@@ -8,6 +8,7 @@ import ApplicationTheResumeYouSent from "./ApplicationTheResumeYouSent";
 import ApplicationStagesAndNightBefore from "./ApplicationStagesAndNightBefore";
 import CueSheet from "./CueSheet";
 import ApplicationWhatYouVeSaid from "./ApplicationWhatYouVeSaid";
+import ApplicationQuestions from "./ApplicationQuestions";
 
 /** Screen id to component, for this group's screens. */
 export const routes: Record<string, ComponentType> = {
@@ -19,7 +20,10 @@ export const routes: Record<string, ComponentType> = {
   "6-6-application-stages-and-night-before": ApplicationStagesAndNightBefore,
   "6-7-cue-sheet": CueSheet,
   "6-8-application-what-you-ve-said": ApplicationWhatYouVeSaid,
+  "applications-questions": ApplicationQuestions,
 };
 
 /** Extra screens (states, dialogs) this group adds beyond the 46 in the design export. */
-export const extras: ManifestEntry[] = [];
+export const extras: ManifestEntry[] = [
+  { id: "applications-questions", title: "Kestrel Pay, questions", shell: "app", nav: "applications", group: "applications", name: "ApplicationQuestions", designed: false },
+];
