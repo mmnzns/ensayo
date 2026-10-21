@@ -37,7 +37,7 @@
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--e-ground);
+  color: var(--e-ink);
   font-family: var(--font-ui);
 }
