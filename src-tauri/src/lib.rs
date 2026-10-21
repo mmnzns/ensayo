@@ -1,5 +1,8 @@
+// Provider table and key store are wired into the UI in M4; they are tested now.
+#[allow(dead_code)]
 mod ai;
 mod commands;
+#[allow(dead_code)]
 mod keys;
 mod paths;
 mod platform;
