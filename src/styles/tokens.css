@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/outfit";
+@import "@fontsource/poppins/500.css";
+
+@theme {
+  --color-background: #F6F6F7;
+  --color-card: #FFFFFF;
+  --color-brand-tint: #FCEEE6;
+  --color-line: #E6E6E9;
+  --color-text: #2B2722;
+  --color-text-muted: #5B5960;
+  --color-brand: #B8432C;
+  --color-on-brand: #FFFFFF;
+  --color-brand-dark: #9A3622;
+  --color-coach-note: #B8432C;
+  --color-win-text: #B86A0C;
+  --color-to-check-bg: #EEF0F4;
+  --color-to-check-text: #3D4555;
+  --color-delete: #B42318;
+  --color-fixed: #2F7A55;
+  --color-fixed-bg: #E7F2EC;
+  --color-win-gold: #F2A33A;
+  --color-evidence: #FFF1C7;
+  --font-ui: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-coach: "Outfit Variable", system-ui, sans-serif;
+  --font-coffee: "Poppins", system-ui, sans-serif;
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+  --shadow-card: 0 1px 2px rgba(43, 39, 34, 0.06);
+}
+
+:root {
+  --sunrise: linear-gradient(135deg, #E8603C 0%, #F2A33A 100%);
+  --glow: linear-gradient(135deg, #FDE7D9 0%, #FFF3DC 100%);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+}
