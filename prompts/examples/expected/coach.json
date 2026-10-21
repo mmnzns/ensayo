@@ -1,0 +1,57 @@
+{
+  "prompt": "03-coach-note v1",
+  "shared_rules": {
+    "note_max_words": 40,
+    "never_contains": ["—", "STAR", "CAAR", "CAR method", "PREP", "rubric", "criterion", "score", "fail", "great answer", "leverage", "synergy"],
+    "rewrite_numbers_must_exist_in": ["transcript", "bank_stories"]
+  },
+  "cases": {
+    "good": {
+      "mode": "all_pass",
+      "expect": {
+        "rewrite": null,
+        "offer_follow_up": true,
+        "note_mentions_any_of": ["31", "44", "led with", "opened with", "stopped"],
+        "note_never_contains": ["!", "amazing", "perfect", "excellent"]
+      }
+    },
+    "typical": {
+      "mode": "fix",
+      "top_fix": "answer_first",
+      "measurements": "time_to_point=41.9s (target under 10s)",
+      "expect": {
+        "rewrite_position": "open",
+        "rewrite_contains_any_of": ["44"],
+        "rewrite_starts_with_any_of": ["I "],
+        "note_mentions_any_of": ["41", "42", "So, um, at Fernhill", "result", "44"],
+        "note_is_single_fix": true
+      },
+      "reference_output": {
+        "note": "Your result came 42 seconds in, after the whole backstory. Say it first, then tell the story.",
+        "rewrite": {"text": "I moved seven-day activation from 31 to 44 percent by firing the email when people stalled on bank linking.", "position": "open", "replaces_sentence": null},
+        "offer_follow_up": true
+      }
+    },
+    "bad": {
+      "mode": "fix",
+      "top_fix": "answer_first",
+      "expect": {
+        "rewrite_position": "open",
+        "rewrite_numbers_only_from_bank": ["31", "44"],
+        "note_does_not_list_other_problems": true
+      },
+      "reference_output": {
+        "note": "You opened with an apology and never said what changed. Open with the result.",
+        "rewrite": {"text": "I moved seven-day activation from 31 to 44 percent by fixing the bank-linking step, not the emails.", "position": "open", "replaces_sentence": null},
+        "offer_follow_up": true
+      }
+    },
+    "invented_number_trap": {
+      "description": "Same as typical but with an empty bank. The rewrite may use 44 (said in the transcript) but must not contain 31, which appears nowhere in the input.",
+      "mode": "fix",
+      "top_fix": "answer_first",
+      "bank": "empty",
+      "expect": {"rewrite_never_contains": ["31"]}
+    }
+  }
+}

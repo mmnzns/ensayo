@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ensayo/question-bank-file.v1",
+  "title": "Ensayo question bank file",
+  "description": "One question set: the general set or a role pack. Type, situation and flag values match prompts/schemas/classify-question.schema.json; stage ids match analyse-jd.schema.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["bank_version", "set_id", "set_name", "description", "questions"],
+  "properties": {
+    "bank_version": {"type": "integer", "minimum": 1},
+    "set_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "set_name": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "questions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/question"}}
+  },
+  "$defs": {
+    "stage": {"enum": ["recruiter", "hiring_manager", "technical", "panel", "leadership"]},
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "type", "behavioral_situation", "stages", "modes", "competencies", "great_eight",
+                   "commitment_check", "builder_operator_check", "difficulty", "follow_up_angles"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z]{3}-[0-9]{3}$"},
+        "text": {"type": "string", "minLength": 5, "maxLength": 200, "not": {"pattern": "—"}},
+        "type": {"enum": ["behavioral", "tell_me_about_yourself", "technical", "factual", "future_looking", "gap", "motivation"]},
+        "behavioral_situation": {"enum": ["problem_solving", "disagreement", "influence", "serving_customers", "leading_team", "motivation", "other", null]},
+        "stages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/stage"}},
+        "modes": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"enum": ["drill", "mock"]}},
+        "competencies": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string", "maxLength": 40}},
+        "great_eight": {"type": "array", "uniqueItems": true, "items": {"enum": ["generate_revenue", "reduce_costs", "market_share", "attract_customers", "retain_customers", "productivity", "develop_people", "compliance"]}},
+        "commitment_check": {"type": "boolean"},
+        "builder_operator_check": {"type": "boolean"},
+        "difficulty": {"enum": ["standard", "hard"]},
+        "follow_up_angles": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string", "maxLength": 80}},
+        "founder_variant": {"type": "boolean", "description": "Only asked when the leadership stage runs the founder variant (startup flag on). Omitted means false."},
+        "moment": {"enum": ["opener", "candidate_questions"], "description": "opener: asked first in the stage. candidate_questions: hands the floor to the candidate; reply scored by question_quality (prompt 10)."},
+        "notes": {"type": "string"}
+      },
+      "allOf": [
+        {"if": {"properties": {"type": {"const": "behavioral"}}},
+         "then": {"properties": {"behavioral_situation": {"type": "string"}}},
+         "else": {"properties": {"behavioral_situation": {"const": null}}}},
+        {"if": {"required": ["founder_variant"], "properties": {"founder_variant": {"const": true}}},
+         "then": {"properties": {"stages": {"contains": {"const": "leadership"}}}}}
+      ]
+    }
+  }
+}

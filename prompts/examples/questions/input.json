@@ -1,0 +1,15 @@
+{
+  "stage": "hiring_manager",
+  "company": "Kestrel Pay",
+  "role": "Senior Lifecycle Marketing Manager",
+  "jd_summary": "A founder-led payments startup needs one person to build and run lifecycle from signup to the tenth payment, reporting activation and early retention weekly.",
+  "priorities": "retain_customers: activation and early retention reported weekly. productivity: no ops team. attract_customers: signup to tenth payment.",
+  "interviewer_said": "[I 1] Tell me about a time you improved a metric that really mattered.\n[I 2] What was your part in that, specifically?\n[I 3] We're a team of 40. Lifecycle reports into me, and I report to the founders.\n[I 4] What questions do you have for me?",
+  "candidate_questions_sets": {
+    "good": "[Q 1.1] For a lifecycle role at your stage I'd expect activation and early retention to be under the most scrutiny.\n[Q 1.2] Beyond those two, how will you judge whether this hire worked after six months?",
+    "generic": "[Q 1.1] What's the culture like?\n[Q 2.1] And who would I report to, and what does a typical day look like?",
+    "none": "[Q 1.1] No, I think you've covered everything, thanks."
+  },
+  "must_say": "[{\"id\": \"ms1\", \"text\": \"Ran lifecycle with no ops team\"}, {\"id\": \"ms2\", \"text\": \"Activation 31% to 44%\"}, {\"id\": \"ms3\", \"text\": \"Weekly retention readout to the execs\"}]",
+  "mock_transcript": "[A 1.1] I moved seven-day activation from 31 to 44 percent by fixing what happened after signup.\n[A 1.2] I traced the funnel and saw people stalled on bank linking.\n[A 2.1] I owned it end to end, I was the only person on lifecycle, there was no ops team.\n[A 2.2] The designer owned the screen."
+}

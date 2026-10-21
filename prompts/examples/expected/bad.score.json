@@ -1,0 +1,44 @@
+{
+  "prompt": "02-score-answer v1",
+  "assert": {
+    "clarifying_question": false,
+    "not_an_answer": false,
+    "first_answer_sentence": null,
+    "proof_landed_sentence": null,
+    "numbers_said_count": 0,
+    "criteria": {
+      "answer_first": "fail",
+      "proof": "fail",
+      "story_fit": "pass",
+      "ownership": "pass",
+      "conviction": "fail",
+      "no_complaining": "fail",
+      "method_first": "fail",
+      "jd_fit": "na",
+      "commitment": "na",
+      "builder_operator": "na",
+      "type_fit": "na"
+    },
+    "evidence_includes": {
+      "conviction": [
+        1,
+        5
+      ],
+      "no_complaining": [
+        1,
+        2
+      ]
+    }
+  },
+  "not_asserted": {
+    "story_id": "Matches the bank story in subject even without numbers; a model returning null is acceptable.",
+    "approach_before_action": "Sentence 3 notices, sentence 4 acts. Passes under v1.",
+    "stage_fit": "Arguable."
+  },
+  "code_side": {
+    "time_to_point": "na",
+    "clean_stop": "na",
+    "top_fix": "answer_first",
+    "coach_mode": "fix"
+  }
+}

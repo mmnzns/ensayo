@@ -1,0 +1,15 @@
+{
+  "question": "Tell me about a time you improved a metric that really mattered to the business.",
+  "classification": {
+    "type": "behavioral",
+    "behavioral_situation": "problem_solving",
+    "commitment_check": false,
+    "builder_operator_check": false,
+    "is_major_story": true,
+    "competencies": ["lifecycle strategy", "data analysis"]
+  },
+  "stage": "hiring_manager",
+  "founder_variant": false,
+  "profile": {"seniority": "senior", "target_role": "Senior Lifecycle Marketing Manager"},
+  "active_criteria": ["answer_first", "proof", "story_fit", "context_short", "clean_stop", "ownership", "conviction", "no_complaining", "method_first", "approach_before_action", "stage_fit"]
+}

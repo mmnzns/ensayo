@@ -1,0 +1,42 @@
+{
+  "prompt": "02-score-answer v1",
+  "assert": {
+    "clarifying_question": false,
+    "not_an_answer": false,
+    "story_id": "st_onboarding",
+    "first_answer_sentence": 6,
+    "proof_landed_sentence": 6,
+    "numbers_said_match": {
+      "st_onboarding.activation_7d": true
+    },
+    "criteria": {
+      "answer_first": "fail",
+      "proof": "pass",
+      "story_fit": "pass",
+      "ownership": "fail",
+      "no_complaining": "pass",
+      "method_first": "fail",
+      "stage_fit": "pass",
+      "jd_fit": "na",
+      "commitment": "na",
+      "builder_operator": "na",
+      "type_fit": "na"
+    }
+  },
+  "not_asserted": {
+    "context_short": "Three sentences before 'we looked at the data'. Rubric passes at three; models may differ. Tune with labelled reps.",
+    "approach_before_action": "Sentence 4 notices the real problem but states no decision or metric. Rubric v1 passes it; Miguel may want v2 to require a decision.",
+    "conviction": "'I think that helped too' hedges an uncertain fact, which is allowed."
+  },
+  "code_side": {
+    "time_to_point_s": 41.9,
+    "time_to_point": "fail",
+    "length_s": 58.0,
+    "tail_s": 16.1,
+    "clean_stop": "fail (placeholder threshold 15s)",
+    "fillers_per_min": 4.1,
+    "fillers": "fail at 4.1/min only if 'basically' counts (v1 draft list); 3.1/min and pass with the Build Plan list. Miguel to confirm.",
+    "top_fix": "answer_first",
+    "coach_mode": "fix"
+  }
+}

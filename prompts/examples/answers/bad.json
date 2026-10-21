@@ -1,0 +1,11 @@
+{
+  "label": "bad",
+  "duration_s": 33.0,
+  "sentences": [
+    {"i": 1, "start": 0.0, "end": 7.5, "text": "Honestly, sorry, this might not be the best example, but at my last job the leadership team basically didn't care about onboarding."},
+    {"i": 2, "start": 7.5, "end": 14.0, "text": "They kept saying the emails were the problem, which was kind of ridiculous if you looked at anything."},
+    {"i": 3, "start": 14.0, "end": 21.0, "text": "So I tend to just try to look at the data when I can, and I saw people weren't linking their bank."},
+    {"i": 4, "start": 21.0, "end": 28.5, "text": "We changed some things with the triggers and the screen and it got a lot better."},
+    {"i": 5, "start": 28.5, "end": 33.0, "text": "I think it was a pretty big improvement, if that makes sense."}
+  ]
+}

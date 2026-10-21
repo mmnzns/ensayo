@@ -1,0 +1,18 @@
+{
+  "_how_to_use": "Run prompt 10 once per candidate_questions_sets entry with the same other inputs. Only these fields are asserted.",
+  "good": {"questions": [{"q": 1, "asked": true, "result": "pass", "checks": {"specific": true, "front_loaded": true, "not_answered": true, "one_question": true}}]},
+  "generic": {
+    "questions": [
+      {"q": 1, "asked": true, "result": "fail", "checks": {"specific": false, "front_loaded": false}},
+      {"q": 2, "asked": true, "result": "fail", "checks": {"not_answered": false, "one_question": false}}
+    ],
+    "try_asking_must_not_contain": ["culture", "typical day"]
+  },
+  "none": {"questions": [{"q": 1, "asked": false, "result": "fail"}]},
+  "must_say_said_for_every_set": [
+    {"id": "ms1", "said": true, "where": "[A 2.1]"},
+    {"id": "ms2", "said": true, "where": "[A 1.1]"},
+    {"id": "ms3", "said": false}
+  ],
+  "notes": "generic Q2 fails not_answered because the interviewer already said lifecycle reports to them (I 3), and one_question because it stacks two questions."
+}

@@ -1,0 +1,48 @@
+{
+  "prompt": "02-score-answer v1",
+  "assert": {
+    "clarifying_question": false,
+    "not_an_answer": false,
+    "restart_at_sentence": null,
+    "story_id": "st_onboarding",
+    "first_answer_sentence": 1,
+    "proof_landed_sentence": 7,
+    "tail_exempt_sentences_includes": [
+      8
+    ],
+    "approach_sentence_in": [
+      4,
+      5
+    ],
+    "action_sentence": 6,
+    "numbers_said_match": {
+      "st_onboarding.activation_7d": true
+    },
+    "criteria": {
+      "answer_first": "pass",
+      "proof": "pass",
+      "story_fit": "pass",
+      "context_short": "pass",
+      "ownership": "pass",
+      "conviction": "pass",
+      "no_complaining": "pass",
+      "method_first": "pass",
+      "approach_before_action": "pass",
+      "stage_fit": "pass",
+      "jd_fit": "na",
+      "commitment": "na",
+      "builder_operator": "na",
+      "type_fit": "na"
+    }
+  },
+  "code_side": {
+    "time_to_point_s": 6.1,
+    "time_to_point": "pass",
+    "length_s": 50.0,
+    "length": "pass (under the 60 to 90 window but proof passed)",
+    "tail_s": 0.0,
+    "clean_stop": "pass (sentence 8 is an exempt bridge)",
+    "top_fix": null,
+    "coach_mode": "all_pass"
+  }
+}

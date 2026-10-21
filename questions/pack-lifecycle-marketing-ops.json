@@ -1,0 +1,1842 @@
+{
+  "bank_version": 1,
+  "set_id": "lifecycle-marketing-ops",
+  "set_name": "Lifecycle and marketing ops pack",
+  "description": "Lifecycle marketing, CRM, marketing operations, martech and marketing automation roles.",
+  "questions": [
+    {
+      "id": "lmo-001",
+      "text": "Have you built behavioral triggers before?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which events did you trigger on",
+        "how did you handle someone who triggered twice"
+      ],
+      "notes": "Trap: 'behavioral' here means behavior-triggered messaging, not a past example of the candidate's conduct. Typed technical per prompt 01. Keep as a classifier regression test."
+    },
+    {
+      "id": "lmo-002",
+      "text": "Have you done a behavioral implementation in your current platform?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you have to set up on the data side",
+        "what broke the first time"
+      ],
+      "notes": "Trap: 'behavioral' here means behavior-triggered messaging, not a past example of the candidate's conduct. Typed technical per prompt 01. Keep as a classifier regression test."
+    },
+    {
+      "id": "lmo-003",
+      "text": "How would you set up a behavioral journey for someone who signs up but never finishes onboarding?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "activation"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the exit condition",
+        "how long would you wait before the first message"
+      ],
+      "notes": "Trap: 'behavioral' here means behavior-triggered messaging, not a past example of the candidate's conduct. Typed technical per prompt 01. Keep as a classifier regression test."
+    },
+    {
+      "id": "lmo-004",
+      "text": "How would you design an onboarding journey for new users?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "activation"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the one action you're driving toward",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "lmo-005",
+      "text": "How do you decide between a scheduled message and one triggered by what the user does?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "lmo-006",
+      "text": "What goes into a good welcome series?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many messages, and why",
+        "when does it stop"
+      ]
+    },
+    {
+      "id": "lmo-007",
+      "text": "How would you build a win-back program for lapsed customers?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "retention"
+      ],
+      "great_eight": [
+        "retain_customers",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you define lapsed",
+        "when do you stop trying"
+      ]
+    },
+    {
+      "id": "lmo-008",
+      "text": "How do you stop people from getting too many messages across channels?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "customer"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who wins when two programs want the same person",
+        "how do you know when it's too many"
+      ]
+    },
+    {
+      "id": "lmo-009",
+      "text": "How would you set up one journey that runs across email, push and SMS?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you pick the channel per person",
+        "what happens when someone has no push token"
+      ]
+    },
+    {
+      "id": "lmo-010",
+      "text": "What happens when a user qualifies for two journeys at the same time?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how do you decide priority",
+        "how would you catch it if it went wrong"
+      ]
+    },
+    {
+      "id": "lmo-011",
+      "text": "How do you decide which segments are worth building?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "segmentation",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many is too many",
+        "which one moved a number"
+      ]
+    },
+    {
+      "id": "lmo-012",
+      "text": "What data needs to be in place before personalization is worth doing?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "personalization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "lmo-013",
+      "text": "How do you get product event data into your messaging platform?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "where's the source of truth",
+        "how do you handle late or missing events"
+      ]
+    },
+    {
+      "id": "lmo-014",
+      "text": "The overnight sync between the data warehouse and your messaging platform failed. What do you do?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how would you find out it failed",
+        "what stops a send going out on bad data"
+      ]
+    },
+    {
+      "id": "lmo-015",
+      "text": "How would you pull a list of users who activated but haven't come back in 30 days?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "sql"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "talk me through the query",
+        "how would you check the result is right"
+      ]
+    },
+    {
+      "id": "lmo-016",
+      "text": "How do you keep customer data clean as more sources get plugged in?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "governance"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who owns each field",
+        "what happens with duplicates"
+      ]
+    },
+    {
+      "id": "lmo-017",
+      "text": "How do you define activation, and how would you find the right activation event?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "activation",
+        "data"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you know it predicts retention",
+        "what if product disagrees"
+      ]
+    },
+    {
+      "id": "lmo-018",
+      "text": "Retention dropped after the first month. How would you figure out why?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "retention",
+        "data"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's the first cut of the data you'd look at",
+        "what if it's a product problem"
+      ]
+    },
+    {
+      "id": "lmo-019",
+      "text": "How do you measure engagement differently from retention?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "retention",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "lmo-020",
+      "text": "How do you decide which stage of the customer lifecycle to fix first?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization",
+        "lifecycle"
+      ],
+      "great_eight": [
+        "retain_customers",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would change your mind",
+        "what would you leave alone"
+      ]
+    },
+    {
+      "id": "lmo-021",
+      "text": "Open rates dropped sharply last week. Where do you look first?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "deliverability",
+        "problem solving"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how would you tell a tracking change from a real drop",
+        "what would you pause"
+      ]
+    },
+    {
+      "id": "lmo-022",
+      "text": "How do you warm up a new sending domain?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "deliverability"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how long does it take",
+        "what do you send first"
+      ]
+    },
+    {
+      "id": "lmo-023",
+      "text": "How do you handle list hygiene and inactive subscribers?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "deliverability",
+        "data"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "when do you suppress someone",
+        "what does it cost you to keep them"
+      ]
+    },
+    {
+      "id": "lmo-024",
+      "text": "What do you need set up on the authentication side before a new domain sends?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "deliverability",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what happens if one of those is missing"
+      ]
+    },
+    {
+      "id": "lmo-025",
+      "text": "How do you set up a holdout group, and why would you bother?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how big does it need to be",
+        "what do you tell the team about the lost revenue"
+      ]
+    },
+    {
+      "id": "lmo-026",
+      "text": "How do you decide a test result is big enough to trust?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "lmo-027",
+      "text": "Tell me about a test result that surprised you.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you expect",
+        "what did you do with the result"
+      ]
+    },
+    {
+      "id": "lmo-028",
+      "text": "How do you prioritize a backlog of test ideas?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "prioritization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "lmo-029",
+      "text": "How do you prove a lifecycle program drove revenue that wouldn't have happened anyway?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "attribution",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's your control",
+        "what would a skeptical finance lead say"
+      ]
+    },
+    {
+      "id": "lmo-030",
+      "text": "How do you report lifecycle results to leadership?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "communication"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which number leads",
+        "what do you leave out"
+      ]
+    },
+    {
+      "id": "lmo-031",
+      "text": "Marketing and finance have different numbers for the same campaign. How do you sort it out?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "attribution",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "whose number wins",
+        "how do you stop it happening again"
+      ]
+    },
+    {
+      "id": "lmo-032",
+      "text": "How do you manage consent and unsubscribes across channels?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "compliance",
+        "data"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "where does consent live",
+        "how fast does an unsubscribe take effect"
+      ]
+    },
+    {
+      "id": "lmo-033",
+      "text": "How would you get campaigns through legal or compliance review without slowing everything down?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "compliance",
+        "productivity"
+      ],
+      "great_eight": [
+        "compliance",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you check before it goes to review",
+        "what do they reject most"
+      ]
+    },
+    {
+      "id": "lmo-034",
+      "text": "How do you make sure a message never goes to someone who opted out?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "compliance",
+        "technical depth"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what if the opt-out came in through another system",
+        "how would you prove it"
+      ]
+    },
+    {
+      "id": "lmo-035",
+      "text": "Tell me about a time a compliance or privacy requirement changed your plan.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "compliance",
+        "collaboration"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "did you agree with it",
+        "what did you build instead"
+      ]
+    },
+    {
+      "id": "lmo-036",
+      "text": "How do you decide whether to automate something or keep it manual?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "automation",
+        "judgment"
+      ],
+      "great_eight": [
+        "productivity",
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you decide not to automate",
+        "what happens when the automation fails"
+      ]
+    },
+    {
+      "id": "lmo-037",
+      "text": "How do you keep a marketing stack documented and governed so it doesn't turn into a mess?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "governance",
+        "tooling"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "lmo-038",
+      "text": "How would you decide whether we should switch marketing automation platforms?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would make you say stay",
+        "how would you run the migration"
+      ]
+    },
+    {
+      "id": "lmo-039",
+      "text": "Where does AI belong in a lifecycle program, and where doesn't it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ai",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what happens when the model gets it wrong",
+        "what stays with a human"
+      ]
+    },
+    {
+      "id": "lmo-040",
+      "text": "How do you QA a campaign before it goes out?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "quality",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what got through last time",
+        "what's automated in that"
+      ]
+    },
+    {
+      "id": "lmo-041",
+      "text": "Have you used Marketo?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-042",
+      "text": "Have you worked with Salesforce Marketing Cloud?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-043",
+      "text": "Have you worked in Braze?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-044",
+      "text": "Have you used Iterable?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-045",
+      "text": "Have you used HubSpot for marketing automation, or mostly as a CRM?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-046",
+      "text": "Have you worked with Segment or another customer data platform?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-047",
+      "text": "How comfortable are you writing SQL on your own?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sql",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the most complex query you've written",
+        "do you need an analyst to check it"
+      ]
+    },
+    {
+      "id": "lmo-048",
+      "text": "Have you owned SMS or push, or mostly email?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "channels"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-049",
+      "text": "Have you run lifecycle for a B2B product, or mostly consumer?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes in B2B",
+        "who was the buyer"
+      ]
+    },
+    {
+      "id": "lmo-050",
+      "text": "Have you led a marketing automation platform migration?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you do first",
+        "what usually goes wrong"
+      ]
+    },
+    {
+      "id": "lmo-051",
+      "text": "Which messaging platforms have you used?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which one most recently",
+        "which one do you prefer"
+      ]
+    },
+    {
+      "id": "lmo-052",
+      "text": "Roughly how big a database have you managed?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience",
+        "scale"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many of those were active"
+      ]
+    },
+    {
+      "id": "lmo-053",
+      "text": "How many years have you worked in lifecycle or CRM?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "hands-on or managing"
+      ]
+    },
+    {
+      "id": "lmo-054",
+      "text": "Tell me about a lifecycle program you built that moved a number.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "data"
+      ],
+      "great_eight": [
+        "retain_customers",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was it before",
+        "how did you know it wasn't going to happen anyway",
+        "what was your part specifically"
+      ]
+    },
+    {
+      "id": "lmo-055",
+      "text": "Tell me about a time a campaign went out with a mistake. What did you do?",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "failure",
+        "quality"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how did you find out",
+        "what stops it happening again"
+      ]
+    },
+    {
+      "id": "lmo-056",
+      "text": "Tell me about a time product or engineering wouldn't prioritize something your program needed.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you do in the meantime",
+        "did it ever get built"
+      ]
+    },
+    {
+      "id": "lmo-057",
+      "text": "Tell me about a time you disagreed with sales or product on how to treat a group of customers.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "customer"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who was right",
+        "how was it decided"
+      ]
+    },
+    {
+      "id": "lmo-058",
+      "text": "Tell me about a time customer behavior data made you change a program.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer",
+        "data"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was your part specifically",
+        "how did you measure it",
+        "what would you do differently"
+      ]
+    },
+    {
+      "id": "lmo-059",
+      "text": "Tell me about a time you trained a team to use a new marketing tool or process.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "develop people",
+        "tooling"
+      ],
+      "great_eight": [
+        "develop_people",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "did they keep using it",
+        "what did you do with the people who didn't"
+      ]
+    },
+    {
+      "id": "lmo-060",
+      "text": "Tell me about a time you inherited a messy marketing stack.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "problem solving",
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you fix first",
+        "what did you leave alone"
+      ]
+    },
+    {
+      "id": "lmo-061",
+      "text": "Tell me about a time you shut down a program you'd built.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "judgment",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you know it was time",
+        "what did you do with what you learned"
+      ]
+    },
+    {
+      "id": "lmo-062",
+      "text": "What would your first 90 days in this role look like?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning",
+        "lifecycle"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you audit first",
+        "what's your first early win"
+      ]
+    },
+    {
+      "id": "lmo-063",
+      "text": "Our activation rate has been flat for a while. Where would you start?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "activation",
+        "problem solving"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's your first hypothesis",
+        "what data would you want"
+      ]
+    },
+    {
+      "id": "lmo-064",
+      "text": "We have a large database we barely talk to. What would you do with it?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "retention"
+      ],
+      "great_eight": [
+        "generate_revenue",
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the risk",
+        "what would you send first"
+      ]
+    },
+    {
+      "id": "lmo-065",
+      "text": "If we're starting lifecycle from almost nothing, how would you set it up?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle",
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you run yourself",
+        "what number would you move first"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "lmo-066",
+      "text": "What would you need from product and data to do this job well?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "collaboration",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you need to validate first",
+        "what's the first step, concretely"
+      ]
+    },
+    {
+      "id": "lmo-067",
+      "text": "Why lifecycle, and not another part of marketing?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "lmo-068",
+      "text": "Do you see yourself more as a strategist, or as the person in the tools every day?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "when were you last in the tools",
+        "what did you change there"
+      ],
+      "notes": "Builder vs operator in lifecycle wording. Scored on the literal answer first."
+    },
+    {
+      "id": "lmo-069",
+      "text": "Give me the version of your background that matters for a lifecycle role.",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "lifecycle"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that move",
+        "what you want next"
+      ]
+    },
+    {
+      "id": "lmo-070",
+      "text": "Before we finish, what would you like to ask me about how lifecycle works here?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "curiosity",
+        "lifecycle"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "anything else"
+      ],
+      "moment": "candidate_questions",
+      "notes": "Candidate's-own-questions moment. No type in the enum fits a prompt that hands the floor to the candidate; typed motivation as closest (it shows interest and preparation). The spoken reply is scored by question_quality (prompt 10), not the normal rubric."
+    }
+  ]
+}

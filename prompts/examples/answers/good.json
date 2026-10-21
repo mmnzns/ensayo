@@ -1,0 +1,14 @@
+{
+  "label": "good",
+  "duration_s": 50.0,
+  "sentences": [
+    {"i": 1, "start": 0.0, "end": 6.1, "text": "I moved seven-day activation at Fernhill from 31 to 44 percent by fixing what happened after people signed up, not the emails."},
+    {"i": 2, "start": 6.1, "end": 11.0, "text": "Whenever a number stalls, the first thing I do is find where people actually drop before I touch anything."},
+    {"i": 3, "start": 11.0, "end": 17.5, "text": "Activation had been flat for two quarters and everyone assumed the welcome emails were weak."},
+    {"i": 4, "start": 17.5, "end": 25.0, "text": "When I looked at the funnel, most people opened the email, clicked, and then stalled on the bank-linking screen."},
+    {"i": 5, "start": 25.0, "end": 31.0, "text": "So I decided the fix was the handoff from email to that screen, and I picked seven-day activation as the number to prove it."},
+    {"i": 6, "start": 31.0, "end": 40.5, "text": "I rebuilt the trigger so the email fired when someone stalled on that step, and I worked with our product designer to cut the screen from three steps to one."},
+    {"i": 7, "start": 40.5, "end": 46.0, "text": "Within a quarter, seven-day activation went from 31 to 44 percent."},
+    {"i": 8, "start": 46.0, "end": 50.0, "text": "That's the kind of problem I'd want to dig into here."}
+  ]
+}

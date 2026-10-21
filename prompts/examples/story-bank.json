@@ -1,0 +1,68 @@
+{
+  "stories": [
+    {
+      "id": "st_onboarding",
+      "title": "Onboarding drop-off",
+      "employer": "Fernhill",
+      "direct_answer": "I moved seven-day activation from 31 to 44 percent by fixing what happened after signup, not the emails.",
+      "context": "Seven-day activation at Fernhill had been flat for two quarters. Everyone assumed the welcome emails were the problem.",
+      "approach": "I traced the funnel and saw people opened and clicked the emails, then stalled on the bank-linking screen. I decided the fix was the handoff from email to that screen, and I chose seven-day activation as the number to prove it.",
+      "action": "I rebuilt the trigger so the email fired when someone stalled on that step instead of on day two. I worked with the product designer to cut the bank-linking screen from three steps to one.",
+      "ownership": "I owned the diagnosis, the trigger rebuild and the metric. The product designer owned the screen redesign.",
+      "result": "Within a quarter, seven-day activation went from 31 to 44 percent.",
+      "proof_points": [
+        {
+          "label": "activation_7d",
+          "metric": "seven-day activation",
+          "before": "31",
+          "after": "44",
+          "unit": "%",
+          "approximate": false
+        },
+        {
+          "label": "bank_link_steps",
+          "metric": "bank-linking steps",
+          "before": "3",
+          "after": "1",
+          "unit": "steps",
+          "approximate": false
+        }
+      ],
+      "scale": "About 40,000 new signups a quarter.",
+      "best_for": [
+        "improving a metric",
+        "finding the real problem"
+      ],
+      "competencies": [
+        "lifecycle strategy",
+        "data analysis"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "retain_customers"
+      ],
+      "branches": [
+        {
+          "kind": "data",
+          "trigger": "How did you know it was the bank-linking step?",
+          "angle": "Funnel by step showed clicks held but completion of bank linking dropped."
+        },
+        {
+          "kind": "failure",
+          "trigger": "What didn't work?",
+          "angle": "The first trigger fired too fast and annoyed people mid-flow; moved it to 20 minutes after stalling."
+        }
+      ],
+      "verified": true
+    }
+  ],
+  "methods": [
+    {
+      "situation": "problem_solving",
+      "spoken": "Whenever a number stalls, the first thing I do is find where people actually drop before I change anything.",
+      "story_ids": [
+        "st_onboarding"
+      ]
+    }
+  ]
+}

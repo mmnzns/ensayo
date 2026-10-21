@@ -1,0 +1,2838 @@
+{
+  "bank_version": 1,
+  "set_id": "general",
+  "set_name": "General set",
+  "description": "Questions that work for any professional role, in any field.",
+  "questions": [
+    {
+      "id": "gen-001",
+      "text": "Tell me about yourself.",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "communication",
+        "positioning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that move",
+        "what are you known for",
+        "what do you want next"
+      ]
+    },
+    {
+      "id": "gen-002",
+      "text": "Walk me through your background.",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "communication",
+        "positioning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that move",
+        "what you want next"
+      ]
+    },
+    {
+      "id": "gen-003",
+      "text": "Give me the short version of your career so far.",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "communication",
+        "positioning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "which part of that matters most for this role",
+        "what you want next"
+      ],
+      "notes": "Short-window variant. Good for practising stopping early."
+    },
+    {
+      "id": "gen-004",
+      "text": "What should I know about you that isn't on your resume?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "communication",
+        "positioning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that move",
+        "what you want next"
+      ]
+    },
+    {
+      "id": "gen-005",
+      "text": "How would the people you work with describe you?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "self-awareness",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "give me an example of that",
+        "what would a critic say"
+      ],
+      "notes": "Self-description, not a past example, so typed tell_me_about_yourself."
+    },
+    {
+      "id": "gen-006",
+      "text": "In a sentence or two, what are you known for?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "prove it with one example",
+        "what are you not known for"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gen-007",
+      "text": "What's your biggest strength?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "self-awareness"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "give me an example",
+        "where has that strength gotten you into trouble"
+      ]
+    },
+    {
+      "id": "gen-008",
+      "text": "What's your greatest weakness?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "self-awareness",
+        "failure"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "give me a recent example",
+        "what are you doing about it now"
+      ],
+      "notes": "No enum type for self-assessment; tell_me_about_yourself is closest. Not a past-example question."
+    },
+    {
+      "id": "gen-009",
+      "text": "Is there anything we haven't covered that you'd want me to know?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why does that matter for this role"
+      ],
+      "notes": "Closing prompt. Tests whether the candidate fills a gap in the evidence instead of repeating."
+    },
+    {
+      "id": "gen-010",
+      "text": "Why are you interested in this role?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what specifically about it",
+        "why now"
+      ]
+    },
+    {
+      "id": "gen-011",
+      "text": "Why this company?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you know about what we're building",
+        "why not a competitor"
+      ]
+    },
+    {
+      "id": "gen-012",
+      "text": "Why are you leaving your current job?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would make you stay",
+        "is that the whole reason"
+      ],
+      "notes": "Must stay positive and consistent across stages (C1)."
+    },
+    {
+      "id": "gen-013",
+      "text": "What are you looking for in your next role?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "gen-014",
+      "text": "Where do you see your career going over the next few years?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "ambition"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how does this role get you there",
+        "what if it doesn't"
+      ]
+    },
+    {
+      "id": "gen-015",
+      "text": "What kind of work gives you the most energy?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "and what drains you"
+      ]
+    },
+    {
+      "id": "gen-016",
+      "text": "What would make you turn down an offer from us?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "gen-017",
+      "text": "Why should we hire you over the other people we're talking to?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's your proof for that",
+        "what would the other candidates say about you"
+      ],
+      "notes": "Typed motivation as closest; it is really a positioning close. Classifier may pick tell_me_about_yourself."
+    },
+    {
+      "id": "gen-018",
+      "text": "Why did you move from your last role to your current one?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "gen-019",
+      "text": "You've moved around a fair bit. What's behind that?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "commitment"
+      ],
+      "great_eight": [],
+      "commitment_check": true,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "why would this one be different"
+      ]
+    },
+    {
+      "id": "gen-020",
+      "text": "What's most important to you in your next role: scope, pay or flexibility?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "if you had to give one up, which"
+      ]
+    },
+    {
+      "id": "gen-021",
+      "text": "Are you looking for a full-time role, doing your own thing, or both?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "commitment"
+      ],
+      "great_eight": [],
+      "commitment_check": true,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how much time does the side work take",
+        "what happens to it if you join"
+      ],
+      "founder_variant": true,
+      "moment": "opener",
+      "notes": "Founder opener. Passes only if the full-time goal comes first."
+    },
+    {
+      "id": "gen-022",
+      "text": "Do you have anything going on the side right now? How much of your time does it take?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "commitment"
+      ],
+      "great_eight": [],
+      "commitment_check": true,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "would that change if you joined"
+      ]
+    },
+    {
+      "id": "gen-023",
+      "text": "If this works out, how long do you see yourself here?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "commitment"
+      ],
+      "great_eight": [],
+      "commitment_check": true,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "gen-024",
+      "text": "Early-stage companies are messy. Why do you want that instead of something stable?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "commitment",
+        "ambiguity"
+      ],
+      "great_eight": [],
+      "commitment_check": true,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "have you actually worked somewhere like that",
+        "what would make you leave"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gen-025",
+      "text": "Are you a builder or an operator?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "give me an operator example",
+        "what number moved"
+      ],
+      "founder_variant": true,
+      "notes": "Typed tell_me_about_yourself as closest (self-description). Scored on the literal answer first, then an operator example."
+    },
+    {
+      "id": "gen-026",
+      "text": "Are you more of a systems person, or do you run things day to day?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "when did you last run something yourself",
+        "what did you change week to week"
+      ],
+      "notes": "Rewording of builder vs operator, the way it is often asked in practice."
+    },
+    {
+      "id": "gen-027",
+      "text": "Once something's built, do you stay and run it until the number moves, or hand it off?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how long did you run it",
+        "what did you change along the way"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gen-028",
+      "text": "Tell me about something you personally ran, week after week, until a number moved.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ownership",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue",
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you change each round",
+        "what was the number before",
+        "who else touched it"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gen-029",
+      "text": "We need someone who'll do the unglamorous work too. What's the least glamorous thing you've owned recently?",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ownership",
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why did you take it on",
+        "what did it change"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gen-030",
+      "text": "What would you do if you disagreed with a call I made as the founder?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "and if I still said no",
+        "has that happened before"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gen-031",
+      "text": "Tell me about a time you had to build something with no process and no team around you.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ambiguity",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you decide not to build",
+        "how did you know it was working"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gen-032",
+      "text": "What's your notice period?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "any flexibility on that"
+      ]
+    },
+    {
+      "id": "gen-033",
+      "text": "When could you start?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "is anything else holding that date"
+      ]
+    },
+    {
+      "id": "gen-034",
+      "text": "What salary range are you targeting?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "is that base or total",
+        "where in that range would you land"
+      ],
+      "notes": "Must be answered plainly the first time, with a range decided in advance."
+    },
+    {
+      "id": "gen-035",
+      "text": "Where are you based, and are you open to coming into the office?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many days a week works"
+      ]
+    },
+    {
+      "id": "gen-036",
+      "text": "Are you able to work here without sponsorship?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "is that permanent"
+      ]
+    },
+    {
+      "id": "gen-037",
+      "text": "Are you interviewing anywhere else right now?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how far along are those",
+        "where does this one rank"
+      ]
+    },
+    {
+      "id": "gen-038",
+      "text": "How many years have you worked in this field?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many of those at this level"
+      ]
+    },
+    {
+      "id": "gen-039",
+      "text": "What's your current title, and who do you report to?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what does that title mean in practice"
+      ]
+    },
+    {
+      "id": "gen-040",
+      "text": "How big is the team you work with today?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who do you work with most"
+      ]
+    },
+    {
+      "id": "gen-041",
+      "text": "Would you consider a contract to start, with a view to full-time?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "logistics",
+        "commitment"
+      ],
+      "great_eight": [],
+      "commitment_check": true,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you need to say yes"
+      ]
+    },
+    {
+      "id": "gen-042",
+      "text": "How did you hear about this role?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "mock"
+      ],
+      "competencies": [
+        "logistics"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "do you know anyone here"
+      ]
+    },
+    {
+      "id": "gen-043",
+      "text": "Tell me about a time you solved a problem nobody had asked you to fix.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ownership",
+        "problem solving"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you spot it",
+        "why did no one else",
+        "how did you measure the fix"
+      ]
+    },
+    {
+      "id": "gen-044",
+      "text": "Walk me through the hardest problem you've worked on in the last year.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "problem solving",
+        "technical depth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what was the root cause",
+        "what did you try first that didn't work"
+      ]
+    },
+    {
+      "id": "gen-045",
+      "text": "Give me an example of a time something broke and you had to fix it fast.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "problem solving",
+        "pressure"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you find out it broke",
+        "what stops it happening again"
+      ]
+    },
+    {
+      "id": "gen-046",
+      "text": "Tell me about a time the obvious answer turned out to be wrong.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "problem solving",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what made you doubt it",
+        "what was the real cause"
+      ]
+    },
+    {
+      "id": "gen-047",
+      "text": "Tell me about a decision you had to make without enough information.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ambiguity",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you do to reduce the risk",
+        "would you make the same call today"
+      ]
+    },
+    {
+      "id": "gen-048",
+      "text": "Tell me about a project that failed. What happened?",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "leadership",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "failure",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what was your part in it failing",
+        "what did you change after"
+      ]
+    },
+    {
+      "id": "gen-049",
+      "text": "Tell me about a time you had to choose between two priorities that both mattered.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you drop",
+        "how did you explain that to the people affected"
+      ]
+    },
+    {
+      "id": "gen-050",
+      "text": "Give me an example of a time you cut cost or effort without hurting the result.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "productivity",
+        "data"
+      ],
+      "great_eight": [
+        "reduce_costs",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how much did it save",
+        "what did it cost you"
+      ]
+    },
+    {
+      "id": "gen-051",
+      "text": "Tell me about a time you disagreed with your manager.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "communication"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did it end",
+        "would you push harder today"
+      ]
+    },
+    {
+      "id": "gen-052",
+      "text": "Tell me about a time you pushed back on a request from someone senior.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "influence"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what did it cost you",
+        "were you right"
+      ]
+    },
+    {
+      "id": "gen-053",
+      "text": "Give me an example of a conflict with a peer and how it got resolved.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how is that relationship now",
+        "what would they say happened"
+      ]
+    },
+    {
+      "id": "gen-054",
+      "text": "Tell me about a time you disagreed with a decision but went along with it anyway.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "leadership",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you commit to it",
+        "how did it turn out"
+      ]
+    },
+    {
+      "id": "gen-055",
+      "text": "Tell me about a time someone pushed back hard on your idea.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "influence"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "were they right about anything",
+        "what did you change"
+      ]
+    },
+    {
+      "id": "gen-056",
+      "text": "Tell me about a time you had to say no to someone important.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "prioritization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did they take it",
+        "what did you offer instead"
+      ]
+    },
+    {
+      "id": "gen-057",
+      "text": "Tell me about a time you got people to change how they worked without having any authority over them.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who resisted most",
+        "did the change stick"
+      ]
+    },
+    {
+      "id": "gen-058",
+      "text": "Tell me about a time you had to convince leadership to fund or prioritize something.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was the case you made",
+        "what did they push back on"
+      ]
+    },
+    {
+      "id": "gen-059",
+      "text": "Give me an example of using data to change someone's mind.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that data",
+        "what if they'd still said no"
+      ]
+    },
+    {
+      "id": "gen-060",
+      "text": "Tell me about a time you had to get several teams to agree on one plan.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who had the most to lose",
+        "how did you keep them aligned after"
+      ]
+    },
+    {
+      "id": "gen-061",
+      "text": "Tell me about a time you sold an idea people were skeptical about.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "leadership",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what was the strongest objection",
+        "did it work"
+      ]
+    },
+    {
+      "id": "gen-062",
+      "text": "Tell me about a time you went out of your way for a customer.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "was it worth the cost",
+        "what changed for other customers"
+      ]
+    },
+    {
+      "id": "gen-063",
+      "text": "Tell me about a time you had to deal with an unhappy customer or client.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer",
+        "conflict"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "did you keep them",
+        "what caused it"
+      ]
+    },
+    {
+      "id": "gen-064",
+      "text": "Give me an example of customer feedback changing what you did.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer",
+        "data"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was your part specifically",
+        "how did you measure it",
+        "what would you do differently"
+      ]
+    },
+    {
+      "id": "gen-065",
+      "text": "Tell me about a time you had to tell a customer something they didn't want to hear.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer",
+        "communication"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how did they react",
+        "what would you say differently"
+      ]
+    },
+    {
+      "id": "gen-066",
+      "text": "Tell me about a time what customers actually needed turned out to be different from what they asked for.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer",
+        "problem solving"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you find out",
+        "what did you build instead"
+      ]
+    },
+    {
+      "id": "gen-067",
+      "text": "Tell me about a time you led a team through a hard stretch.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you do personally",
+        "who struggled most"
+      ]
+    },
+    {
+      "id": "gen-068",
+      "text": "Tell me about a time someone on your team wasn't performing. What did you do?",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "develop people"
+      ],
+      "great_eight": [
+        "develop_people"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how long did you wait to act",
+        "what happened to them"
+      ]
+    },
+    {
+      "id": "gen-069",
+      "text": "Give me an example of someone you helped grow in their role.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "develop people"
+      ],
+      "great_eight": [
+        "develop_people"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you actually do",
+        "where are they now"
+      ]
+    },
+    {
+      "id": "gen-070",
+      "text": "Tell me about a project you led where none of the people reported to you.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "influence"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you keep people accountable"
+      ]
+    },
+    {
+      "id": "gen-071",
+      "text": "Tell me about a time you had to deliver bad news to your team.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "communication"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did they react",
+        "what did you do the next day"
+      ]
+    },
+    {
+      "id": "gen-072",
+      "text": "Tell me about a time you handed off work you cared about so the team could scale.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "develop people"
+      ],
+      "great_eight": [
+        "develop_people",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you have to let go of",
+        "how did you make sure it held up"
+      ]
+    },
+    {
+      "id": "gen-073",
+      "text": "Tell me about a time you kept a long project going when nobody was paying attention to it.",
+      "type": "behavioral",
+      "behavioral_situation": "motivation",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why did you keep going",
+        "what did it lead to"
+      ]
+    },
+    {
+      "id": "gen-074",
+      "text": "Tell me about the piece of work you're proudest of.",
+      "type": "behavioral",
+      "behavioral_situation": "motivation",
+      "stages": [
+        "hiring_manager",
+        "leadership",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that one",
+        "what was your part specifically"
+      ]
+    },
+    {
+      "id": "gen-075",
+      "text": "Tell me about a time you took on something well outside your job description.",
+      "type": "behavioral",
+      "behavioral_situation": "motivation",
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why you",
+        "what did you give up to do it"
+      ]
+    },
+    {
+      "id": "gen-076",
+      "text": "Tell me about a time you had to learn something new quickly to get the job done.",
+      "type": "behavioral",
+      "behavioral_situation": "motivation",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "learning",
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you learn it",
+        "how good are you at it now"
+      ]
+    },
+    {
+      "id": "gen-077",
+      "text": "Tell me about a time you lost interest in a project. How did you handle it?",
+      "type": "behavioral",
+      "behavioral_situation": "motivation",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "self-awareness"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "did anyone notice",
+        "what did you learn about yourself"
+      ]
+    },
+    {
+      "id": "gen-078",
+      "text": "Tell me about a time you had to deliver under a very tight deadline.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "pressure",
+        "prioritization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you cut",
+        "would you do it the same way again"
+      ]
+    },
+    {
+      "id": "gen-079",
+      "text": "Tell me about a time you had to adapt to a big change at work.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ambiguity",
+        "adaptability"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was your part specifically",
+        "how did you measure it",
+        "what would you do differently"
+      ]
+    },
+    {
+      "id": "gen-080",
+      "text": "Tell me about a time you got feedback that was hard to hear.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager",
+        "leadership",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "self-awareness",
+        "learning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "was it fair",
+        "what did you change"
+      ]
+    },
+    {
+      "id": "gen-081",
+      "text": "Tell me about a time you had to choose between doing it right and doing it fast.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you trade away",
+        "what happened later because of it"
+      ]
+    },
+    {
+      "id": "gen-082",
+      "text": "Tell me about a time you had to follow a rule or process you didn't agree with.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "compliance",
+        "judgment"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "did you try to change it",
+        "what did you do in the meantime"
+      ]
+    },
+    {
+      "id": "gen-083",
+      "text": "Tell me about a mistake you made that affected other people.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "failure",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how did you tell them",
+        "what did you change after"
+      ]
+    },
+    {
+      "id": "gen-084",
+      "text": "How do you decide what to work on first when everything feels urgent?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "give me a recent example",
+        "who decides when you disagree"
+      ],
+      "notes": "Method question, typed technical per prompt 01 (how the candidate works), not behavioral."
+    },
+    {
+      "id": "gen-085",
+      "text": "How do you measure whether your work is actually making a difference?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that metric",
+        "what would it look like if it wasn't working"
+      ]
+    },
+    {
+      "id": "gen-086",
+      "text": "Walk me through how you'd plan a project starting from a blank page.",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you do before anything else",
+        "where do plans like that usually go wrong"
+      ]
+    },
+    {
+      "id": "gen-087",
+      "text": "A number that matters dropped last month. How would you figure out why?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "problem solving"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what if the data itself is wrong",
+        "who would you talk to first"
+      ]
+    },
+    {
+      "id": "gen-088",
+      "text": "How do you document your work so someone else can pick it up?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "productivity",
+        "collaboration"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "has anyone actually picked it up",
+        "how do you keep it current"
+      ]
+    },
+    {
+      "id": "gen-089",
+      "text": "If you had to cut your team's workload by a third tomorrow, how would you decide what goes?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization",
+        "judgment"
+      ],
+      "great_eight": [
+        "reduce_costs",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "who would push back",
+        "what's the risk you'd accept"
+      ]
+    },
+    {
+      "id": "gen-090",
+      "text": "How do you know when something is good enough to ship?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "judgment",
+        "quality"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "gen-091",
+      "text": "Walk me through how you'd run a test to decide between two options.",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "experimentation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how long would you run it",
+        "what if the result is flat"
+      ]
+    },
+    {
+      "id": "gen-092",
+      "text": "How do you keep track of a lot of projects at once without dropping things?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "productivity",
+        "organization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what breaks first at scale",
+        "how would you know it worked"
+      ]
+    },
+    {
+      "id": "gen-093",
+      "text": "How would you set up a weekly report on your area for leadership?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "communication"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you leave out",
+        "what decision would it help them make"
+      ]
+    },
+    {
+      "id": "gen-094",
+      "text": "How do you check your own work before it goes out?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "quality"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what slipped through last time",
+        "what's automated and what isn't"
+      ]
+    },
+    {
+      "id": "gen-095",
+      "text": "What would your first 90 days look like?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning",
+        "prioritization"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you not touch",
+        "what's your first early win"
+      ]
+    },
+    {
+      "id": "gen-096",
+      "text": "If you joined, what's the first thing you'd want to understand?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning",
+        "curiosity"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you need to validate first",
+        "what's the first step, concretely"
+      ]
+    },
+    {
+      "id": "gen-097",
+      "text": "Based on what you've seen so far, what would you change about how we do things?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what are you assuming",
+        "what if you're wrong about that"
+      ]
+    },
+    {
+      "id": "gen-098",
+      "text": "A year from now, what would make this hire a clear success, in your view?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how would we measure that",
+        "what would get in the way"
+      ]
+    },
+    {
+      "id": "gen-099",
+      "text": "Given the challenge I just described, where would you start?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "problem solving",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you need to see first",
+        "what's your first hypothesis"
+      ],
+      "notes": "Best with a JD or a described challenge loaded; without one the app should state a generic challenge first."
+    },
+    {
+      "id": "gen-100",
+      "text": "How would you build trust with the team in your first month?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "collaboration",
+        "leadership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you need to validate first",
+        "what's the first step, concretely"
+      ]
+    },
+    {
+      "id": "gen-101",
+      "text": "What do you think will be hardest about this role?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "self-awareness",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how would you handle that",
+        "have you faced that before"
+      ]
+    },
+    {
+      "id": "gen-102",
+      "text": "Have you managed people directly?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many",
+        "what's the closest you've come"
+      ]
+    },
+    {
+      "id": "gen-103",
+      "text": "Have you worked in our industry before?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you have to learn",
+        "what transfers"
+      ]
+    },
+    {
+      "id": "gen-104",
+      "text": "This role is a step up from what you do now. What makes you ready for it?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "where would you struggle",
+        "who would back that up"
+      ]
+    },
+    {
+      "id": "gen-105",
+      "text": "Have you owned a budget?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how big",
+        "how did you decide where it went"
+      ]
+    },
+    {
+      "id": "gen-106",
+      "text": "Have you presented to executives or a board?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "communication",
+        "influence"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did it go",
+        "what would you do differently"
+      ]
+    },
+    {
+      "id": "gen-107",
+      "text": "What questions do you have for me?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "curiosity",
+        "preparation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "anything else"
+      ],
+      "moment": "candidate_questions",
+      "notes": "Candidate's-own-questions moment. No type in the enum fits a prompt that hands the floor to the candidate; typed motivation as closest (it shows interest and preparation). The spoken reply is scored by question_quality (prompt 10), not the normal rubric."
+    },
+    {
+      "id": "gen-108",
+      "text": "Before we wrap up, is there anything you'd like to ask me?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "curiosity",
+        "preparation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "anything else"
+      ],
+      "moment": "candidate_questions",
+      "notes": "Candidate's-own-questions moment. No type in the enum fits a prompt that hands the floor to the candidate; typed motivation as closest (it shows interest and preparation). The spoken reply is scored by question_quality (prompt 10), not the normal rubric."
+    },
+    {
+      "id": "gen-109",
+      "text": "What would you want to know from me before deciding this is right for you?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "curiosity",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "anything else"
+      ],
+      "founder_variant": true,
+      "moment": "candidate_questions",
+      "notes": "Candidate's-own-questions moment. No type in the enum fits a prompt that hands the floor to the candidate; typed motivation as closest (it shows interest and preparation). The spoken reply is scored by question_quality (prompt 10), not the normal rubric."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "label": "typical",
+  "duration_s": 58.0,
+  "sentences": [
+    {"i": 1, "start": 0.0, "end": 6.8, "text": "So, um, at Fernhill I was on the lifecycle team, and we owned all the onboarding emails."},
+    {"i": 2, "start": 6.8, "end": 13.5, "text": "And basically activation was kind of flat, like for a long time, and leadership was worried about it."},
+    {"i": 3, "start": 13.5, "end": 20.2, "text": "We had a welcome series, it was five emails, and the thinking was the content wasn't strong enough."},
+    {"i": 4, "start": 20.2, "end": 27.0, "text": "So we looked at the data and, you know, people were actually clicking, they just weren't linking their bank."},
+    {"i": 5, "start": 27.0, "end": 36.4, "text": "So we changed the trigger so it fires when they stall on that step, and the design team simplified the screen."},
+    {"i": 6, "start": 36.4, "end": 41.9, "text": "And activation went up to about 44 percent, which was a big deal for us."},
+    {"i": 7, "start": 41.9, "end": 58.0, "text": "And then after that we also started looking at the second week, and we did some stuff with push notifications, and I think that helped too, but we never really measured that one properly."}
+  ]
+}

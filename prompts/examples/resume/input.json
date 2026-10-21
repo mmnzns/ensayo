@@ -1,0 +1,20 @@
+{
+  "company": "Kestrel Pay",
+  "role": "Senior Lifecycle Marketing Manager",
+  "resume_text_file": "resume.txt",
+  "jd_analysis": {
+    "great_eight": [
+      {"id": "retain_customers", "why": "Activation and early retention reported to the founders weekly."},
+      {"id": "productivity", "why": "No ops team behind you: one person builds and runs lifecycle."},
+      {"id": "attract_customers", "why": "From first signup to the tenth payment."}
+    ],
+    "must_believe": [
+      {"belief": "This person can own lifecycle end to end without an ops team.", "best_story_id": null},
+      {"belief": "This person moves activation, not just sends messages.", "best_story_id": "st_onboarding"},
+      {"belief": "This person will run it week to week until the number moves.", "best_story_id": null}
+    ],
+    "summary": "A founder-led payments startup needs one person to build and run lifecycle from signup to the tenth payment, reporting activation and early retention weekly."
+  },
+  "bank_numbers": "st_onboarding | activation_7d | 31 | 44 | % | verified\nst_onboarding | bank_link_steps | 3 | 1 | steps | verified",
+  "bank_index": "st_onboarding | Onboarding drop-off | improving a metric; finding the real problem | lifecycle strategy, data analysis | attract_customers, retain_customers | activation_7d, bank_link_steps"
+}
