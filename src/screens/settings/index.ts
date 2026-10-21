@@ -10,6 +10,9 @@ import SettingsAi from "./SettingsAi";
 import SettingsPrivacy from "./SettingsPrivacy";
 import SettingsCheckSetup from "./SettingsCheckSetup";
 import Feedback from "./Feedback";
+import SettingsAbout from "./SettingsAbout";
+import SettingsDeveloper from "./SettingsDeveloper";
+import { extras as settingsExtras } from "./extras";
 
 /** Screen id to component, for this group's screens. */
 export const routes: Record<string, ComponentType> = {
@@ -23,7 +26,9 @@ export const routes: Record<string, ComponentType> = {
   "8-6-settings-privacy": SettingsPrivacy,
   "8-7-settings-check-setup": SettingsCheckSetup,
   "9-1-feedback": Feedback,
+  "settings-about": SettingsAbout,
+  "settings-developer": SettingsDeveloper,
 };
 
 /** Extra screens (states, dialogs) this group adds beyond the 46 in the design export. */
-export const extras: ManifestEntry[] = [];
+export const extras: ManifestEntry[] = settingsExtras;

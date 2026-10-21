@@ -1,8 +1,27 @@
 // Draft generated from Design/screens/html/7-2-progress-sessions.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
+import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { useStore } from "../../data/store";
+import type { Mode } from "../../data/types";
 
+/** The chips are one row: All clears the filters, Drill and Mock pick a mode, an application narrows to it. They combine. */
 export default function ProgressSessions() {
+  const { sessions, applications } = useStore();
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [appId, setAppId] = useState<string | null>(null);
+
+  // Applications that have at least one session, in the order they first show up.
+  const appIds = sessions.map((s) => s.applicationId).filter((id, i, all): id is string => !!id && all.indexOf(id) === i);
+  const appName = (id: string) => applications.find((a) => a.id === id)?.company ?? "Application";
+
+  const shown = sessions.filter((s) => (!mode || s.mode === mode) && (!appId || s.applicationId === appId));
+  const groups = shown.map((s) => s.group).filter((g, i, all) => all.indexOf(g) === i);
+  const lastId = shown[shown.length - 1]?.id;
+  const noFilter = !mode && !appId;
+
+  const chip = (on: boolean) => (on ? "e-chip e-chip-on" : "e-chip");
+
   return (
     <AppShell nav="progress">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
@@ -13,64 +32,43 @@ export default function ProgressSessions() {
         </div>
       </header>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-        <button type="button" className="e-chip e-chip-on" aria-pressed="true">All</button>
-        <button type="button" className="e-chip">Drill</button>
-        <button type="button" className="e-chip">Mock</button>
-        <button type="button" className="e-chip">Kestrel Pay</button>
-        <button type="button" className="e-chip">Northpine</button>
+        <button type="button" className={chip(noFilter)} aria-pressed={noFilter} onClick={() => { setMode(null); setAppId(null); }}>All</button>
+        <button type="button" className={chip(mode === "drill")} aria-pressed={mode === "drill"} onClick={() => setMode(mode === "drill" ? null : "drill")}>Drill</button>
+        <button type="button" className={chip(mode === "mock")} aria-pressed={mode === "mock"} onClick={() => setMode(mode === "mock" ? null : "mock")}>Mock</button>
+        {appIds.map((id) => (
+          <button key={id} type="button" className={chip(appId === id)} aria-pressed={appId === id} onClick={() => setAppId(appId === id ? null : id)}>{appName(id)}</button>
+        ))}
       </div>
       <span className="e-small">Drill: a note after every answer, with retries. Mock: a full stage run straight through, notes at the end.</span>
       <section className="e-card" style={{ padding: "4px 28px" }}>
-        <span className="e-label" style={{ display: "block", padding: "18px 0 4px" }}>This week</span>{" "}
-        <Link to="4-3-session-results-drill" className="e-rowline" style={{ textDecoration: "none", color: "var(--e-ink)" }}>
-          <span className="e-meta" style={{ width: "120px" }}>Today, 9:12 PM</span>
-          <span className="e-pill" style={{ background: "var(--e-ground)", width: "52px", justifyContent: "center" }}>Drill</span>
-          <span style={{ flex: "1" }}>Hiring manager · Kestrel Pay</span>
-          <span className="e-hand" style={{ fontSize: "17px", color: "var(--e-win)" }}>38s → 9s</span>
-          <span className="e-small" style={{ width: "24px" }}>›</span>
-        </Link>
-        {" "}
-        <Link to="4-4-session-results-mock-debrief" className="e-rowline" style={{ textDecoration: "none", color: "var(--e-ink)" }}>
-          <span className="e-meta" style={{ width: "120px" }}>Yesterday</span>
-          <span className="e-pill" style={{ background: "var(--e-ink)", color: "#FFFFFF", width: "52px", justifyContent: "center" }}>Mock</span>
-          <span style={{ flex: "1" }}>Leadership · Kestrel Pay</span>
-          <span className="e-hand" style={{ fontSize: "17px" }}>5 of 6 on point</span>
-          <span className="e-small" style={{ width: "24px" }}>›</span>
-        </Link>
-        {" "}
-        <Link to="4-3-session-results-drill" className="e-rowline" style={{ textDecoration: "none", color: "var(--e-ink)" }}>
-          <span className="e-meta" style={{ width: "120px" }}>Mon, Oct 19</span>
-          <span className="e-pill" style={{ background: "var(--e-ground)", width: "52px", justifyContent: "center" }}>Drill</span>
-          <span style={{ flex: "1" }}>Recruiter · general questions</span>
-          <span className="e-hand" style={{ fontSize: "17px" }}>3 fixes stuck</span>
-          <span className="e-small" style={{ width: "24px" }}>›</span>
-        </Link>
-        {" "}<span className="e-label" style={{ display: "block", padding: "22px 0 4px" }}>Last week</span>{" "}
-        <Link to="4-3-session-results-drill" className="e-rowline" style={{ textDecoration: "none", color: "var(--e-ink)" }}>
-          <span className="e-meta" style={{ width: "120px" }}>Sat, Oct 17</span>
-          <span className="e-pill" style={{ background: "var(--e-ground)", width: "52px", justifyContent: "center" }}>Drill</span>
-          <span style={{ flex: "1" }}>Story: Reactivation program</span>
-          <span className="e-hand" style={{ fontSize: "17px" }}>said 4.8% every time</span>
-          <span className="e-small" style={{ width: "24px" }}>›</span>
-        </Link>
-        {" "}
-        <Link to="4-3-session-results-drill" className="e-rowline" style={{ textDecoration: "none", color: "var(--e-ink)" }}>
-          <span className="e-meta" style={{ width: "120px" }}>Thu, Oct 15</span>
-          <span className="e-pill" style={{ background: "var(--e-ground)", width: "52px", justifyContent: "center" }}>Drill</span>
-          <span style={{ flex: "1" }}>Technical · Northpine</span>
-          <span className="e-hand" style={{ fontSize: "17px" }}>2 fixes stuck</span>
-          <span className="e-small" style={{ width: "24px" }}>›</span>
-        </Link>
-        {" "}
-        <Link to="4-4-session-results-mock-debrief" className="e-rowline" style={{ textDecoration: "none", color: "var(--e-ink)", borderBottom: "none" }}>
-          <span className="e-meta" style={{ width: "120px" }}>Tue, Oct 13</span>
-          <span className="e-pill" style={{ background: "var(--e-ink)", color: "#FFFFFF", width: "52px", justifyContent: "center" }}>Mock</span>
-          <span style={{ flex: "1" }}>Recruiter · Kestrel Pay</span>
-          <span className="e-hand" style={{ fontSize: "17px" }}>4 of 5 on point</span>
-          <span className="e-small" style={{ width: "24px" }}>›</span>
-        </Link>
+        {shown.length === 0 && (
+          <p className="e-meta" style={{ margin: "0", padding: "22px 0" }}>No sessions match. Pick All to see every session.</p>
+        )}
+        {groups.map((g, gi) => (
+          <div key={g}>
+            <span className="e-label" style={{ display: "block", padding: gi === 0 ? "18px 0 4px" : "22px 0 4px" }}>{g}</span>
+            {shown
+              .filter((s) => s.group === g)
+              .map((s) => (
+                <Link
+                  key={s.id}
+                  to={s.mode === "mock" ? "4-4-session-results-mock-debrief" : "4-3-session-results-drill"}
+                  className="e-rowline"
+                  style={{ textDecoration: "none", color: "var(--e-ink)", ...(s.id === lastId ? { borderBottom: "none" } : {}) }}
+                >
+                  <span className="e-meta" style={{ width: "120px" }}>{s.when}</span>
+                  <span className="e-pill" style={s.mode === "mock" ? { background: "var(--e-ink)", color: "var(--e-surface)", width: "52px", justifyContent: "center" } : { background: "var(--e-ground)", width: "52px", justifyContent: "center" }}>
+                    {s.mode === "mock" ? "Mock" : "Drill"}
+                  </span>
+                  <span style={{ flex: "1" }}>{s.title}</span>
+                  <span className="e-hand" style={{ fontSize: "17px", ...(s.headline.includes("→") ? { color: "var(--e-win)" } : {}) }}>{s.headline}</span>
+                  <span className="e-small" style={{ width: "24px" }}>›</span>
+                </Link>
+              ))}
+          </div>
+        ))}
       </section>
-      <span className="e-small">Recordings are kept for 30 days, then only the text stays. Change this in Settings, Privacy.</span>
+      <span className="e-small">Recordings are kept for 30 days, then only the text stays. Change this in <Link to="8-6-settings-privacy">Settings, Privacy</Link>.</span>
     </AppShell>
   );
 }

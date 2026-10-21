@@ -1,8 +1,43 @@
 // Draft generated from Design/screens/html/7-1-progress-habits.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { habitStatus, useStore } from "../../data/store";
+import type { Habit, Streak } from "../../data/types";
+import type { HabitProgress } from "../../data/screens/settings";
+import { passRate, shortDate, youLabel } from "./format";
+
+const TOTALS: { label: string; key: keyof Streak; color?: string }[] = [
+  { label: "Days in a row", key: "daysInARow", color: "var(--e-win)" },
+  { label: "Answers practiced", key: "answers" },
+  { label: "Questions faced", key: "questions" },
+  { label: "Follow-ups handled", key: "followUps" },
+];
+
+/** The last 10 first tries as ten small blocks, oldest first, padded on the left when there are fewer. */
+function LastTen({ results }: { results: boolean[] }) {
+  const last = results.slice(-10);
+  const cells: (boolean | null)[] = [...Array(10 - last.length).fill(null), ...last];
+  const { passes, of } = habitStatus(results);
+  return (
+    <div style={{ display: "flex", gap: "6px" }} aria-label={`Last ${of} answers: ${passes} passed`}>
+      {cells.map((c, i) => (
+        <span key={i} style={{ flex: "1", height: "28px", borderRadius: "6px", background: c ? "var(--e-primary)" : "var(--e-line)" }} />
+      ))}
+    </div>
+  );
+}
+
+const retryText = (r?: [number, number]) => (r ? `${r[0]} of ${r[1]}` : "n/a");
 
 export default function ProgressHabits() {
+  const store = useStore();
+  const { streak, habits } = store;
+  const data = store.screens.settings.progress;
+  const habitOf = (id: string): Habit | undefined => habits.find((h) => h.id === id);
+  const progressOf = (id: string): HabitProgress | undefined => data.habits.find((p) => p.id === id);
+  const rows = habits.map((h) => ({ habit: h, progress: progressOf(h.id) }));
+  const focus = data.focus.map((f) => ({ f, habit: habitOf(f.id), progress: progressOf(f.id) })).filter((x) => x.habit && x.progress);
+
   return (
     <AppShell nav="progress">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
@@ -13,133 +48,60 @@ export default function ProgressHabits() {
         </div>
       </header>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
-        <div className="e-card" style={{ padding: "20px" }}>
-          <span className="e-small">Days in a row</span>
-          <div className="e-hand" style={{ fontSize: "31px", color: "var(--e-win)" }}>5</div>
-        </div>
-        <div className="e-card" style={{ padding: "20px" }}>
-          <span className="e-small">Answers practiced</span>
-          <div className="e-hand" style={{ fontSize: "31px" }}>58</div>
-        </div>
-        <div className="e-card" style={{ padding: "20px" }}>
-          <span className="e-small">Questions faced</span>
-          <div className="e-hand" style={{ fontSize: "31px" }}>23</div>
-        </div>
-        <div className="e-card" style={{ padding: "20px" }}>
-          <span className="e-small">Follow-ups handled</span>
-          <div className="e-hand" style={{ fontSize: "31px" }}>11</div>
-        </div>
+        {TOTALS.map((t) => (
+          <div key={t.key} className="e-card" style={{ padding: "20px" }}>
+            <span className="e-small">{t.label}</span>
+            <div className="e-hand" style={{ fontSize: "31px", ...(t.color ? { color: t.color } : {}) }}>{streak[t.key]}</div>
+          </div>
+        ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
-        <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "14px", boxShadow: "inset 0 0 0 2px var(--e-primary)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-            <span className="e-label" style={{ color: "var(--e-primary-dark)" }}>Focus</span>
-            <span className="e-small">since Oct 21</span>
-          </div>
-          <span className="e-h2">Saying what you decided</span>
-          <div style={{ display: "flex", gap: "6px" }} aria-label="Last 10 answers: 5 passed">
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-          </div>
-          <span className="e-meta">5 of your last 10 first tries · the fix stuck on retry 4 of 5 times</span>
-        </section>
-        <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "14px", boxShadow: "inset 0 0 0 2px var(--e-primary)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-            <span className="e-label" style={{ color: "var(--e-primary-dark)" }}>Focus</span>
-            <span className="e-small">since Oct 2</span>
-          </div>
-          <span className="e-h2">Stopping once the point lands</span>
-          <div style={{ display: "flex", gap: "6px" }} aria-label="Last 10 answers: 4 passed">
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-line)" }} />
-            <span style={{ flex: "1", height: "28px", borderRadius: "6px", background: "var(--e-primary)" }} />
-          </div>
-          <span className="e-meta">4 of your last 10 first tries · about 14 seconds past the point, down from 31</span>
-        </section>
-      </div>
+      {focus.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
+          {focus.map(({ f, habit, progress }) => {
+            const { passes, of } = habitStatus(progress!.results);
+            const detail = f.detail ?? (progress!.retry ? `the fix stuck on retry ${progress!.retry[0]} of ${progress!.retry[1]} times` : "");
+            return (
+              <section key={f.id} className="e-card" style={{ display: "flex", flexDirection: "column", gap: "14px", boxShadow: "inset 0 0 0 2px var(--e-primary)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                  <span className="e-label" style={{ color: "var(--e-primary-dark)" }}>Focus</span>
+                  <span className="e-small">since {shortDate(f.since)}</span>
+                </div>
+                <span className="e-h2">{youLabel(habit!.label)}</span>
+                <LastTen results={progress!.results} />
+                <span className="e-meta">
+                  {passes} of your last {of} first tries{detail ? ` · ${detail}` : ""}
+                </span>
+              </section>
+            );
+          })}
+        </div>
+      )}
       <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "0", padding: "8px 28px" }}>
         <div className="e-rowline" style={{ padding: "14px 0" }}>
           <span className="e-h3" style={{ flex: "1" }}>All habits</span>
           <span className="e-small" style={{ width: "200px" }}>right first time</span>
           <span className="e-small" style={{ width: "120px", textAlign: "right" }}>fix stuck on retry</span>
         </div>
-        <div className="e-rowline" style={{ padding: "14px 0" }}>
-          <span style={{ flex: "1", display: "flex", alignItems: "center", gap: "10px" }}>
-            Getting to the point <span className="e-badge" style={{ background: "#FFE7B8", color: "#7A4A12" }}>Graduated</span>
-          </span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "80%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>9 of 10</span>
-        </div>
-        <div className="e-rowline" style={{ padding: "14px 0" }}>
-          <span style={{ flex: "1" }}>Saying your numbers</span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "90%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>3 of 3</span>
-        </div>
-        <div className="e-rowline" style={{ padding: "14px 0" }}>
-          <span style={{ flex: "1" }}>Picking a story that fits</span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "100%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>n/a</span>
-        </div>
-        <div className="e-rowline" style={{ padding: "14px 0" }}>
-          <span style={{ flex: "1" }}>Keeping the setup short</span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "70%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>2 of 3</span>
-        </div>
-        <div className="e-rowline" style={{ padding: "14px 0" }}>
-          <span style={{ flex: "1" }}>Opening with how you work</span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "30%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>1 of 4</span>
-        </div>
-        <div className="e-rowline" style={{ padding: "14px 0" }}>
-          <span style={{ flex: "1" }}>Saying it with conviction</span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "90%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>1 of 1</span>
-        </div>
-        <div className="e-rowline" style={{ padding: "14px 0" }}>
-          <span style={{ flex: "1" }}>
-            Filler words <span className="e-small">· 3.1 a minute</span>
-          </span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "60%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>2 of 4</span>
-        </div>
-        <div className="e-rowline" style={{ padding: "14px 0", borderBottom: "none" }}>
-          <span style={{ flex: "1" }}>No knocks on past teams</span>
-          <div className="e-bar" style={{ width: "200px" }}>
-            <span style={{ width: "100%" }} />
-          </div>
-          <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>n/a</span>
-        </div>
+        {rows.map(({ habit, progress }, i) => {
+          const graduated = progress ? habitStatus(progress.results).graduated : false;
+          return (
+            <div key={habit.id} className="e-rowline" style={{ padding: "14px 0", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
+              <span style={{ flex: "1", display: "flex", alignItems: "center", gap: "10px" }}>
+                <span>
+                  {youLabel(habit.label)}
+                  {progress?.note ? <span className="e-small"> · {progress.note}</span> : null}
+                </span>
+                {graduated ? <span className="e-badge" style={{ background: "#FFE7B8", color: "#7A4A12" }}>Graduated</span> : null}
+              </span>
+              <div className="e-bar" style={{ width: "200px" }} role="img" aria-label={progress ? `Right first time in ${Math.round(passRate(progress.results) * 100)} percent of recent answers` : "No answers yet"}>
+                <span style={{ width: `${Math.round((progress ? passRate(progress.results) : 0) * 100)}%` }} />
+              </div>
+              <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>{retryText(progress?.retry)}</span>
+            </div>
+          );
+        })}
       </section>
-      <span className="e-small">Based on your last 20 answers. How answers are judged was updated on Oct 18; older results keep their original marks.</span>
+      <span className="e-small">Based on your last {data.basedOnLast} answers. How answers are judged was updated on {shortDate(data.judgedUpdatedOn)}; older results keep their original marks.</span>
     </AppShell>
   );
 }

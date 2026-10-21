@@ -1,110 +1,153 @@
 // Draft generated from Design/screens/html/8-4-settings-speech.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
-import AppShell from "../../ui/AppShell";
-import Link from "../../ui/Link";
+import { useState } from "react";
+import { useStore } from "../../data/store";
+import type { SpeechModel } from "../../data/screens/settings";
+import { formatSize } from "./format";
+import { KeyResult, SettingsLayout, useKeyTests, useLater } from "./parts";
+
+const ring = (color: string) => ({ width: "10px", height: "10px", borderRadius: "50%", boxShadow: `inset 0 0 0 1.5px ${color}`, flex: "none" as const });
 
 export default function SettingsSpeech() {
+  const { speech } = useStore().screens.settings;
+  const [engine, setEngine] = useState(speech.models.find((m) => m.status === "in-use")?.engine ?? speech.engines[0].name);
+  const [models, setModels] = useState<SpeechModel[]>(speech.models);
+  const [downloading, setDownloading] = useState<string[]>([]);
+  const [modelFor, setModelFor] = useState(speech.modelFor);
+  const [processor, setProcessor] = useState<"Automatic" | "Lower">("Automatic");
+  const [keys, setKeys] = useState<Record<string, string>>({});
+  const tests = useKeyTests();
+  const later = useLater();
+
+  const engineInfo = speech.engines.find((e) => e.name === engine);
+  const engineModels = models.filter((m) => m.engine === engine);
+  const selectedId = engineModels.some((m) => m.id === modelFor[engine]) ? modelFor[engine] : engineModels[0]?.id;
+  const selected = models.find((m) => m.id === selectedId);
+  const onDisk = models.filter((m) => m.status === "in-use" || m.status === "ready" || m.status === "found");
+  const totalMb = onDisk.reduce((sum, m) => sum + m.mb, 0);
+
+  const setStatus = (id: string, status: SpeechModel["status"]) => setModels((ms) => ms.map((m) => (m.id === id ? { ...m, status } : m)));
+  const use = (id: string) => {
+    const m = models.find((x) => x.id === id);
+    if (m) setEngine(m.engine);
+    setModels((ms) => ms.map((x) => (x.id === id ? { ...x, status: "in-use" } : x.status === "in-use" ? { ...x, status: "ready" } : x)));
+  };
+  const remove = (id: string) =>
+    setModels((ms) => {
+      const wasInUse = ms.find((m) => m.id === id)?.status === "in-use";
+      const next = ms.map((m) => (m.id === id ? { ...m, status: "missing" as const } : m));
+      if (!wasInUse) return next;
+      const heir = next.find((m) => m.status === "ready");
+      return heir ? next.map((m) => (m.id === heir.id ? { ...m, status: "in-use" as const } : m)) : next;
+    });
+  const download = (id: string) => {
+    setDownloading((d) => [...d, id]);
+    later(() => {
+      setDownloading((d) => d.filter((x) => x !== id));
+      setStatus(id, "ready");
+    }, 1500);
+  };
+
+  const changeEngine = (name: string) => {
+    setEngine(name);
+    const first = models.find((m) => m.engine === name);
+    const id = models.some((m) => m.id === modelFor[name] && m.engine === name) ? modelFor[name] : first?.id;
+    const m = models.find((x) => x.id === id);
+    if (m && (m.status === "ready" || m.status === "found")) use(m.id);
+  };
+
+  const pickModel = (id: string) => {
+    setModelFor((f) => ({ ...f, [engine]: id }));
+    const m = models.find((x) => x.id === id);
+    if (m && (m.status === "ready" || m.status === "found")) use(id);
+  };
+
   return (
-    <AppShell nav="settings">
-      <h1 className="e-h1">Settings</h1>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "flex-start" }}>
-        <nav style={{ flex: "1 1 170px", maxWidth: "200px", display: "flex", flexDirection: "column", gap: "2px" }} aria-label="Settings sections">
-          <Link to="8-1-settings-profile" className="e-nav">Profile</Link>
-          <Link to="8-2-settings-practice" className="e-nav">Practice</Link>
-          <Link to="8-3-settings-voice" className="e-nav">Voice</Link>
-          <Link to="8-4-settings-speech" className="e-nav e-nav-on" aria-current="page">Speech</Link>
-          <Link to="8-5-settings-ai" className="e-nav">AI</Link>
-          <Link to="8-6-settings-privacy" className="e-nav">Privacy</Link>
-          <Link to="8-7-settings-check-setup" className="e-nav">Check setup</Link>
-        </nav>
-        <div style={{ flex: "999 1 480px", minWidth: "0", display: "flex", flexDirection: "column", gap: "20px" }}>
-          <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingBottom: "10px" }}>
-              <span className="e-h2">Speech to text</span>
-              <span className="e-meta">How your answers become words. Local models work offline and keep everything here.</span>
-            </div>
-            <div className="e-rowline">
-              <span style={{ flex: "1" }}>Engine</span>
-              <select className="e-input" style={{ width: "260px" }} aria-label="Speech engine">
-                <optgroup label="On this computer">
-                  <option>Whisper</option>
-                  <option>Parakeet</option>
-                  <option>Nemotron</option>
-                </optgroup>
+    <SettingsLayout active="8-4-settings-speech">
+      <div style={{ flex: "999 1 480px", minWidth: "0", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingBottom: "10px" }}>
+            <span className="e-h2">Speech to text</span>
+            <span className="e-meta">How your answers become words. Local models work offline and keep everything here.</span>
+          </div>
+          <div className="e-rowline">
+            <span style={{ flex: "1" }}>Engine</span>
+            <select className="e-input" style={{ width: "260px" }} aria-label="Speech engine" value={engine} onChange={(e) => changeEngine(e.target.value)}>
+              <optgroup label="On this computer">
+                {speech.engines.map((e) => (
+                  <option key={e.name}>{e.name}</option>
+                ))}
+              </optgroup>
+              {speech.onlineSpeechInV0 && (
                 <optgroup label="Online, with your key">
-                  <option>AssemblyAI</option>
-                  <option>ElevenLabs Scribe</option>
-                  <option>Gemini</option>
-                  <option>Speechmatics</option>
-                  <option>xAI</option>
+                  {speech.onlineEngines.map((e) => (
+                    <option key={e}>{e}</option>
+                  ))}
                 </optgroup>
-              </select>
+              )}
+            </select>
+          </div>
+          <div className="e-rowline">
+            <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+              Model<span className="e-small">{engineInfo?.hint}</span>
+              {selected && selected.status === "missing" && <span className="e-small" style={{ color: "var(--e-ink)" }}>Not on this computer yet. Download it below.</span>}
+            </span>
+            <select className="e-input" style={{ width: "260px" }} aria-label="Model" value={selectedId} onChange={(e) => pickModel(e.target.value)}>
+              {engineModels.map((m) => (
+                <option key={m.id} value={m.id}>{`${m.name} · ${formatSize(m.mb)}`}</option>
+              ))}
+            </select>
+          </div>
+          <div className="e-rowline" style={{ borderBottom: "none" }}>
+            <span style={{ flex: "1" }}>Processor use</span>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+              {(["Automatic", "Lower"] as const).map((p) => (
+                <button key={p} type="button" className={processor === p ? "e-chip e-chip-on" : "e-chip"} aria-pressed={processor === p} onClick={() => setProcessor(p)}>{p}</button>
+              ))}
+              <span className="e-small">{processor === "Automatic" ? "uses the graphics chip when it helps" : "keeps the computer quieter, a little slower"}</span>
             </div>
-            <div className="e-rowline">
-              <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-                Model<span className="e-small">Large Turbo is the most accurate and keeps the "um"s. Small is faster on older machines.</span>
-              </span>
-              <select className="e-input" style={{ width: "260px" }} aria-label="Model" defaultValue="Whisper Large Turbo · 575 MB">
-                <option>Whisper Large Turbo · 575 MB</option>
-                <option>Whisper Small · 244 MB</option>
-              </select>
-            </div>
-            <div className="e-rowline" style={{ borderBottom: "none" }}>
-              <span style={{ flex: "1" }}>Processor use</span>
-              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                <button type="button" className="e-chip e-chip-on" aria-pressed="true">Automatic</button>
-                <button type="button" className="e-chip">Lower</button>
-                <span className="e-small">uses the graphics chip when it helps</span>
+          </div>
+        </section>
+        <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", paddingBottom: "10px" }}>
+            <span className="e-h3">Models on this computer</span>
+            <span className="e-small">{formatSize(totalMb)}</span>
+          </div>
+          {models.map((m, i) => {
+            const busy = downloading.includes(m.id);
+            const inUse = m.status === "in-use";
+            const have = inUse || m.status === "ready" || m.status === "found";
+            return (
+              <div key={m.id} className="e-rowline" style={{ padding: "12px 0", ...(i === models.length - 1 ? { borderBottom: "none" } : {}) }}>
+                {inUse ? <span className="e-dot" aria-hidden="true" /> : <span style={ring(have ? "var(--e-muted)" : "var(--e-line)")} />}
+                <span style={{ flex: "1", ...(have ? {} : { color: "var(--e-muted)" }) }}>
+                  {m.name}
+                  {m.status === "found" && <span className="e-small"> · found, from another app on this computer</span>}
+                </span>
+                <span className="e-small">{busy ? "Downloading…" : `${formatSize(m.mb)}${inUse ? " · in use" : ""}`}</span>
+                {have && !inUse && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => use(m.id)}>Use</button>}
+                {(inUse || m.status === "ready") && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => remove(m.id)}>Remove</button>}
+                {m.status === "missing" && <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={busy} onClick={() => download(m.id)}>{busy ? "Please wait" : "Download"}</button>}
               </div>
-            </div>
-          </section>
-          <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", paddingBottom: "10px" }}>
-              <span className="e-h3">Models on this computer</span>
-              <span className="e-small">1.4 GB</span>
-            </div>
-            <div className="e-rowline" style={{ padding: "12px 0" }}>
-              <span className="e-dot" aria-hidden="true" />
-              <span style={{ flex: "1" }}>Whisper Large Turbo</span>
-              <span className="e-small">575 MB · in use</span>
-              <button type="button" className="e-btn e-btn-ghost e-btn-sm">Remove</button>
-            </div>
-            <div className="e-rowline" style={{ padding: "12px 0" }}>
-              <span style={{ width: "10px", height: "10px", borderRadius: "50%", boxShadow: "inset 0 0 0 1.5px var(--e-muted)", flex: "none" }} />
-              <span style={{ flex: "1" }}>
-                Parakeet v3 <span className="e-small">· found, from another app on this computer</span>
-              </span>
-              <span className="e-small">600 MB</span>
-              <button type="button" className="e-btn e-btn-ghost e-btn-sm">Use</button>
-            </div>
-            <div className="e-rowline" style={{ padding: "12px 0" }}>
-              <span style={{ width: "10px", height: "10px", borderRadius: "50%", boxShadow: "inset 0 0 0 1.5px var(--e-line)", flex: "none" }} />
-              <span style={{ flex: "1", color: "var(--e-muted)" }}>Whisper Small</span>
-              <span className="e-small">244 MB</span>
-              <button type="button" className="e-btn e-btn-line e-btn-sm">Download</button>
-            </div>
-            <div className="e-rowline" style={{ padding: "12px 0", borderBottom: "none" }}>
-              <span style={{ width: "10px", height: "10px", borderRadius: "50%", boxShadow: "inset 0 0 0 1.5px var(--e-line)", flex: "none" }} />
-              <span style={{ flex: "1", color: "var(--e-muted)" }}>Nemotron</span>
-              <span className="e-small">2.4 GB</span>
-              <button type="button" className="e-btn e-btn-line e-btn-sm">Download</button>
-            </div>
-          </section>
+            );
+          })}
+        </section>
+        {speech.onlineSpeechInV0 && (
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <span className="e-h3">Online speech keys</span>
             <span className="e-meta">Only used when an online engine is selected. Your audio is sent to that service for transcription.</span>
-            <div className="e-rowline" style={{ padding: "12px 0" }}>
-              <span style={{ flex: "1" }}>AssemblyAI</span>
-              <input className="e-input" type="password" style={{ width: "260px" }} placeholder="Paste key" aria-label="AssemblyAI key" />
-              <button type="button" className="e-btn e-btn-soft e-btn-sm">Test</button>
-            </div>
-            <div className="e-rowline" style={{ padding: "12px 0", borderBottom: "none" }}>
-              <span style={{ flex: "1" }}>ElevenLabs</span>
-              <input className="e-input" type="password" style={{ width: "260px" }} placeholder="Paste key" aria-label="ElevenLabs key" />
-              <button type="button" className="e-btn e-btn-soft e-btn-sm">Test</button>
-            </div>
+            {speech.onlineKeys.map((k, i) => (
+              <div key={k.id} style={{ display: "flex", flexDirection: "column" }}>
+                <div className="e-rowline" style={{ padding: "12px 0", ...(i === speech.onlineKeys.length - 1 ? { borderBottom: "none" } : {}) }}>
+                  <span style={{ flex: "1" }}>{k.label}</span>
+                  <input className="e-input" type="password" style={{ width: "260px" }} placeholder="Paste key" aria-label={`${k.label} key`} value={keys[k.id] ?? ""} onChange={(e) => { setKeys((s) => ({ ...s, [k.id]: e.target.value })); tests.clear(k.id); }} />
+                  <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={() => tests.test(k.id, keys[k.id] ?? "")}>Test</button>
+                </div>
+                <KeyResult status={tests.status[k.id]} empty={!(keys[k.id] ?? "").trim()} />
+              </div>
+            ))}
           </section>
-        </div>
+        )}
       </div>
-    </AppShell>
+    </SettingsLayout>
   );
 }
