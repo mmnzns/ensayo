@@ -1,0 +1,59 @@
+[package]
+name = "ensayo"
+version = "0.0.1"
+description = "Interview rehearsal app"
+authors = ["Miguel Monzones"]
+edition = "2024"
+
+[lib]
+name = "ensayo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png", "macos-private-api"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2.0.21"
+dirs = "7.0.0"
+log = "0.4.34"
+cpal = "0.18.2"
+rtrb = "0.4.0"
+rubato = "5.0.1"
+hound = "3.5.1"
+whisper-rs = "0.16.0"
+parakeet-rs = "0.3.8"
+# parakeet-rs 0.3.8 does not build against ort 2.0.0-rc.14; keep rc.13 until it does (same pin as Talaan).
+ort = { version = "=2.0.0-rc.13", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "json"] }
+sha2 = "0.10.9"
+keyring = "3.6.3"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tiny_http = "0.12.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+whisper-rs = { version = "0.16.0", features = ["metal"] }
+objc2 = "0.6.5"
+objc2-av-foundation = "0.3.2"
+objc2-foundation = "0.3.2"
+block2 = "0.6.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+winreg = "0.56.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true
+
+# Dependencies are always optimized, even in debug builds: whisper.cpp (built through CMake, which follows
+# opt-level) and the audio math are 10x+ slower unoptimized. Ensayo's own code stays fast to compile.
+[profile.dev.package."*"]
+opt-level = 3
