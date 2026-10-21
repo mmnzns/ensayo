@@ -8,6 +8,7 @@ import ResultAttempt2 from "./ResultAttempt2";
 import FollowUp from "./FollowUp";
 import ClarifyingQuestion from "./ClarifyingQuestion";
 import ResultEverythingWorked from "./ResultEverythingWorked";
+import MockFollowUp from "./MockFollowUp";
 
 /** Screen id to component, for this group's screens. */
 export const routes: Record<string, ComponentType> = {
@@ -19,7 +20,10 @@ export const routes: Record<string, ComponentType> = {
   "3-6-follow-up": FollowUp,
   "3-7-clarifying-question": ClarifyingQuestion,
   "3-8-result-everything-worked": ResultEverythingWorked,
+  "practice-mock-follow-up": MockFollowUp,
 };
 
 /** Extra screens (states, dialogs) this group adds beyond the 46 in the design export. */
-export const extras: ManifestEntry[] = [];
+export const extras: ManifestEntry[] = [
+  { id: "practice-mock-follow-up", title: "Follow-up, in a Mock", shell: "focus", group: "practice", name: "MockFollowUp", designed: false },
+];
