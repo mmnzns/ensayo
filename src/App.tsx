@@ -3,7 +3,11 @@ import { StoreProvider } from "./data/store";
 import M0Check from "./m0/M0Check";
 import NotFound from "./screens/NotFound";
 import { registry } from "./screens/registry";
+import { applyStoredTheme } from "./screens/settings/theme";
 import { useRoute } from "./ui/router";
+
+// Appearance (Settings › Practice): Auto unless the user chose Light or Dark.
+applyStoredTheme();
 
 /** First-run until the profile is set up, then Home. M1 has no real profile yet, so "" opens Home. */
 const HOME = "2-1-home";

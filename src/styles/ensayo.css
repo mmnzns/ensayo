@@ -59,7 +59,7 @@
 .e-btn-line{background:transparent;color:var(--e-ink);box-shadow:inset 0 0 0 1.5px var(--e-line)}
 .e-btn-ghost{background:transparent;color:var(--e-muted);font-weight:500}
 .e-btn-sm{min-height:44px;padding:10px 14px;font-size:14px;border-radius:var(--e-r-sm)}
-.e-btn-danger{background:transparent;color:var(--e-danger);box-shadow:inset 0 0 0 1.5px #F1C4BE}
+.e-btn-danger{background:transparent;color:var(--e-danger);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--e-danger) 35%,transparent)}
 .e-chip{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:10px 16px;font:inherit;font-size:15px;background:var(--e-surface);color:var(--e-ink);border:none;box-shadow:inset 0 0 0 1.5px var(--e-line);cursor:pointer;min-height:44px;box-sizing:border-box;text-align:left}
 .e-chip-on{background:var(--e-tint);box-shadow:inset 0 0 0 2px var(--e-primary);font-weight:600}
 .e-pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500;background:var(--e-surface);color:var(--e-muted)}
