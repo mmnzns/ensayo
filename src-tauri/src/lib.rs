@@ -1,3 +1,5 @@
+mod ai;
+mod keys;
 mod paths;
 mod recorder;
 mod speech;
