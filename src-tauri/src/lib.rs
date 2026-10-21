@@ -1,4 +1,6 @@
+mod paths;
 mod recorder;
+mod speech;
 
 pub fn run() {
     tauri::Builder::default()
