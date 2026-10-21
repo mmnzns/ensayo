@@ -1,27 +1,22 @@
 // Draft generated from Design/screens/html/1-2-about-you.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
+import { useState } from "react";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
-import Wordmark from "../../ui/Wordmark";
+import { useStore } from "../../data/store";
+import StepHeader from "./StepHeader";
 
 export default function AboutYou() {
+  const { profile, screens } = useStore();
+  const { seniorityOptions, sellsToOptions } = screens.firstRun;
+  const [role, setRole] = useState(profile.targetRole);
+  const [industry, setIndustry] = useState(profile.industry);
+  const [seniority, setSeniority] = useState(profile.seniority);
+  const [sellsTo, setSellsTo] = useState(profile.sellsTo);
+  const [who, setWho] = useState(profile.identityStatement);
   return (
     <FocusShell>
-      <div className="e-wrap" style={{ gap: "32px" }}>
-        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-          <span className="e-brand" style={{ padding: "0" }} aria-label="Ensayo">
-            <Wordmark size={24} />
-          </span>
-          <div className="e-steps" aria-label="Step 2 of 7">
-            <span className="on" />
-            <span className="on" />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-          </div>
-          <Link to="1-3-what-to-work-on" className="e-btn e-btn-ghost e-btn-sm">Skip</Link>
-        </header>
+      <div className="e-wrap" style={{ width: "100%", gap: "32px" }}>
+        <StepHeader step={2} skipTo="1-3-what-to-work-on" />
         <div className="e-narrow" style={{ gap: "24px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <span className="e-label">Step 2 of 7</span>
@@ -32,36 +27,38 @@ export default function AboutYou() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
               <div className="e-field">
                 <label htmlFor="role">Role you're going for</label>
-                <input id="role" className="e-input" defaultValue="Senior Lifecycle Marketing Manager" />
+                <input id="role" className="e-input" value={role} onChange={(e) => setRole(e.target.value)} />
               </div>
               <div className="e-field">
                 <label htmlFor="ind">Industry</label>
-                <input id="ind" className="e-input" defaultValue="Fintech" />
+                <input id="ind" className="e-input" value={industry} onChange={(e) => setIndustry(e.target.value)} />
               </div>
             </div>
             <div className="e-field">
               <span style={{ fontSize: "14px", fontWeight: "600" }}>Seniority</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                <button type="button" className="e-chip">Early career</button>
-                <button type="button" className="e-chip">Mid-level</button>
-                <button type="button" className="e-chip e-chip-on" aria-pressed="true">Senior</button>
-                <button type="button" className="e-chip">Lead or manager</button>
-                <button type="button" className="e-chip">Director and up</button>
+                {seniorityOptions.map((o) => (
+                  <button key={o.value} type="button" className={o.value === seniority ? "e-chip e-chip-on" : "e-chip"} aria-pressed={o.value === seniority} onClick={() => setSeniority(o.value)}>
+                    {o.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="e-field">
               <span style={{ fontSize: "14px", fontWeight: "600" }}>You sell to</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                <button type="button" className="e-chip">Businesses (B2B)</button>
-                <button type="button" className="e-chip e-chip-on" aria-pressed="true">Consumers (B2C)</button>
-                <button type="button" className="e-chip">Both</button>
+                {sellsToOptions.map((o) => (
+                  <button key={o.value} type="button" className={o.value === sellsTo ? "e-chip e-chip-on" : "e-chip"} aria-pressed={o.value === sellsTo} onClick={() => setSellsTo(o.value)}>
+                    {o.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="e-field">
               <label htmlFor="who">
                 Who you are at work, in one sentence <span style={{ fontWeight: "400", color: "var(--e-muted)" }}>(optional)</span>
               </label>
-              <textarea id="who" className="e-input" rows={3} defaultValue={"I'm a lifecycle marketer who finds where activation and retention actually break, then builds the journeys that fix them."} />
+              <textarea id="who" className="e-input" rows={3} value={who} onChange={(e) => setWho(e.target.value)} />
               <span className="e-small">Ensayo checks that this comes through early when you answer "Tell me about yourself".</span>
             </div>
           </div>

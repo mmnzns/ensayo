@@ -7,6 +7,7 @@ import Microphone from "./Microphone";
 import Speech from "./Speech";
 import FeedbackEngine from "./FeedbackEngine";
 import YourFirstStory from "./YourFirstStory";
+import ThatsTheLoop from "./ThatsTheLoop";
 
 /** Screen id to component, for this group's screens. */
 export const routes: Record<string, ComponentType> = {
@@ -17,7 +18,10 @@ export const routes: Record<string, ComponentType> = {
   "1-5-speech": Speech,
   "1-6-feedback-engine": FeedbackEngine,
   "1-7-your-first-story": YourFirstStory,
+  "first-run-loop": ThatsTheLoop,
 };
 
 /** Extra screens (states, dialogs) this group adds beyond the 46 in the design export. */
-export const extras: ManifestEntry[] = [];
+export const extras: ManifestEntry[] = [
+  { id: "first-run-loop", title: "That's the loop", shell: "focus", group: "first-run", name: "ThatsTheLoop", designed: false },
+];
