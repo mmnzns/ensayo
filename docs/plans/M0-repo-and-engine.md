@@ -2312,3 +2312,14 @@ Build the signed app (`sh scripts/build-signed-debug.sh`), open `Ensayo.app`, al
 Dated entry: what was built; Talaan source commit `932fb91`; the three flagged decisions (GPU helper not brought, Parlato reuse path removed, word timestamps added on top of Talaan's engine); the Task 14 findings; "waiting on Miguel": live Mac check, push approval, PC check (clone to `C:\Dev\Ensayo`, `git pull`, `npm install`, dot-source `cpu-baseline.ps1`, `npm run tauri dev`).
 
 - [ ] **Step 6: 🛑 Stop.** Report to Miguel, ask for the push OK and the live checks on both machines. Do not start M1 (UI) until he confirms.
+
+---
+
+## Execution notes (what differed from this plan)
+
+- `src/node-test.d.ts` and `src/vite-env.d.ts` were added: TypeScript 6 no longer loads `@types/node` on its own, so tests use a small shim (the same fix Talaan uses).
+- `tokio` is a direct dependency (the model downloader uses it for its stall timeout).
+- `Cargo.toml` Windows dependencies are `keyring` and `winreg` only (the plan briefly listed the `windows` crate).
+- The Mac microphone-permission code was written in Task 10 (with the commands that use it) instead of Task 12; the plists, signing script and Windows flags stayed in Task 12.
+- `ai` and `keys` carry `#[allow(dead_code)]` until M4 wires them into the UI.
+- Real-model checks done on the Mac: `smoke_real_model` with `whisper-turbo` and `parakeet-ultra` (Talaan's downloads, reused) on an 85 s computer-voice sample. Not done: a live microphone take and anything on Windows (waiting on Miguel).
