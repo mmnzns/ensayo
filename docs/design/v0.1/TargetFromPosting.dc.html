@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New target from a posting</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/745c83b0ae8a2c705f72deca59395423">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="e-focus" style="min-height: 1080px; background: rgba(43,39,34,0.32); display: flex; align-items: center; justify-content: center; padding: 40px 16px;">
+<div role="dialog" aria-modal="true" aria-labelledby="tf-title" class="e-card" style="width: 100%; max-width: 720px; padding: 36px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 24px 64px rgba(43,39,34,0.18);">
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 4px;"><h1 id="tf-title" class="e-h2" style="font-size: 24px;">New target from the Ledgerline posting</h1><span class="e-meta">Filled in from the posting and your B2C lifecycle target. Check it before you save.</span></div>
+<a href="AppFit.dc.html" class="e-btn e-btn-ghost e-btn-sm" aria-label="Close">✕</a>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+<div class="e-field"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><label style="font-size: 14px; font-weight: 600;">Target name</label><span class="e-badge" style="background: var(--e-tint); color: var(--e-primary-dark);">suggested</span></span><input class="e-input" value="B2B marketing ops" aria-label="Target name"></div>
+<div class="e-field"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><label style="font-size: 14px; font-weight: 600;">Role</label><span class="e-badge" style="background: var(--e-tint); color: var(--e-primary-dark);">from the posting</span></span><input class="e-input" value="Marketing Operations Manager" aria-label="Role"></div>
+<div class="e-field"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><label style="font-size: 14px; font-weight: 600;">Sells to</label><span class="e-badge" style="background: var(--e-tint); color: var(--e-primary-dark);">from the posting</span></span><select class="e-input" aria-label="Sells to"><option selected>Businesses (B2B)</option><option>Consumers (B2C)</option><option>Both</option></select></div>
+<div class="e-field"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><label style="font-size: 14px; font-weight: 600;">Industry</label><span class="e-badge" style="background: var(--e-tint); color: var(--e-primary-dark);">from the posting</span></span><input class="e-input" value="B2B fintech SaaS" aria-label="Industry"></div>
+<div class="e-field"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><label style="font-size: 14px; font-weight: 600;">Seniority</label><span class="e-badge" style="background: var(--e-tint); color: var(--e-primary-dark);">from the posting</span></span><select class="e-input" aria-label="Seniority"><option>Mid-level</option><option selected>Senior</option><option>Lead or manager</option></select></div>
+<div class="e-field"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><label style="font-size: 14px; font-weight: 600;">Usual stages</label><span class="e-badge" style="background: var(--e-tint); color: var(--e-primary-dark);">from the posting</span></span><input class="e-input" value="Recruiter, Hiring manager, Technical, Panel" aria-label="Stages"></div>
+</div>
+<div class="e-field"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><label style="font-size: 14px; font-weight: 600;">Your pitch</label><span class="e-badge" style="font-weight: 600;">copied from B2C lifecycle</span></span><textarea class="e-input" rows="2" aria-label="Your pitch">I'm a lifecycle marketer who finds where activation and retention actually break, then builds the journeys that fix them.</textarea>
+<div class="e-soft" style="background: var(--e-highlight); padding: 12px 16px;"><span class="e-meta" style="color: var(--e-warn-ink);">This still pitches a B2C lifecycle marketer. Rewrite it for marketing ops before your first Mock for this target. Ensayo won't write it for you.</span></div>
+</div>
+<div class="e-soft" style="background: var(--e-ground); display: flex; flex-direction: column; gap: 6px; padding: 16px 20px;">
+<span class="e-h3" style="font-size: 15px;">Also copied from B2C lifecycle</span>
+<span class="e-meta">2 pinned stories and 1 hidden story. Change them in the target after you save.</span>
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 12px;">
+<a href="AppFit.dc.html" class="e-btn e-btn-ghost">Cancel</a>
+<a href="TargetEdit.dc.html" class="e-btn e-btn-primary">Create and move Ledgerline</a>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

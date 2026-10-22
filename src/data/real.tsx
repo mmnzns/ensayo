@@ -42,7 +42,10 @@ import type { ApplicationExtras, NewApplicationDraft } from "./screens/applicati
 import { TIMING_ONLY, engineStatusOf } from "./engine";
 import { mockStore } from "./mock";
 import { StoreProvider, useStore, type Store } from "./store";
-import type { Application, EngineStatus, Method, Profile, StageId, Story } from "./types";
+import type { Application, EngineStatus, Method, Profile, StageId, Story, Target, You } from "./types";
+import * as TS from "./targetState";
+import { activeOf, NO_TARGETS, type TargetsState } from "./targetState";
+import { mergedProfile } from "./targets";
 import { AI_CHANGED, type AiView } from "../screens/settings/aiSettings";
 import { habitStats, pickFocusHabits, sessionList, streakOf, type RepSummary } from "../practice/habits";
 
@@ -59,7 +62,14 @@ export interface DataStatus {
   age_secs: number | null;
 }
 
-interface LoadAll {
+/** What `load_targets` (and the `targets` part of `load_all`) returns. */
+interface TargetsBundle {
+  you: You | null;
+  targets: Target[];
+  targetsNotePending: boolean;
+}
+
+interface LoadAll extends Partial<TargetsBundle> {
   profile: Profile | null;
   stories: Story[];
   methods: { situation: string; spoken: string; storyIds: string[] }[];
@@ -75,6 +85,21 @@ export interface Actions {
   setProofVerified(storyId: string, label: string, verified: boolean): Promise<void>;
   saveMethod(method: Method): Promise<void>;
   saveProfile(profile: Profile): Promise<void>;
+  // ----- you and your targets (v0.1) -----
+  saveYou(you: You): Promise<You>;
+  /** An empty `id` makes a new target. */
+  saveTarget(target: Target): Promise<Target>;
+  duplicateTarget(id: string, name?: string): Promise<Target>;
+  /** Practice outside an application is for this one. The screens block this mid-session. */
+  setActiveTarget(id: string): Promise<void>;
+  /** Fails with a plain line when the target still has applications and `moveApplicationsTo` is not given. */
+  archiveTarget(id: string, moveApplicationsTo?: string): Promise<void>;
+  restoreTarget(id: string): Promise<void>;
+  setStoryPriority(targetId: string, storyId: string, priority: "pin" | "hide" | "none"): Promise<void>;
+  /** Dismisses the one-time note about targets. */
+  ackTargetsNote(): Promise<void>;
+  /** A target prefilled from the posting (not saved), with the closest target's pitch copied in and `pitchCopied` set. */
+  targetFromPosting(applicationId: string): Promise<{ target: Target; pitchCopied: boolean }>;
   // ----- applications. Each returns what the command returned; the screens read the new state from the store. -----
   createApplication(input: NewApplicationInput, posting?: string): Promise<AppBundle>;
   updateApplication(applicationId: string, patch: AppPatch): Promise<AppBundle>;
@@ -124,6 +149,15 @@ const NO_ACTIONS: Actions = {
   setProofVerified: unavailable,
   saveMethod: unavailable,
   saveProfile: unavailable,
+  saveYou: unavailable,
+  saveTarget: unavailable,
+  duplicateTarget: unavailable,
+  setActiveTarget: unavailable,
+  archiveTarget: unavailable,
+  restoreTarget: unavailable,
+  setStoryPriority: unavailable,
+  ackTargetsNote: unavailable,
+  targetFromPosting: unavailable,
   createApplication: unavailable,
   updateApplication: unavailable,
   deleteApplication: unavailable,
@@ -173,6 +207,10 @@ export const useApplicationExtras = (applicationId: string | undefined): Applica
 const SetupContext = createContext(false);
 /** True in the app until a profile has been saved: the first-run screens come before Home. */
 export const useNeedsSetup = (): boolean => useContext(SetupContext);
+
+const TargetsNoteContext = createContext(false);
+/** True until the one-time note about targets (shown after the upgrade to v0.1) has been dismissed. */
+export const useTargetsNotePending = (): boolean => useContext(TargetsNoteContext);
 
 const DataInfoContext = createContext<{ problems: string[] }>({ problems: [] });
 
@@ -373,6 +411,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DataState>(() =>
     app ? { profile: null, stories: [], methods: mergeMethods([], mockStore.methods) } : { profile: mockStore.profile, stories: mockStore.stories, methods: mockStore.methods },
   );
+  const [tg, setTg] = useState<TargetsState>(() => (app ? NO_TARGETS : { you: mockStore.you, targets: mockStore.targets, notePending: false }));
+  const tgRef = useRef(tg);
+  tgRef.current = tg;
   const [phase, setPhase] = useState<Phase>(app ? "loading" : "ready");
   const [status, setStatus] = useState<DataStatus | null>(null);
   const [error, setError] = useState("");
@@ -435,6 +476,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const readAll = useCallback(async () => {
     const all = await invoke<LoadAll>("load_all");
     setState({ profile: all.profile, stories: all.stories, methods: mergeMethods(all.methods, mockStore.methods) });
+    setTg({ you: all.you ?? null, targets: all.targets ?? [], notePending: all.targetsNotePending ?? false });
     setApps({ applications: all.applications ?? [], extras: all.application_extras ?? {} });
     setProblems(all.problems);
     await readReps();
@@ -483,6 +525,91 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [readAll]);
 
+  /** After a command changed targets: take what the backend now holds. */
+  const refreshTargets = useCallback(async () => {
+    const b = await invoke<TargetsBundle>("load_targets");
+    setTg({ you: b.you, targets: b.targets, notePending: b.targetsNotePending });
+  }, []);
+
+  const targetActions = useMemo<Pick<Actions, "saveYou" | "saveTarget" | "duplicateTarget" | "setActiveTarget" | "archiveTarget" | "restoreTarget" | "setStoryPriority" | "ackTargetsNote" | "targetFromPosting">>(
+    () => ({
+      async saveYou(you) {
+        if (app) {
+          const saved = await invoke<You>("save_you", { you });
+          setTg((s) => ({ ...s, you: saved }));
+          return saved;
+        }
+        setTg((s) => ({ ...s, you }));
+        return you;
+      },
+      async saveTarget(target) {
+        if (app) {
+          const saved = await invoke<Target>("save_target", { target });
+          await refreshTargets();
+          return saved;
+        }
+        const out = TS.saveTarget(tgRef.current, target);
+        setTg(out.state);
+        return out.saved;
+      },
+      async duplicateTarget(id, name) {
+        if (app) {
+          const saved = await invoke<Target>("duplicate_target", { id, name: name ?? null });
+          await refreshTargets();
+          return saved;
+        }
+        const out = TS.duplicateTarget(tgRef.current, id, name);
+        setTg(out.state);
+        return out.saved;
+      },
+      async setActiveTarget(id) {
+        if (app) {
+          await invoke("set_active_target", { id });
+          await refreshTargets();
+          return;
+        }
+        setTg(TS.setActive(tgRef.current, id));
+      },
+      async archiveTarget(id, moveApplicationsTo) {
+        if (app) {
+          await invoke("archive_target", { id, moveApplicationsTo: moveApplicationsTo ?? null });
+          await refreshTargets();
+          await readApps();
+          return;
+        }
+        const inUse = appsRef.current.applications.some((a) => (a.targetId ?? tgRef.current.targets[0]?.id) === id);
+        if (inUse && !moveApplicationsTo) throw new Error("This target has applications. Move them to another target first.");
+        if (moveApplicationsTo) setApps((s) => ({ ...s, applications: s.applications.map((a) => ((a.targetId ?? tgRef.current.targets[0]?.id) === id ? { ...a, targetId: moveApplicationsTo } : a)) }));
+        setTg(TS.setArchived(tgRef.current, id, true));
+      },
+      async restoreTarget(id) {
+        if (app) {
+          await invoke("restore_target", { id });
+          await refreshTargets();
+          return;
+        }
+        setTg(TS.setArchived(tgRef.current, id, false));
+      },
+      async setStoryPriority(targetId, storyId, priority) {
+        if (app) {
+          await invoke("set_story_priority", { targetId, storyId, priority });
+          await refreshTargets();
+          return;
+        }
+        setTg(TS.setStoryPriority(tgRef.current, targetId, storyId, priority));
+      },
+      async ackTargetsNote() {
+        if (app) await invoke("ack_targets_note");
+        setTg((s) => ({ ...s, notePending: false }));
+      },
+      async targetFromPosting(applicationId) {
+        if (!app) return Promise.reject(new Error(NEEDS_THE_APP));
+        return invoke<{ target: Target; pitchCopied: boolean }>("target_from_posting", { applicationId });
+      },
+    }),
+    [app, refreshTargets, readApps],
+  );
+
   const actions = useMemo<Actions>(
     () => ({
       async saveStory(story) {
@@ -507,18 +634,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setState((s) => saveMethodIn(s, method));
       },
       async saveProfile(profile) {
-        if (app) await invoke("save_profile", { profile });
+        if (app) {
+          await invoke("save_profile", { profile });
+          await refreshTargets();
+        } else {
+          setTg((s) => TS.applyProfile(s, profile));
+        }
         setState((s) => ({ ...s, profile }));
       },
+      ...targetActions,
       ...applicationActions(app, appsRef, setApps),
     }),
-    [app],
+    [app, targetActions, refreshTargets],
   );
 
   const store = useMemo<Store>(() => {
+    const active = activeOf(tg);
+    const you: You = tg.you ?? { name: "", fullName: "", focusHabits: [], activeTargetId: null };
+    const profile = tg.you ? mergedProfile(tg.you, active, state.profile ?? undefined) : (state.profile ?? (app ? BLANK_PROFILE : mockStore.profile));
     const base: Store = {
       ...mockStore,
-      profile: state.profile ?? (app ? BLANK_PROFILE : mockStore.profile),
+      profile,
+      you,
+      targets: tg.targets,
+      activeTarget: active,
       stories: state.stories,
       methods: state.methods,
       applications: apps.applications,
@@ -538,7 +677,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       streak: streakOf(reps, now),
       homeHabitStats: habitStats(mockStore.habits, reps),
     };
-  }, [state, apps, reps, app, engine]);
+  }, [state, apps, tg, reps, app, engine]);
   const info = useMemo(() => ({ problems }), [problems]);
 
   if (phase === "loading") return <Centered><p className="e-meta" style={{ margin: 0 }}>Opening your data…</p></Centered>;
@@ -556,9 +695,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     <ActionsContext.Provider value={actions}>
       <DataInfoContext.Provider value={info}>
         <RepsContext.Provider value={reps}>
-          <SetupContext.Provider value={app && state.profile === null}>
+          <TargetsNoteContext.Provider value={app && tg.notePending}>
+          <SetupContext.Provider value={app && state.profile === null && tg.you === null}>
             <StoreProvider store={store}>{children}</StoreProvider>
           </SetupContext.Provider>
+          </TargetsNoteContext.Provider>
         </RepsContext.Provider>
       </DataInfoContext.Provider>
     </ActionsContext.Provider>

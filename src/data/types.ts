@@ -34,6 +34,63 @@ export interface Profile {
   focusHabits: HabitId[];
 }
 
+export type RoleFamily = "lifecycle" | "marketing_ops" | "growth" | "product_marketing" | "other";
+export type CompanyStage = "startup" | "growth" | "enterprise" | "any";
+export type TargetColor = "coral" | "slate" | "green" | "gold" | "plum";
+
+/** One kind of job the person goes for (v0.1). Everything job-specific lives here; stories, habits and history are shared. */
+export interface Target {
+  id: string;
+  name: string;
+  color: TargetColor;
+  role: string;
+  roleFamily: RoleFamily;
+  seniority: Seniority;
+  industry: string;
+  sellsTo: SellsTo;
+  companyStage: CompanyStage;
+  /** The one sentence "Tell me about yourself" is checked against. Ensayo never writes it. */
+  pitch: string;
+  /** Two or three points every interviewer should hear. */
+  leadWith: string[];
+  pinnedStoryIds: string[];
+  hiddenStoryIds: string[];
+  defaultProcess: StageId[];
+  baseResume: { path: string; fileName: string } | null;
+  /** Never sent to an AI. */
+  payRange: { low: number; high: number; currency: string } | null;
+  archived: boolean;
+  createdAt: string;
+}
+
+/** What stays with the person across every target. */
+export interface You {
+  name: string;
+  fullName: string;
+  focusHabits: HabitId[];
+  activeTargetId: string | null;
+}
+
+/** A story's way in for one target. It never changes the story's numbers. */
+export interface StoryAngle {
+  target_id: string;
+  headline: string;
+  emphasis: string[];
+  lead_branch: string | null;
+}
+
+export type FitLevel = "strong" | "ok" | "weak";
+
+/** How a posting reads against the person's targets (prompt 09, or keywords when no engine is set up). */
+export interface TargetFit {
+  sellsTo: SellsTo;
+  roleFamily: RoleFamily;
+  seniority: Seniority;
+  bestTargetId: string | null;
+  mismatchNotes: string[];
+  perTarget: { targetId: string; fit: FitLevel; why: string }[];
+}
+
 export interface ProofPoint {
   label: string;
   metric: string;
@@ -73,6 +130,8 @@ export interface Story {
   headline: string;
   usage: { practiced: number; fits: number; saidNumber?: number };
   year?: string;
+  /** One per target that has its own way in; targets without one use `headline`. */
+  angles?: StoryAngle[];
 }
 
 export interface Method {
@@ -183,6 +242,10 @@ export interface Application {
   night_before?: { date: string; stage_id: string } | null;
   /** "I didn't send one". */
   no_resume?: boolean;
+  /** The target this application is filed under. Missing means the first target. */
+  targetId?: string;
+  /** How the posting reads against the targets; null until a posting is read. */
+  targetFit?: TargetFit | null;
 }
 
 export interface SessionSummary {
@@ -193,6 +256,7 @@ export interface SessionSummary {
   title: string;
   headline: string;
   applicationId?: string;
+  targetId?: string;
 }
 
 export interface EngineStatus {

@@ -7,12 +7,18 @@ import type { ResultsData } from "./screens/results";
 import type { SettingsData } from "./screens/settings";
 import type { StatesData } from "./screens/states";
 import type { StoriesData } from "./screens/stories";
-import type { Application, EngineStatus, Habit, HabitStat, Method, Profile, ProcessStage, SessionSummary, Story, Streak } from "./types";
+import type { Application, EngineStatus, Habit, HabitStat, Method, Profile, ProcessStage, SessionSummary, Story, Streak, Target, You } from "./types";
 
 /** Everything the screens read. M1 serves `mockStore`; later milestones serve the real files behind the same interface. */
 export interface Store {
   now(): Date;
+  /** You plus the active target, in the v0 shape, so every v0 screen keeps working. */
   profile: Profile;
+  you: You;
+  /** Every target, archived ones included (filter `archived` where they should not show). */
+  targets: Target[];
+  /** The one practice outside an application is for. Undefined only before setup. */
+  activeTarget: Target | undefined;
   habits: Habit[];
   stories: Story[];
   methods: Method[];
