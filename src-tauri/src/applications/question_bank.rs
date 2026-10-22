@@ -90,7 +90,7 @@ pub fn pick<'a>(bank: &[&'a BankQuestion], stage: &str, priorities: &[String], s
     let mut pool: Vec<&BankQuestion> = bank.iter().copied().filter(|q| eligible(q, stage, startup) && !used.contains(&q.id)).collect();
     pool.sort_by(|a, b| score(b).cmp(&score(a)).then_with(|| a.id.cmp(&b.id)));
     let mut out: Vec<&BankQuestion> = Vec::new();
-    let mut take_first = |out: &mut Vec<&'a BankQuestion>, pred: &dyn Fn(&BankQuestion) -> bool, pool: &mut Vec<&'a BankQuestion>| {
+    let take_first = |out: &mut Vec<&'a BankQuestion>, pred: &dyn Fn(&BankQuestion) -> bool, pool: &mut Vec<&'a BankQuestion>| {
         if out.len() < take {
             if let Some(i) = pool.iter().position(|q| pred(q)) {
                 out.push(pool.remove(i));
