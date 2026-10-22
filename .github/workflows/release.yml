@@ -124,6 +124,10 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: npm run tauri build -- --target ${{ matrix.target }} --bundles app,dmg
+      - name: Check the Mac signature
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: sh scripts/check-mac-signature.sh "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Ensayo.app"
       - name: Upload to the draft
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -185,9 +189,18 @@ jobs:
           npm run tauri build -- --bundles nsis
       - name: Mac disk image
         if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           sh scripts/build-llm-helper.sh
           npm run tauri build -- --bundles app,dmg
+      - name: Check the Mac signature
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: sh scripts/check-mac-signature.sh src-tauri/target/release/bundle/macos/Ensayo.app
       - uses: actions/upload-artifact@v4
         with:
           name: ensayo-${{ runner.os }}
