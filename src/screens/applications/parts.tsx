@@ -6,6 +6,8 @@ import { EMPTY_EXTRAS, plainError } from "../../data/actions";
 import { useActions, useApplicationExtras } from "../../data/real";
 import { useHashParam, withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
+import { applicationTarget } from "../../data/targets";
+import { TargetLabel } from "./TargetMark";
 import type { ApplicationExtras } from "../../data/screens/applications";
 import type { Application, ApplicationStatus, ClosedReason } from "../../data/types";
 import { CLOSED_LABEL, STATUSES, STATUS_LABEL, nextStage, shortDate, statusStyle, STAGE_LABEL, whenText } from "./format";
@@ -218,6 +220,8 @@ export function StatusMenu({ app }: { app: Application }) {
 /** Company, badges, role line and the two actions, shared by the application detail screens. */
 export function AppHeader({ app, now, children }: { app: Application; now: Date; children?: ReactNode }) {
   const link = useAppLink();
+  const store = useStore();
+  const filed = applicationTarget(app, store.targets);
   const next = nextStage(app);
   const nextBit = next ? ` · next: ${next.label || STAGE_LABEL[next.stage]}, ${next.at ? whenText(next.at, now) : "date to come"}` : "";
   return (
@@ -229,7 +233,17 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
           {app.startup && <span className="e-pill">Startup</span>}
           <StatusMenu app={app} />
         </div>
-        <span className="e-meta">{`${app.role} · applied ${shortDate(app.applied_on)}${nextBit}`}</span>
+        <span className="e-meta">
+          {`${app.role} · applied ${shortDate(app.applied_on)}${nextBit}`}
+          {filed && (
+            <>
+              {" · target: "}
+              <Link to={link("6-4-application-edit-details")} style={{ fontWeight: 600, color: "var(--e-ink)", textDecoration: "none" }} aria-label={`Target: ${filed.name}. Change it in Edit details`}>
+                <TargetLabel target={filed} />
+              </Link>
+            </>
+          )}
+        </span>
         {children}
       </div>
       <div style={{ display: "flex", gap: "10px" }}>

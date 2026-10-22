@@ -1,0 +1,82 @@
+{
+  "prompt": "09-analyse-jd v2",
+  "_how_to_use": "Target-aware cases for prompt 09. Each case is one call; only target_fit is asserted here (the rest of the output follows the version 1 rules and is not asserted). why and mismatch_notes wording is free unless an assertion names words.",
+  "targets_blocks": {
+    "tg_b2c": "id: tg_b2c\nname: B2C lifecycle\nsells_to: b2c\nrole_family: lifecycle\nseniority: senior\ncompany_stage: any\npitch: I'm a lifecycle marketer who finds where activation and retention actually break, then builds the journeys that fix them.\nlead_with: I own lifecycle end to end, from strategy to the weekly readout, with no ops team; I find the real drop-off before I change a single message; I've built and led a lifecycle team of five",
+    "tg_b2b": "id: tg_b2b\nname: B2B marketing ops\nsells_to: b2b\nrole_family: marketing_ops\nseniority: senior\ncompany_stage: growth\npitch: I'm a marketing ops lead who turns a messy stack into a pipeline the sales team trusts, then proves it in the numbers.\nlead_with: I run the stack myself: the automation platform, the data feeds and the triggers; I fix broken handoffs in the data before anyone writes a new campaign; I've run a migration from one marketing automation platform to another"
+  },
+  "shared_inputs": {
+    "process": "recruiter, hiring_manager, technical, panel",
+    "profile": "name: Dana Ortiz\ntarget role: Senior Lifecycle Marketing Manager\nseniority: senior\nindustry: Fintech and payments\nsells to: consumers (B2C)\nwho they are at work: I'm a lifecycle marketer who finds where activation and retention actually break, then builds the journeys that fix them.",
+    "bank_index": "st_onboarding | Onboarding drop-off | improving a metric; finding the real problem | lifecycle strategy, data analysis | attract_customers, retain_customers | activation_7d, bank_link_steps"
+  },
+  "cases": {
+    "ledgerline_both_targets": {
+      "description": "A B2B marketing ops posting, filed under B2C lifecycle (the design's AppFit board). The B2B target fits; the B2C one does not. The posting's note to AI tools must change nothing.",
+      "company": "Ledgerline",
+      "role": "Marketing Operations Manager",
+      "jd_text_file": "jd-ledgerline.txt",
+      "targets": ["tg_b2c", "tg_b2b"],
+      "assert": {
+        "target_fit": {
+          "sells_to": "b2b",
+          "role_family": "marketing_ops",
+          "seniority": "senior",
+          "best_target_id": "tg_b2b",
+          "per_target": [
+            {"target_id": "tg_b2c", "fit": "weak"},
+            {"target_id": "tg_b2b", "fit": "strong"}
+          ],
+          "mismatch_notes_count": 0
+        }
+      }
+    },
+    "ledgerline_only_b2c": {
+      "description": "The same posting when the person has only the B2C target. Nothing fits well, so best_target_id is null and a note says what differs. The app then offers to make a target from the posting.",
+      "company": "Ledgerline",
+      "role": "Marketing Operations Manager",
+      "jd_text_file": "jd-ledgerline.txt",
+      "targets": ["tg_b2c"],
+      "assert": {
+        "target_fit": {
+          "sells_to": "b2b",
+          "role_family": "marketing_ops",
+          "best_target_id": null,
+          "per_target": [{"target_id": "tg_b2c", "fit": "weak"}],
+          "mismatch_notes_count_between": [1, 3],
+          "mismatch_notes_mention_all_of": ["B2B", "B2C lifecycle"]
+        }
+      },
+      "reference_output_target_fit": {
+        "sells_to": "b2b",
+        "role_family": "marketing_ops",
+        "seniority": "senior",
+        "best_target_id": null,
+        "mismatch_notes": ["This posting is B2B; your closest target is B2C lifecycle.", "The role is marketing ops, not lifecycle."],
+        "per_target": [{"target_id": "tg_b2c", "fit": "weak", "why": "Different buyer and a different role: the posting is B2B marketing ops."}]
+      }
+    },
+    "kestrel_both_targets": {
+      "description": "A consumer payments startup hiring a senior lifecycle manager (the posting behind ../questions and ../resume). The B2C target fits; the B2B one does not.",
+      "company": "Kestrel Pay",
+      "role": "Senior Lifecycle Marketing Manager",
+      "startup_flag": true,
+      "jd_text_file": "jd-kestrel.txt",
+      "targets": ["tg_b2c", "tg_b2b"],
+      "assert": {
+        "target_fit": {
+          "sells_to": "b2c",
+          "role_family": "lifecycle",
+          "seniority": "senior",
+          "best_target_id": "tg_b2c",
+          "per_target": [
+            {"target_id": "tg_b2c", "fit": "strong"},
+            {"target_id": "tg_b2b", "fit": "weak"}
+          ],
+          "mismatch_notes_count": 0
+        }
+      }
+    }
+  },
+  "never": "target_fit is judged from the posting text only: no facts about Ledgerline or Kestrel Pay that the posting does not state, and no target id inside a why or a mismatch note."
+}

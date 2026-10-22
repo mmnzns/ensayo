@@ -6,6 +6,9 @@ import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import { STAGE_LABEL, STATUS_LABEL, nextStage, shortDate, whenText } from "./format";
 import { keptWords } from "./forms";
+import FitBanner from "./FitBanner";
+import { FIT_LABEL, fitClass, fitRows } from "./targetPick";
+import { TargetMark } from "./TargetMark";
 import { AppHeader, AppTabs, ErrorLine, Notice, useAppLink, useRun, withFeatured, type Featured } from "./parts";
 
 const editInput = { minHeight: "40px", padding: "8px 10px", fontSize: "15px" } as const;
@@ -51,11 +54,13 @@ function Overview({ app, extras, now }: Featured) {
   const practiced = next ? (extras.practicedByStage[next.id] ?? 0) : 0;
   const suggested = app.suggested_status && app.suggested_status !== app.status ? app.suggested_status : null;
   const kept = lastRead ? keptWords(lastRead.result.kept) : [];
+  const fits = fitRows(app.targetFit, store.targets);
 
   return (
     <AppShell nav="applications">
       <AppHeader app={app} now={now} />
       <AppTabs current="overview" />
+      <FitBanner app={app} />
       {suggested && (
         <Notice>
           {`This looks like it has moved to ${STATUS_LABEL[suggested]}. `}
@@ -185,6 +190,21 @@ function Overview({ app, extras, now }: Featured) {
               </div>
             </section>
           </div>
+          {fits.length > 0 && (
+            <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <span className="e-h3">How each target reads this posting</span>
+              {fits.map((f, i) => (
+                <div key={f.target.id} className="e-rowline" style={{ padding: "12px 0", ...(i === fits.length - 1 ? { borderBottom: "none" } : {}) }}>
+                  <TargetMark target={f.target} />
+                  <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span style={{ fontWeight: "600" }}>{f.target.name}</span>
+                    {f.why && <span className="e-small">{f.why}</span>}
+                  </span>
+                  <span className={fitClass(f.fit)}>{FIT_LABEL[f.fit]}</span>
+                </div>
+              ))}
+            </section>
+          )}
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <span className="e-h3">The posting</span>
             <span className="e-small">{extras.postingText ? `Pasted ${shortDate(extras.postingPastedOn)}. Reading it again never overwrites what you edited.` : "No posting text saved. Add it from Edit details to read it again."}</span>

@@ -2,7 +2,9 @@ import type { ComponentType } from "react";
 import type { ManifestEntry } from "../manifest";
 import ProgressHabits from "./ProgressHabits";
 import ProgressSessions from "./ProgressSessions";
-import SettingsProfile from "./SettingsProfile";
+import SettingsYou from "./SettingsYou";
+import SettingsTargets from "./SettingsTargets";
+import TargetEditor from "./TargetEditor";
 import SettingsPractice from "./SettingsPractice";
 import SettingsVoice from "./SettingsVoice";
 import SettingsSpeech from "./SettingsSpeech";
@@ -18,7 +20,11 @@ import { extras as settingsExtras } from "./extras";
 export const routes: Record<string, ComponentType> = {
   "7-1-progress-habits": ProgressHabits,
   "7-2-progress-sessions": ProgressSessions,
-  "8-1-settings-profile": SettingsProfile,
+  // The old Profile route stays as an alias, so a saved link or an old build still lands on You.
+  "8-1-settings-profile": SettingsYou,
+  "8-1-settings-you": SettingsYou,
+  "8-2-settings-targets": SettingsTargets,
+  "8-3-target-editor": TargetEditor,
   "8-2-settings-practice": SettingsPractice,
   "8-3-settings-voice": SettingsVoice,
   "8-4-settings-speech": SettingsSpeech,

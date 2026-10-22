@@ -21,8 +21,10 @@ export interface NewApplicationInput {
   contacts?: Contact[];
   notes?: string;
   startup?: boolean;
-  /** Left out: the default four stages. */
+  /** Left out: the stages of the target (else the default four). */
   stages?: { stage: StageId; label?: string; at?: string }[];
+  /** The target it is filed under. Left out: the active target. */
+  targetId?: string;
 }
 
 /** Fields sent and different are saved and listed in `edited_by_user`. Closing needs a reason. */
@@ -36,6 +38,10 @@ export interface AppPatch {
   contacts?: Contact[];
   notes?: string;
   startup?: boolean;
+  /** Moves the application to another target. */
+  targetId?: string;
+  /** With a new `targetId`: make the question set again for that target (questions the person edited stay). */
+  rebuildQuestions?: boolean;
 }
 
 /** One row of the whole stage list. A row without an id (or with one the process does not have) is a new stage. */

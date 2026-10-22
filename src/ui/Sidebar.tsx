@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useStore } from "../data/store";
 import { ApplicationsIcon, FeedbackIcon, HomeIcon, ProgressIcon, SettingsIcon, StoriesIcon } from "./Icons";
 import Link from "./Link";
+import TargetSwitcher from "./TargetSwitcher";
 import Wordmark from "./Wordmark";
 
 export type NavId = "home" | "stories" | "applications" | "progress" | "settings" | "feedback";
@@ -11,7 +12,7 @@ const ITEMS: { id: NavId; to: string; label: string; icon: ReactNode }[] = [
   { id: "stories", to: "5-1-stories", label: "Stories", icon: <StoriesIcon /> },
   { id: "applications", to: "6-1-applications", label: "Applications", icon: <ApplicationsIcon /> },
   { id: "progress", to: "7-1-progress-habits", label: "Progress", icon: <ProgressIcon /> },
-  { id: "settings", to: "8-1-settings-profile", label: "Settings", icon: <SettingsIcon /> },
+  { id: "settings", to: "8-1-settings-you", label: "Settings", icon: <SettingsIcon /> },
   { id: "feedback", to: "9-1-feedback", label: "Feedback", icon: <FeedbackIcon /> },
 ];
 
@@ -22,6 +23,7 @@ export default function Sidebar({ active }: { active: NavId }) {
       <Link to="2-1-home" className="e-brand" aria-label="Ensayo home">
         <Wordmark size={26} />
       </Link>
+      <TargetSwitcher />
       {ITEMS.map((i) => (
         <Link key={i.id} to={i.to} className={i.id === active ? "e-nav e-nav-on" : "e-nav"} aria-current={i.id === active ? "page" : undefined}>
           {i.icon}

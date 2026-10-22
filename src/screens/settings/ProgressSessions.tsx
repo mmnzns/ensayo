@@ -5,21 +5,28 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { useStore } from "../../data/store";
 import type { Mode } from "../../data/types";
+import { applicationTarget } from "../../data/targets";
+import { TargetMark } from "../applications/TargetMark";
+import { filterSessionsByTarget, progressChoices, sessionTargetId } from "./progressTargets";
 
 /** The chips are one row: All clears the filters, Drill and Mock pick a mode, an application narrows to it. They combine. */
 export default function ProgressSessions() {
-  const { sessions, applications } = useStore();
+  const { sessions, applications, targets } = useStore();
   const [mode, setMode] = useState<Mode | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
+  const [targetId, setTargetId] = useState<string>("all");
+  const choices = progressChoices(targets, [...sessions.map((s) => sessionTargetId(s, applications, targets)), ...applications.map((a) => applicationTarget(a, targets)?.id)]);
+  const chosen = choices.some((t) => t.id === targetId) ? targetId : "all";
+  const withMarker = targets.filter((t) => !t.archived).length > 1;
 
   // Applications that have at least one session, in the order they first show up.
   const appIds = sessions.map((s) => s.applicationId).filter((id, i, all): id is string => !!id && all.indexOf(id) === i);
   const appName = (id: string) => applications.find((a) => a.id === id)?.company ?? "Application";
 
-  const shown = sessions.filter((s) => (!mode || s.mode === mode) && (!appId || s.applicationId === appId));
+  const shown = filterSessionsByTarget(sessions, applications, targets, chosen).filter((s) => (!mode || s.mode === mode) && (!appId || s.applicationId === appId));
   const groups = shown.map((s) => s.group).filter((g, i, all) => all.indexOf(g) === i);
   const lastId = shown[shown.length - 1]?.id;
-  const noFilter = !mode && !appId;
+  const noFilter = !mode && !appId && chosen === "all";
 
   const chip = (on: boolean) => (on ? "e-chip e-chip-on" : "e-chip");
 
@@ -33,7 +40,15 @@ export default function ProgressSessions() {
         </div>
       </header>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-        <button type="button" className={chip(noFilter)} aria-pressed={noFilter} onClick={() => { setMode(null); setAppId(null); }}>All</button>
+        {choices.length > 1 && (
+          <select className="e-input" style={{ width: "200px", minHeight: "44px" }} aria-label="Target" value={chosen} onChange={(e) => setTargetId(e.target.value)}>
+            <option value="all">All targets</option>
+            {choices.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        )}
+        <button type="button" className={chip(noFilter)} aria-pressed={noFilter} onClick={() => { setMode(null); setAppId(null); setTargetId("all"); }}>All</button>
         <button type="button" className={chip(mode === "drill")} aria-pressed={mode === "drill"} onClick={() => setMode(mode === "drill" ? null : "drill")}>Drill</button>
         <button type="button" className={chip(mode === "mock")} aria-pressed={mode === "mock"} onClick={() => setMode(mode === "mock" ? null : "mock")}>Mock</button>
         {appIds.map((id) => (
@@ -62,7 +77,18 @@ export default function ProgressSessions() {
                   <span className="e-pill" style={s.mode === "mock" ? { background: "var(--e-ink)", color: "var(--e-surface)", width: "52px", justifyContent: "center" } : { background: "var(--e-ground)", width: "52px", justifyContent: "center" }}>
                     {s.mode === "mock" ? "Mock" : "Drill"}
                   </span>
-                  <span style={{ flex: "1" }}>{s.title}</span>
+                  <span style={{ flex: "1", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px" }}>
+                    {s.title}
+                    {withMarker && (() => {
+                      const t = targets.find((x) => x.id === sessionTargetId(s, applications, targets));
+                      return t ? (
+                        <span className="e-small" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <TargetMark target={t} />
+                          {t.name}
+                        </span>
+                      ) : null;
+                    })()}
+                  </span>
                   <span className="e-hand" style={{ fontSize: "17px", ...(s.headline.includes("→") ? { color: "var(--e-win)" } : {}) }}>{s.headline}</span>
                   <span className="e-small" style={{ width: "24px" }}>›</span>
                 </Link>

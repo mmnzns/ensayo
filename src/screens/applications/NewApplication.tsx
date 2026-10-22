@@ -11,6 +11,9 @@ import type { ApplicationStatus, StageId } from "../../data/types";
 import { STAGE_LABEL, STATUSES, STATUS_LABEL } from "./format";
 import { bytesOf, contactFromText, isResumeFile, joinAt, moveItem, splitAt } from "./forms";
 import { ErrorLine, Notice, useRun } from "./parts";
+import FitBanner from "./FitBanner";
+import TargetPicker from "./TargetPicker";
+import { PICKER_HINT, stagesFor, stagesLine, suggestTarget } from "./targetPick";
 
 type ResumeChoice = "attach" | "other" | "none";
 interface StageRow {
@@ -34,14 +37,14 @@ const dateInput = { width: "150px", minHeight: "40px", padding: "8px 10px", font
 const timeInput = { width: "110px", minHeight: "40px", padding: "8px 10px", fontSize: "14px" } as const;
 const smallBtn = { minHeight: "40px", padding: "8px" } as const;
 
-/** A new application starts with these four, in this order; the rest are added or taken out on screen. */
-const DEFAULT_STAGES: StageId[] = ["recruiter", "hiring_manager", "panel", "leadership"];
-
 export default function NewApplication() {
   const store = useStore();
   const actions = useActions();
   const draft = store.screens.applications.newApplication;
   const withResume = store.applications.filter((a) => a.resume);
+  const liveTargets = store.targets.filter((t) => !t.archived);
+  const activeId = store.activeTarget?.id ?? store.you?.activeTargetId ?? liveTargets[0]?.id;
+  const targetFor = (id: string) => liveTargets.find((t) => t.id === id);
 
   const [company, setCompany] = useState(draft.company);
   const [role, setRole] = useState(draft.role);
@@ -57,7 +60,11 @@ export default function NewApplication() {
   const [filePages, setFilePages] = useState<number | null>(draft.resumePages || null);
   const [choosing, setChoosing] = useState(!draft.resumeFileName);
   const [otherId, setOtherId] = useState(withResume[0]?.id ?? "");
-  const firstRows: StageRow[] = (draft.stages.length ? draft.stages : DEFAULT_STAGES.map((stage) => ({ stage, at: "" }))).map((s, i) => ({ key: i, stage: s.stage, ...splitAt(s.at) }));
+  // The target starts as the active one, or the one the role typed points to; the person's own pick is never overridden.
+  const [targetId, setTargetId] = useState(() => suggestTarget(draft.role, draft.postingText, store.targets, activeId) ?? activeId ?? "");
+  const [targetTouched, setTargetTouched] = useState(false);
+  const [stagesTouched, setStagesTouched] = useState(draft.stages.length > 0);
+  const firstRows: StageRow[] = (draft.stages.length ? draft.stages : stagesFor(targetFor(targetId)).map((stage) => ({ stage, at: "" }))).map((s, i) => ({ key: i, stage: s.stage, ...splitAt(s.at) }));
   const [stages, setStages] = useState<StageRow[]>(firstRows);
   const [nextKey, setNextKey] = useState(firstRows.length);
   const [saved, setSaved] = useState<Saved | null>(null);
@@ -66,6 +73,27 @@ export default function NewApplication() {
   const fileInput = useRef<HTMLInputElement>(null);
   const { busy, error, run, setError } = useRun();
   const pasting = useRun();
+
+  /** The stages follow the target until the person changes the list themselves. */
+  const seedStages = (id: string) => {
+    if (stagesTouched) return;
+    const rows = stagesFor(targetFor(id)).map((stage, i) => ({ key: nextKey + i, stage, date: "", time: "" }));
+    setStages(rows);
+    setNextKey(nextKey + rows.length);
+  };
+  const pickTarget = (id: string) => {
+    setTargetId(id);
+    setTargetTouched(true);
+    seedStages(id);
+  };
+  const suggest = (role: string, posting: string) => {
+    if (targetTouched) return;
+    const id = suggestTarget(role, posting, store.targets, activeId);
+    if (id && id !== targetId) {
+      setTargetId(id);
+      seedStages(id);
+    }
+  };
 
   const takeFile = (f: File | undefined) => {
     if (!f) return;
@@ -81,12 +109,19 @@ export default function NewApplication() {
     setChoice("attach");
   };
 
-  const move = (i: number, d: -1 | 1) => setStages(moveItem(stages, i, d));
+  const move = (i: number, d: -1 | 1) => {
+    setStagesTouched(true);
+    setStages(moveItem(stages, i, d));
+  };
   const addStage = (stage: StageId) => {
+    setStagesTouched(true);
     setStages([...stages, { key: nextKey, stage, date: "", time: "" }]);
     setNextKey(nextKey + 1);
   };
-  const setStageAt = (key: number, patch: Partial<StageRow>) => setStages(stages.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+  const setStageAt = (key: number, patch: Partial<StageRow>) => {
+    setStagesTouched(true);
+    setStages(stages.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+  };
   const otherApp = withResume.find((a) => a.id === otherId);
 
   // Save the application, read the posting, then the resume. Each step that fails is said in plain words and the
@@ -104,6 +139,7 @@ export default function NewApplication() {
           contacts: contactFromText(contact),
           startup,
           stages: stages.map((s) => ({ stage: s.stage, ...(joinAt(s.date, s.time) ? { at: joinAt(s.date, s.time) as string } : {}) })),
+          ...(targetId ? { targetId } : {}),
         },
         posting,
       );
@@ -147,8 +183,13 @@ export default function NewApplication() {
     setFilePages(null);
     setChoosing(true);
     setChoice("attach");
-    setStages(DEFAULT_STAGES.map((stage, i) => ({ key: nextKey + i, stage, date: "", time: "" })));
-    setNextKey(nextKey + DEFAULT_STAGES.length);
+    const fresh = suggestTarget("", "", store.targets, activeId) ?? activeId ?? "";
+    setTargetId(fresh);
+    setTargetTouched(false);
+    setStagesTouched(false);
+    const rows = stagesFor(targetFor(fresh)).map((stage, i) => ({ key: nextKey + i, stage, date: "", time: "" }));
+    setStages(rows);
+    setNextKey(nextKey + rows.length);
     setError("");
   };
 
@@ -163,6 +204,7 @@ export default function NewApplication() {
           <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
           <h1 className="e-h1">{`${saved.company} is saved`}</h1>
         </div>
+        {made && <FitBanner app={made} />}
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <span className="e-h2">What Ensayo read</span>
           {saved.analysis ? (
@@ -237,9 +279,16 @@ export default function NewApplication() {
             </div>
             <div className="e-field">
               <label htmlFor="ro">Role</label>
-              <input id="ro" className="e-input" value={role} onChange={(e) => setRole(e.target.value)} />
+              <input id="ro" className="e-input" value={role} onChange={(e) => { setRole(e.target.value); suggest(e.target.value, posting); }} />
             </div>
           </div>
+          {liveTargets.length > 0 && (
+            <div className="e-field">
+              <span style={{ fontSize: "14px", fontWeight: "600" }}>Target</span>
+              <TargetPicker targets={store.targets} activeId={activeId} value={targetId} onChange={pickTarget} />
+              <span className="e-small">{PICKER_HINT}</span>
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px" }}>
             <div className="e-field">
               <label htmlFor="st">Where it stands</label>
@@ -337,7 +386,7 @@ export default function NewApplication() {
             <label htmlFor="jd">
               Job posting <span style={{ fontWeight: "400", color: "var(--e-muted)" }}>· can wait until they call</span>
             </label>
-            <textarea id="jd" className="e-input" rows={5} value={posting} onChange={(e) => setPosting(e.target.value)} />
+            <textarea id="jd" className="e-input" rows={5} value={posting} onChange={(e) => { setPosting(e.target.value); suggest(role, e.target.value); }} />
             <span className="e-small">Paste the whole thing. It stays on this computer except for the summary your AI engine reads.</span>
           </div>
           <label className="e-soft" style={{ display: "flex", alignItems: "flex-start", gap: "14px", cursor: "pointer" }}>
@@ -350,7 +399,7 @@ export default function NewApplication() {
         </section>
         <section className="e-card" style={{ flex: "1 1 340px", minWidth: "0", display: "flex", flexDirection: "column", gap: "10px" }}>
           <span className="e-h3">Their interview stages</span>
-          <span className="e-meta">In the order you'll meet them. Use the arrows to reorder. Add dates as you get them.</span>
+          <span className="e-meta">{stagesLine(targetFor(targetId), draft.stages.length > 0)}</span>
           {stages.length === 0 && <span className="e-small" style={{ padding: "12px 0" }}>No stages yet. Add the ones you know about below.</span>}
           {stages.map((s, i) => (
             <div key={s.key} className="e-rowline" style={{ padding: "12px 0" }}>

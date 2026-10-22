@@ -5,7 +5,8 @@ import Link from "../../ui/Link";
 import { useDeveloperTools } from "./devtools";
 
 const SECTIONS: { to: string; label: string }[] = [
-  { to: "8-1-settings-profile", label: "Profile" },
+  { to: "8-1-settings-you", label: "You" },
+  { to: "8-2-settings-targets", label: "Targets" },
   { to: "8-2-settings-practice", label: "Practice" },
   { to: "8-3-settings-voice", label: "Voice" },
   { to: "8-4-settings-speech", label: "Speech" },

@@ -54,11 +54,11 @@ describe("the applications screens as the app serves them", () => {
     expect(html).toContain(`href="#/2-3-start-a-session?app=${b.application.id}&amp;stage=${b.application.process[1].id}"`);
   });
 
-  it("New application starts blank, with the four default stages and no sample company", () => {
+  it("New application starts blank, with the target's usual stages and no sample company", () => {
     const html = render("6-2-new-application", appStore([]));
     expect(inputValues(html)).not.toContain("Kestrel Pay");
     const text = strip(html);
-    for (const s of ["Recruiter", "Hiring manager", "Panel", "Leadership"]) expect(text).toContain(s);
+    for (const s of ["Recruiter", "Hiring manager", "Technical", "Panel"]) expect(text).toContain(s);
     expect(text).toContain("Save and read both");
     expect(html).toContain('type="date"');
     expect(text).not.toContain("Closed");

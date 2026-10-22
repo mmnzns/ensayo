@@ -163,6 +163,19 @@ export const applications: Application[] = [
     claims: [],
     waiting: "Referral from Sam",
     answersPracticed: 0,
+    // Filed under the first target, but the posting reads as B2B marketing ops: the sample for the fit banner.
+    targetId: "tg_b2c",
+    targetFit: {
+      sellsTo: "b2b",
+      roleFamily: "marketing_ops",
+      seniority: "senior",
+      bestTargetId: "tg_b2b",
+      mismatchNotes: ["Copperleaf sells to finance teams at mid-size companies, and the role is marketing ops."],
+      perTarget: [
+        { targetId: "tg_b2c", fit: "weak", why: "Different buyer and role. Its pitch talks about activation and customers." },
+        { targetId: "tg_b2b", fit: "strong", why: "Same buyer, role and seniority. Its lead points match 2 of their 3 needs." },
+      ],
+    },
   },
   {
     id: "app_brightlane",

@@ -4,7 +4,9 @@ import type { Mode, StageId } from "../../data/types";
 import { practiceTarget } from "../../practice/applied";
 import { useApplicationExtras } from "../../practice/extras";
 import { checkAi, liveAvailable, startLive } from "../../practice/live";
+import { practiceTargetFor } from "../../practice/sessionTarget";
 import FocusShell from "../../ui/FocusShell";
+import { TargetChoice, TargetMarker } from "../../ui/TargetSwitcher";
 import Link from "../../ui/Link";
 import { readPrefs } from "../settings/prefs";
 import { dayBadge, lowerFirst } from "./format";
@@ -18,7 +20,7 @@ const MOCK_QUESTIONS = 6;
 
 export default function StartASession() {
   const store = useStore();
-  const { habits, profile, stories, applications } = store;
+  const { habits, profile, stories, applications, targets, activeTarget } = store;
   const blurbs = store.screens.home.stageBlurbs;
   const now = store.now();
   // A link from an application names it in the address (?app=&stage=&mode=); a button on Home names it through the preset.
@@ -48,10 +50,16 @@ export default function StartASession() {
     return wanted;
   });
   const [stage, setStage] = useState<StageId>(preset.stage ?? next?.stage.stage ?? (blurbs.some((b) => b.stage === saved.stage) ? saved.stage : (blurbs[0]?.stage ?? "recruiter")));
-  const [storyId, setStoryId] = useState(stories[0]?.id ?? "");
+  const [storyId, setStoryId] = useState(preset.storyId && stories.some((x) => x.id === preset.storyId) ? preset.storyId : (stories[0]?.id ?? ""));
   const [question, setQuestion] = useState("");
   const [length, setLength] = useState<number>(saved.questions);
   const [followUps, setFollowUps] = useState(saved.followUps);
+
+  // The target this session is for: the application's own when the questions come from an application, else the one practised now.
+  const appFiled = source === "application" && !!next;
+  const sessionTarget = practiceTargetFor(appFiled ? next?.application : undefined, targets, activeTarget);
+  const filedUnder = next ? practiceTargetFor(next.application, targets, activeTarget) : undefined;
+  const [changing, setChanging] = useState(false);
 
   const mock = mode === "mock";
   const setMode = (m: Mode) => {
@@ -88,7 +96,7 @@ export default function StartASession() {
         tries: saved.tries,
         followUps,
       },
-      { targetRole: profile.targetRole, stories, methods: store.methods },
+      { targetRole: sessionTarget?.role ?? profile.targetRole, stories, methods: store.methods, target: sessionTarget },
     );
     void checkAi();
   };
@@ -111,6 +119,28 @@ export default function StartASession() {
           <h1 id="ss-title" className="e-h2" style={{ fontSize: "24px" }}>Start a session</h1>
           <Link to="2-1-home" className="e-btn e-btn-ghost e-btn-sm" aria-label="Close">✕</Link>
         </div>
+        {sessionTarget && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div className="e-soft" style={{ background: "var(--e-ground)", display: "flex", alignItems: "center", gap: "12px", padding: "14px 18px" }}>
+              <TargetMarker color={sessionTarget.color} size={10} />
+              <span className="e-meta" style={{ flex: "1" }}>
+                Practicing for <strong style={{ color: "var(--e-ink)" }}>{sessionTarget.name}</strong>: its pitch, question pack and lead stories.
+              </span>
+              {appFiled ? (
+                <span className="e-small" title="An application keeps its own target. Change it in the application's details.">set by the application</span>
+              ) : (
+                <button type="button" className="e-small" aria-expanded={changing} onClick={() => setChanging(!changing)} style={{ border: "none", background: "none", padding: 0, cursor: "pointer", font: "inherit", fontSize: "13px", color: "var(--e-primary-dark)", textDecoration: "underline" }}>
+                  {changing ? "Close" : "Change"}
+                </button>
+              )}
+            </div>
+            {changing && !appFiled && (
+              <div role="menu" aria-label="Practicing for" className="e-card" style={{ padding: "8px", display: "flex", flexDirection: "column", gap: "2px" }}>
+                <TargetChoice onDone={() => setChanging(false)} withHelp={false} />
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
           <label className="e-card" style={modeCard(!mock)}>
             <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -147,7 +177,7 @@ export default function StartASession() {
             <label className="e-rowline" style={{ padding: "12px 0", cursor: "pointer" }}>
               <input type="radio" name="src" className="e-check" checked={source === "application"} onChange={() => setSource("application")} />
               <span style={{ flex: "1" }}>
-                <span className="e-h3" style={{ fontSize: "16px" }}>{next.application.company}</span>{" "}<span className="e-meta">· {next.stage.label} stage</span>
+                <span className="e-h3" style={{ fontSize: "16px" }}>{next.application.company}</span>{" "}<span className="e-meta">· {next.stage.label} stage{filedUnder ? ` · filed under ${filedUnder.name}` : ""}</span>
               </span>
               {nextAt && <span className="e-badge">{dayBadge(nextAt, daysUntil(nextAt, now))}</span>}
             </label>
@@ -238,7 +268,7 @@ export default function StartASession() {
             <span className="e-meta" style={{ flex: "1" }}>
               Focus this session: <strong style={{ color: "var(--e-ink)" }}>{lowerFirst(focusHabit.label)}</strong>
             </span>
-            <Link to="8-1-settings-profile" className="e-small">Change</Link>
+            <Link to="8-1-settings-you" className="e-small">Change</Link>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>

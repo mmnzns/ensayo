@@ -19,6 +19,8 @@ export interface RepSummary {
   mode: string;
   stage: string;
   application_id: string | null;
+  /** The target this answer was practised for. Missing in answers saved before targets: read as the first target. */
+  target_id?: string | null;
   started: string;
   n: number;
   question_id: string;

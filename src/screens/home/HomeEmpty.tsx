@@ -40,7 +40,7 @@ export default function HomeEmpty() {
           <h2 className="e-h1" style={{ fontSize: "28px" }}>Answer {NUMBER_WORDS[drill.questions] ?? drill.questions} questions out loud</h2>
           <p className="e-meta" style={{ margin: "0" }}>General questions for a {profile.targetRole.toLowerCase()} role. About {drill.minutes} minutes. You'll get one fix after each answer, and a chance to say it again.</p>
         </div>
-        <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => startQuickDrill({ targetRole: profile.targetRole, stories: store.stories, methods: store.methods }, { count: drill.questions })}>Practice</Link>
+        <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => startQuickDrill({ targetRole: store.activeTarget?.role ?? profile.targetRole, stories: store.stories, methods: store.methods, target: store.activeTarget }, { count: drill.questions })}>Practice</Link>
       </section>
       {isApp() ? <SpeechReminder /> : null}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "20px" }}>

@@ -1,0 +1,101 @@
+{
+  "prompt": "02-score-answer v2",
+  "_how_to_use": "Target-aware cases for prompt 02. Each case lists the inputs that differ from ../question.json and ../story-bank.json, the exact story_angles and target_pitch strings code sends, the answer, and the assertions. Only the fields under assert are checked; quote and reason are free text.",
+  "cases": {
+    "angle_b2b": {
+      "description": "Practicing for tg_b2b. The answer opens with the B2B angle headline for st_onboarding, which counts as the story's direct answer. Sentence 6 says sync errors dropped by half: that number is only in the angle's emphasis, never in the proof points, so it is not in the bank and is not proof.",
+      "target_id": "tg_b2b",
+      "question": "../question.json",
+      "stage": "hiring_manager",
+      "active_criteria": ["answer_first", "proof", "story_fit", "context_short", "clean_stop", "ownership", "conviction", "no_complaining", "method_first", "approach_before_action", "stage_fit"],
+      "story_angles": "story_id: st_onboarding\nangle_headline: Our activation problem turned out to be a broken handoff in the data, and fixing it took activation from 31 to 44 percent.\nangle_emphasis: Funnel data; Systems; Working across teams; Sync errors down by half",
+      "target_pitch": "",
+      "answer": {
+        "duration_s": 44.5,
+        "sentences": [
+          {"i": 1, "start": 0.0, "end": 6.4, "text": "Our activation problem turned out to be a broken handoff in the data, and fixing it took seven-day activation from 31 to 44 percent."},
+          {"i": 2, "start": 6.4, "end": 11.2, "text": "Whenever a number stalls, the first thing I do is find where people actually drop before I touch anything."},
+          {"i": 3, "start": 11.2, "end": 17.0, "text": "At Fernhill, activation had been flat for two quarters and everyone blamed the welcome emails."},
+          {"i": 4, "start": 17.0, "end": 24.5, "text": "When I traced the events, people clicked the emails and then stalled on the bank-linking screen, and the email platform never heard about the stall."},
+          {"i": 5, "start": 24.5, "end": 30.5, "text": "So I decided to fix the handoff between the product events and the email platform, and I picked seven-day activation as the number to prove it."},
+          {"i": 6, "start": 30.5, "end": 39.0, "text": "I rebuilt the trigger so it fired off the stall event, worked with our product designer on the screen, and sync errors between the two tools dropped by half."},
+          {"i": 7, "start": 39.0, "end": 44.5, "text": "Within a quarter, seven-day activation went from 31 to 44 percent."}
+        ]
+      },
+      "assert": {
+        "story_id": "st_onboarding",
+        "first_answer_sentence": 1,
+        "proof_landed_sentence": 7,
+        "action_sentence": 6,
+        "numbers_said_match": {"st_onboarding.activation_7d": true},
+        "numbers_said_not_in_bank": [{"sentence": 6, "text_contains": "half"}],
+        "criteria": {
+          "answer_first": "pass",
+          "proof": "pass",
+          "story_fit": "pass",
+          "method_first": "pass",
+          "approach_before_action": "pass",
+          "no_complaining": "pass",
+          "type_fit": "na",
+          "jd_fit": "na"
+        }
+      }
+    },
+    "tmay_b2c_pitch": {
+      "description": "Tell me about yourself, practicing for tg_b2c. Sentence 1 says the B2C pitch almost word for word: type_fit passes from sentence 1.",
+      "target_id": "tg_b2c",
+      "question": "Tell me about yourself.",
+      "classification": {"type": "tell_me_about_yourself", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "is_major_story": false},
+      "stage": "recruiter",
+      "active_criteria": ["answer_first", "proof", "story_fit", "context_short", "clean_stop", "ownership", "conviction", "no_complaining", "stage_fit", "type_fit"],
+      "story_angles": "",
+      "target_pitch": "I'm a lifecycle marketer who finds where activation and retention actually break, then builds the journeys that fix them.",
+      "answer": "tmay",
+      "assert": {
+        "first_answer_sentence": 1,
+        "numbers_said_match": {"st_onboarding.activation_7d": true},
+        "type_fit_sentences_includes": [1],
+        "criteria": {
+          "answer_first": "pass",
+          "proof": "pass",
+          "no_complaining": "pass",
+          "type_fit": "pass"
+        }
+      }
+    },
+    "tmay_b2b_pitch": {
+      "description": "The same answer, practicing for tg_b2b. Nothing in it says the B2B pitch (a messy stack, a pipeline sales trusts): it is a pitch for a different kind of job, so type_fit fails. Everything else is judged the same as tmay_b2c_pitch.",
+      "target_id": "tg_b2b",
+      "question": "Tell me about yourself.",
+      "classification": {"type": "tell_me_about_yourself", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "is_major_story": false},
+      "stage": "recruiter",
+      "active_criteria": ["answer_first", "proof", "story_fit", "context_short", "clean_stop", "ownership", "conviction", "no_complaining", "stage_fit", "type_fit"],
+      "story_angles": "",
+      "target_pitch": "I'm a marketing ops lead who turns a messy stack into a pipeline the sales team trusts, then proves it in the numbers.",
+      "answer": "tmay",
+      "assert": {
+        "first_answer_sentence": 1,
+        "numbers_said_match": {"st_onboarding.activation_7d": true},
+        "criteria": {
+          "answer_first": "pass",
+          "proof": "pass",
+          "no_complaining": "pass",
+          "type_fit": "fail"
+        }
+      }
+    }
+  },
+  "answers": {
+    "tmay": {
+      "duration_s": 33.0,
+      "sentences": [
+        {"i": 1, "start": 0.0, "end": 7.0, "text": "I'm a lifecycle marketer, and what I do best is find where activation and retention actually break, then build the journeys that fix them."},
+        {"i": 2, "start": 7.0, "end": 13.5, "text": "Right now I own lifecycle at Fernhill, a neobank, from the strategy to the sends to the weekly readout for the execs."},
+        {"i": 3, "start": 13.5, "end": 22.5, "text": "The clearest example is when everyone blamed our welcome emails, but people were stalling on bank linking, and fixing that took seven-day activation from 31 to 44 percent."},
+        {"i": 4, "start": 22.5, "end": 28.0, "text": "Before that I ran email at Brightwave and rebuilt our deliverability after a blocklisting."},
+        {"i": 5, "start": 28.0, "end": 33.0, "text": "Now I want to do the same for a consumer product where the first few weeks decide everything."}
+      ]
+    }
+  },
+  "never_changes": "Across all three cases, angles and pitches change only answer_first openings and type_fit. numbers_said, proof and the bank match are the same as they would be with no target."
+}
