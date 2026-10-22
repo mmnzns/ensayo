@@ -232,7 +232,7 @@ pub fn save(storage: &Storage, app_id: &str, ctx: &AnswerCtx, ex: &Extracted, re
     let now = stamp();
     let mut used = vec![false; ex.conflicts.len()];
     let mut saved = Vec::new();
-    let mut make = |file: &mut ClaimsFile, kind: &str, subject: &str, value: &str, quote: &str, conflict: Option<&Found>| {
+    let make = |file: &mut ClaimsFile, kind: &str, subject: &str, value: &str, quote: &str, conflict: Option<&Found>| {
         let c = ClaimRec {
             id: file.new_id(),
             kind: kind.to_string(),

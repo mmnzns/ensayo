@@ -1,6 +1,7 @@
 // The modules the `ensayo-eval` command line tool also uses are public.
 pub mod ai;
 pub mod ai_commands;
+mod application_commands;
 pub mod applications;
 mod audio_retention;
 mod commands;
@@ -70,6 +71,38 @@ pub fn run() {
             ai_commands::test_ai,
             ai_commands::session_cost,
             story_commands::parse_story,
+            application_commands::load_applications,
+            application_commands::create_application,
+            application_commands::update_application,
+            application_commands::delete_application,
+            application_commands::save_process,
+            application_commands::add_stage,
+            application_commands::remove_stage,
+            application_commands::reorder_stages,
+            application_commands::rename_stage,
+            application_commands::set_stage_time,
+            application_commands::set_stage_done,
+            application_commands::save_posting,
+            application_commands::analyse_jd,
+            application_commands::save_analysis,
+            application_commands::save_question,
+            application_commands::delete_question,
+            application_commands::edit_claim,
+            application_commands::remove_claim,
+            application_commands::add_claim,
+            application_commands::mark_claim_updated,
+            application_commands::mark_claim_current,
+            application_commands::attach_resume,
+            application_commands::use_resume_from,
+            application_commands::set_no_resume,
+            application_commands::paste_resume_text,
+            application_commands::read_resume,
+            application_commands::record_must_say,
+            application_commands::drop_story_suggestion,
+            application_commands::save_locked,
+            application_commands::clear_locked,
+            application_commands::cue_sheet,
+            application_commands::cue_sheet_markdown,
             local_ai_commands::local_ai_status,
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,

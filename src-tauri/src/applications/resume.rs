@@ -783,6 +783,17 @@ pub fn bank_status(check: Option<&BankCheck>, stories: &[Story]) -> (String, Opt
     }
 }
 
+/// Takes a suggested story off the list once the user has turned it into a story (or does not want it).
+pub fn drop_story_suggestion(storage: &Storage, id: &str, bullet: &str) -> StorageResult<()> {
+    let mut rec = load_resume(storage, id)?.ok_or_else(|| StorageError::NotFound("resume".into()))?;
+    let before = rec.story_suggestions.len();
+    rec.story_suggestions.retain(|s| s.bullet != bullet);
+    if rec.story_suggestions.len() == before {
+        return Err(StorageError::NotFound("that suggestion".into()));
+    }
+    save_resume(storage, id, &rec)
+}
+
 /// The Mock debrief says which "say these out loud" items were said in a Mock: counted per item and per Mock.
 pub fn record_must_say(storage: &Storage, id: &str, said_ids: &[String]) -> StorageResult<()> {
     let mut rec = load_resume(storage, id)?.ok_or_else(|| StorageError::NotFound("resume".into()))?;
@@ -1405,5 +1416,15 @@ mod tests {
         assert_eq!(rec.mocks_checked, 2);
         assert_eq!((rec.must_say[0].said_in, rec.must_say[1].said_in), (1, 2));
         assert!(record_must_say(&s, &id, &["ms-9".to_string()]).is_err());
+    }
+
+    #[test]
+    fn a_suggested_story_leaves_the_list_when_the_user_is_done_with_it() {
+        let (d, s, id) = setup();
+        attached(&d, &s, &id);
+        read(&s, &id, &Scripted::new(vec![Ok(&reply(|_| {}))]));
+        drop_story_suggestion(&s, &id, "Win-back series brought back 18% of lapsed customers").unwrap();
+        assert_eq!(resume_rec(&s, &id).story_suggestions.len(), 1);
+        assert!(drop_story_suggestion(&s, &id, "Win-back series brought back 18% of lapsed customers").is_err());
     }
 }
