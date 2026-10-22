@@ -173,6 +173,14 @@ pub struct QuestionsFile {
     pub questions: Vec<QuestionRec>,
     #[serde(default)]
     pub next_n: u32,
+    /// Questions the person deleted, as normalised text, so reading the posting again never brings them back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deleted: Vec<String>,
+}
+
+/// A question's text as compared for "the same question": trimmed, lower case, spaces collapsed.
+pub fn question_key(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
 
 impl QuestionsFile {

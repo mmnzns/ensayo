@@ -769,6 +769,22 @@ mod tests {
     }
 
     #[test]
+    fn keeping_the_target_is_remembered_and_forgotten_when_the_application_moves() {
+        let (_d, s) = setup();
+        let (a, b) = with_two_targets(&s);
+        let id = make(&s);
+        update_with(&s, None, &id, patch(Some(&a.id), false), at()).unwrap();
+        let app = s.application(&id).unwrap();
+        let kept = update_with(&s, None, &app.id, AppPatch { fit_dismissed_for: Some(a.id.clone()), ..Default::default() }, at()).unwrap();
+        assert_eq!(kept.application.fit_dismissed_for.as_deref(), Some(a.id.as_str()));
+        let moved = update_with(&s, None, &app.id, AppPatch { target_id: Some(b.id.clone()), ..Default::default() }, at()).unwrap();
+        assert_eq!(moved.application.fit_dismissed_for, None, "a move starts the question afresh");
+        update_with(&s, None, &app.id, AppPatch { fit_dismissed_for: Some(b.id.clone()), ..Default::default() }, at()).unwrap();
+        let cleared = update_with(&s, None, &app.id, AppPatch { fit_dismissed_for: Some(String::new()), ..Default::default() }, at()).unwrap();
+        assert_eq!(cleared.application.fit_dismissed_for, None);
+    }
+
+    #[test]
     fn moving_an_application_works_out_the_fit_again_for_its_new_target_without_a_new_reading() {
         let (_d, s) = setup();
         let (first, ops) = with_two_targets(&s);

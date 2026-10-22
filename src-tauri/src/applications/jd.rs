@@ -628,11 +628,12 @@ pub fn save_analysis(storage: &Storage, id: &str, mut input: DerivedAnalysis) ->
 
 /// The new set of questions: the ones the user wrote or changed stay, the rest are replaced by the new reading's.
 fn merge_questions(rec: &AppRecord, old: Option<QuestionsFile>, fresh: Vec<QuestionRec>, prompt: &str, engine: &str) -> (QuestionsFile, Vec<String>) {
-    let mut file = QuestionsFile { prompt: prompt.into(), engine: engine.into(), questions: vec![], next_n: old.as_ref().map(|o| o.next_n).unwrap_or(0) };
+    let deleted: Vec<String> = old.as_ref().map(|o| o.deleted.clone()).unwrap_or_default();
+    let mut file = QuestionsFile { prompt: prompt.into(), engine: engine.into(), questions: vec![], next_n: old.as_ref().map(|o| o.next_n).unwrap_or(0), deleted: deleted.clone() };
     let kept: Vec<QuestionRec> = old.map(|o| o.questions.into_iter().filter(|q| q.edited_by_user).collect()).unwrap_or_default();
     let kept_ids: Vec<String> = kept.iter().map(|q| format!("question {}", q.id)).collect();
     file.questions = kept;
-    for mut q in fresh {
+    for mut q in fresh.into_iter().filter(|q| !deleted.contains(&crate::storage::application_files::question_key(&q.text))) {
         q.id = file.new_id();
         file.questions.push(q);
     }
@@ -652,6 +653,11 @@ pub fn save_posting(storage: &Storage, id: &str, text: &str) -> StorageResult<Po
         None => !text.trim().is_empty(),
     };
     if changed {
+        // A different posting is a different fit: "Keep <target>" was about the old one.
+        storage.change(id, |a| {
+            a.fit_dismissed_for = None;
+            Ok(())
+        })?;
         if text.trim().is_empty() {
             storage.application(id)?;
             storage.remove_application_file(id, "jd.txt")?;
@@ -834,10 +840,12 @@ pub fn save_question(storage: &Storage, id: &str, input: QuestionInput) -> Stora
 
 pub fn delete_question(storage: &Storage, id: &str, question_id: &str) -> StorageResult<()> {
     let mut file = storage.load_application_part::<QuestionsFile>(id, "questions.json")?.ok_or_else(|| StorageError::NotFound(format!("question {question_id}")))?;
-    let before = file.questions.len();
-    file.questions.retain(|q| q.id != question_id);
-    if file.questions.len() == before {
+    let Some(gone) = file.questions.iter().find(|q| q.id == question_id).map(|q| crate::storage::application_files::question_key(&q.text)) else {
         return Err(StorageError::NotFound(format!("question {question_id}")));
+    };
+    file.questions.retain(|q| q.id != question_id);
+    if !file.deleted.contains(&gone) {
+        file.deleted.push(gone);
     }
     storage.save_application_part(id, "questions.json", &file)
 }
@@ -1060,6 +1068,19 @@ mod tests {
         assert!(delete_question(&s, &id, "q_999").is_err());
         assert!(save_question(&s, &id, QuestionInput { id: None, stage_id: "stg_99".into(), text: "x".into(), kind: "behavioral".into() }).is_err(), "the stage has to exist");
         assert!(save_question(&s, &id, QuestionInput { id: None, stage_id: "stg_1".into(), text: "  ".into(), kind: "behavioral".into() }).is_err());
+    }
+
+    #[test]
+    fn a_deleted_question_does_not_come_back_when_the_posting_is_read_again() {
+        let (_d, s, id) = setup();
+        run(&s, &id, &Scripted::new(vec![Ok(REPLY)]));
+        let before = questions(&s, &id);
+        let gone = before[2].text.clone();
+        delete_question(&s, &id, &before[2].id).unwrap();
+        run(&s, &id, &Scripted::new(vec![Ok(REPLY)]));
+        let after = questions(&s, &id);
+        assert!(!after.iter().any(|q| q.text.trim().eq_ignore_ascii_case(gone.trim())), "{gone} came back");
+        assert_eq!(after.len(), before.len() - 1);
     }
 
     #[test]

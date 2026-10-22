@@ -155,6 +155,9 @@ pub struct ApplicationView {
     /// How the posting read against the targets; null until a posting has been read.
     #[serde(rename = "targetFit")]
     pub target_fit: Option<TargetFit>,
+    /// The target the person chose to keep on the fit banner (the banner stays quiet while it is the filed target).
+    #[serde(rename = "fitDismissedFor")]
+    pub fit_dismissed_for: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -461,6 +464,7 @@ pub fn build(storage: &Storage, app: &AppRecord, ctx: &Ctx) -> StorageResult<App
         no_resume: app.no_resume,
         target_id: resolve_target(app.target_id.as_deref(), ctx.targets, ctx.targets.iter().find(|t| !t.archived).map(|t| t.id.as_str())),
         target_fit: app.target_fit.clone(),
+        fit_dismissed_for: app.fit_dismissed_for.clone(),
     })
 }
 
@@ -895,7 +899,7 @@ mod tests {
         s.update_application(&app.id, AppPatch { role: Some("Sr Lifecycle Mgr".into()), ..Default::default() }).unwrap();
         s.set_stage_time(&app.id, "stg_2", Some("2026-10-23T14:00")).unwrap();
         let q = |id: &str, stage: &str, kind: &str, text: &str, edited: bool| QuestionRec { id: id.into(), stage_id: stage.into(), stage: "hiring_manager".into(), text: text.into(), kind: kind.into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, best_story_id: Some("st_onboarding".into()), why: "tests a belief".into(), requirement: None, source: "jd".into(), edited_by_user: edited };
-        s.save_application_part(&app.id, "questions.json", &QuestionsFile { prompt: "analyse-jd v1".into(), engine: "ai".into(), questions: vec![q("q_1", "stg_1", "tell_me_about_yourself", "Give me the short version.", false), q("q_2", "stg_2", "future_looking", "First 60 days?", true), q("q_3", "stg_2", "behavioral", "Tell me about a time.", false)], next_n: 3 }).unwrap();
+        s.save_application_part(&app.id, "questions.json", &QuestionsFile { prompt: "analyse-jd v1".into(), engine: "ai".into(), questions: vec![q("q_1", "stg_1", "tell_me_about_yourself", "Give me the short version.", false), q("q_2", "stg_2", "future_looking", "First 60 days?", true), q("q_3", "stg_2", "behavioral", "Tell me about a time.", false)], next_n: 3, deleted: vec![] }).unwrap();
         crate::applications::cue::save_locked(&s, &app.id, "stg_2", crate::applications::cue::LockInput { opener: "Lifecycle marketer.".into(), opener_prompt: None, power_story: "st_onboarding".into(), questions: vec!["One?".into()] }).unwrap();
         let v = json_of(&extras(&s, &app.id));
         for k in ["postingText", "postingPastedOn", "wasValues", "practicedByStage", "nightBefore", "questions"] {

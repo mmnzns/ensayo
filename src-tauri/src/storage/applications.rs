@@ -124,6 +124,10 @@ pub struct AppRecord {
     /// How the posting read against the targets when it was last read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_fit: Option<TargetFit>,
+    /// "Keep <target>" on the fit banner: the target the person chose to keep despite the posting. Cleared when the
+    /// application moves to another target or its posting changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fit_dismissed_for: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -181,6 +185,9 @@ pub struct AppPatch {
     /// Done by the command, which has the engine; the storage only files the application.
     #[serde(default, alias = "rebuildQuestions")]
     pub rebuild_questions: bool,
+    /// "Keep <target>": the target id to stop suggesting another for; an empty string clears it.
+    #[serde(default, alias = "fitDismissedFor")]
+    pub fit_dismissed_for: Option<String>,
 }
 
 /// One row of the stage list as the Edit details screen saves it.
@@ -468,6 +475,7 @@ impl Storage {
                 None => self.active_target()?.map(|t| t.id),
             },
             target_fit: None,
+            fit_dismissed_for: None,
         };
         if NaiveDate::parse_from_str(&rec.applied_on, "%Y-%m-%d").is_err() {
             return Err(StorageError::Invalid(format!("\"{}\" is not a date. Use a day like 2026-10-06.", rec.applied_on)));
@@ -568,7 +576,12 @@ impl Storage {
             if let Some(t) = &new_target {
                 if a.target_id.as_deref() != Some(t.as_str()) {
                     a.target_id = Some(t.clone());
+                    a.fit_dismissed_for = None;
                 }
+            }
+            if let Some(k) = &patch.fit_dismissed_for {
+                let k = k.trim();
+                a.fit_dismissed_for = if k.is_empty() { None } else { Some(k.to_string()) };
             }
             if let Some(s) = patch.startup {
                 if s != a.startup {
