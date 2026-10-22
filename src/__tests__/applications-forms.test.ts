@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytesOf, contactFromText, fileSlug, filledContacts, isResumeFile, isoDay, joinAt, lockQuestions, moveItem, splitAt, stageInputs } from "../screens/applications/forms";
+import { bytesOf, contactFromText, fileSlug, filledContacts, isResumeFile, isoDay, joinAt, keptWords, lockQuestions, moveItem, splitAt, stageInputs } from "../screens/applications/forms";
 
 describe("dates the backend accepts", () => {
   it("splits a stored date-time into a date and a time", () => {
@@ -81,5 +81,23 @@ describe("files and the night before", () => {
   it("reads a file's bytes", async () => {
     const bytes = await bytesOf(new Blob([new Uint8Array([37, 80, 68, 70])]));
     expect(Array.from(bytes)).toEqual([37, 80, 68, 70]);
+  });
+});
+
+describe("what reading again kept", () => {
+  it("names the edits in plain words, once each", () => {
+    expect(keptWords(["analysis.summary", "analysis.priorities.1", "analysis.beliefs.0", "analysis.gaps.2", "analysis.echo.0", "question q_3", "question q_4"])).toEqual([
+      "the summary",
+      "priority 2",
+      "belief 1",
+      "gap 3",
+      "phrase 1",
+      "one of your questions",
+    ]);
+  });
+
+  it("does not show a path it does not know", () => {
+    expect(keptWords(["something.odd"])).toEqual(["something you edited"]);
+    expect(keptWords([])).toEqual([]);
   });
 });

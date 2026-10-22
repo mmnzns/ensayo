@@ -85,3 +85,30 @@ export function lockQuestions(questions: string[]): string[] {
 export async function bytesOf(file: Blob): Promise<Uint8Array> {
   return new Uint8Array(await file.arrayBuffer());
 }
+
+/** What reading the posting again left alone, in plain words. The backend names paths ("analysis.priorities.1",
+ *  "question q_3"); the screen says what they are. */
+export function keptWords(kept: string[]): string[] {
+  const words = kept.map((k) => {
+    const m = /^analysis\.(summary|priorities|beliefs|gaps|echo)(?:\.(\d+))?$/.exec(k);
+    if (m) {
+      const n = m[2] === undefined ? 0 : Number(m[2]) + 1;
+      switch (m[1]) {
+        case "summary":
+          return "the summary";
+        case "priorities":
+          return `priority ${n}`;
+        case "beliefs":
+          return `belief ${n}`;
+        case "gaps":
+          return `gap ${n}`;
+        default:
+          return `phrase ${n}`;
+      }
+    }
+    if (k.startsWith("question")) return "one of your questions";
+    if (k === "posting") return "the posting text";
+    return "something you edited";
+  });
+  return [...new Set(words)];
+}
