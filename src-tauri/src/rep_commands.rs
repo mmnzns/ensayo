@@ -4,6 +4,7 @@
 //! blocking thread.
 
 use crate::ai::llm::Llm;
+use crate::applications::hook;
 use crate::audio_retention::{self, audio_path};
 use crate::data_commands::data_folder;
 use crate::metrics::{self, fix, numbers, Inputs, Metrics, Outcome};
@@ -141,6 +142,8 @@ struct Asked {
     builder_operator_check: bool,
     is_major_story: bool,
     founder_variant: bool,
+    /// What the application's posting is about (empty outside an application, or before it was read).
+    jd_summary: String,
 }
 
 enum Judged {
@@ -188,7 +191,7 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
         founder_variant: asked.founder_variant,
         seniority: profile.as_ref().map(|p| p.seniority.as_str()).unwrap_or("mid"),
         identity_statement: profile.as_ref().map(|p| p.identity_statement.as_str()).unwrap_or(""),
-        jd_summary: "",
+        jd_summary: &asked.jd_summary,
         stories: &stories,
         method: &method,
         metrics,
@@ -277,6 +280,12 @@ fn outcome_without_rep(name: &'static str, session_id: String) -> RepOutcome {
 /// or when the model fails, the rep keeps its timing-only checks.
 pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, words: Vec<Word>, keep_audio: bool, now: DateTime<Utc>, mut ai: Option<AiCtx>) -> StorageResult<RepOutcome> {
     let session_id = args.session_id.clone().unwrap_or_else(|| crate::storage::io::new_id("ses"));
+    // Inside an application: the stage of its process, and the founder variant at a startup's leadership round.
+    let session_stage = storage.session(&session_id).ok().flatten().and_then(|s| s.stage_id);
+    let app_ctx = hook::app_context(storage, args.application_id.as_deref(), session_stage.as_deref(), args.stage_id.as_deref(), &args.stage);
+    let resolved = FinishArgs { founder_variant: hook::founder_variant(app_ctx.as_ref(), &args.stage, args.founder_variant), ..args.clone() };
+    let args = &resolved;
+    let mut pending: Option<hook::Pending> = None;
     let type_for_rules = if args.question_type.is_empty() { "behavioral" } else { args.question_type.as_str() };
     let mut metrics = measure(storage, &args.stage, type_for_rules, &args.story_ids, words.clone(), false)?;
     if metrics.outcome == Outcome::DidntCatch {
@@ -303,6 +312,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             builder_operator_check: args.builder_operator_check,
             is_major_story: args.is_major_story,
             founder_variant: args.founder_variant,
+            jd_summary: if app_ctx.is_some() { hook::jd_summary(storage, args.application_id.as_deref()) } else { String::new() },
         };
         let judged = match &args.follow_up {
             Some(f) => judge_follow_up(storage, ctx, &session_id, args, f, &mut metrics),
@@ -315,6 +325,18 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
                 rewrite = r;
                 meta = Some(m);
                 question_type = t;
+                if let Some(app) = &app_ctx {
+                    // Claims for the consistency check (prompt 07): the answer is compared with what was said before.
+                    let identity = storage.profile().ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
+                    let heard = hook::Heard { question: &args.question_text, question_type: &question_type, story_ids: &args.story_ids, identity_statement: &identity, founder: args.founder_variant && args.stage == "leadership" };
+                    let (p, claims_notice) = hook::after_scored(storage, ctx, app, &heard, &mut metrics, &mut fix_id, &mut note, &mut rewrite);
+                    pending = p;
+                    notice = claims_notice;
+                    if let Some(m) = meta.as_mut() {
+                        m.prompts.push(hook::prompt_tag());
+                        m.cost_usd = ctx.budget.spend.usd;
+                    }
+                }
             }
             Judged::Clarifying => {
                 let _ = std::fs::remove_file(&args.audio_path);
@@ -330,7 +352,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         }
     }
     if storage.session(&session_id)?.is_none() {
-        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: args.application_id.clone(), stage_id: args.stage_id.clone(), started: stamp(now) })?;
+        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now) })?;
     }
     let n = storage.next_rep_number(&session_id)?;
     let delta = delta_for(storage, &session_id, &args.question_id, args.attempt, &metrics);
@@ -361,6 +383,11 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         metrics,
     };
     storage.save_rep(&session_id, &full)?;
+    if let Some(p) = &pending {
+        if let Err(e) = hook::save_pending(storage, p, &session_id, n) {
+            log::warn!("claims of {session_id}/{n} were not saved: {e}");
+        }
+    }
     let audio_kept = keep_audio && move_audio(&args.audio_path, &audio_path(audio_root, &session_id, n));
     if !audio_kept {
         let _ = std::fs::remove_file(&args.audio_path);
@@ -390,6 +417,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
     full.rep.rewrite = None;
     full.rep.ai = None;
     let mut notice = None;
+    let mut pending: Option<hook::Pending> = None;
     if let Some(ctx) = ai.as_mut() {
         let asked = Asked {
             text: full.rep.question_text.clone(),
@@ -399,6 +427,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
             builder_operator_check: full.rep.builder_operator_check,
             is_major_story: full.rep.is_major_story,
             founder_variant: full.rep.founder_variant,
+            jd_summary: hook::jd_summary(storage, session.application_id.as_deref()),
         };
         match judge(storage, ctx, &session.stage, &full.rep.story_ids.clone(), &asked, &mut full.metrics) {
             Judged::Scored { fix, note, rewrite, meta, .. } => {
@@ -406,12 +435,32 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
                 full.rep.note = Some(note);
                 full.rep.rewrite = rewrite;
                 full.rep.ai = Some(meta);
+                // The words changed, so what was heard in them is heard again.
+                if let Some(app_id) = session.application_id.as_deref() {
+                    let _ = hook::forget_rep(storage, app_id, session_id, Some(n));
+                    if let Some(app) = hook::app_context(storage, Some(app_id), session.stage_id.as_deref(), None, &session.stage) {
+                        let identity = storage.profile().ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
+                        let heard = hook::Heard { question: &full.rep.question_text, question_type: &full.rep.question_type, story_ids: &full.rep.story_ids, identity_statement: &identity, founder: full.rep.founder_variant && session.stage == "leadership" };
+                        let (p, claims_notice) = hook::after_scored(storage, ctx, &app, &heard, &mut full.metrics, &mut full.rep.fix, &mut full.rep.note, &mut full.rep.rewrite);
+                        pending = p;
+                        notice = claims_notice;
+                        if let Some(m) = full.rep.ai.as_mut() {
+                            m.prompts.push(hook::prompt_tag());
+                            m.cost_usd = ctx.budget.spend.usd;
+                        }
+                    }
+                }
             }
             Judged::Fallback(n) => notice = Some(n),
             Judged::Clarifying | Judged::NotAnAnswer => {}
         }
     }
     storage.save_rep(session_id, &full)?;
+    if let Some(p) = &pending {
+        if let Err(e) = hook::save_pending(storage, p, session_id, n) {
+            log::warn!("claims of {session_id}/{n} were not saved: {e}");
+        }
+    }
     let delta = delta_for(storage, session_id, &full.rep.question_id, full.rep.attempt, &full.metrics);
     let audio_kept = audio_path(audio_root, session_id, n).is_file();
     Ok(RepOutcome { outcome: "scored", session_id: session_id.to_string(), rep: Some(full), delta, restart_offered: false, audio_kept, notice, transcript_text: None })
@@ -431,6 +480,7 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
         builder_operator_check: rep.rep.builder_operator_check,
         is_major_story: rep.rep.is_major_story,
         founder_variant: rep.rep.founder_variant,
+        jd_summary: String::new(),
     };
     match judge(storage, ai, &stage, &rep.rep.story_ids, &asked, &mut metrics) {
         Judged::Scored { .. } => Ok(metrics.checks),
@@ -519,7 +569,8 @@ pub fn next_follow_up_with(storage: &Storage, ai: &mut AiCtx, session_id: &str, 
     let stories: Vec<Story> = parent.rep.story_ids.iter().filter_map(|id| stories_all.iter().find(|s| &s.id == id).cloned()).collect();
     let transcript = transcript_text(&parent.metrics);
     let branches = followup::branches_text(&stories);
-    let g = GenInput { question: &parent.rep.question_text, transcript: &transcript, checks: &parent.metrics.checks, stage: &session.stage, founder_variant: parent.rep.founder_variant, branches: &branches, used: &used, jd_summary: "" };
+    let jd = hook::jd_summary(storage, session.application_id.as_deref());
+    let g = GenInput { question: &parent.rep.question_text, transcript: &transcript, checks: &parent.metrics.checks, stage: &session.stage, founder_variant: parent.rep.founder_variant, branches: &branches, used: &used, jd_summary: &jd };
     let f = followup::generate(ai.llm, &g, ai.budget).map_err(|e| e.notice())?;
     Ok(FollowUpQuestion { kind: f.kind, question: f.question, targets: f.targets, number: earlier.len() as u32 + 1, of })
 }
@@ -578,7 +629,12 @@ pub async fn rescore_rep(session_id: String, n: u32, keep_restart: bool) -> Cmd<
 #[tauri::command]
 pub async fn delete_rep(session_id: String, n: u32) -> Cmd<()> {
     blocking(move || {
-        open().and_then(|s| s.delete_rep(&session_id, n)).map_err(plain)?;
+        let storage = open().map_err(plain)?;
+        let application = storage.session(&session_id).ok().flatten().and_then(|s| s.application_id);
+        storage.delete_rep(&session_id, n).map_err(plain)?;
+        if let Some(app_id) = application {
+            let _ = hook::forget_rep(&storage, &app_id, &session_id, Some(n));
+        }
         let _ = std::fs::remove_file(audio_path(&paths::audio_dir(), &session_id, n));
         Ok(())
     })
@@ -1107,5 +1163,210 @@ mod tests {
         for s in &m.sentences {
             eprintln!("  [{}] {:.1}s-{:.1}s {}", s.index, s.start_ms as f64 / 1000.0, s.end_ms as f64 / 1000.0, s.text);
         }
+    }
+
+    // ---------- inside an application ----------
+
+    use crate::storage::application_files::{AnalysisFile, ClaimsFile, DerivedAnalysis};
+    use crate::storage::applications::NewApplication;
+
+    fn app(storage: &Storage, startup: bool) -> String {
+        storage.create_application(NewApplication { company: "Kestrel Pay".into(), startup, ..Default::default() }, chrono::NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap().id
+    }
+
+    fn claims_reply(claims: Value, conflicts: Value) -> String {
+        json!({"claims": claims, "conflicts": conflicts}).to_string()
+    }
+
+    fn notice_claim(value: &str) -> Value {
+        json!([{"type": "availability", "subject": "notice period", "value": value, "quote": "We cut churn", "sentence": 1}])
+    }
+
+    fn in_app(a: &mut FinishArgs, app_id: &str, stage: &str) {
+        a.application_id = Some(app_id.into());
+        a.stage = stage.into();
+    }
+
+    fn good_score() -> String {
+        score_json(1, 1, &[("answer_first", "pass"), ("proof", "pass")], false)
+    }
+
+    fn saved_claims(storage: &Storage, app_id: &str) -> Vec<crate::storage::application_files::ClaimRec> {
+        storage.load_application_part::<ClaimsFile>(app_id, "claims.json").unwrap().map(|f| f.claims).unwrap_or_default()
+    }
+
+    #[test]
+    fn a_scored_answer_inside_an_application_saves_its_claims_with_the_stage_and_the_rep_and_the_session_knows_its_stage() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &id, "recruiter");
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("four weeks"), json!([])))]);
+        let out = ai_run(&llm, &a, &storage, &tmp.join("audio"), words(40));
+        let rep = out.rep.unwrap();
+        assert_eq!(llm.calls(), 3);
+        assert!(rep.metrics.checks.iter().all(|c| c.id != "c1_consistent"), "nothing earlier to compare with");
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v1", "coach-note v1", "extract-claims v1"]);
+        let claims = saved_claims(&storage, &id);
+        assert_eq!(claims.len(), 1);
+        assert_eq!((claims[0].stage.as_str(), claims[0].stage_ref.as_str(), claims[0].value.as_str()), ("stg_1", "recruiter", "four weeks"));
+        let r = claims[0].rep.clone().unwrap();
+        assert_eq!((r.session_id.as_str(), r.n), (out.session_id.as_str(), 1));
+        let session = storage.session(&out.session_id).unwrap().unwrap();
+        assert_eq!((session.application_id.as_deref(), session.stage_id.as_deref()), (Some(id.as_str()), Some("stg_1")));
+    }
+
+    #[test]
+    fn a_later_answer_that_conflicts_fails_the_consistency_check_and_the_note_is_about_it() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut first = args(&tmp, 1, None);
+        in_app(&mut first, &id, "recruiter");
+        ai_run(&Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("four weeks"), json!([])))]), &first, &storage, &tmp.join("audio"), words(40));
+        let mut second = args(&tmp, 2, None);
+        in_app(&mut second, &id, "hiring_manager");
+        let conflict = json!([{"type": "availability", "subject": "notice period", "earlier_claim_id": "cl_1", "earlier_stage": "recruiter", "earlier_value": "four weeks", "new_value": "two weeks", "sentence": 1}]);
+        let c1_note = r#"{"note":"In the recruiter stage you said four weeks. Say it the same way.","rewrite":null,"offer_follow_up":true}"#;
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("two weeks"), conflict)), Ok(c1_note)]);
+        let out = ai_run(&llm, &second, &storage, &tmp.join("audio"), words(40));
+        let rep = out.rep.unwrap();
+        let c1 = rep.metrics.checks.iter().find(|c| c.id == "c1_consistent").unwrap();
+        assert_eq!(c1.passed, Some(false));
+        assert_eq!(c1.evidence, "In the recruiter stage you said \"four weeks\". Here you said \"two weeks\".");
+        assert_eq!(rep.rep.fix.as_deref(), Some("c1_consistent"), "it outranks the tail the first note was about");
+        assert_eq!(rep.rep.note.as_deref(), Some("In the recruiter stage you said four weeks. Say it the same way."));
+        let seen = llm.seen.lock().unwrap();
+        assert!(seen[3].user.contains("c1_consistent"), "the coach is told the new fix");
+        assert!(seen[2].user.contains("cl_1 | stage=recruiter | availability | \"four weeks\" | current"), "the claims log reached the model");
+        let flagged = saved_claims(&storage, &id).into_iter().find(|c| c.value == "two weeks").unwrap();
+        assert_eq!(flagged.conflict.unwrap().earlier_claim_id, "cl_1");
+        assert_eq!(flagged.stage, "stg_2");
+    }
+
+    #[test]
+    fn a_passing_consistency_check_leaves_the_fix_and_the_note_as_they_were() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut first = args(&tmp, 1, None);
+        in_app(&mut first, &id, "recruiter");
+        ai_run(&Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("four weeks"), json!([])))]), &first, &storage, &tmp.join("audio"), words(40));
+        let mut second = args(&tmp, 2, None);
+        in_app(&mut second, &id, "hiring_manager");
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("a month"), json!([])))]);
+        let rep = ai_run(&llm, &second, &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        assert_eq!(llm.calls(), 3, "no second coach call when nothing conflicts");
+        assert_eq!(rep.metrics.checks.iter().find(|c| c.id == "c1_consistent").unwrap().passed, Some(true));
+        assert_eq!(rep.rep.fix.as_deref(), Some("clean_stop"));
+        assert_eq!(rep.rep.note.as_deref(), Some("You kept going long after the number. Stop once it lands."));
+    }
+
+    #[test]
+    fn a_follow_up_answer_inside_an_application_is_checked_for_consistency_too() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut first = args(&tmp, 1, None);
+        in_app(&mut first, &id, "hiring_manager");
+        let session = ai_run(&Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("four weeks"), json!([])))]), &first, &storage, &tmp.join("audio"), words(40)).session_id;
+        let mut f = args(&tmp, 1, Some(&session));
+        in_app(&mut f, &id, "hiring_manager");
+        f.question_text = "Wouldn't that have happened anyway?".into();
+        f.follow_up = Some(FollowUpArgs { parent_n: 1, kind: "skeptic_push".into(), number: 1 });
+        let conflict = json!([{"type": "availability", "subject": "notice period", "earlier_claim_id": "cl_1", "earlier_stage": "hiring_manager", "earlier_value": "four weeks", "new_value": "six weeks", "sentence": 1}]);
+        let llm = Scripted::new(vec![Ok(&follow_score_json(&[])), Ok(COACH), Ok(&claims_reply(notice_claim("six weeks"), conflict)), Ok(r#"{"note":"You said four weeks before.","rewrite":null,"offer_follow_up":false}"#)]);
+        let rep = ai_run(&llm, &f, &storage, &tmp.join("audio"), words(8)).rep.unwrap();
+        assert_eq!(rep.rep.n, 2);
+        assert_eq!(rep.rep.fix.as_deref(), Some("c1_consistent"));
+        assert!(rep.metrics.checks.iter().any(|c| c.id == "f1_answer_push") && rep.metrics.checks.iter().any(|c| c.id == "c1_consistent"));
+        assert_eq!(saved_claims(&storage, &id).len(), 2);
+        assert_eq!(saved_claims(&storage, &id)[1].rep.as_ref().unwrap().n, 2);
+    }
+
+    #[test]
+    fn if_the_claims_cannot_be_checked_the_rep_is_still_saved_with_a_plain_notice() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &id, "recruiter");
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Err(AiError::Failed("The network dropped.".into()))]);
+        let out = ai_run(&llm, &a, &storage, &tmp.join("audio"), words(40));
+        let rep = out.rep.unwrap();
+        assert_eq!(rep.rep.fix.as_deref(), Some("clean_stop"), "the first note stands");
+        assert!(rep.rep.note.is_some());
+        assert!(out.notice.unwrap().contains("compare this answer with what you said before"));
+        assert!(saved_claims(&storage, &id).is_empty());
+    }
+
+    #[test]
+    fn practice_without_an_application_and_an_application_that_is_gone_make_no_claims_call() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH)]);
+        ai_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40));
+        assert_eq!(llm.calls(), 2);
+        let mut gone = args(&tmp, 2, None);
+        gone.application_id = Some("app_deleted".into());
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH)]);
+        let out = ai_run(&llm, &gone, &storage, &tmp.join("audio"), words(40));
+        assert_eq!(llm.calls(), 2);
+        assert!(out.rep.is_some());
+    }
+
+    #[test]
+    fn the_leadership_round_of_a_startup_is_the_founder_variant_even_if_the_screen_did_not_ask() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let startup = app(&storage, true);
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &startup, "leadership");
+        a.founder_variant = false;
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(json!([]), json!([])))]);
+        let rep = ai_run(&llm, &a, &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        assert!(rep.rep.founder_variant);
+        assert!(llm.seen.lock().unwrap()[0].user.contains("founder variant"), "the scorer is told");
+        // Not the leadership round: no founder variant. Not a startup: none either.
+        let mut hm = args(&tmp, 2, None);
+        in_app(&mut hm, &startup, "hiring_manager");
+        let rep = ai_run(&Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(json!([]), json!([])))]), &hm, &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        assert!(!rep.rep.founder_variant);
+        let plain = app(&storage, false);
+        let mut lead = args(&tmp, 3, None);
+        in_app(&mut lead, &plain, "leadership");
+        let rep = ai_run(&Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(json!([]), json!([])))]), &lead, &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        assert!(!rep.rep.founder_variant);
+    }
+
+    #[test]
+    fn the_postings_summary_reaches_the_scorer_inside_an_application() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let file = AnalysisFile { prompt: "analyse-jd v1".into(), engine: "ai".into(), read_on: "x".into(), raw: None, derived: DerivedAnalysis { summary: "A founder-led payments startup needs one lifecycle owner.".into(), ..Default::default() }, edited_by_user: vec![] };
+        storage.save_application_part(&id, "analysis.json", &file).unwrap();
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &id, "recruiter");
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(json!([]), json!([])))]);
+        ai_run(&llm, &a, &storage, &tmp.join("audio"), words(40));
+        assert!(llm.seen.lock().unwrap()[0].user.contains("A founder-led payments startup needs one lifecycle owner."));
+    }
+
+    #[test]
+    fn scoring_a_kept_restart_again_hears_the_claims_again_instead_of_stacking_them() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let audio = tmp.join("audio");
+        let id = app(&storage, false);
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &id, "recruiter");
+        let out = ai_run(&Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("four weeks"), json!([])))]), &a, &storage, &audio, words(40));
+        let again = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("five weeks"), json!([])))]);
+        let mut budget = Budget::new(Provider::Claude, 0.0);
+        rescore_with(&storage, &audio, &out.session_id, 1, true, Some(AiCtx { llm: &again, budget: &mut budget })).unwrap();
+        let claims = saved_claims(&storage, &id);
+        assert_eq!(claims.iter().map(|c| c.value.as_str()).collect::<Vec<_>>(), vec!["five weeks"]);
     }
 }

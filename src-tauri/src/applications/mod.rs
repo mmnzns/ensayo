@@ -2,6 +2,7 @@
 //! records is `storage::applications`; the screens read the result through `view`.
 
 pub mod claims;
+pub mod hook;
 pub mod inputs;
 pub mod jd;
 pub mod question_bank;
