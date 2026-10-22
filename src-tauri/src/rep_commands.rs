@@ -454,7 +454,7 @@ fn transcribe_path(path: &Path, model_id: &str) -> Cmd<transcribe::Transcript> {
 
 /// Runs `f` with a model client and the session's budget when an engine is set up and usable. When it is not (no key,
 /// timing only), runs it without one and returns the reason in plain words.
-fn with_ai<T>(session_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -> (T, Option<String>) {
+pub(crate) fn with_ai<T>(session_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -> (T, Option<String>) {
     match crate::ai_commands::resolved_from_disk() {
         Ok(Some(engine)) => {
             let llm = engine.client();

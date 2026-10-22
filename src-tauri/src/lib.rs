@@ -12,6 +12,7 @@ pub mod paths;
 mod platform;
 pub mod rep_commands;
 pub mod storage;
+mod story_commands;
 mod recorder;
 pub mod scoring;
 mod speech;
@@ -67,6 +68,7 @@ pub fn run() {
             ai_commands::clear_api_key,
             ai_commands::test_ai,
             ai_commands::session_cost,
+            story_commands::parse_story,
             local_ai_commands::local_ai_status,
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,
