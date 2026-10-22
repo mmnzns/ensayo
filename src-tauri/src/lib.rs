@@ -1,6 +1,7 @@
 // Provider table and key store are wired into the UI in M4; they are tested now.
 #[allow(dead_code)]
 mod ai;
+mod audio_retention;
 mod commands;
 mod data_commands;
 #[allow(dead_code)]
@@ -8,6 +9,7 @@ mod keys;
 mod metrics;
 mod paths;
 mod platform;
+mod rep_commands;
 mod storage;
 mod recorder;
 mod speech;
@@ -40,6 +42,18 @@ pub fn run() {
             data_commands::resolve_conflict,
             data_commands::set_data_folder,
             data_commands::delete_all_data,
+            rep_commands::finish_rep,
+            rep_commands::rescore_rep,
+            rep_commands::delete_rep,
+            rep_commands::label_rep,
+            rep_commands::discard_recording,
+            rep_commands::rep_audio_available,
+            rep_commands::read_rep_audio,
+            rep_commands::load_session,
+            rep_commands::list_sessions,
+            rep_commands::sweep_audio,
+            rep_commands::audio_retention,
+            rep_commands::set_audio_retention,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ensayo");

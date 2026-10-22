@@ -96,7 +96,7 @@ pub async fn start_recording(state: State<'_, RecorderState>, device: Option<Str
     let started = (|| {
         std::fs::create_dir_all(paths::audio_dir()).map_err(|e| e.to_string())?;
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-        let path = paths::audio_dir().join(format!("m0-{stamp}.wav"));
+        let path = paths::audio_dir().join(format!("rec-{stamp}.wav"));
         let mic = MicSource::with_device(device.as_deref().unwrap_or(""));
         Capture::start(Box::new(mic), &path)
     })();

@@ -40,6 +40,9 @@ pub struct Rep {
     /// 1, 2 or 3: tries at the same question.
     pub attempt: u32,
     pub recorded_at: String,
+    /// Stories whose numbers this answer is measured against, picked by code when the question was asked.
+    #[serde(default)]
+    pub story_ids: Vec<String>,
     /// The check the note was about, picked by code.
     pub fix: Option<String>,
     pub feedback: Option<Feedback>,
@@ -48,6 +51,9 @@ pub struct Rep {
 /// A rep with its words and measurements, as the screens read it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FullRep {
+    /// The session this rep belongs to (needed for eval copies, which sit outside the session folder).
+    #[serde(default)]
+    pub session_id: String,
     #[serde(flatten)]
     pub rep: Rep,
     pub transcript: Vec<Word>,
@@ -120,6 +126,7 @@ impl Storage {
     }
 
     pub fn save_rep(&self, session: &str, full: &FullRep) -> Result<()> {
+        let full = &FullRep { session_id: session.to_string(), ..full.clone() };
         let dir = self.rep_dir(checked(session)?, full.rep.n);
         save_record(&dir.join("transcript.json"), &TranscriptFile { words: full.transcript.clone() })?;
         save_record(&dir.join("metrics.json"), &full.metrics)?;
@@ -131,7 +138,7 @@ impl Storage {
         let Some(rep) = load_record::<Rep>(&dir.join("rep.json"), migrate::unchanged)? else { return Ok(None) };
         let transcript = load_record::<TranscriptFile>(&dir.join("transcript.json"), migrate::unchanged)?.map(|t| t.words).unwrap_or_default();
         let metrics = load_record::<Metrics>(&dir.join("metrics.json"), migrate::unchanged)?.ok_or_else(|| StorageError::NotFound(format!("metrics for rep {n}")))?;
-        Ok(Some(FullRep { rep, transcript, metrics }))
+        Ok(Some(FullRep { session_id: session.to_string(), rep, transcript, metrics }))
     }
 
     /// In the order they were made.
@@ -228,7 +235,8 @@ mod tests {
         let words: Vec<Word> = (0..12).map(|i| Word { text: if i == 11 { "it." } else { "word" }.into(), start_ms: i * 500, end_ms: i * 500 + 400 }).collect();
         let metrics = compute(Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: numbers::extract("24%"), keep_restart: false });
         FullRep {
-            rep: Rep { n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), fix: Some("proof".into()), feedback: None },
+            session_id: "ses_a".into(),
+            rep: Rep { n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), feedback: None },
             transcript: words,
             metrics,
         }

@@ -11,9 +11,22 @@ use std::path::{Path, PathBuf};
 pub struct LocalSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_folder: Option<String>,
+    /// How long answer audio is kept on this computer: "7", "30" (the default), "90", "forever" or "none".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_retention: Option<String>,
     /// Keys a newer Ensayo wrote. Kept so an older build does not delete them when it saves.
     #[serde(flatten)]
     pub other: Map<String, Value>,
+}
+
+/// Days to keep answer audio. None means forever; Some(0) means do not keep it at all.
+pub fn retention_days(s: &LocalSettings) -> Option<u32> {
+    match s.audio_retention.as_deref().map(str::trim) {
+        Some("forever") => None,
+        Some("none") => Some(0),
+        Some(n) => n.parse().ok().or(Some(30)),
+        None => Some(30),
+    }
 }
 
 /// A missing or damaged file is just the defaults: settings must never stop the app from starting.
@@ -59,6 +72,17 @@ mod tests {
         assert_eq!(resolve_data_folder(Some("/env/data"), &saved, &default), PathBuf::from("/env/data"));
         assert_eq!(resolve_data_folder(None, &saved, &default), PathBuf::from("/saved/data"));
         assert_eq!(resolve_data_folder(None, &LocalSettings::default(), &default), default);
+    }
+
+    #[test]
+    fn audio_retention_defaults_to_thirty_days_and_reads_the_choices() {
+        let with = |v: Option<&str>| LocalSettings { audio_retention: v.map(String::from), ..Default::default() };
+        assert_eq!(retention_days(&with(None)), Some(30));
+        assert_eq!(retention_days(&with(Some("7"))), Some(7));
+        assert_eq!(retention_days(&with(Some("90"))), Some(90));
+        assert_eq!(retention_days(&with(Some("forever"))), None);
+        assert_eq!(retention_days(&with(Some("none"))), Some(0));
+        assert_eq!(retention_days(&with(Some("garbage"))), Some(30));
     }
 
     #[test]
