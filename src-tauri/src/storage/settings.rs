@@ -7,8 +7,35 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 
+/// Which engine judges the answers. Empty `provider` means timing only (no AI). Keys never live here: they are in
+/// the system's secure key storage (`keys.rs`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct AiSettings {
+    /// A `Provider::key_id` ("claude", "openai", ..., "compatible"), or empty for timing only.
+    #[serde(default)]
+    pub provider: String,
+    /// Model for classify, score, follow-up and parse. Empty means the provider's default.
+    #[serde(default)]
+    pub fast_model: String,
+    /// Model for the coach note, job posting and resume. Empty means the provider's default.
+    #[serde(default)]
+    pub strong_model: String,
+    /// Where an OpenAI-compatible or local server listens ("http://localhost:11434").
+    #[serde(default)]
+    pub base_url: String,
+    /// Stop using AI for the rest of a session once its estimated cost passes this. 0 means no cap.
+    #[serde(default = "default_cap")]
+    pub cost_cap_usd: f64,
+}
+
+fn default_cap() -> f64 {
+    0.25
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LocalSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai: Option<AiSettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_folder: Option<String>,
     /// How long answer audio is kept on this computer: "7", "30" (the default), "90", "forever" or "none".
@@ -83,6 +110,22 @@ mod tests {
         assert_eq!(retention_days(&with(Some("forever"))), None);
         assert_eq!(retention_days(&with(Some("none"))), Some(0));
         assert_eq!(retention_days(&with(Some("garbage"))), Some(30));
+    }
+
+    #[test]
+    fn ai_settings_round_trip_beside_the_data_folder_and_default_to_a_quarter_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let mut s = LocalSettings::default();
+        s.data_folder = Some("/x".into());
+        s.ai = Some(AiSettings { provider: "claude".into(), cost_cap_usd: 1.0, ..Default::default() });
+        save(&path, &s).unwrap();
+        let back = load(&path);
+        assert_eq!(back.data_folder.as_deref(), Some("/x"));
+        assert_eq!(back.ai.as_ref().unwrap().provider, "claude");
+        assert_eq!(back.ai.unwrap().cost_cap_usd, 1.0);
+        let partial: LocalSettings = serde_json::from_str(r#"{"ai": {"provider": "openai"}}"#).unwrap();
+        assert_eq!(partial.ai.unwrap().cost_cap_usd, 0.25);
     }
 
     #[test]
