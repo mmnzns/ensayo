@@ -4,7 +4,7 @@ import { allVerified, deleteStory as deleteStoryIn, mergeMethods, saveMethod as 
 import { mockStore } from "./mock";
 import { StoreProvider, type Store } from "./store";
 import type { Method, Profile, Story } from "./types";
-import { habitStats, sessionList, streakOf, type RepSummary } from "../practice/habits";
+import { habitStats, pickFocusHabits, sessionList, streakOf, type RepSummary } from "../practice/habits";
 
 /** True inside the desktop app. In a plain browser (`npm run dev`) the data is the mock, held in memory. */
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -210,8 +210,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!app) return base;
     const now = new Date();
     const companyOf = (id: string) => mockStore.applications.find((a) => a.id === id)?.company;
+    // "Not sure yet" at setup: after five answers on a habit, Ensayo picks the one that is lowest.
+    const focus = base.profile.focusHabits.length ? base.profile.focusHabits : pickFocusHabits(mockStore.habits, reps);
     return {
       ...base,
+      profile: { ...base.profile, focusHabits: focus },
       applications: [],
       sessions: sessionList(reps, now, companyOf),
       streak: streakOf(reps, now),
