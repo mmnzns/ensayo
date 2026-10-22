@@ -38,3 +38,21 @@ Three things the fixtures deliberately test:
 - `questions/`: prompt 10 (question quality and must-say). Three versions of the candidate's questions
   (good, generic, none) against the same Mock; `expected.json` lists what each must return, and the
   must-say result that holds for all three.
+
+## Added 2026-10-22 (v0.1 Targets)
+
+`targets/`: Dana's two targets, B2C lifecycle (`tg_b2c`) and B2B marketing ops (`tg_b2b`), and the
+cases for the four prompts that changed. The version 1 fixtures above still hold for the version 2
+prompts: with no target input sent, 02, 03, 09 and 11 behave as before.
+- `targets.json`: both targets (pitch, lead-with points) and the two angles on `st_onboarding`.
+  The B2B angle's emphasis holds a number that is not a proof point ("down by half"), on purpose.
+- `score.json` (prompt 02): an answer that opens with the B2B angle headline (`answer_first`
+  passes; "by half" is `not_in_bank`), and one tell me about yourself answer judged against each
+  target's pitch (`type_fit` passes for B2C, fails for B2B).
+- `coach.json` (prompt 03): the typical answer rewritten with each target's angle headline, and the
+  tell me about yourself rewrite with the B2B pitch. No rewrite may use the emphasis number.
+- `jd-ledgerline.txt`, `jd-kestrel.txt`, `jd.json` (prompt 09): a B2B marketing ops posting (with a
+  note aimed at AI tools that must change nothing) and the Kestrel Pay consumer posting, each
+  against both targets, plus Ledgerline against the B2C target alone (`best_target_id` null).
+- `resume.json` (prompt 11): which lead-with points fit the Kestrel Pay posting, for each target,
+  and the empty result when no posting has been read.
