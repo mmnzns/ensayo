@@ -71,6 +71,11 @@ pub struct Metrics {
     pub checks: Vec<Check>,
 }
 
+/// One decimal place: that is all the screens show, and it keeps the saved files exact.
+fn one_decimal(x: f64) -> f64 {
+    (x * 10.0).round() / 10.0
+}
+
 pub fn minutes_seconds(ms: u64) -> String {
     let s = ms / 1000;
     format!("{}:{:02}", s / 60, s % 60)
@@ -95,7 +100,7 @@ pub fn compute(input: Inputs) -> Metrics {
     let speaking_ms = timing::speaking_ms(&words);
     let outcome = if clean::heard_enough(&words) { Outcome::Scored } else { Outcome::DidntCatch };
     let items = fillers::find(&words);
-    let filler_rate = fillers::per_minute(items.len(), speaking_ms);
+    let filler_rate = one_decimal(fillers::per_minute(items.len(), speaking_ms));
     let proof = timing::proof(&sentences, &input.bank);
     let length = timing::length(speaking_ms, window);
     let unbanked: Vec<Number> = if input.bank.is_empty() {
@@ -138,7 +143,7 @@ pub fn compute(input: Inputs) -> Metrics {
         rubric_version: RUBRIC_VERSION,
         outcome,
         word_count: words.len(),
-        wpm: timing::words_per_minute(&words),
+        wpm: one_decimal(timing::words_per_minute(&words)),
         pauses: timing::pauses(&words),
         fillers: FillerInfo { count: items.len(), per_minute: filler_rate, items },
         words,
