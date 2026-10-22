@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { Application, SessionSummary, Story, Target } from "../data/types";
 import type { RepSummary } from "../practice/habits";
-import { filterRepsByTarget, filterSessionsByTarget, leadStories, presetFor, progressChoices, repTargetId, sessionTargetId, targetReadiness, totalsFor, type TargetedRep } from "../screens/settings/progressTargets";
+import { filterRepsByTarget, filterSessionsByTarget, progressChoices, sessionTargetId, totalsFor, type TargetedRep } from "../screens/settings/progressTargets";
+import { leadStories, presetFor, repTargetId, targetReadiness } from "../data/readiness";
 
 const [b2c, b2b] = mockStore.targets;
 const targets: Target[] = [b2c, b2b];
@@ -66,7 +67,7 @@ describe("ready for each target", () => {
 
   it("starts with the pitch when nothing has been practiced", () => {
     const r = targetReadiness(b2b, input());
-    expect(r.rows.map((x) => x.title)).toEqual(["Pitch not practiced yet", "Lead stories verified", "No Mock yet", "No open gaps"]);
+    expect(r.lines.map((x) => x.title)).toEqual(["Pitch not practiced yet", "Lead stories verified", "No Mock yet", "No open gaps"]);
     expect(r.action).toEqual({ kind: "pitch", label: "Practice the pitch", primary: true });
   });
 
@@ -79,16 +80,16 @@ describe("ready for each target", () => {
       rep({ question_type: "behavioral", question_id: "x", session_id: "d", target_id: "tg_b2c" }),
     ];
     const r = targetReadiness(b2c, input({ reps }));
-    expect(r.rows[0]).toEqual({ id: "pitch", ok: true, title: "Pitch practiced 2 times", detail: "last on Oct 19" });
-    expect(targetReadiness(b2b, input({ reps })).rows[0].title).toBe("Pitch practiced once");
+    expect(r.lines[0]).toEqual({ id: "pitch", ok: true, title: "Pitch practiced 2 times", detail: "last on Oct 19" });
+    expect(targetReadiness(b2b, input({ reps })).lines[0].title).toBe("Pitch practiced once");
   });
 
   it("counts lead stories: the pinned ones, else the first three it uses, never the hidden", () => {
     const pinned = { ...b2c, pinnedStoryIds: ["s1", "s3"] };
-    expect(targetReadiness(pinned, input()).rows[1]).toMatchObject({ ok: false, detail: "1 of 2" });
+    expect(targetReadiness(pinned, input()).lines[1]).toMatchObject({ ok: false, detail: "1 of 2" });
     expect(leadStories({ pinnedStoryIds: [], hiddenStoryIds: ["s1"] }, stories).map((s) => s.id)).toEqual(["s2", "s3", "s4"]);
-    expect(targetReadiness({ ...b2c, pinnedStoryIds: ["s1", "s2"] }, input()).rows[1]).toMatchObject({ ok: true, detail: "2 of 2" });
-    expect(targetReadiness(b2c, input({ stories: [] })).rows[1]).toMatchObject({ ok: false, title: "No lead stories yet" });
+    expect(targetReadiness({ ...b2c, pinnedStoryIds: ["s1", "s2"] }, input()).lines[1]).toMatchObject({ ok: true, detail: "2 of 2" });
+    expect(targetReadiness(b2c, input({ stories: [] })).lines[1]).toMatchObject({ ok: false, title: "No lead stories yet" });
   });
 
   it("reads the last Mock and the must-say points said", () => {
@@ -96,12 +97,12 @@ describe("ready for each target", () => {
       { id: "1", text: "", resume: "", said: "Said in 2 of 3" }, { id: "2", text: "", resume: "", said: "Not said yet" }, { id: "3", text: "", resume: "", said: "Said in 1 of 1" },
     ] } });
     const reps = [rep({ mode: "mock", application_id: "a1", started: "2026-10-18T09:00:00", recorded_at: "2026-10-18T09:20:00" })];
-    expect(targetReadiness(b2c, input({ applications: [withPoints], reps })).rows[2]).toEqual({ id: "mock", ok: true, title: "Last Mock, Oct 18", detail: "said 2 of 3 must-say points" });
+    expect(targetReadiness(b2c, input({ applications: [withPoints], reps })).lines[2]).toEqual({ id: "mock", ok: true, title: "Last Mock, Oct 18", detail: "said 2 of 3 must-say points" });
   });
 
   it("names who could call when no Mock has been done", () => {
     const soon = app({ id: "a2", company: "Ledgerline", targetId: "tg_b2b", process: [{ ...mockStore.applications[0].process[1], at: "2026-10-30T10:00", done: false }] });
-    expect(targetReadiness(b2b, input({ applications: [soon] })).rows[2].detail).toBe("Ledgerline could call any day");
+    expect(targetReadiness(b2b, input({ applications: [soon] })).lines[2].detail).toBe("Ledgerline could call any day");
   });
 
   it("lists open gaps and points the button at the application that has them", () => {
@@ -110,7 +111,7 @@ describe("ready for each target", () => {
     const closed = app({ id: "a4", targetId: "tg_b2c", status: "closed", analysis });
     const reps = [rep({ question_type: "tell_me_about_yourself", target_id: "tg_b2c" })];
     const r = targetReadiness(b2c, input({ applications: [a, closed], reps }));
-    expect(r.rows[3]).toEqual({ id: "gaps", ok: false, title: "2 open gaps", detail: "SQL for cohort analysis, push at scale" });
+    expect(r.lines[3]).toEqual({ id: "gaps", ok: false, title: "2 open gaps", detail: "SQL for cohort analysis, push at scale" });
     expect(r.action).toEqual({ kind: "gap", label: "Practice a gap", primary: false, applicationId: "a3" });
     expect(presetFor(r.action)).toEqual({ mode: "drill", source: "application", applicationId: "a3" });
     expect(presetFor({ kind: "pitch", label: "", primary: true })).toEqual({ mode: "drill", source: "stage", stage: "recruiter" });
@@ -119,6 +120,6 @@ describe("ready for each target", () => {
   it("says where the gaps came from when there are many", () => {
     const analysis = { ...mockStore.applications[0].analysis!, gaps: ["a", "b", "c"] };
     const r = targetReadiness(b2b, input({ applications: [app({ id: "a5", company: "Ledgerline", targetId: "tg_b2b", analysis })] }));
-    expect(r.rows[3].detail).toBe("from Ledgerline");
+    expect(r.lines[3].detail).toBe("from Ledgerline");
   });
 });

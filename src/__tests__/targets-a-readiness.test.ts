@@ -53,7 +53,7 @@ describe("the pitch line", () => {
   });
   it("says so when it has not been practiced", () => {
     const l = lines(targetReadiness(second, { targets, stories: [], applications: [], reps: [] })).pitch;
-    expect(l).toMatchObject({ ok: false, title: "Pitch not practiced yet", detail: "start here" });
+    expect(l).toMatchObject({ ok: false, title: "Pitch not practiced yet", detail: "the first thing to fix" });
   });
 });
 
@@ -69,10 +69,10 @@ describe("the lead stories line", () => {
   });
   it("with nothing pinned counts the stories in use, hidden ones left out", () => {
     const l = lines(targetReadiness(t("tg_1", { hiddenStoryIds: ["c"] }), { targets, stories, applications: [], reps: [] })).stories;
-    expect(l.detail).toBe("0 of 1");
+    expect(l.detail).toBe("1 of 3");
   });
   it("invites pinning when there is nothing to count", () => {
-    const l = lines(targetReadiness(first, { targets, stories: [story("a", true)], applications: [], reps: [] })).stories;
+    const l = lines(targetReadiness(first, { targets, stories: [], applications: [], reps: [] })).stories;
     expect(l).toMatchObject({ ok: false, title: "No lead stories yet", detail: "pin up to three to put them first" });
   });
 });
@@ -92,12 +92,12 @@ describe("the last Mock line", () => {
   });
   it("gives only the date when the Mock was not for an application", () => {
     const l = lines(targetReadiness(first, { targets, stories: [], applications: [], reps: [rep({ mode: "mock", started: "2026-10-18T10:00:00" })] })).mock;
-    expect(l).toMatchObject({ title: "Last Mock, Oct 18", detail: "" });
+    expect(l).toMatchObject({ title: "Last Mock, Oct 18", detail: "no must-say points to check yet" });
   });
   it("suggests one before the next call when there is none", () => {
     const a = app("a1", "Ledgerline", "tg_2", [], { process: [{ ...mockStore.applications[0].process[0], done: false, at: "2026-10-28T14:00" }] });
     const l = lines(targetReadiness(second, { targets, stories: [], applications: [a], reps: [], now: new Date("2026-10-21T21:00:00") })).mock;
-    expect(l).toMatchObject({ ok: false, title: "No Mock yet", detail: "try one before Ledgerline calls" });
+    expect(l).toMatchObject({ ok: false, title: "No Mock yet", detail: "Ledgerline could call any day" });
     expect(lines(targetReadiness(first, { targets, stories: [], applications: [], reps: [] })).mock.detail).toBe("try one before an interview");
   });
 });
@@ -106,7 +106,7 @@ describe("the open gaps line", () => {
   it("collects the gaps of this target's open applications and names them", () => {
     const apps = [app("a1", "Kestrel Pay", "tg_1", ["x"]), app("a2", "Northwind Bank", undefined, ["y"]), app("a3", "Ledgerline", "tg_2", ["z", "w", "v"]), app("a4", "Old Co", "tg_1", ["q"], { status: "closed" })];
     const l = lines(targetReadiness(first, { targets, stories: [], applications: apps, reps: [] })).gaps;
-    expect(l).toMatchObject({ ok: false, title: "2 open gaps", detail: "from Kestrel Pay and Northwind Bank" });
+    expect(l).toMatchObject({ ok: false, title: "2 open gaps", detail: "x, y" });
     expect(lines(targetReadiness(second, { targets, stories: [], applications: apps, reps: [] })).gaps).toMatchObject({ title: "3 open gaps", detail: "from Ledgerline" });
   });
   it("says there are none", () => {
