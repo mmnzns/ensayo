@@ -20,6 +20,8 @@ export interface BankQuestion {
   follow_up_angles: string[];
   founder_variant?: boolean;
   moment?: "opener" | "candidate_questions";
+  /** An application's own question can name the story that answers it best; that story is measured first. */
+  best_story_id?: string | null;
 }
 
 /** The general set, plus the role pack that fits the target role. */
@@ -115,4 +117,65 @@ export function ownQuestion(text: string): BankQuestion {
     difficulty: "standard",
     follow_up_angles: [],
   };
+}
+
+/** One question of an application's question set, as the backend lists it (`ExtrasView.questions`). */
+export interface ExtraQuestion {
+  id: string;
+  /** The application's process stage this question belongs to. */
+  stageId: string;
+  /** The screens' names: `about_you` and `future` stand for `tell_me_about_yourself` and `future_looking`. */
+  type: string;
+  text: string;
+  bestStoryId?: string | null;
+  behavioralSituation?: string | null;
+  commitmentCheck?: boolean;
+  builderOperatorCheck?: boolean;
+}
+
+const ENGINE_TYPE: Record<string, string> = { about_you: "tell_me_about_yourself", future: "future_looking" };
+
+/** An application question as a bank question, so the rest of the practice loop treats both the same way. `stageType` is the stage kind (`recruiter`...). */
+export function bankQuestionFromExtra(e: ExtraQuestion, stageType: string): BankQuestion {
+  return {
+    id: e.id,
+    text: e.text.trim(),
+    type: ENGINE_TYPE[e.type] ?? e.type,
+    behavioral_situation: e.behavioralSituation || null,
+    stages: [stageType],
+    modes: ["drill", "mock"],
+    competencies: [],
+    great_eight: [],
+    commitment_check: e.commitmentCheck === true,
+    builder_operator_check: e.builderOperatorCheck === true,
+    difficulty: "standard",
+    follow_up_angles: [],
+    best_story_id: e.bestStoryId || null,
+  };
+}
+
+const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+export interface ApplicationPickOptions {
+  bank: BankQuestion[];
+  /** The application's question set; undefined while it has not loaded, or in the browser preview. */
+  extras?: ExtraQuestion[];
+  /** The process stage being practised, and its kind. */
+  stageId?: string | null;
+  stage: string;
+  mode: "drill" | "mock";
+  count: number;
+  startup?: boolean;
+  seed?: number;
+}
+
+/** The questions for a session inside an application: that stage's own questions first, in the order they are kept, then the bank to make up the count. */
+export function pickApplicationQuestions(o: ApplicationPickOptions): BankQuestion[] {
+  const own = (o.extras ?? [])
+    .filter((e) => e.stageId === o.stageId && e.text.trim() !== "")
+    .map((e) => bankQuestionFromExtra(e, o.stage))
+    .slice(0, o.count);
+  if (own.length >= o.count) return own;
+  const fill = pickQuestions({ bank: o.bank, stage: o.stage, mode: o.mode, count: o.count + own.length, startup: o.startup, seed: o.seed ?? 1 }).filter((q) => !own.some((x) => sameText(x.text, q.text)));
+  return [...own, ...fill].slice(0, o.count);
 }
