@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { daysUntil, nextInterview, useStore } from "../../data/store";
 import type { Mode, StageId } from "../../data/types";
-import { liveAvailable, startLive } from "../../practice/live";
+import { checkAi, liveAvailable, startLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { dayBadge, lowerFirst } from "./format";
@@ -66,6 +66,7 @@ export default function StartASession() {
       },
       { targetRole: profile.targetRole, stories, methods: store.methods },
     );
+    void checkAi();
   };
 
   const modeCard = (on: boolean): React.CSSProperties => ({

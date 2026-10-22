@@ -6,7 +6,7 @@ import { resultRoute, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { SessionHeader } from "./parts";
-import { getAttempt, resultAfterThinking, setFollowUp } from "./practiceFlow";
+import { ASK, FOLLOW_UP, getAttempt, resultAfterThinking, setFollowUp } from "./practiceFlow";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
 
@@ -31,6 +31,8 @@ export default function PracticeThinking() {
     if (!live) return;
     if (state.phase === "result") go(resultRoute());
     if (state.phase === "didnt_catch") go("states-didnt-catch-that");
+    if (state.phase === "clarify") go("3-7-clarifying-question");
+    if (state.phase === "notice") go(state.view === "followup" ? FOLLOW_UP : ASK);
   }, [live, state.phase]);
 
   useEffect(() => {

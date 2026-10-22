@@ -171,6 +171,11 @@ export function liveSession(): PracticeSession {
 
 /** The target window for the current question, for the timer. */
 export function liveWindow(): { from: number; to: number } {
+  if (state.view === "followup") {
+    // A follow-up answer should take under half the time of the first.
+    const first = state.outcomes[state.attempt - 1]?.rep?.metrics.speaking_ms ?? 0;
+    return { from: 5, to: Math.max(10, Math.round(first / 2000)) };
+  }
   const last = state.outcomes[state.outcomes.length - 1]?.rep?.metrics.window;
   if (last) return { from: last.min_s, to: last.max_s };
   const t = currentQuestion()?.type;

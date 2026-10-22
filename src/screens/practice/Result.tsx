@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { keepAfterRestart, labelCriteria, listenToRep, savedLabels, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
+import { anotherFollowUp, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, requestFollowUp, savedLabels, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { Kbd, SessionHeader } from "./parts";
@@ -100,7 +100,8 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const { attempts } = useStore().screens.practice;
   const { live, session, question, endTo, onEnd } = usePractice();
   const state = useLive();
-  const attempt = live ? state.attempts[state.attempt - 1] : attempts[index];
+  const inFollowUp = live && state.view === "followup";
+  const attempt = live ? (inFollowUp ? (state.followUpAttempt ?? undefined) : state.attempts[state.attempt - 1]) : attempts[index];
   const [open, setOpen] = useState(detailsStartOpen);
   const [mockWrong, setMockWrong] = useState(false);
   const [noAudio, setNoAudio] = useState(false);
@@ -108,7 +109,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const [labelOn, setLabelOn] = useState(false);
   const [labels, setLabels] = useState<Labels>({});
   const [labelsSaved, setLabelsSaved] = useState(false);
-  const repKey = live ? `${state.sessionId}/${state.attempt}` : "";
+  const repKey = live ? `${state.sessionId}/${state.attempt}/${inFollowUp ? state.followUp?.number : 0}` : "";
   useEffect(() => {
     setLabelOn(false);
     setLabelsSaved(false);
@@ -136,8 +137,10 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const wins = attempt?.wins ?? [];
   const everythingWorked = wins.length > 0;
   const lastAttempt = number >= MAX_ATTEMPTS;
-  // Follow-ups are built in M6; a live session does not offer them yet.
-  const canFollowUp = number >= 2 && !everythingWorked && !live;
+  // A real session offers a follow-up after any answer once a feedback engine is set up (the interviewer needs one);
+  // the preview keeps the old rule.
+  const canFollowUp = live ? state.aiReady && !inFollowUp : number >= 2 && !everythingWorked;
+  const moreFollowUps = inFollowUp && !!state.followUp && state.followUp.number < state.followUp.of;
 
   const again = () => {
     if (live) tryAgain();
@@ -149,7 +152,12 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
     if (nextLiveQuestion() === "done") go(endTo);
     else go(ASK);
   };
-  const followUp = live ? next : () => go(FOLLOW_UP);
+  const followUp = live ? () => void requestFollowUp().then((route) => route && go(route)) : () => go(FOLLOW_UP);
+  const anotherOne = () => void anotherFollowUp().then((route) => route && go(route));
+  const backToAnswer = () => {
+    endFollowUp();
+    go(state.attempts[state.attempt - 1]?.wins?.length ? "3-8-result-everything-worked" : state.attempt > 1 ? "3-5-result-attempt-2" : "3-4-result-attempt-1-details-open");
+  };
   const end = () => {
     onEnd?.();
     go(endTo);
@@ -161,7 +169,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const sayIt = () => attempt?.trySaying && speak(attempt.trySaying);
 
   // Enter does whatever the big button does.
-  const primary = everythingWorked ? followUp : lastAttempt ? next : again;
+  const primary = inFollowUp ? (moreFollowUps ? anotherOne : next) : everythingWorked ? (canFollowUp ? followUp : next) : lastAttempt ? next : again;
   useKeys({ enter: primary, n: next, l: listen, esc: end });
 
   if (!attempt) {
@@ -211,7 +219,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
           <section className="e-card" style={{ flex: "999 1 560px", minWidth: "0", padding: "36px", display: "flex", flexDirection: "column", gap: "24px" }}>
             {delta ? (
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-                <span className="e-meta">Attempt {number} of {MAX_ATTEMPTS}</span>
+                <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${MAX_ATTEMPTS}`}</span>
                 {delta.caption ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
                     <span className="e-win" style={{ fontSize: "21px" }}>{deltaText}</span>
@@ -222,7 +230,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
                 )}
               </div>
             ) : (
-              <span className="e-meta">Attempt {number} of {MAX_ATTEMPTS}</span>
+              <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${MAX_ATTEMPTS}`}</span>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
               <span className="e-label">Coach's note</span>
@@ -250,9 +258,15 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
             )}
             {attempt.closing && <p className="e-meta" style={{ margin: "0" }}>{attempt.closing}</p>}
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", marginTop: "auto" }}>
-              {everythingWorked ? (
+              {inFollowUp ? (
                 <>
-                  {live ? (
+                  <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={moreFollowUps ? anotherOne : next}>{moreFollowUps ? "Another follow-up" : "Next question →"}</button>
+                  {moreFollowUps && <button type="button" className="e-btn e-btn-ghost" onClick={next}>Next question →</button>}
+                  <button type="button" className="e-btn e-btn-ghost" onClick={backToAnswer}>Back to my answer</button>
+                </>
+              ) : everythingWorked ? (
+                <>
+                  {live && !canFollowUp ? (
                     <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={next}>Next question →</button>
                   ) : (
                     <>
@@ -329,7 +343,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
         )}
         {showKeyHint && (
           <p className="e-small" style={{ margin: "0" }}>
-            <Kbd>Enter</Kbd> again · <Kbd>N</Kbd> next · <Kbd>L</Kbd> listen · <Kbd>Esc</Kbd> end
+            <Kbd>Enter</Kbd> {inFollowUp ? "continue" : "again"} · <Kbd>N</Kbd> next · <Kbd>L</Kbd> listen · <Kbd>Esc</Kbd> end
           </p>
         )}
       </div>
