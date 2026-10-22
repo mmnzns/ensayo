@@ -5,6 +5,7 @@ mod commands;
 mod data_commands;
 #[allow(dead_code)]
 mod keys;
+mod metrics;
 mod paths;
 mod platform;
 mod storage;
