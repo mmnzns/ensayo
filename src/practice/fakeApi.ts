@@ -62,12 +62,15 @@ function metrics(attempt: number): Metrics {
 
 export function fakeApi(): RepApi {
   let attempt = 0;
+  const kept: FullRep[] = [];
+  let started = { mode: "drill", stage: "recruiter" };
   return {
     startRecording: async () => undefined,
     stopRecording: async () => ({ path: "/fake/rec.wav", duration_ms: 70_000 }),
     level: async () => ({ level: 0.2 + Math.random() * 0.3, elapsed_ms: 0 }),
     finishRep: async (args): Promise<RepOutcome> => {
       attempt = args.attempt;
+      started = { mode: args.mode, stage: args.stage };
       const m = metrics(attempt);
       const fix = m.checks.find((c) => c.passed === false)?.id ?? null;
       const rep: FullRep = {
@@ -95,6 +98,7 @@ export function fakeApi(): RepApi {
       };
       const delta = attempt > 1 ? { check: "clean_stop", label: "Time after the number", from_seconds: attempt === 2 ? 31 : 12, to_seconds: attempt === 2 ? 12 : 4, from_count: null, to_count: null, improved: true } : null;
       await new Promise((r) => setTimeout(r, 900));
+      kept.push(rep);
       return { outcome: "scored", session_id: "ses_fake", rep, delta, restart_offered: false, audio_kept: false, notice: null, transcript_text: null };
     },
     rescoreRep: async () => {
@@ -110,5 +114,6 @@ export function fakeApi(): RepApi {
     repLabels: async () => ({}),
     audioAvailable: async () => false,
     readAudio: async () => new ArrayBuffer(0),
+    loadSession: async (id) => (kept.length ? { session: { id, ...started, application_id: null, started: kept[0].recorded_at }, reps: kept } : null),
   };
 }

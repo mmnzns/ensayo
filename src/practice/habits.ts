@@ -159,7 +159,7 @@ export function habitStats(habits: Habit[], reps: RepSummary[]): HabitStat[] {
 const DAY = 86_400_000;
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
-const STAGE_LABELS: Record<string, string> = { recruiter: "Recruiter", hiring_manager: "Hiring manager", leadership: "Leadership", panel: "Panel", technical: "Technical" };
+export const STAGE_LABELS: Record<string, string> = { recruiter: "Recruiter", hiring_manager: "Hiring manager", leadership: "Leadership", panel: "Panel", technical: "Technical" };
 
 /** "Today, 9:12 PM", "Yesterday", "Mon, Oct 19". */
 export function whenText(iso: string, now: Date): string {
@@ -280,6 +280,9 @@ const ADVICE: Record<HabitId, string> = {
 };
 
 const SECONDS_HABITS: Partial<Record<HabitId, { check: string; target: number }>> = { to_the_point: { check: "time_to_point", target: 10 }, clean_stop: { check: "clean_stop", target: 15 } };
+
+/** Seconds on the focus habit's clock for one answer (time to point, time after the number), or null when it has none. */
+export const habitSeconds = (r: RepSummary, habitId: HabitId): number | null => secondsOf(r, habitId);
 
 const secondsOf = (r: RepSummary, habitId: HabitId): number | null => {
   const spec = SECONDS_HABITS[habitId];

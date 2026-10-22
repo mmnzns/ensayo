@@ -1,11 +1,31 @@
 import { useState } from "react";
+import { useActions } from "../../data/real";
 import { habitStatus, useStore } from "../../data/store";
+import type { GraduationData } from "../../data/screens/results";
+import { useResults } from "./useResults";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 
 export default function HabitGraduation() {
-  const { habits, screens } = useStore();
-  const g = screens.results.graduation;
+  const state = useResults();
+  const g = state.status === "mock" || state.status === "ready" ? state.results.graduation : null;
+  if (!g) {
+    return (
+      <FocusShell style={{ alignItems: "center", justifyContent: "center" }}>
+        <div className="e-card" style={{ maxWidth: "560px", display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
+          <span className="e-h2">No habit has stuck yet</span>
+          <span className="e-meta">A habit sticks when it holds in eight of your last ten answers. Keep going and it shows up here.</span>
+          <Link to="2-1-home" className="e-btn e-btn-primary">Back home</Link>
+        </div>
+      </FocusShell>
+    );
+  }
+  return <Graduation g={g} />;
+}
+
+function Graduation({ g }: { g: GraduationData }) {
+  const { habits, profile } = useStore();
+  const { saveProfile } = useActions();
   const habit = habits.find((h) => h.id === g.habitId);
   const label = habit?.label ?? "";
   const status = habitStatus(g.results);
@@ -36,6 +56,7 @@ export default function HabitGraduation() {
             {status.passes} of your last {status.of} answers {g.passLine}
           </span>
         </div>
+        {g.before && g.nowSeconds !== null && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px", width: "100%" }}>
           <div className="e-soft" style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "4px" }}>
             <span className="e-small">{g.before.when}</span>
@@ -46,6 +67,7 @@ export default function HabitGraduation() {
             <span className="e-h2">{g.nowSeconds}s to your point</span>
           </div>
         </div>
+        )}
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "12px", alignItems: "center", borderTop: "1px solid var(--e-line)", paddingTop: "24px" }}>
           <span className="e-h3">What do you want to work on next?</span>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px" }} role="group" aria-label="Next habit">
@@ -76,7 +98,10 @@ export default function HabitGraduation() {
             ) : (
               <>
                 <Link to="4-3-session-results-drill" className="e-btn e-btn-ghost">Back to results</Link>
-                <button type="button" className="e-btn e-btn-primary e-btn-big" disabled={!pickedHabit} onClick={() => setConfirmed(true)}>Make it my focus</button>
+                <button type="button" className="e-btn e-btn-primary e-btn-big" disabled={!pickedHabit} onClick={() => {
+                  void saveProfile({ ...profile, focusHabits: [picked as typeof profile.focusHabits[number]] }).catch(() => {});
+                  setConfirmed(true);
+                }}>Make it my focus</button>
               </>
             )}
           </div>

@@ -1,6 +1,12 @@
 // The Rust rep commands as one object, so the live practice flow can be driven by a fake in tests and in the browser.
 
-import type { FinishArgs, FollowUpQuestion, RepOutcome } from "./types";
+import type { FinishArgs, FollowUpQuestion, FullRep, RepOutcome } from "./types";
+
+/** What `load_session` returns: the session record and every rep in it. */
+export interface SessionDetail {
+  session: { id: string; mode: string; stage: string; application_id: string | null; started: string };
+  reps: FullRep[];
+}
 
 export interface RepApi {
   startRecording(): Promise<void>;
@@ -18,6 +24,7 @@ export interface RepApi {
   repLabels(sessionId: string, n: number): Promise<Record<string, "pass" | "fail">>;
   audioAvailable(sessionId: string, n: number): Promise<boolean>;
   readAudio(sessionId: string, n: number): Promise<ArrayBuffer>;
+  loadSession(sessionId: string): Promise<SessionDetail | null>;
 }
 
 /** Speech models in the order Ensayo prefers them; the first one on this computer is used. */
@@ -54,5 +61,6 @@ export async function tauriApi(): Promise<RepApi> {
     repLabels: (sessionId, n) => invoke("rep_labels", { sessionId, n }),
     audioAvailable: (sessionId, n) => invoke("rep_audio_available", { sessionId, n }),
     readAudio: (sessionId, n) => invoke("read_rep_audio", { sessionId, n }),
+    loadSession: (sessionId) => invoke("load_session", { sessionId }),
   };
 }

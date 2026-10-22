@@ -4,6 +4,7 @@ import { allVerified, deleteStory as deleteStoryIn, mergeMethods, saveMethod as 
 import { mockStore } from "./mock";
 import { StoreProvider, type Store } from "./store";
 import type { Method, Profile, Story } from "./types";
+import { habitStats, sessionList, streakOf, type RepSummary } from "../practice/habits";
 
 /** True inside the desktop app. In a plain browser (`npm run dev`) the data is the mock, held in memory. */
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -38,6 +39,10 @@ const ActionsContext = createContext<Actions>(NO_ACTIONS);
 export const useActions = (): Actions => useContext(ActionsContext);
 
 const DataInfoContext = createContext<{ problems: string[] }>({ problems: [] });
+
+const RepsContext = createContext<RepSummary[]>([]);
+/** Every saved answer as a compact summary, oldest first by session. Empty in the browser and before anything is practised. */
+export const useRepHistory = (): RepSummary[] => useContext(RepsContext);
 /** Plain-words lines for data files that could not be read (a damaged file, one from a newer Ensayo). */
 export const useDataProblems = (): string[] => useContext(DataInfoContext).problems;
 
@@ -94,15 +99,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DataStatus | null>(null);
   const [error, setError] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
+  const [reps, setReps] = useState<RepSummary[]>([]);
+
+  const readReps = useCallback(async () => {
+    if (!app) return;
+    try {
+      setReps(await invoke<RepSummary[]>("rep_summaries"));
+    } catch {
+      // History is a view over files that may be mid-sync; showing none is better than blocking the app.
+    }
+  }, [app]);
+
+  // live.ts announces every saved rep; Home, Progress and the history list read the new one.
+  useEffect(() => {
+    if (!app) return;
+    const onHistory = () => void readReps();
+    window.addEventListener("ensayo:history", onHistory);
+    return () => window.removeEventListener("ensayo:history", onHistory);
+  }, [app, readReps]);
 
   const readAll = useCallback(async () => {
     const all = await invoke<LoadAll>("load_all");
     setState({ profile: all.profile ?? mockStore.profile, stories: all.stories, methods: mergeMethods(all.methods, mockStore.methods) });
     setProblems(all.problems);
+    await readReps();
     setPhase("ready");
     // Housekeeping: remove answer audio older than the retention setting (reps kept for the eval set stay).
     void invoke("sweep_audio").catch(() => {});
-  }, []);
+  }, [readReps]);
 
   const load = useCallback(async () => {
     if (!app) return;
@@ -174,7 +198,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [app],
   );
 
-  const store = useMemo<Store>(() => ({ ...mockStore, profile: state.profile ?? mockStore.profile, stories: state.stories, methods: state.methods }), [state]);
+  const store = useMemo<Store>(() => {
+    const base: Store = { ...mockStore, profile: state.profile ?? mockStore.profile, stories: state.stories, methods: state.methods };
+    if (!app) return base;
+    const now = new Date();
+    const companyOf = (id: string) => mockStore.applications.find((a) => a.id === id)?.company;
+    return {
+      ...base,
+      sessions: sessionList(reps, now, companyOf),
+      streak: streakOf(reps, now),
+      homeHabitStats: habitStats(mockStore.habits, reps),
+    };
+  }, [state, reps, app]);
   const info = useMemo(() => ({ problems }), [problems]);
 
   if (phase === "loading") return <Centered><p className="e-meta" style={{ margin: 0 }}>Opening your data…</p></Centered>;
@@ -191,7 +226,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   return (
     <ActionsContext.Provider value={actions}>
       <DataInfoContext.Provider value={info}>
-        <StoreProvider store={store}>{children}</StoreProvider>
+        <RepsContext.Provider value={reps}>
+          <StoreProvider store={store}>{children}</StoreProvider>
+        </RepsContext.Provider>
       </DataInfoContext.Provider>
     </ActionsContext.Provider>
   );

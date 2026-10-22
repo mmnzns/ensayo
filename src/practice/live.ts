@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from "react";
 import type { PracticeAttempt, PracticeSession } from "../data/screens/practice";
 import type { Method, Story } from "../data/types";
-import { isApp, tauriApi, type RepApi } from "./api";
+import { isApp, tauriApi, type RepApi, type SessionDetail } from "./api";
 import { attemptFromOutcome } from "./attempt";
 import { banksFor, ownQuestion, pickQuestions, type BankQuestion } from "./questions";
 import { pickStories } from "./stories";
@@ -122,6 +122,11 @@ export function setRepApi(next: RepApi | null) {
 async function repApi(): Promise<RepApi> {
   if (!api) api = await tauriApi();
   return api;
+}
+
+/** A saved session with all its answers, for the results screens. */
+export async function loadSessionDetail(sessionId: string): Promise<SessionDetail | null> {
+  return (await repApi()).loadSession(sessionId);
 }
 
 /** Whether a session started from the Start screen runs the real loop: only inside the app. */
@@ -475,11 +480,15 @@ let player: HTMLAudioElement | null = null;
 /** Plays the saved audio for the current rep. Returns false when it is no longer on this computer. */
 export async function listenToRep(): Promise<boolean> {
   const rep = currentRep();
-  if (!rep) return false;
+  return rep ? playRep(rep.session_id, rep.n) : false;
+}
+
+/** Plays the saved audio of any answer. False when it is no longer on this computer (the words are still kept). */
+export async function playRep(sessionId: string, n: number): Promise<boolean> {
   try {
     const a = await repApi();
-    if (!(await a.audioAvailable(rep.session_id, rep.n))) return false;
-    const bytes = await a.readAudio(rep.session_id, rep.n);
+    if (!(await a.audioAvailable(sessionId, n))) return false;
+    const bytes = await a.readAudio(sessionId, n);
     player?.pause();
     player = new Audio(URL.createObjectURL(new Blob([bytes], { type: "audio/wav" })));
     await player.play();

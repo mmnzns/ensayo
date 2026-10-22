@@ -76,6 +76,7 @@ function fake(outcomes: RepOutcome[]) {
     repLabels: async () => ({ proof: "pass" }),
     audioAvailable: async () => true,
     readAudio: async () => new ArrayBuffer(4),
+    loadSession: async () => null,
   };
   return { api, calls };
 }

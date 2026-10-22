@@ -1,4 +1,5 @@
 // Draft generated from Design/screens/html/7-2-progress-sessions.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
+import { viewSession } from "../../practice/viewing";
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -53,6 +54,7 @@ export default function ProgressSessions() {
                 <Link
                   key={s.id}
                   to={s.mode === "mock" ? "4-4-session-results-mock-debrief" : "4-3-session-results-drill"}
+                  onClick={() => viewSession(s.id)}
                   className="e-rowline"
                   style={{ textDecoration: "none", color: "var(--e-ink)", ...(s.id === lastId ? { borderBottom: "none" } : {}) }}
                 >

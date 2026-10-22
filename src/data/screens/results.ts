@@ -31,6 +31,10 @@ export interface DrillQuestionResult {
 }
 
 export interface DrillResultsData {
+  /** "seconds": the hero is time on a clock. "flags": the focus habit is a yes or no, so the hero is how many answers got it. Default "seconds". */
+  kind?: "seconds" | "flags";
+  /** Where Listen plays the best answer from; the words are read aloud when the recording is gone. */
+  bestFrom?: { sessionId: string; n: number };
   applicationId: string;
   stageLabel: string;
   /** The habit this session worked on; its label comes from store.habits. */
@@ -109,8 +113,9 @@ export interface GraduationData {
   results: boolean[];
   /** Finishes "8 of your last 10 answers ...". */
   passLine: string;
-  before: { when: string; seconds: number };
-  nowSeconds: number;
+  /** Null for a habit that has no clock (the two boxes are then left out). */
+  before: { when: string; seconds: number } | null;
+  nowSeconds: number | null;
   /** Habit ids offered as the next one to work on. */
   nextChoices: HabitId[];
   suggestedNextId: HabitId;
