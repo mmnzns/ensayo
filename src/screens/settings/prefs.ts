@@ -19,10 +19,15 @@ export interface PracticePrefs {
   autoStop: boolean;
 }
 
+/** Which engine reads aloud: the app's browser engine, or the computer's own speech run by the backend. */
+export type VoiceEngine = "browser" | "system";
+
 export interface VoicePrefs {
   readAloud: boolean;
-  /** A browser voice's `voiceURI`; empty means whichever voice the computer picks. */
+  /** A browser voice's `voiceURI`, or a system voice's id when `engine` is "system"; empty means whichever voice the engine picks. */
   voiceUri: string;
+  /** The engine `voiceUri` belongs to. Saves from before system voices have none, and mean "browser". */
+  engine: VoiceEngine;
   speed: Speed;
   readTrySaying: boolean;
 }
@@ -40,7 +45,7 @@ export interface Prefs {
 
 export const DEFAULT_PREFS: Prefs = {
   practice: { stage: "hiring_manager", questions: 5, tries: 3, timer: true, followUps: true, autoStop: false },
-  voice: { readAloud: true, voiceUri: "", speed: "Normal", readTrySaying: true },
+  voice: { readAloud: true, voiceUri: "", engine: "browser", speed: "Normal", readTrySaying: true },
   speech: { model: "" },
 };
 
@@ -94,6 +99,8 @@ function cleanVoice(raw: unknown): VoicePrefs {
   return {
     readAloud: bool(r.readAloud, d.readAloud),
     voiceUri: typeof r.voiceUri === "string" ? r.voiceUri : d.voiceUri,
+    // Migration: an old save has no engine, and its voice was always a browser voice.
+    engine: r.engine === "system" ? "system" : "browser",
     speed: r.speed === "Slower" || r.speed === "Normal" || r.speed === "Faster" ? r.speed : d.speed,
     readTrySaying: bool(r.readTrySaying, d.readTrySaying),
   };
@@ -192,4 +199,42 @@ export function chooseVoice<T extends VoiceLike>(voices: T[], voiceUri: string):
 
 export function speechRate(speed: Speed): number {
   return speed === "Slower" ? 0.85 : speed === "Faster" ? 1.2 : 1;
+}
+
+// ---------- system voices ----------
+
+/** A voice the backend reports from the computer's own speech (`native_voices`). */
+export interface NativeVoiceLike {
+  id: string;
+  name: string;
+  language: string;
+}
+
+/** A choice in the Voice list: the engine and voice it stands for, and the words and tag shown. */
+export interface VoiceOption {
+  /** What the list holds: a browser voiceURI as it is, or `system:` and the system voice's id. */
+  value: string;
+  label: string;
+  engine: VoiceEngine;
+  voiceUri: string;
+  /** "system" on a system voice. */
+  tag?: "system";
+}
+
+const SYSTEM_PREFIX = "system:";
+
+/** The list's value for a saved choice. */
+export const voiceValue = (engine: VoiceEngine, voiceUri: string): string => (voiceUri && engine === "system" ? SYSTEM_PREFIX + voiceUri : voiceUri);
+
+/** The engine and voice a list value stands for; "" is automatic. */
+export function parseVoiceValue(value: string): { engine: VoiceEngine; voiceUri: string } {
+  return value.startsWith(SYSTEM_PREFIX) ? { engine: "system", voiceUri: value.slice(SYSTEM_PREFIX.length) } : { engine: "browser", voiceUri: value };
+}
+
+/** Browser voices first (English first), then the system's, each tagged "system" and labelled with its language. */
+export function voiceOptions(browser: VoiceLike[], system: NativeVoiceLike[]): VoiceOption[] {
+  const fromBrowser: VoiceOption[] = voiceChoices(browser).map((c) => ({ ...c, engine: "browser", voiceUri: c.value }));
+  const fromSystem: VoiceOption[] = voiceChoices(system.map((v) => ({ voiceURI: v.id, name: v.name, lang: v.language })))
+    .map((c) => ({ value: SYSTEM_PREFIX + c.value, label: `${c.label} · system`, engine: "system" as const, voiceUri: c.value, tag: "system" as const }));
+  return [...fromBrowser, ...fromSystem];
 }

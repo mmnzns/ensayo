@@ -12,6 +12,9 @@ import {
   updateSpeech,
   updateVoice,
   voiceChoices,
+  voiceOptions,
+  voiceValue,
+  parseVoiceValue,
   type VoiceLike,
 } from "../screens/settings/prefs";
 
@@ -93,7 +96,7 @@ describe("saved settings", () => {
 
   it("matches the sample defaults the screens were designed with", () => {
     expect(DEFAULT_PREFS.practice).toEqual({ stage: "hiring_manager", questions: 5, tries: 3, timer: true, followUps: true, autoStop: false });
-    expect(DEFAULT_PREFS.voice).toMatchObject({ readAloud: true, voiceUri: "", speed: "Normal", readTrySaying: true });
+    expect(DEFAULT_PREFS.voice).toMatchObject({ readAloud: true, voiceUri: "", engine: "browser", speed: "Normal", readTrySaying: true });
   });
 });
 
@@ -129,5 +132,61 @@ describe("voice", () => {
     expect(speechRate("Slower")).toBeLessThan(speechRate("Normal"));
     expect(speechRate("Normal")).toBe(1);
     expect(speechRate("Faster")).toBeGreaterThan(speechRate("Normal"));
+  });
+});
+
+describe("the voice engine in the saved choice", () => {
+  it("migrates an old save with no engine to the browser engine, keeping the voice", () => {
+    const old = JSON.stringify({ voice: { readAloud: false, voiceUri: "com.apple.voice.Samantha", speed: "Faster", readTrySaying: false } });
+    expect(readPrefs(fakeStorage(old)).voice).toEqual({ readAloud: false, voiceUri: "com.apple.voice.Samantha", engine: "browser", speed: "Faster", readTrySaying: false });
+  });
+
+  it("treats an unknown engine as the browser engine", () => {
+    expect(readPrefs(fakeStorage(JSON.stringify({ voice: { engine: "cloud", voiceUri: "x" } }))).voice.engine).toBe("browser");
+    expect(readPrefs(fakeStorage(JSON.stringify({ voice: { engine: 3 } }))).voice.engine).toBe("browser");
+  });
+
+  it("remembers a system voice with its engine, and a later change keeps both", () => {
+    const s = fakeStorage();
+    updateVoice({ engine: "system", voiceUri: "Alex" }, s);
+    updateVoice({ speed: "Slower" }, s);
+    expect(readPrefs(s).voice).toMatchObject({ engine: "system", voiceUri: "Alex", speed: "Slower" });
+  });
+
+  it("choosing a browser voice again switches the engine back", () => {
+    const s = fakeStorage();
+    updateVoice({ engine: "system", voiceUri: "Alex" }, s);
+    updateVoice({ engine: "browser", voiceUri: "Samantha" }, s);
+    expect(readPrefs(s).voice).toMatchObject({ engine: "browser", voiceUri: "Samantha" });
+  });
+});
+
+describe("the Voice list with system voices", () => {
+  const browser: VoiceLike[] = [{ voiceURI: "b-zoe", name: "Zoe", lang: "en-US" }, { voiceURI: "b-amelie", name: "Amélie", lang: "fr-CA" }];
+  const system = [{ id: "Alex", name: "Alex", language: "en_US" }, { id: "Eddy (English (US))", name: "Eddy (English (US))", language: "en_US" }];
+
+  it("lists browser voices, then system voices tagged system", () => {
+    const list = voiceOptions(browser, system);
+    expect(list.map((o) => o.engine)).toEqual(["browser", "browser", "system", "system"]);
+    expect(list.filter((o) => o.tag === "system").map((o) => o.label)).toEqual(["Alex · American English · system", "Eddy (English (US)) · American English · system"]);
+    expect(list[0].tag).toBeUndefined();
+  });
+
+  it("keeps a browser voice and a system voice of the same name apart", () => {
+    const list = voiceOptions([{ voiceURI: "Alex", name: "Alex", lang: "en-US" }], [{ id: "Alex", name: "Alex", language: "en_US" }]);
+    expect(new Set(list.map((o) => o.value)).size).toBe(2);
+  });
+
+  it("turns a saved choice into a list value and back", () => {
+    expect(voiceValue("browser", "b-zoe")).toBe("b-zoe");
+    expect(voiceValue("system", "Alex")).toBe("system:Alex");
+    expect(voiceValue("system", "")).toBe("");
+    expect(parseVoiceValue("system:Eddy (English (US))")).toEqual({ engine: "system", voiceUri: "Eddy (English (US))" });
+    expect(parseVoiceValue("b-zoe")).toEqual({ engine: "browser", voiceUri: "b-zoe" });
+    expect(parseVoiceValue("")).toEqual({ engine: "browser", voiceUri: "" });
+  });
+
+  it("each option parses back to its own engine and voice", () => {
+    for (const o of voiceOptions(browser, system)) expect(parseVoiceValue(o.value)).toEqual({ engine: o.engine, voiceUri: o.voiceUri });
   });
 });

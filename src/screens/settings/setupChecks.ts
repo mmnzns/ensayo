@@ -7,6 +7,8 @@ import { micFix, micView, type Os } from "../first-run/setup";
 import type { AiView, LocalAiView } from "./aiSettings";
 import { kindOfProvider, localModelOf } from "./aiSettings";
 import { inUseModel, type SpeechModelEntry } from "./speechModels";
+import { browserSource, loadNativeVoices } from "../../practice/voice";
+import { NO_BROWSER_VOICE, NO_VOICE, probeBrowserVoices, voiceMode } from "../../practice/voiceEngine";
 
 const SPEECH = "8-4-settings-speech";
 const AI = "8-5-settings-ai";
@@ -90,6 +92,38 @@ export function folderCheck(status: DataStatus): SetupCheck {
   }
 }
 
+/** The interviewer's voice, from what the probe found. Nothing is spoken here; the row's Play a line button does that. */
+export function voiceCheck(browserVoices: number, systemVoices: number, os: Os): SetupCheck {
+  const base = { id: "voice", label: "Interviewer voice" };
+  switch (voiceMode(browserVoices, systemVoices)) {
+    case "list":
+      return { ...base, detail: `${browserVoices} ${browserVoices === 1 ? "voice" : "voices"} from the app's browser engine. Press Play a line to hear one.`, state: "ready" };
+    case "system":
+      return { ...base, detail: `${NO_BROWSER_VOICE} Press Play a line to hear it.`, state: "ready" };
+    default:
+      return {
+        ...base,
+        detail: NO_VOICE,
+        state: "fix",
+        fixLabel: "How to fix",
+        fixHelp:
+          os === "windows"
+            ? "Open Settings, then Time & language, then Speech, and add a voice. Then press Run again."
+            : os === "mac"
+              ? "Open System Settings, then Accessibility, then Spoken Content, and add a system voice. Then press Run again."
+              : "Add a speech voice in your computer's settings, then press Run again.",
+      };
+  }
+}
+
+/** What the voice row needs to know: how many voices each engine has. */
+export type VoiceCounts = () => Promise<{ browser: number; system: number }>;
+
+const realVoiceCounts: VoiceCounts = async () => ({
+  browser: (await probeBrowserVoices(browserSource())).length,
+  system: (await loadNativeVoices()).length,
+});
+
 export function summaryLine(ready: number, total: number): string {
   return ready === total ? `${ready} of ${total} ready` : `${ready} of ${total} ready · you can still practice`;
 }
@@ -107,7 +141,7 @@ type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 const errorText = (e: unknown): string => (typeof e === "string" ? e : e instanceof Error ? e.message : "");
 
 /** The checks, in the order they run. `invoke` is the app's command call and `preferred` the speech model chosen in Settings. */
-export function checkers(invoke: Invoke, os: Os, preferred: string): Checker[] {
+export function checkers(invoke: Invoke, os: Os, preferred: string, voiceCounts: VoiceCounts = realVoiceCounts): Checker[] {
   const failed = (id: string, label: string): SetupCheck => ({ id, label, detail: "Ensayo couldn't run this check.", state: "fix", fixLabel: "Run again", fixHelp: "Press Run again. If it still fails, restart Ensayo." });
   const guard = (id: string, label: string, run: () => Promise<SetupCheck>) => async () => run().catch(() => failed(id, label));
   return [
@@ -134,6 +168,14 @@ export function checkers(invoke: Invoke, os: Os, preferred: string): Checker[] {
           );
         }
         return aiCheck(view, local, test);
+      }),
+    },
+    {
+      id: "voice",
+      label: "Interviewer voice",
+      run: guard("voice", "Interviewer voice", async () => {
+        const n = await voiceCounts();
+        return voiceCheck(n.browser, n.system, os);
       }),
     },
     { id: "folder", label: "Data folder", run: guard("folder", "Data folder", async () => folderCheck(await invoke<DataStatus>("data_status"))) },

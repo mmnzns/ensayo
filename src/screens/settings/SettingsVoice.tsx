@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { VoiceData } from "../../data/screens/settings";
-import { say, stopSaying, useVoices } from "../../practice/voice";
+import { say, stopSaying, useVoiceCatalog } from "../../practice/voice";
+import { NO_BROWSER_VOICE, NO_VOICE, voiceMode } from "../../practice/voiceEngine";
 import { RowText, SettingsLayout, ToggleRow, useLater } from "./parts";
-import { readPrefs, updateVoice, voiceChoices, type VoicePrefs } from "./prefs";
+import { parseVoiceValue, readPrefs, updateVoice, voiceOptions, voiceValue, type VoicePrefs } from "./prefs";
 
 const SPEEDS: VoiceData["speed"][] = ["Slower", "Normal", "Faster"];
 
@@ -11,8 +12,10 @@ const SAMPLE = "Tell me about a time you changed your mind.";
 export default function SettingsVoice() {
   // Where the choice is kept: this computer (see prefs.ts). The voices are the ones the system offers.
   const [prefs, setPrefs] = useState<VoicePrefs>(() => readPrefs().voice);
-  const voices = useVoices();
-  const choices = voiceChoices(voices);
+  const { browser, system, probed } = useVoiceCatalog();
+  const choices = voiceOptions(browser, system);
+  // What to tell the user about the voices; while the probe is still waiting, the usual hint.
+  const mode = probed ? voiceMode(browser.length, system.length) : "list";
   const [playing, setPlaying] = useState(false);
   const later = useLater();
   useEffect(() => stopSaying, []);
@@ -20,7 +23,15 @@ export default function SettingsVoice() {
   const change = (c: Partial<VoicePrefs>) => setPrefs(updateVoice(c).voice);
   const { readAloud, speed, readTrySaying } = prefs;
   // A saved voice that this computer no longer has shows as automatic.
-  const voice = choices.some((c) => c.value === prefs.voiceUri) ? prefs.voiceUri : "";
+  const saved = voiceValue(prefs.engine, prefs.voiceUri);
+  const voice = choices.some((c) => c.value === saved) ? saved : "";
+  const pick = (value: string) => change(parseVoiceValue(value));
+  const hint =
+    mode === "none"
+      ? NO_VOICE
+      : mode === "system"
+        ? NO_BROWSER_VOICE
+        : "Natural voices sound best. On Windows, install them under Settings › Time & language › Speech.";
 
   const preview = () => {
     setPlaying(true);
@@ -38,15 +49,15 @@ export default function SettingsVoice() {
         </div>
         <ToggleRow title="Read questions aloud" checked={readAloud} onChange={(v) => change({ readAloud: v })} />
         <div className="e-rowline" style={off}>
-          <RowText title="Voice" hint={choices.length === 0 ? "Ensayo can't find a voice on this computer. Questions stay on screen." : "Natural voices sound best. On Windows, install them under Settings › Time & language › Speech."} />
+          <RowText title="Voice" hint={hint} />
           <div style={{ display: "flex", gap: "8px" }}>
-            <select className="e-input" style={{ width: "220px" }} aria-label="Voice" value={voice} disabled={!readAloud} onChange={(e) => change({ voiceUri: e.target.value })}>
+            <select className="e-input" style={{ width: "220px" }} aria-label="Voice" value={voice} disabled={!readAloud} onChange={(e) => pick(e.target.value)}>
               <option value="">Automatic</option>
               {choices.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
-            <button type="button" className="e-btn e-btn-soft e-btn-sm" style={{ minHeight: "48px" }} disabled={!readAloud || playing} onClick={preview}>
+            <button type="button" className="e-btn e-btn-soft e-btn-sm" style={{ minHeight: "48px" }} disabled={!readAloud || playing || mode === "none"} onClick={preview}>
               {playing ? (
                 <span className="e-dot" aria-hidden="true" />
               ) : (

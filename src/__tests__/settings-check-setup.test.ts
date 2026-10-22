@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aiCheck, folderCheck, micCheck, speechCheck, voiceDetectionCheck, summaryLine } from "../screens/settings/setupChecks";
+import { aiCheck, checkers, folderCheck, micCheck, speechCheck, voiceCheck, voiceDetectionCheck, summaryLine } from "../screens/settings/setupChecks";
 import type { AiView, LocalAiView } from "../screens/settings/aiSettings";
 import type { SpeechModelEntry } from "../screens/settings/speechModels";
 
@@ -93,5 +93,44 @@ describe("summary", () => {
   it("counts the ready ones", () => {
     expect(summaryLine(5, 5)).toBe("5 of 5 ready");
     expect(summaryLine(3, 5)).toBe("3 of 5 ready · you can still practice");
+  });
+});
+
+describe("interviewer voice check", () => {
+  it("is ready and counts the browser engine's voices", () => {
+    expect(voiceCheck(12, 0, "mac")).toMatchObject({ id: "voice", label: "Interviewer voice", state: "ready", detail: "12 voices from the app's browser engine. Press Play a line to hear one." });
+    expect(voiceCheck(1, 0, "mac").detail).toContain("1 voice from");
+  });
+
+  it("is ready on the system's voice when the browser engine has none, and says so", () => {
+    const c = voiceCheck(0, 7, "windows");
+    expect(c.state).toBe("ready");
+    expect(c.detail).toBe("No voice from the app's browser engine on this computer, so Ensayo uses your system's voice. Press Play a line to hear it.");
+  });
+
+  it("needs fixing when there is no voice at all, with steps for this computer", () => {
+    const mac = voiceCheck(0, 0, "mac");
+    expect(mac).toMatchObject({ state: "fix", detail: "No voice available. Questions are shown, not spoken.", fixLabel: "How to fix" });
+    expect(mac.fixHelp).toContain("Spoken Content");
+    expect(voiceCheck(0, 0, "windows").fixHelp).toContain("Time & language");
+  });
+
+  it("is a row in the real checks, run from what the probe found, and never speaks", async () => {
+    const calls: string[] = [];
+    const invoke = (async (cmd: string) => {
+      calls.push(cmd);
+      throw new Error("not needed");
+    }) as never;
+    const row = checkers(invoke, "mac", "", async () => ({ browser: 0, system: 3 })).find((c) => c.id === "voice");
+    expect(row?.label).toBe("Interviewer voice");
+    expect(await row!.run()).toMatchObject({ id: "voice", state: "ready" });
+    expect(calls).not.toContain("speak_native");
+    const none = checkers(invoke, "mac", "", async () => ({ browser: 0, system: 0 })).find((c) => c.id === "voice");
+    expect((await none!.run()).state).toBe("fix");
+  });
+
+  it("a probe that throws gives the 'couldn't run this check' row, not a crash", async () => {
+    const row = checkers((async () => undefined) as never, "mac", "", async () => { throw new Error("boom"); }).find((c) => c.id === "voice");
+    expect(await row!.run()).toMatchObject({ id: "voice", state: "fix", detail: "Ensayo couldn't run this check." });
   });
 });

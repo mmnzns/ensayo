@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { isApp } from "../../data/real";
 import type { SetupCheck } from "../../data/screens/settings";
 import { useStore } from "../../data/store";
+import { say, stopSaying } from "../../practice/voice";
+import { NO_VOICE } from "../../practice/voiceEngine";
 import Link from "../../ui/Link";
 import { osOf } from "../first-run/setup";
 import { CheckIcon, SettingsLayout, useLater } from "./parts";
@@ -12,6 +14,8 @@ import { checkers, summaryLine } from "./setupChecks";
 
 /** While "Run again" works down the list, each row is waiting, then checking, then settled on its real state. */
 type Phase = "waiting" | "checking" | "done";
+
+const VOICE_LINE = "Tell me about a time you changed your mind.";
 
 export default function SettingsCheckSetup() {
   const sample = useStore().screens.settings.checkSetup;
@@ -25,6 +29,28 @@ export default function SettingsCheckSetup() {
   const [running, setRunning] = useState(false);
   const [help, setHelp] = useState<string | null>(null);
   const later = useLater();
+  // The interviewer voice row has a manual button: nothing is spoken until you press it.
+  const [playing, setPlaying] = useState(false);
+  const [playNote, setPlayNote] = useState<string | null>(null);
+  useEffect(() => stopSaying, []);
+  const playLine = () => {
+    if (playing) {
+      stopSaying();
+      setPlaying(false);
+      return;
+    }
+    setPlayNote(null);
+    setPlaying(true);
+    const started = say(VOICE_LINE, (spoke) => {
+      if (!alive.current) return;
+      setPlaying(false);
+      if (!spoke) setPlayNote(NO_VOICE);
+    });
+    if (!started) {
+      setPlaying(false);
+      setPlayNote(NO_VOICE);
+    }
+  };
 
   const phaseOf = (id: string): Phase => phases[id] ?? "done";
 
@@ -104,11 +130,17 @@ export default function SettingsCheckSetup() {
                   )}
                   {phase === "checking" && <span className="e-meta" role="status">Checking…</span>}
                   {phase === "waiting" && <span className="e-small">Waiting</span>}
+                  {phase === "done" && c.id === "voice" && c.state === "ready" && app && (
+                    <button type="button" className="e-btn e-btn-soft e-btn-sm" aria-pressed={playing} onClick={playLine}>{playing ? "Stop" : "Play a line"}</button>
+                  )}
                   {fix && c.fixTo && <Link to={c.fixTo} className="e-btn e-btn-soft e-btn-sm">{c.fixLabel ?? "How to fix"}</Link>}
                   {fix && !c.fixTo && (
                     <button type="button" className="e-btn e-btn-soft e-btn-sm" aria-expanded={help === c.id} onClick={() => setHelp(help === c.id ? null : c.id)}>{c.fixLabel ?? "How to fix"}</button>
                   )}
                 </div>
+                {c.id === "voice" && playNote && (
+                  <p className="e-meta" role="status" style={{ margin: "0", padding: "0 0 14px 26px" }}>{playNote}</p>
+                )}
                 {fix && !c.fixTo && help === c.id && (
                   <p className="e-meta" style={{ margin: "0", padding: "0 0 14px 26px" }}>{c.fixHelp}</p>
                 )}

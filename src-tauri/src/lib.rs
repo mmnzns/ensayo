@@ -10,6 +10,7 @@ pub mod eval;
 pub mod keys;
 mod local_ai_commands;
 mod mock_commands;
+mod native_voice;
 pub mod metrics;
 pub mod paths;
 mod platform;
@@ -141,6 +142,9 @@ pub fn run() {
             update_commands::updates_check,
             update_commands::updates_pending,
             update_commands::updates_install,
+            native_voice::native_voices,
+            native_voice::speak_native,
+            native_voice::stop_speaking_native,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Ensayo")
@@ -148,6 +152,7 @@ pub fn run() {
             // The helper also exits by itself when Ensayo's end of its pipe closes; this just makes it immediate.
             if let tauri::RunEvent::Exit = event {
                 ai::local::stop_shared();
+                native_voice::stop();
             }
         });
 }
