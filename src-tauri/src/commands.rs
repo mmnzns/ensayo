@@ -44,16 +44,46 @@ pub async fn list_input_devices() -> Vec<String> {
     tauri::async_runtime::spawn_blocking(input_devices).await.unwrap_or_default()
 }
 
+/// One speech model for Settings, Speech: what it is and whether it is on this computer.
+#[derive(Serialize)]
+pub struct SpeechModelEntry {
+    id: &'static str,
+    name: &'static str,
+    maker: &'static str,
+    note: &'static str,
+    languages: &'static str,
+    size_mb: u64,
+    /// "ready" (Ensayo's copy), "on_this_computer" (reused from another app) or "missing".
+    state: &'static str,
+}
+
+fn state_of(store: &models::ModelStore, m: &models::ModelInfo) -> &'static str {
+    match store.locate(m) {
+        models::Location::Own(_) => "ready",
+        models::Location::OnThisComputer(_) => "on_this_computer",
+        models::Location::Missing => "missing",
+    }
+}
+
+/// Every model that turns speech into text, in the order Settings lists them, with its state.
+pub fn speech_model_list(store: &models::ModelStore) -> Vec<SpeechModelEntry> {
+    models::CATALOG
+        .iter()
+        .filter(|m| m.engine.is_speech())
+        .map(|m| SpeechModelEntry { id: m.id, name: m.name, maker: m.maker, note: m.note, languages: m.languages, size_mb: m.size() / 1_000_000, state: state_of(store, m) })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn speech_models() -> Vec<SpeechModelEntry> {
+    tauri::async_runtime::spawn_blocking(|| speech_model_list(&models::ModelStore::new(paths::models_dir(), true))).await.unwrap_or_default()
+}
+
 #[tauri::command]
 pub fn model_status(id: String) -> Result<ModelStatus, String> {
     let m = models::find(&id).ok_or("Unknown model")?;
     let store = models::ModelStore::new(paths::models_dir(), true);
-    let state = match store.locate(m) {
-        models::Location::Own(_) => "ready",
-        models::Location::OnThisComputer(_) => "on_this_computer",
-        models::Location::Missing => "missing",
-    };
-    Ok(ModelStatus { id: m.id, name: m.name, size_mb: m.size() / 1_000_000, state })
+    Ok(ModelStatus { id: m.id, name: m.name, size_mb: m.size() / 1_000_000, state: state_of(&store, m) })
 }
 
 #[tauri::command]
@@ -172,6 +202,16 @@ mod tests {
         assert_eq!(s.id, "whisper-tiny");
         assert!(s.size_mb > 10);
         assert!(["ready", "on_this_computer", "missing"].contains(&s.state));
+    }
+
+    #[test]
+    fn the_speech_list_has_every_speech_model_and_nothing_else() {
+        let dir = tempfile::tempdir().unwrap();
+        let list = speech_model_list(&models::ModelStore::new(dir.path().to_path_buf(), false));
+        assert_eq!(list[0].id, "whisper-turbo", "the recommended model comes first");
+        assert!(list.iter().all(|m| m.state == "missing"), "an empty folder has nothing");
+        assert!(list.iter().all(|m| m.id != "vad"), "voice detection is not a model to pick");
+        assert_eq!(list.len(), models::CATALOG.iter().filter(|m| m.engine.is_speech()).count());
     }
 
     #[test]

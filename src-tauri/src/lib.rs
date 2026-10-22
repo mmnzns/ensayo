@@ -25,6 +25,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
             commands::model_status,
+            commands::speech_models,
             commands::download_model,
             commands::mic_permission,
             commands::request_mic_permission,

@@ -27,14 +27,21 @@ export interface VoicePrefs {
   readTrySaying: boolean;
 }
 
+export interface SpeechPrefs {
+  /** The speech model picked in Settings, Speech; empty means the first one on this computer in Ensayo's order. */
+  model: string;
+}
+
 export interface Prefs {
   practice: PracticePrefs;
   voice: VoicePrefs;
+  speech: SpeechPrefs;
 }
 
 export const DEFAULT_PREFS: Prefs = {
   practice: { stage: "hiring_manager", questions: 5, tries: 3, timer: true, followUps: true, autoStop: false },
   voice: { readAloud: true, voiceUri: "", speed: "Normal", readTrySaying: true },
+  speech: { model: "" },
 };
 
 type Store = Pick<Storage, "getItem" | "setItem">;
@@ -92,15 +99,20 @@ function cleanVoice(raw: unknown): VoicePrefs {
   };
 }
 
+function cleanSpeech(raw: unknown): SpeechPrefs {
+  const r = isObject(raw) ? raw : {};
+  return { model: typeof r.model === "string" ? r.model : DEFAULT_PREFS.speech.model };
+}
+
 /** The saved settings, or the defaults for anything missing, damaged or unreadable. */
 export function readPrefs(storage: Store | null = browserStorage()): Prefs {
   try {
     const text = storage?.getItem(PREFS_KEY);
     const raw: unknown = text ? JSON.parse(text) : null;
     const r = isObject(raw) ? raw : {};
-    return { practice: cleanPractice(r.practice), voice: cleanVoice(r.voice) };
+    return { practice: cleanPractice(r.practice), voice: cleanVoice(r.voice), speech: cleanSpeech(r.speech) };
   } catch {
-    return { practice: { ...DEFAULT_PREFS.practice }, voice: { ...DEFAULT_PREFS.voice } };
+    return { practice: { ...DEFAULT_PREFS.practice }, voice: { ...DEFAULT_PREFS.voice }, speech: { ...DEFAULT_PREFS.speech } };
   }
 }
 
@@ -124,6 +136,14 @@ export function updatePractice(change: Partial<PracticePrefs>, storage: Store | 
 export function updateVoice(change: Partial<VoicePrefs>, storage: Store | null = browserStorage()): Prefs {
   const now = readPrefs(storage);
   const next: Prefs = { ...now, voice: cleanVoice({ ...now.voice, ...change }) };
+  writePrefs(next, storage);
+  return next;
+}
+
+/** Saves the speech model to use and returns everything as it now stands. */
+export function updateSpeech(change: Partial<SpeechPrefs>, storage: Store | null = browserStorage()): Prefs {
+  const now = readPrefs(storage);
+  const next: Prefs = { ...now, speech: cleanSpeech({ ...now.speech, ...change }) };
   writePrefs(next, storage);
   return next;
 }

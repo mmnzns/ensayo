@@ -1,13 +1,82 @@
 // Draft generated from Design/screens/html/8-4-settings-speech.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
 import { useState } from "react";
+import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import type { SpeechModel } from "../../data/screens/settings";
 import { formatSize } from "./format";
 import { KeyResult, SettingsLayout, useKeyTests, useLater } from "./parts";
+import { modelRows, modelsSize, progressPercent } from "./speechModels";
+import { useSpeechModels } from "./useSpeechModels";
 
 const ring = (color: string) => ({ width: "10px", height: "10px", borderRadius: "50%", boxShadow: `inset 0 0 0 1.5px ${color}`, flex: "none" as const });
 
+/** In the app the screen reads the real models and downloads them; in the browser preview it stays the sample below. */
 export default function SettingsSpeech() {
+  return isApp() ? <SpeechLive /> : <SpeechMock />;
+}
+
+function SpeechLive() {
+  const { models, inUseId, downloadingId, fraction, error, download, use } = useSpeechModels();
+  const rows = modelRows(models ?? [], inUseId);
+  const current = rows.find((r) => r.inUse);
+
+  return (
+    <SettingsLayout active="8-4-settings-speech">
+      <div style={{ flex: "999 1 480px", minWidth: "0", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingBottom: "10px" }}>
+            <span className="e-h2">Speech to text</span>
+            <span className="e-meta">How your answers become words. The model runs on this computer, works offline and keeps everything here.</span>
+          </div>
+          <div className="e-rowline" style={{ borderBottom: "none" }}>
+            <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+              {models === null ? "Looking at what is on this computer…" : current ? "Model in use" : "No speech model yet"}
+              <span className="e-small">
+                {current ? `${current.name} · ${current.maker}${current.languages ? ` · ${current.languages}` : ""}` : models === null ? "" : "Until one is here, Ensayo can't hear your answers. Download one below."}
+              </span>
+            </span>
+            {current ? <span className="e-badge e-badge-ok">In use</span> : null}
+          </div>
+          {error ? <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{error}</span> : null}
+        </section>
+        <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", paddingBottom: "10px" }}>
+            <span className="e-h3">Models</span>
+            {models ? <span className="e-small">{formatSize(modelsSize(models))} on this computer</span> : null}
+          </div>
+          {rows.map((m, i) => {
+            const busy = downloadingId === m.id;
+            const have = m.state !== "missing";
+            return (
+              <div key={m.id} className="e-rowline" style={{ padding: "12px 0", flexWrap: "wrap", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
+                {m.inUse ? <span className="e-dot" aria-hidden="true" /> : <span style={ring(have ? "var(--e-muted)" : "var(--e-line)")} />}
+                <span style={{ flex: "1 1 220px", display: "flex", flexDirection: "column", gap: "2px", ...(have ? {} : { color: "var(--e-muted)" }) }}>
+                  {m.name}
+                  <span className="e-small">{busy ? `Downloading, ${progressPercent(fraction)}%` : m.status}{m.note ? ` · ${m.note}` : ""}</span>
+                </span>
+                <span className="e-small">{formatSize(m.size_mb)}</span>
+                {m.canUse && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => use(m.id)}>Use</button>}
+                {m.canDownload && (
+                  <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={downloadingId !== null} onClick={() => void download(m.id)}>
+                    {busy ? "Please wait" : "Download"}
+                  </button>
+                )}
+                {busy && (
+                  <span className="e-bar" style={{ flexBasis: "100%" }} role="progressbar" aria-label={`Download progress for ${m.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent(fraction)}>
+                    <span style={{ width: `${progressPercent(fraction)}%` }} />
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <span className="e-small" style={{ paddingTop: "8px" }}>A download picks up where it stopped. To remove the models, use Delete all Ensayo data under Privacy.</span>
+        </section>
+      </div>
+    </SettingsLayout>
+  );
+}
+
+function SpeechMock() {
   const { speech } = useStore().screens.settings;
   const [engine, setEngine] = useState(speech.models.find((m) => m.status === "in-use")?.engine ?? speech.engines[0].name);
   const [models, setModels] = useState<SpeechModel[]>(speech.models);

@@ -8,6 +8,7 @@ import {
   stageIdOf,
   stageLabelOf,
   updatePractice,
+  updateSpeech,
   updateVoice,
   voiceChoices,
   type VoiceLike,
@@ -36,6 +37,14 @@ describe("saved settings", () => {
     const back = readPrefs(s);
     expect(back.practice.questions).toBe(10);
     expect(back.voice.speed).toBe("Faster");
+  });
+
+  it("keeps the speech model choice with the rest", () => {
+    const s = fakeStorage();
+    expect(readPrefs(s).speech.model).toBe("");
+    updateSpeech({ model: "whisper-small" }, s);
+    expect(readPrefs(s).speech.model).toBe("whisper-small");
+    expect(readPrefs(s).practice).toEqual(DEFAULT_PREFS.practice);
   });
 
   it("changes one setting and leaves the rest", () => {

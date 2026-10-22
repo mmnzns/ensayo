@@ -1,5 +1,7 @@
 // The Rust rep commands as one object, so the live practice flow can be driven by a fake in tests and in the browser.
 
+import { readPrefs } from "../screens/settings/prefs";
+import { candidateModels, SPEECH_MODELS } from "../screens/settings/speechModels";
 import type { MustSayItem, QuestionQuality } from "./debrief";
 import type { FinishArgs, FollowUpQuestion, FullRep, RepOutcome } from "./types";
 
@@ -30,19 +32,17 @@ export interface RepApi {
   mockDebrief(args: { session_id: string; company: string; role: string; jd_summary: string; priorities: string; must_say: MustSayItem[] }): Promise<QuestionQuality>;
 }
 
-/** Speech models in the order Ensayo prefers them; the first one on this computer is used. */
-export const SPEECH_MODELS = ["whisper-turbo", "parakeet-ultra", "whisper-small", "whisper-base", "whisper-tiny"];
+export { SPEECH_MODELS };
 
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export async function tauriApi(): Promise<RepApi> {
   const { invoke } = await import("@tauri-apps/api/core");
-  let model: string | undefined;
+  // The model chosen in Settings, Speech comes first; then the usual order. Read every time, so a change applies at once.
   const pickModel = async () => {
-    if (model) return model;
-    for (const id of SPEECH_MODELS) {
-      const s = await invoke<{ state: string }>("model_status", { id });
-      if (s.state === "ready" || s.state === "on_this_computer") return (model = id);
+    for (const id of candidateModels(readPrefs().speech.model)) {
+      const s = await invoke<{ state: string }>("model_status", { id }).catch(() => null);
+      if (s && (s.state === "ready" || s.state === "on_this_computer")) return id;
     }
     throw new Error("No speech model is on this computer yet. Download one from Settings.");
   };
