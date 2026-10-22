@@ -9,6 +9,9 @@ import { habitStats, sessionList, streakOf, type RepSummary } from "../practice/
 /** True inside the desktop app. In a plain browser (`npm run dev`) the data is the mock, held in memory. */
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+/** What the setup screens start from: nothing filled in. */
+export const BLANK_PROFILE: Profile = { name: "", fullName: "", targetRole: "", seniority: "senior", industry: "", sellsTo: "both", identityStatement: "", focusHabits: [] };
+
 export interface DataStatus {
   folder: string;
   state: "ready" | "missing" | "other_machine" | "stale_lock";
@@ -37,6 +40,10 @@ const NO_ACTIONS: Actions = { saveStory: unavailable, deleteStory: unavailable, 
 
 const ActionsContext = createContext<Actions>(NO_ACTIONS);
 export const useActions = (): Actions => useContext(ActionsContext);
+
+const SetupContext = createContext(false);
+/** True in the app until a profile has been saved: the first-run screens come before Home. */
+export const useNeedsSetup = (): boolean => useContext(SetupContext);
 
 const DataInfoContext = createContext<{ problems: string[] }>({ problems: [] });
 
@@ -93,7 +100,7 @@ function Blocked({ status, onRetry, onOpenAnyway }: { status: DataStatus | null;
 export function DataProvider({ children }: { children: ReactNode }) {
   const app = isApp();
   const [state, setState] = useState<DataState>(() =>
-    app ? { profile: mockStore.profile, stories: [], methods: mergeMethods([], mockStore.methods) } : { profile: mockStore.profile, stories: mockStore.stories, methods: mockStore.methods },
+    app ? { profile: null, stories: [], methods: mergeMethods([], mockStore.methods) } : { profile: mockStore.profile, stories: mockStore.stories, methods: mockStore.methods },
   );
   const [phase, setPhase] = useState<Phase>(app ? "loading" : "ready");
   const [status, setStatus] = useState<DataStatus | null>(null);
@@ -120,7 +127,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const readAll = useCallback(async () => {
     const all = await invoke<LoadAll>("load_all");
-    setState({ profile: all.profile ?? mockStore.profile, stories: all.stories, methods: mergeMethods(all.methods, mockStore.methods) });
+    setState({ profile: all.profile, stories: all.stories, methods: mergeMethods(all.methods, mockStore.methods) });
     setProblems(all.problems);
     await readReps();
     setPhase("ready");
@@ -199,12 +206,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const store = useMemo<Store>(() => {
-    const base: Store = { ...mockStore, profile: state.profile ?? mockStore.profile, stories: state.stories, methods: state.methods };
+    const base: Store = { ...mockStore, profile: state.profile ?? (app ? BLANK_PROFILE : mockStore.profile), stories: state.stories, methods: state.methods };
     if (!app) return base;
     const now = new Date();
     const companyOf = (id: string) => mockStore.applications.find((a) => a.id === id)?.company;
     return {
       ...base,
+      applications: [],
       sessions: sessionList(reps, now, companyOf),
       streak: streakOf(reps, now),
       homeHabitStats: habitStats(mockStore.habits, reps),
@@ -227,7 +235,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     <ActionsContext.Provider value={actions}>
       <DataInfoContext.Provider value={info}>
         <RepsContext.Provider value={reps}>
-          <StoreProvider store={store}>{children}</StoreProvider>
+          <SetupContext.Provider value={app && state.profile === null}>
+            <StoreProvider store={store}>{children}</StoreProvider>
+          </SetupContext.Provider>
         </RepsContext.Provider>
       </DataInfoContext.Provider>
     </ActionsContext.Provider>
