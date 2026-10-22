@@ -6,3 +6,4 @@ pub mod hook;
 pub mod inputs;
 pub mod jd;
 pub mod question_bank;
+pub mod resume;
