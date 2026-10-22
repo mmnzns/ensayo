@@ -11,8 +11,8 @@ import { clearSessionPreset } from "../screens/home/preset";
 import { registry } from "../screens/registry";
 import { Debrief } from "../screens/results/SessionResultsMockDebrief";
 
-const extrasOf = vi.hoisted(() => ({ byId: {} as Record<string, unknown>, actions: {} as Record<string, unknown> }));
-vi.mock("../data/real", async (original) => ({ ...(await original<Record<string, unknown>>()), useApplicationExtras: (id: string | null | undefined) => (id ? extrasOf.byId[id] : undefined), useActions: () => extrasOf.actions }));
+const extrasOf = vi.hoisted(() => ({ byId: {} as Record<string, unknown>, actions: {} as Record<string, unknown>, app: false }));
+vi.mock("../data/real", async (original) => ({ ...(await original<Record<string, unknown>>()), useApplicationExtras: (id: string | null | undefined) => (id ? extrasOf.byId[id] : undefined), useActions: () => extrasOf.actions, isApp: () => extrasOf.app }));
 
 const render = (id: string, store: Store = mockStore) => renderToStaticMarkup(createElement(StoreProvider, { store, children: createElement(registry[id]) }));
 const stage = (id: string, at?: string) => ({ id, stage: "hiring_manager" as const, label: "Hiring manager", order: 1, done: false, decides: "", sessions: 0, ...(at ? { at } : {}) });
@@ -26,6 +26,7 @@ const api = { startRecording: async () => undefined, stopRecording: async () => 
 beforeEach(() => {
   extrasOf.byId = {};
   extrasOf.actions = {};
+  extrasOf.app = false;
   setRepApi(api);
 });
 afterEach(() => {
@@ -104,11 +105,13 @@ describe("the Mock debrief's flags", () => {
   });
 
   it("leaves the button out where the data layer cannot mark a claim", () => {
+    extrasOf.app = true;
     expect(html({ saves: true })).not.toContain("Two weeks is right now");
     expect(html({ saves: true })).toContain("Said differently");
   });
 
   it("shows the button when it can, and the claim is there to change", () => {
+    extrasOf.app = true;
     extrasOf.actions = { markClaimUpdated: async () => undefined };
     expect(html({ saves: true })).toContain("Two weeks is right now");
     expect(html({ saves: true }, [application({ claims: [] })])).not.toContain("Two weeks is right now");
