@@ -41,3 +41,16 @@ describe("feedback email", () => {
     expect(describeSystem("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("Windows");
   });
 });
+
+import { retentionChoice, retentionLabel } from "../screens/settings/privacy";
+
+describe("recording retention labels", () => {
+  it("maps what the backend stores to the list and back", () => {
+    for (const [label, choice] of [["7 days", "7"], ["30 days", "30"], ["90 days", "90"], ["Forever", "forever"], ["Don't keep", "none"]]) {
+      expect(retentionChoice(label)).toBe(choice);
+      expect(retentionLabel(choice)).toBe(label);
+    }
+    expect(retentionLabel("garbage")).toBe("30 days");
+    expect(retentionChoice("garbage")).toBe("30");
+  });
+});

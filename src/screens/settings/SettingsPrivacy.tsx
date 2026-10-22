@@ -1,9 +1,11 @@
 // Draft generated from Design/screens/html/8-6-settings-privacy.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import { formatSize } from "./format";
 import { SettingsLayout } from "./parts";
-import { leavesRows } from "./privacy";
+import { leavesRows, retentionChoice, retentionLabel } from "./privacy";
 
 /** Which delete is asking "are you sure" right now. */
 type Asking = "recordings" | "all" | null;
@@ -17,6 +19,16 @@ export default function SettingsPrivacy() {
   const [recordingsMb, setRecordingsMb] = useState(privacy.recordingsMb);
   const [allDeleted, setAllDeleted] = useState(false);
   const rows = leavesRows(privacy.setup);
+
+  // In the app the choice is the real one, kept on this computer; in the browser preview it is just local state.
+  useEffect(() => {
+    if (!isApp()) return;
+    void invoke<string>("audio_retention").then((c) => setRetention(retentionLabel(c)), () => {});
+  }, []);
+  const chooseRetention = (label: string) => {
+    setRetention(label);
+    if (isApp()) void invoke("set_audio_retention", { choice: retentionChoice(label) }).catch(() => {});
+  };
 
   return (
     <SettingsLayout active="8-6-settings-privacy">
@@ -41,7 +53,7 @@ export default function SettingsPrivacy() {
             <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
               Recordings<span className="e-small">Transcripts and scores stay after audio is removed.</span>
             </span>
-            <select className="e-input" style={{ width: "220px" }} aria-label="Keep recordings" value={retention} onChange={(e) => setRetention(e.target.value)}>
+            <select className="e-input" style={{ width: "220px" }} aria-label="Keep recordings" value={retention} onChange={(e) => chooseRetention(e.target.value)}>
               {privacy.retentionOptions.map((o) => (
                 <option key={o}>{o}</option>
               ))}

@@ -31,3 +31,15 @@ export function leavesRows(setup: PrivacyData["setup"]): LeaveRow[] {
   rows.push({ title: "Usage data about Ensayo", detail: "There is none. Ensayo has no analytics.", badge: "Nothing sent", stays: true });
   return rows;
 }
+
+const RETENTION: [string, string][] = [
+  ["7 days", "7"],
+  ["30 days", "30"],
+  ["90 days", "90"],
+  ["Forever", "forever"],
+  ["Don't keep", "none"],
+];
+
+/** The label in the Keep recordings list for what the backend stores ("30"), and back. */
+export const retentionLabel = (choice: string): string => RETENTION.find(([, c]) => c === choice)?.[0] ?? "30 days";
+export const retentionChoice = (label: string): string => RETENTION.find(([l]) => l === label)?.[1] ?? "30";

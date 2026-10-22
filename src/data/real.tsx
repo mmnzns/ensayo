@@ -100,6 +100,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setState({ profile: all.profile ?? mockStore.profile, stories: all.stories, methods: mergeMethods(all.methods, mockStore.methods) });
     setProblems(all.problems);
     setPhase("ready");
+    // Housekeeping: remove answer audio older than the retention setting (reps kept for the eval set stay).
+    void invoke("sweep_audio").catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
