@@ -5,7 +5,7 @@
 use crate::storage::applications::AppRecord;
 use crate::storage::targets::{role_family_of, target_name, color_for, FitRow, Target, TargetFit};
 use crate::storage::{Result as StorageResult, Storage};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// What the posting words say the job is.
 #[derive(Debug, Clone, PartialEq)]
@@ -484,4 +484,103 @@ mod tests {
         let _ = role_family_of("x");
         let _ = target_name("", "both", "other");
     }
+
+    #[test]
+    fn the_targets_block_puts_the_applications_target_first_leaves_archived_ones_out_and_never_sends_pay() {
+        let mut a = target("tg_a", "Lifecycle Manager", "lifecycle", "b2c", "senior");
+        a.lead_with = vec!["I own it end to end".into(), " ".into(), "Activation 31% to 44%".into()];
+        a.pay_range = Some(crate::storage::targets::PayRange { low: 120_000.0, high: 140_000.0, currency: "USD".into() });
+        let b = target("tg_b", "Marketing Ops Manager", "marketing_ops", "b2b", "senior");
+        let mut gone = target("tg_old", "Agency", "other", "both", "mid");
+        gone.archived = true;
+        let text = targets_text(&[a, b, gone], Some("tg_b"));
+        assert!(text.starts_with("id: tg_b\n"), "{text}");
+        assert!(text.contains("lead_with: I own it end to end; Activation 31% to 44%"));
+        assert!(!text.contains("tg_old"));
+        assert!(!text.contains("120") && !text.contains("USD"), "the pay range is never sent: {text}");
+        assert!(text.contains("pitch: pitch of tg_a"));
+    }
+
+    #[test]
+    fn the_engines_fit_keeps_only_live_targets_and_rates_any_it_left_out() {
+        let a = target("tg_a", "Lifecycle Manager", "lifecycle", "b2c", "senior");
+        let b = target("tg_b", "Marketing Ops Manager", "marketing_ops", "b2b", "senior");
+        let raw = RawFit {
+            sells_to: "b2b".into(),
+            role_family: "marketing_ops".into(),
+            seniority: "senior".into(),
+            best_target_id: Some("tg_ghost".into()),
+            mismatch_notes: vec!["This posting is B2B; your closest target is B2C lifecycle \u{2014} not a fit.".into()],
+            per_target: vec![RawFitRow { target_id: "tg_a".into(), fit: "weak".into(), why: "Different buyer.".into() }, RawFitRow { target_id: "tg_ghost".into(), fit: "strong".into(), why: String::new() }],
+        };
+        let fit = from_model(raw, &[a, b], Some("tg_a")).unwrap();
+        assert_eq!(fit.per_target.len(), 2, "one row per live target, none for one that does not exist");
+        assert_eq!(fit.per_target[0].why, "Different buyer.");
+        assert_eq!(fit.per_target[1].target_id, "tg_b", "the target the engine left out is rated by keywords");
+        assert_eq!(fit.best_target_id, None, "a best target that does not exist is dropped");
+        assert!(!fit.mismatch_notes[0].contains('\u{2014}'));
+    }
+}
+
+
+// ---------- the engine's reading of the fit (prompt 09) ----------
+
+/// The `targets` block prompt 09 reads: the unarchived targets, `first` (the application's target) first, one block each.
+/// The pay range is never sent.
+pub fn targets_text(targets: &[Target], first: Option<&str>) -> String {
+    let mut live: Vec<&Target> = targets.iter().filter(|t| !t.archived).collect();
+    live.sort_by_key(|t| Some(t.id.as_str()) != first);
+    let or_none = |s: &str| if s.trim().is_empty() { "none".to_string() } else { s.trim().to_string() };
+    live.iter()
+        .map(|t| {
+            let lead = t.lead_with.iter().map(|p| p.trim()).filter(|p| !p.is_empty()).collect::<Vec<_>>().join("; ");
+            format!(
+                "id: {}\nname: {}\nsells_to: {}\nrole_family: {}\nseniority: {}\ncompany_stage: {}\npitch: {}\nlead_with: {}",
+                t.id, t.name, t.sells_to, t.role_family, t.seniority, t.company_stage, or_none(&t.pitch), or_none(&lead)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawFitRow {
+    pub target_id: String,
+    pub fit: String,
+    #[serde(default)]
+    pub why: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawFit {
+    pub sells_to: String,
+    pub role_family: String,
+    pub seniority: String,
+    #[serde(default)]
+    pub best_target_id: Option<String>,
+    #[serde(default)]
+    pub mismatch_notes: Vec<String>,
+    #[serde(default)]
+    pub per_target: Vec<RawFitRow>,
+}
+
+/// The engine's fit, kept to the targets that exist and are not archived. A target the engine left out is rated by
+/// keywords from the engine's own reading of the posting, so every live target has a row.
+pub fn from_model(raw: RawFit, targets: &[Target], filed: Option<&str>) -> Option<TargetFit> {
+    let live: Vec<&Target> = targets.iter().filter(|t| !t.archived).collect();
+    if live.is_empty() {
+        return None;
+    }
+    let guess = Guess { sells_to: raw.sells_to.clone(), role_family: raw.role_family.clone(), seniority: raw.seniority.clone() };
+    let fallback = fit_against(&guess, targets, filed);
+    let per_target: Vec<FitRow> = live
+        .iter()
+        .map(|t| match raw.per_target.iter().find(|r| r.target_id == t.id && matches!(r.fit.as_str(), "strong" | "ok" | "weak")) {
+            Some(r) => FitRow { target_id: t.id.clone(), fit: r.fit.clone(), why: r.why.trim().replace('\u{2014}', ",") },
+            None => fallback.as_ref().and_then(|f| f.per_target.iter().find(|x| x.target_id == t.id).cloned()).unwrap_or(FitRow { target_id: t.id.clone(), fit: "weak".into(), why: String::new() }),
+        })
+        .collect();
+    let best_target_id = raw.best_target_id.filter(|id| per_target.iter().any(|r| &r.target_id == id && r.fit != "weak"));
+    let mismatch_notes = raw.mismatch_notes.into_iter().map(|n| n.trim().replace('\u{2014}', ",")).filter(|n| !n.is_empty()).take(3).collect();
+    Some(TargetFit { sells_to: raw.sells_to, role_family: raw.role_family, seniority: raw.seniority, best_target_id, mismatch_notes, per_target })
 }

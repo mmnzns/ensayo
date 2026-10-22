@@ -70,6 +70,9 @@ struct Raw {
     questions: Vec<RawQuestion>,
     gap_questions: Vec<RawGap>,
     no_match: Vec<RawNoMatch>,
+    /// Prompt 09 v2: how the posting fits the person's targets. Missing in older replies; keywords fill in then.
+    #[serde(default)]
+    target_fit: Option<super::target_fit::RawFit>,
 }
 
 /// What reading the posting produced, before it is merged with earlier edits.
@@ -81,6 +84,8 @@ struct Reading {
     raw: Option<Value>,
     prompt: String,
     engine: &'static str,
+    /// The engine's reading of the fit, when it gave one.
+    fit: Option<super::target_fit::RawFit>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -250,8 +255,9 @@ fn question_for(rec: &AppRecord, stories: &[Story], stage_type: &str, q: RawQues
     })
 }
 
-fn ai_read(ctx: &mut AiCtx, rec: &AppRecord, jd: &str, stories: &[Story], profile: &str) -> Result<Reading, CallError> {
+fn ai_read(ctx: &mut AiCtx, rec: &AppRecord, jd: &str, stories: &[Story], profile: &str, targets: &str) -> Result<Reading, CallError> {
     let vars = Vars::new()
+        .set("targets", escape_data(targets))
         .set("company", escape_data(&rec.company))
         .set("role", escape_data(&rec.role))
         .set("process", process_text(rec))
@@ -265,6 +271,7 @@ fn ai_read(ctx: &mut AiCtx, rec: &AppRecord, jd: &str, stories: &[Story], profil
     let mut questions: Vec<QuestionRec> = Vec::new();
     let gaps: Vec<RawGap> = raw.gap_questions.iter().map(|g| RawGap { stage: g.stage.clone(), text: g.text.clone(), requirement: g.requirement.clone() }).collect();
     let startup = raw.startup;
+    let fit = raw.target_fit.clone();
     for q in raw.questions {
         let stage = q.stage.clone();
         questions.extend(question_for(rec, stories, &stage, q, "jd"));
@@ -276,7 +283,7 @@ fn ai_read(ctx: &mut AiCtx, rec: &AppRecord, jd: &str, stories: &[Story], profil
             questions.push(rq);
         }
     }
-    Ok(Reading { derived, questions, startup, raw: Some(called.value), prompt: format!("analyse-jd v{}", get(PromptId::AnalyseJd).version), engine: "ai" })
+    Ok(Reading { derived, questions, startup, raw: Some(called.value), prompt: format!("analyse-jd v{}", get(PromptId::AnalyseJd).version), engine: "ai", fit })
 }
 
 // ---------- the keyword reading ----------
@@ -496,7 +503,7 @@ fn keyword_reading(rec: &AppRecord, jd: &str, stories: &[Story], target_role: &s
             });
         }
     }
-    Reading { derived, questions, startup: k.startup, raw: None, prompt: "keywords".into(), engine: "keywords" }
+    Reading { derived, questions, startup: k.startup, raw: None, prompt: "keywords".into(), engine: "keywords", fit: None }
 }
 
 // ---------- merging with what the user edited ----------
@@ -672,8 +679,11 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
     let stories = storage.load_stories()?.items;
     let profile = storage.profile_for(storage.application_target(&rec)?.as_deref())?;
     let old = storage.load_application_part::<AnalysisFile>(id, "analysis.json")?;
+    let targets = storage.targets()?;
+    let filed = storage.application_target(&rec)?;
+    let targets_block = super::target_fit::targets_text(&targets, filed.as_deref());
     let attempt: Result<Reading, String> = match ai {
-        Some(mut ctx) => ai_read(&mut ctx, &rec, &jd, &stories, &profile_text(profile.as_ref())).map_err(|e| failure_notice(&e)),
+        Some(mut ctx) => ai_read(&mut ctx, &rec, &jd, &stories, &profile_text(profile.as_ref()), &targets_block).map_err(|e| failure_notice(&e)),
         None => Err(NO_ENGINE.to_string()),
     };
     let (reading, notice) = match attempt {
@@ -686,6 +696,7 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
             (keyword_reading(&rec, &jd, &stories, profile.as_ref().map(|p| p.target_role.as_str()).unwrap_or("")), Some(reason))
         }
     };
+    let model_fit = reading.fit.clone();
     let (derived, mut kept) = merge_derived(old.as_ref(), reading.derived);
     let mut changed = changes(old.as_ref().map(|o| &o.derived), &derived);
     let old_questions = storage.load_application_part::<QuestionsFile>(id, "questions.json")?;
@@ -707,7 +718,10 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
     }
     storage.save_application_part(id, "analysis.json", &file)?;
     storage.save_application_part(id, "questions.json", &qfile)?;
-    let target_fit = fit_of(storage, &rec, &jd)?;
+    let target_fit = match model_fit.and_then(|raw| super::target_fit::from_model(raw, &targets, filed.as_deref())) {
+        Some(f) => Some(f),
+        None => fit_of(storage, &rec, &jd)?,
+    };
     storage.change(id, |a| {
         a.target_fit = target_fit.clone();
         Ok(())
@@ -1071,6 +1085,24 @@ mod tests {
 
     fn second_target(s: &Storage) -> crate::storage::targets::Target {
         s.save_target(&crate::storage::targets::Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), ..Default::default() }).unwrap()
+    }
+
+    #[test]
+    fn the_engine_is_told_the_targets_and_its_own_fit_is_saved_over_the_keyword_guess() {
+        let (_d, s, id) = setup();
+        let ops = second_target(&s);
+        let first = s.targets().unwrap().remove(0);
+        let r = reply(|v| {
+            v["target_fit"] = json!({"sells_to": "b2b", "role_family": "marketing_ops", "seniority": "senior", "best_target_id": ops.id, "mismatch_notes": ["This posting is B2B."],
+                "per_target": [{"target_id": first.id, "fit": "weak", "why": "Different buyer."}, {"target_id": ops.id, "fit": "strong", "why": "Same buyer and role."}]})
+        });
+        let llm = Scripted::new(vec![Ok(&r)]);
+        let out = run(&s, &id, &llm);
+        let fit = out.target_fit.expect("a fit");
+        assert_eq!(fit.best_target_id.as_deref(), Some(ops.id.as_str()), "the engine's reading wins over the keyword guess");
+        assert_eq!(fit.per_target.iter().find(|r| r.target_id == ops.id).unwrap().why, "Same buyer and role.");
+        let user = llm.seen.lock().unwrap()[0].user.clone();
+        assert!(user.contains(&format!("id: {}", ops.id)) && user.contains("role_family: marketing_ops"), "{user}");
     }
 
     #[test]
