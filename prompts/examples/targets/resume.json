@@ -1,0 +1,49 @@
+{
+  "prompt": "11-read-resume v2",
+  "_how_to_use": "Target-aware cases for prompt 11. Inputs are ../resume/input.json and ../resume/resume.txt (the Kestrel Pay application) plus lead_with. Everything in ../resume/expected.json must still hold for both cases (claims, bank check, must-say, story suggestions, injection). Only lead_with_fit and the listed extras are asserted here; why wording is free.",
+  "base_inputs": "../resume/input.json",
+  "cases": {
+    "kestrel_b2c_lead_with": {
+      "description": "The application's target is tg_b2c. Two points speak to the posting (no ops team, finding the real drop-off); the team of five does not, because the job is one person with no team.",
+      "target_id": "tg_b2c",
+      "lead_with": "[{\"id\": \"lw-1\", \"text\": \"I own lifecycle end to end, from strategy to the weekly readout, with no ops team\"}, {\"id\": \"lw-2\", \"text\": \"I find the real drop-off before I change a single message\"}, {\"id\": \"lw-3\", \"text\": \"I've built and led a lifecycle team of five\"}]",
+      "assert": {
+        "lead_with_fit": [
+          {"id": "lw-1", "fits": true},
+          {"id": "lw-2", "fits": true},
+          {"id": "lw-3", "fits": false}
+        ]
+      },
+      "code_side": {
+        "must_say_added": [
+          {"id": "ms-lw-1", "text": "I own lifecycle end to end, from strategy to the weekly readout, with no ops team"},
+          {"id": "ms-lw-2", "text": "I find the real drop-off before I change a single message"}
+        ],
+        "note": "Added after the resume items (ms-1, ms-2...), in lead-with order, numbered among the fitting points only."
+      }
+    },
+    "kestrel_b2b_lead_with": {
+      "description": "The same application filed under tg_b2b. Running the stack yourself fits a job with no ops team even though the target is another kind of job; a platform migration is nowhere in the posting.",
+      "target_id": "tg_b2b",
+      "lead_with": "[{\"id\": \"lw-1\", \"text\": \"I run the stack myself: the automation platform, the data feeds and the triggers\"}, {\"id\": \"lw-2\", \"text\": \"I fix broken handoffs in the data before anyone writes a new campaign\"}, {\"id\": \"lw-3\", \"text\": \"I've run a migration from one marketing automation platform to another\"}]",
+      "assert": {
+        "lead_with_fit": [
+          {"id": "lw-1", "fits": true},
+          {"id": "lw-3", "fits": false}
+        ]
+      },
+      "not_asserted": {"lw-2": "Fixing a data handoff is close to the activation fix the posting wants but the posting never names data or handoffs. Either answer is defensible."}
+    },
+    "no_posting": {
+      "description": "Same resume and lead_with as kestrel_b2c_lead_with, with jd_analysis empty. lead_with_fit is empty, like must_say.",
+      "target_id": "tg_b2c",
+      "jd_analysis": "",
+      "assert": {"lead_with_fit_count": 0, "must_say_count": 0}
+    }
+  },
+  "never": {
+    "claims_must_not_contain": ["team of five", "migration", "drop-off before I change"],
+    "must_say_resume_quote_is_copied_from": "../resume/resume.txt (never from lead_with; a resume item may overlap a lead-with point in meaning, and code keeps both)",
+    "bank_check_never_mentions_lead_with": true
+  }
+}

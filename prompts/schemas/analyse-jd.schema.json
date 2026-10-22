@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "ensayo/analyse-jd.v1",
+  "$id": "ensayo/analyse-jd.v2",
   "type": "object",
   "additionalProperties": false,
   "required": ["company_stage", "stage_evidence", "startup", "great_eight", "must_believe", "unsaid", "mirror_language", "summary", "questions", "gap_questions", "no_match"],
@@ -45,6 +45,23 @@
       "type": "array",
       "items": {"type": "object", "additionalProperties": false, "required": ["stage", "text", "requirement"],
         "properties": {"stage": {"$ref": "#/$defs/stage"}, "text": {"type": "string", "maxLength": 240}, "requirement": {"type": "string", "maxLength": 200}}}
+    },
+    "target_fit": {
+      "type": "object", "additionalProperties": false,
+      "description": "v2. What kind of job the posting is and how each target fits. Optional so version 1 readings stay valid.",
+      "required": ["sells_to", "role_family", "seniority", "best_target_id", "mismatch_notes", "per_target"],
+      "properties": {
+        "sells_to": {"enum": ["b2b", "b2c", "both"]},
+        "role_family": {"enum": ["lifecycle", "marketing_ops", "growth", "product_marketing", "other"]},
+        "seniority": {"enum": ["early", "mid", "senior", "lead", "director"]},
+        "best_target_id": {"type": ["string", "null"]},
+        "mismatch_notes": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 160}},
+        "per_target": {
+          "type": "array",
+          "items": {"type": "object", "additionalProperties": false, "required": ["target_id", "fit", "why"],
+            "properties": {"target_id": {"type": "string"}, "fit": {"enum": ["strong", "ok", "weak"]}, "why": {"type": "string", "maxLength": 200}}}
+        }
+      }
     },
     "no_match": {
       "type": "array",

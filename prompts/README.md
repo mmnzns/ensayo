@@ -13,18 +13,18 @@ written for any user in any field: nothing personal to Miguel is inside them.
 | --- | --- | --- | --- |
 | `rubric-v1.md` | Criteria definitions shared by every scoring prompt | n/a | Inserted into prompts 02 and 05 as `{{rubric}}` |
 | `01-classify-question.md` | Question type, behavioral situation, founder-style flags | fast | When a question has no stored type |
-| `02-score-answer.md` | Judge every AI criterion with quoted evidence | fast | After every answer |
-| `03-coach-note.md` | Write the one note and the rewritten first sentence | strong | After scoring, once code has picked the top fix |
+| `02-score-answer.md` | Judge every AI criterion with quoted evidence (with the target's pitch and story angles) | fast | After every answer |
+| `03-coach-note.md` | Write the one note and the rewritten first sentence (may open with the angle headline) | strong | After scoring, once code has picked the top fix |
 | `04-generate-follow-up.md` | The interviewer's next question | fast | After scoring, when a follow-up is due |
 | `05-score-follow-up.md` | F1 to F5 | fast | After a follow-up answer |
 | `06-answer-clarification.md` | Interviewer replies to a clarifying question | fast | When prompt 02 flags a clarifying question |
 | `07-extract-claims.md` | Claims log entries and cross-stage conflicts (C1) | fast | After every scored answer inside an application |
 | `08-parse-story.md` | Raw story text to CAAR fields | fast | Story Bank paste and parse |
-| `09-analyse-jd.md` | JD to priorities, beliefs, question set, story map | strong | JD import |
+| `09-analyse-jd.md` | JD to priorities, beliefs, question set, story map, and how each target fits | strong | JD import |
 | `10-question-quality.md` | The candidate's own questions (question_quality) and which must-say items were said out loud | fast | End of a Mock; Drill on demand |
-| `11-read-resume.md` | Submitted resume to stage-zero claims, bank check, must-say list, story suggestions | strong | Once when a resume is attached to an application |
+| `11-read-resume.md` | Submitted resume to stage-zero claims, bank check, must-say list, story suggestions, and which lead-with points fit | strong | Once when a resume is attached to an application |
 | `schemas/*.schema.json` | JSON Schema (2020-12) for each output | n/a | Validate every response |
-| `examples/` | Fictional candidate, one question, three answers, expected outputs | n/a | Tests and the M4 consistency check |
+| `examples/` | Fictional candidate, one question, three answers, expected outputs; `examples/targets/` for v0.1 | n/a | Tests and the M4 consistency check |
 
 ## Conventions (apply to every prompt)
 
@@ -56,6 +56,27 @@ written for any user in any field: nothing personal to Miguel is inside them.
    `rubric_version` and the prompt versions used. Changing a prompt bumps its version; changing a
    criterion bumps the rubric version.
 
+## Versions
+
+Rubric: v1 (unchanged by v0.1 Targets: no criterion changed).
+
+| Prompt | Version | Inputs added in the latest version | Output added |
+| --- | --- | --- | --- |
+| 01 classify question | 1 | | |
+| 02 score answer | 2 | `target_pitch` (replaces `identity_statement`), `story_angles` | none |
+| 03 coach note | 2 | `target_pitch` (replaces `identity_statement`), `story_angles` | none |
+| 04 generate follow-up | 1 | | |
+| 05 score follow-up | 1 | | |
+| 06 answer clarification | 1 | | |
+| 07 extract claims | 1 | | |
+| 08 parse story | 1 | | |
+| 09 analyse JD | 2 | `targets` | `target_fit` (optional in the schema) |
+| 10 question quality | 1 | | |
+| 11 read resume | 2 | `lead_with` | `lead_with_fit` (optional in the schema) |
+
+Each prompt's `## Input notes for code` (02: `## Input formats code must produce`) gives the exact
+format of every new input.
+
 ## What code does between prompts (not a prompt)
 
 - **Top fix selection.** Code picks the failed criterion with the highest priority, in this order:
@@ -84,3 +105,22 @@ written for any user in any field: nothing personal to Miguel is inside them.
   bank stories sent. Otherwise drop the rewrite and show the note only.
 - **Number check.** Code normalises numbers ("twenty-four percent" to 24 %) and compares them with
   the bank. The model's `numbers_said` is the fallback for paraphrases ("about a quarter").
+- **Targets (v0.1).** Code sends the session target's `pitch` as `target_pitch` to 02 and 03 only
+  for tell me about yourself questions, and builds `story_angles` from the selected stories'
+  angles for that target only. Angles never change a number: proof points live on the story, so
+  the number check, `proof`, `c1_consistent` and `f3_consistent` read the story and never the
+  angle. Prompt 09's `target_fit` is stored on the application; prompt 11's fitting lead-with
+  points join the must-say list as `ms-lw-1`, `ms-lw-2`... and are checked in the Mock debrief
+  like resume items. The pay range is never sent to any prompt.
+
+## Changelog
+
+- **2026-10-22, v0.1 Targets.** 02 v2: checks tell me about yourself against the target's pitch
+  (`target_pitch`, replacing `identity_statement`) and takes `story_angles` (`angle_headline`,
+  `angle_emphasis` per story); the angle headline counts as the story's direct answer for
+  `answer_first` and never changes numbers. 03 v2: the rewrite may open with the angle headline;
+  never-invent rule unchanged; `target_pitch` replaces `identity_statement`. 09 v2: takes
+  `targets` and returns `target_fit` (buyer, role family, seniority, best target, mismatch notes,
+  fit per target). 11 v2: takes `lead_with` and returns `lead_with_fit`; resume must-say rules
+  unchanged. Schemas `analyse-jd.v2` and `read-resume.v2` add the new outputs as optional fields;
+  the 02 and 03 schemas are unchanged. Rubric stays v1. Examples: `examples/targets/`.

@@ -1,0 +1,73 @@
+{
+  "prompt": "03-coach-note v2",
+  "_how_to_use": "Target-aware cases for prompt 03. The shared_rules in ../expected/coach.json apply to every case here too. Wording is not compared exactly; reference_output shows one good answer.",
+  "cases": {
+    "typical_b2b_angle": {
+      "description": "The typical answer (../answers/typical.json, answer_first fails) while practicing for tg_b2b. The rewrite opens with the B2B angle headline. The emphasis says 'Sync errors down by half', which is in neither the transcript nor the bank: it must not reach the rewrite.",
+      "target_id": "tg_b2b",
+      "answer": "../answers/typical.json",
+      "mode": "fix",
+      "top_fix": "answer_first",
+      "measurements": "time_to_point=41.9s (target under 10s)",
+      "story_angles": "story_id: st_onboarding\nangle_headline: Our activation problem turned out to be a broken handoff in the data, and fixing it took activation from 31 to 44 percent.\nangle_emphasis: Funnel data; Systems; Working across teams; Sync errors down by half",
+      "target_pitch": "",
+      "expect": {
+        "rewrite_position": "open",
+        "rewrite_contains_any_of": ["handoff"],
+        "rewrite_contains_all_of": ["44"],
+        "rewrite_numbers_only_from": ["31", "44"],
+        "rewrite_never_contains": ["half", "50", "sync"],
+        "note_is_single_fix": true
+      },
+      "reference_output": {
+        "note": "Your result came 42 seconds in, after the backstory. Open with what you found and what it moved.",
+        "rewrite": {"text": "Our activation problem turned out to be a broken handoff in the data, and fixing it took activation from 31 to 44 percent.", "position": "open", "replaces_sentence": null},
+        "offer_follow_up": true
+      }
+    },
+    "typical_b2c_angle": {
+      "description": "The same answer while practicing for tg_b2c. The rewrite opens with the B2C angle headline instead.",
+      "target_id": "tg_b2c",
+      "answer": "../answers/typical.json",
+      "mode": "fix",
+      "top_fix": "answer_first",
+      "measurements": "time_to_point=41.9s (target under 10s)",
+      "story_angles": "story_id: st_onboarding\nangle_headline: I moved seven-day activation from 31 to 44 percent by fixing what happened after signup, not the emails.\nangle_emphasis: Activation; Customer behavior; Experiments",
+      "target_pitch": "",
+      "expect": {
+        "rewrite_position": "open",
+        "rewrite_contains_any_of": ["after signup", "not the emails"],
+        "rewrite_contains_all_of": ["44"],
+        "rewrite_numbers_only_from": ["31", "44"],
+        "rewrite_never_contains": ["handoff"],
+        "note_is_single_fix": true
+      },
+      "reference_output": {
+        "note": "Your result came 42 seconds in, after the backstory. Say it first, then tell the story.",
+        "rewrite": {"text": "I moved seven-day activation from 31 to 44 percent by fixing what happened after signup, not the emails.", "position": "open", "replaces_sentence": null},
+        "offer_follow_up": true
+      }
+    },
+    "tmay_b2b_pitch": {
+      "description": "The tell me about yourself answer from score.json (answers.tmay) while practicing for tg_b2b: type_fit failed because the B2B pitch never landed. The rewrite is the B2B pitch in the candidate's words. Prompt 03 gets the pitch, not the other target's.",
+      "target_id": "tg_b2b",
+      "answer": "score.json#answers.tmay",
+      "mode": "fix",
+      "top_fix": "type_fit",
+      "measurements": "",
+      "story_angles": "",
+      "target_pitch": "I'm a marketing ops lead who turns a messy stack into a pipeline the sales team trusts, then proves it in the numbers.",
+      "expect": {
+        "rewrite_position": "open",
+        "rewrite_contains_any_of": ["pipeline", "sales team trusts", "messy stack"],
+        "rewrite_never_contains": ["lifecycle marketer", "journeys"],
+        "note_is_single_fix": true
+      },
+      "reference_output": {
+        "note": "You opened with your lifecycle pitch. For this kind of job, open with the marketing ops one.",
+        "rewrite": {"text": "I'm a marketing ops lead who turns a messy stack into a pipeline the sales team trusts, then proves it in the numbers.", "position": "open", "replaces_sentence": null},
+        "offer_follow_up": true
+      }
+    }
+  }
+}
