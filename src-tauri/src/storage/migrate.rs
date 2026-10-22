@@ -75,3 +75,10 @@ pub fn story(mut v: Value) -> Result<Value> {
 pub fn unchanged(v: Value) -> Result<Value> {
     Ok(v)
 }
+
+/// An application's record and the files next to it (`analysis.json`, `claims.json`, `resume/resume.json`...).
+/// Format 1 is the first, so nothing changes yet. When one of these files changes shape, bump `CURRENT` and add the
+/// step here: a file older than `CURRENT` is moved forward in memory and rewritten when the user next saves it.
+pub fn application(v: Value) -> Result<Value> {
+    Ok(v)
+}

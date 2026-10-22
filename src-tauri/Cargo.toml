@@ -41,6 +41,8 @@ tokio = { version = "1", features = ["rt", "time", "macros"] }
 keyring = "3.6.3"
 jsonschema = { version = "0.30", default-features = false }
 ensayo-llm-protocol = { path = "llm-protocol" }
+pdf-extract = "0.12.1"
+docx-rs = "0.4.22"
 
 [dev-dependencies]
 tempfile = "3.27.0"

@@ -39,6 +39,10 @@ pub struct FinishArgs {
     pub mode: String,
     pub stage: String,
     pub application_id: Option<String>,
+    /// The stage of the application's process (a stage may repeat). Optional: without it the first stage of this
+    /// type that is not done is used.
+    #[serde(default)]
+    pub stage_id: Option<String>,
     pub question_id: String,
     pub question_text: String,
     /// Empty for a question nobody tagged (a typed one): the engine classifies it first.
@@ -326,7 +330,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         }
     }
     if storage.session(&session_id)?.is_none() {
-        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: args.application_id.clone(), started: stamp(now) })?;
+        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: args.application_id.clone(), stage_id: args.stage_id.clone(), started: stamp(now) })?;
     }
     let n = storage.next_rep_number(&session_id)?;
     let delta = delta_for(storage, &session_id, &args.question_id, args.attempt, &metrics);
@@ -740,6 +744,7 @@ mod tests {
             mode: "drill".into(),
             stage: "recruiter".into(),
             application_id: None,
+            stage_id: None,
             question_id: "gen-001".into(),
             question_text: "Tell me about a time you cut churn.".into(),
             question_type: "behavioral".into(),
