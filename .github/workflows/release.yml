@@ -180,14 +180,20 @@ jobs:
           workspaces: src-tauri
           key: test-build-${{ matrix.os }}
       - run: npm ci
+      # Same two steps as the release job: the helper script runs in its own process, because run in place it
+      # leaves the shell in another folder and the baseline script is then not found.
+      - name: Windows helper
+        if: runner.os == 'Windows'
+        env:
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-llm-helper.ps1
       - name: Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
-        # Only here: on the Mac a Windows LLVM path stops bindgen finding libclang.
+        # Only on Windows: on the Mac a Windows LLVM path stops bindgen finding libclang.
         env:
           LIBCLANG_PATH: C:\Program Files\LLVM\bin
         run: |
-          ./scripts/build-llm-helper.ps1
           . ./scripts/cpu-baseline.ps1
           npm run tauri build -- --bundles nsis
       - name: Mac disk image
