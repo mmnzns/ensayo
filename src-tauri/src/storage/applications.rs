@@ -222,6 +222,8 @@ pub struct DeleteOutcome {
     pub kept_sessions: usize,
     /// (session, rep number) of every rep deleted, so the caller can remove the machine-local audio.
     pub deleted_reps: Vec<(String, u32)>,
+    /// The sessions moved to the trash (`delete_reps`), so the caller can move their audio there too.
+    pub trashed_sessions: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -764,18 +766,20 @@ impl Storage {
     }
 
     /// Deletes an application. Its sessions stay as "practice without an application" unless `delete_reps` is set,
-    /// in which case they go too (the result lists the reps so the caller can remove their audio).
+    /// in which case they go to the trash, where they can be restored for seven days (the result lists them so the
+    /// caller can move their audio there too).
     pub fn delete_application(&self, id: &str, delete_reps: bool) -> Result<DeleteOutcome> {
         let dir = self.application_dir(id)?;
         if !dir.is_dir() {
             return Err(StorageError::NotFound(format!("application {id}")));
         }
         let sessions = self.sessions_of_application(id)?;
-        let mut out = DeleteOutcome { kept_sessions: 0, deleted_reps: vec![] };
+        let mut out = DeleteOutcome { kept_sessions: 0, deleted_reps: vec![], trashed_sessions: vec![] };
         for mut s in sessions {
             if delete_reps {
                 out.deleted_reps.extend(self.rep_numbers(&s.id).into_iter().map(|n| (s.id.clone(), n)));
-                self.delete_session(&s.id)?;
+                self.trash_session(&s.id, Utc::now())?;
+                out.trashed_sessions.push(s.id.clone());
             } else {
                 s.application_id = None;
                 s.stage_id = None;

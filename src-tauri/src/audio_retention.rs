@@ -76,6 +76,48 @@ pub fn remove_all(root: &Path) -> Result<usize, String> {
     Ok(removed)
 }
 
+// ---------- the audio trash ----------
+// A deleted session's recordings move to `<app local>/trash/audio/<session>/` (never into the data folder: audio is
+// machine-local). They come back with the session if they are still on this computer, and go when the session is purged.
+
+/// Moves a session's recordings into the audio trash. False when there were none.
+pub fn move_to_trash(audio_root: &Path, trash_root: &Path, session: &str) -> std::io::Result<bool> {
+    move_dir(&audio_root.join(session), &trash_root.join(session))
+}
+
+/// Moves a session's recordings back out of the audio trash. False when they are no longer on this computer.
+pub fn restore_from_trash(audio_root: &Path, trash_root: &Path, session: &str) -> std::io::Result<bool> {
+    move_dir(&trash_root.join(session), &audio_root.join(session))
+}
+
+/// Removes a session's trashed recordings for good.
+pub fn remove_trashed(trash_root: &Path, session: &str) {
+    let _ = std::fs::remove_dir_all(trash_root.join(session));
+}
+
+/// The sessions that have recordings in the audio trash.
+pub fn trashed_ids(trash_root: &Path) -> Vec<String> {
+    let Ok(rd) = std::fs::read_dir(trash_root) else { return vec![] };
+    let mut v: Vec<String> = rd.flatten().filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    v.sort();
+    v
+}
+
+/// Moves the files of one folder into another (made if needed), then removes the empty folder.
+fn move_dir(from: &Path, to: &Path) -> std::io::Result<bool> {
+    let Ok(files) = std::fs::read_dir(from) else { return Ok(false) };
+    std::fs::create_dir_all(to)?;
+    let mut moved = false;
+    for f in files.flatten() {
+        if f.path().is_file() {
+            std::fs::rename(f.path(), to.join(f.file_name()))?;
+            moved = true;
+        }
+    }
+    let _ = std::fs::remove_dir(from);
+    Ok(moved)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

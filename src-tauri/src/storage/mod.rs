@@ -15,6 +15,7 @@ pub mod reps;
 pub mod model;
 pub mod settings;
 pub mod targets;
+pub mod trash;
 pub mod versioned;
 
 use std::path::PathBuf;

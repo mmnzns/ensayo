@@ -16,6 +16,7 @@ mod platform;
 pub mod rep_commands;
 pub mod storage;
 mod story_commands;
+mod trash_commands;
 mod target_commands;
 mod recorder;
 pub mod scoring;
@@ -91,6 +92,11 @@ pub fn run() {
             rep_commands::set_audio_retention,
             rep_commands::audio_usage_mb,
             rep_commands::delete_all_audio,
+            trash_commands::delete_session,
+            trash_commands::delete_application_practice,
+            trash_commands::trashed_sessions,
+            trash_commands::restore_session,
+            trash_commands::purge_trash,
             ai_commands::ai_settings,
             ai_commands::save_ai_settings,
             ai_commands::save_api_key,

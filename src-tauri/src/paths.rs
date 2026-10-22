@@ -17,6 +17,15 @@ pub fn audio_dir() -> PathBuf {
     app_local().join("audio")
 }
 
+/// Machine-local trash: recordings of deleted sessions wait here (`audio/<session>/`) until the session is purged or restored.
+pub fn trash_dir() -> PathBuf {
+    app_local().join("trash")
+}
+
+pub fn audio_trash_dir() -> PathBuf {
+    trash_dir().join("audio")
+}
+
 /// Where the data folder lives unless the user chose another one (Settings › Privacy › Data folder).
 pub fn default_data_dir() -> PathBuf {
     app_local().join("data")
