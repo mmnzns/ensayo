@@ -1,10 +1,35 @@
 import { useState } from "react";
 import { useStore } from "../../data/store";
 import Link from "../../ui/Link";
+import { checkText, phaseText, useUpdate } from "../../data/updates";
 import { setDeveloperTools, useDeveloperTools } from "./devtools";
 import { CheckIcon, SettingsLayout, ToggleRow, useLater } from "./parts";
 import { isApp } from "../../data/real";
 import { useAppVersion } from "./version";
+
+/** Updates in the app: Ensayo checks by itself; this row checks now and installs what it finds. */
+function UpdatesRow() {
+  const u = useUpdate();
+  const busy = u.phase.state === "installing" || u.phase.state === "restarting";
+  const line = phaseText(u.phase) ?? checkText(u.check) ?? (u.pending ? `Ensayo ${u.pending.version} is ready to install` : "Ensayo checks for updates by itself.");
+  const bad = u.phase.state === "error" || u.check.state === "offline";
+  return (
+    <div className="e-rowline">
+      <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+        Updates
+        <span className="e-small" role="status" style={{ color: bad ? "var(--e-danger)" : u.check.state === "up-to-date" ? "var(--e-primary-dark)" : "var(--e-muted)" }}>{line}</span>
+      </span>
+      {u.pending && u.laterFor === u.pending.version && !busy && (
+        <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={u.showBanner}>See what's new</button>
+      )}
+      {u.pending ? (
+        <button type="button" className="e-btn e-btn-primary e-btn-sm" disabled={busy} onClick={() => void u.install()}>{u.phase.state === "error" ? "Try again" : "Update now"}</button>
+      ) : (
+        <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={u.check.state === "checking"} onClick={() => void u.checkNow()}>Check for updates</button>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsAbout() {
   const { credits } = useStore().screens.settings;
@@ -32,15 +57,7 @@ export default function SettingsAbout() {
             <span style={{ flex: "1" }}>Version</span>
             <span className="e-meta">{version}</span>
           </div>
-          {app ? (
-            <div className="e-rowline">
-              <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-                Updates
-                <span className="e-small">Ensayo doesn't check for updates by itself. New versions are posted on the releases page.</span>
-              </span>
-              <Link to="https://github.com/mmnzns/ensayo/releases" className="e-btn e-btn-line e-btn-sm">See releases</Link>
-            </div>
-          ) : (
+          {app ? <UpdatesRow /> : (
             <div className="e-rowline">
               <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
                 Updates

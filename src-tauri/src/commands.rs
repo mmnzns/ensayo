@@ -19,14 +19,19 @@ pub struct RecorderState {
 
 impl RecorderState {
     fn begin(&self) -> Result<(), String> {
-        if self.active.swap(true, Ordering::AcqRel) {
+        if self.active.swap(true, Ordering::SeqCst) {
             return Err("Already recording".into());
         }
         Ok(())
     }
 
     fn end(&self) {
-        self.active.store(false, Ordering::Release);
+        self.active.store(false, Ordering::SeqCst);
+    }
+
+    /// True from the start of a recording until it is stopped or fails to start (an update never installs then).
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
     }
 }
 
@@ -121,8 +126,14 @@ pub fn open_mic_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn start_recording(state: State<'_, RecorderState>, device: Option<String>) -> Result<String, String> {
+pub async fn start_recording(app: AppHandle, state: State<'_, RecorderState>, device: Option<String>) -> Result<String, String> {
     state.begin()?;
+    // The update flag is set before the installer looks at `is_active` and this looks at the flag only after
+    // `begin`, so a recording and an install can't both go ahead (the installer quits Ensayo mid-answer).
+    if crate::update_commands::installing(&app) {
+        state.end();
+        return Err("Ensayo is installing an update. Try again in a moment.".into());
+    }
     let started = (|| {
         std::fs::create_dir_all(paths::audio_dir()).map_err(|e| e.to_string())?;
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);

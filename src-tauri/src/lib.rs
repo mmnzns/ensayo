@@ -19,11 +19,19 @@ mod story_commands;
 mod recorder;
 pub mod scoring;
 mod speech;
+mod update_commands;
+pub mod update_notice;
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(commands::RecorderState::default())
+        .setup(|app| {
+            update_commands::setup(app.handle());
+            update_commands::check_at_launch(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
             commands::model_status,
@@ -118,6 +126,9 @@ pub fn run() {
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,
             local_ai_commands::stop_local_ai,
+            update_commands::updates_check,
+            update_commands::updates_pending,
+            update_commands::updates_install,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Ensayo")
