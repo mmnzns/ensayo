@@ -33,6 +33,12 @@ export interface AiScreenState {
   settings: AiSettings;
 }
 
+/** Fired on `window` after the AI settings, a key or the local model changed, so the sidebar's engine line can read them again. */
+export const AI_CHANGED = "ensayo:ai";
+export const announceAiChange = () => {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(AI_CHANGED));
+};
+
 export const OTHER_MODEL = "Other model…";
 const RECOMMENDED = " (recommended)";
 const AUTOMATIC = "Automatic · ";

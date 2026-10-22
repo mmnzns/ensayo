@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { allVerified, deleteStory as deleteStoryIn, mergeMethods, saveMethod as saveMethodIn, saveStory as saveStoryIn, setProofVerified as setProofIn, type DataState } from "./actions";
+import { TIMING_ONLY, engineStatusOf } from "./engine";
 import { mockStore } from "./mock";
 import { StoreProvider, type Store } from "./store";
-import type { Method, Profile, Story } from "./types";
+import type { EngineStatus, Method, Profile, Story } from "./types";
+import { AI_CHANGED, type AiView } from "../screens/settings/aiSettings";
 import { habitStats, sessionList, streakOf, type RepSummary } from "../practice/habits";
 
 /** True inside the desktop app. In a plain browser (`npm run dev`) the data is the mock, held in memory. */
@@ -107,6 +109,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
   const [reps, setReps] = useState<RepSummary[]>([]);
+  const [engine, setEngine] = useState<EngineStatus>(TIMING_ONLY);
+
+  // The sidebar's engine line: what the saved AI settings mean right now (a key saved, the local model on this computer).
+  const readEngine = useCallback(async () => {
+    if (!app) return;
+    try {
+      const [view, ready] = await Promise.all([invoke<AiView>("ai_settings"), invoke<boolean>("ai_ready")]);
+      setEngine(engineStatusOf(view.settings, ready, view.providers, typeof navigator === "undefined" || navigator.onLine !== false));
+    } catch {
+      setEngine(TIMING_ONLY);
+    }
+  }, [app]);
+
+  // Settings and setup announce every change to the AI settings, a key or the local model; the connection coming and going matters too.
+  useEffect(() => {
+    if (!app) return;
+    const refresh = () => void readEngine();
+    for (const name of [AI_CHANGED, "online", "offline"]) window.addEventListener(name, refresh);
+    return () => {
+      for (const name of [AI_CHANGED, "online", "offline"]) window.removeEventListener(name, refresh);
+    };
+  }, [app, readEngine]);
 
   const readReps = useCallback(async () => {
     if (!app) return;
@@ -130,10 +154,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setState({ profile: all.profile, stories: all.stories, methods: mergeMethods(all.methods, mockStore.methods) });
     setProblems(all.problems);
     await readReps();
+    await readEngine();
     setPhase("ready");
     // Housekeeping: remove answer audio older than the retention setting (reps kept for the eval set stay).
     void invoke("sweep_audio").catch(() => {});
-  }, [readReps]);
+  }, [readReps, readEngine]);
 
   const load = useCallback(async () => {
     if (!app) return;
@@ -212,12 +237,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const companyOf = (id: string) => mockStore.applications.find((a) => a.id === id)?.company;
     return {
       ...base,
+      engine,
       applications: [],
       sessions: sessionList(reps, now, companyOf),
       streak: streakOf(reps, now),
       homeHabitStats: habitStats(mockStore.habits, reps),
     };
-  }, [state, reps, app]);
+  }, [state, reps, app, engine]);
   const info = useMemo(() => ({ problems }), [problems]);
 
   if (phase === "loading") return <Centered><p className="e-meta" style={{ margin: 0 }}>Opening your data…</p></Centered>;
