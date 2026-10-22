@@ -2,7 +2,7 @@
 // and how the "this posting fits another target" banner and the per-target reading are worded. Pure; the screens
 // call these and the data layer holds the truth.
 
-import { applicationTarget, fitBanner, pickableTargets, roleFamilyOf } from "../../data/targets";
+import { applicationTarget, fitBanner, pickableTargets, roleFamilyOf, targetName } from "../../data/targets";
 import type { Application, FitLevel, RoleFamily, SellsTo, StageId, Target, TargetFit } from "../../data/types";
 
 const B2B_WORDS = /\b(b2b|saas|enterprise|business customers|sales teams?|finance teams?|mid-size companies|other businesses)\b/i;
@@ -108,3 +108,48 @@ export const PICKER_HINT = "Suggested from the role you typed. Once Ensayo reads
 /** "Started from B2C lifecycle's usual stages. Use the arrows to reorder. Add dates as you get them." */
 export const stagesLine = (target: Pick<Target, "name"> | undefined, touched: boolean): string =>
   target && !touched ? `Started from ${target.name}'s usual stages. Use the arrows to reorder. Add dates as you get them.` : "In the order you'll meet them. Use the arrows to reorder. Add dates as you get them.";
+
+// ---------- a new target from a posting ----------
+
+/** The target that reads closest to the posting: the best fit, else the best ranked, else the one it is filed under. */
+export function closestTarget(app: Pick<Application, "targetId" | "targetFit">, targets: Target[]): Target | undefined {
+  const fit = app.targetFit;
+  const live = targets.filter((t) => !t.archived);
+  const best = fit?.bestTargetId ? live.find((t) => t.id === fit.bestTargetId) : undefined;
+  if (best) return best;
+  if (fit) {
+    const rank = (id: string) => ({ strong: 3, ok: 2, weak: 1 })[fit.perTarget.find((p) => p.targetId === id)?.fit ?? "weak"];
+    const ranked = [...live].sort((a, b) => rank(b.id) - rank(a.id));
+    if (ranked[0]) return ranked[0];
+  }
+  return applicationTarget(app, targets);
+}
+
+/** What the browser preview shows for "Make a new target from this posting" (the app asks the backend). Nothing is written
+ *  for the person: the pitch is the closest target's, copied, and the screen says it needs rewriting. */
+export function draftFromPosting(app: Pick<Application, "role" | "startup" | "targetId" | "targetFit">, targets: Target[], blank: Target): { target: Target; pitchCopied: boolean } {
+  const closest = closestTarget(app, targets);
+  const fit = app.targetFit;
+  const sellsTo = fit?.sellsTo ?? closest?.sellsTo ?? "both";
+  const roleFamily = fit?.roleFamily ?? roleFamilyOf(app.role);
+  const role = app.role.trim() || closest?.role || "";
+  const target: Target = {
+    ...blank,
+    role,
+    roleFamily,
+    seniority: fit?.seniority ?? closest?.seniority ?? blank.seniority,
+    sellsTo,
+    industry: closest?.industry ?? "",
+    companyStage: app.startup ? "startup" : (closest?.companyStage ?? "any"),
+    defaultProcess: stagesFor(closest),
+    pitch: closest?.pitch ?? "",
+    name: targetName(role, sellsTo, roleFamily),
+  };
+  return { target, pitchCopied: !!closest?.pitch.trim() };
+}
+
+/** True while the pitch is still the copied one (or empty): the screen asks the person to write their own before saving. */
+export const pitchNeedsWork = (pitch: string, copied: string): boolean => pitch.trim() === "" || pitch.trim() === copied.trim();
+
+export const SENIORITY_LABEL: Record<Target["seniority"], string> = { early: "Early career", mid: "Mid-level", senior: "Senior", lead: "Lead or manager", director: "Director" };
+export const SELLS_TO_LABEL: Record<SellsTo, string> = { b2b: "Businesses (B2B)", b2c: "Consumers (B2C)", both: "Both" };

@@ -135,3 +135,30 @@ describe("Keep the target", () => {
     expect(isKept("a1", "t", { getItem: () => "not json" })).toBe(false);
   });
 });
+
+import { blankTarget } from "../data/targetState";
+import { closestTarget, draftFromPosting, pitchNeedsWork } from "../screens/applications/targetPick";
+
+describe("a new target from a posting", () => {
+  const filed = app({ role: "Marketing Operations Manager", targetFit: b2bFit, startup: false });
+  it("finds the closest target", () => {
+    expect(closestTarget(filed, targets)?.id).toBe("tg_b2b");
+    expect(closestTarget(app({ targetFit: { ...b2bFit, bestTargetId: null, perTarget: [{ targetId: "tg_b2c", fit: "ok", why: "" }, { targetId: "tg_b2b", fit: "weak", why: "" }] } }), targets)?.id).toBe("tg_b2c");
+    expect(closestTarget(app({ targetFit: null }), targets)?.id).toBe("tg_b2c");
+  });
+  it("fills the target from the reading and copies the closest target's pitch, never writing one", () => {
+    const { target, pitchCopied } = draftFromPosting(filed, targets, blankTarget(targets));
+    expect(target).toMatchObject({ id: "", name: "B2B marketing ops", role: "Marketing Operations Manager", roleFamily: "marketing_ops", sellsTo: "b2b", seniority: "senior", leadWith: [], pinnedStoryIds: [], archived: false });
+    expect(target.pitch).toBe(b2b.pitch);
+    expect(target.defaultProcess).toEqual(b2b.defaultProcess);
+    expect(pitchCopied).toBe(true);
+  });
+  it("marks a startup posting as a startup", () => {
+    expect(draftFromPosting({ ...filed, startup: true }, targets, blankTarget(targets)).target.companyStage).toBe("startup");
+  });
+  it("asks for a pitch when it is still the copied one or empty", () => {
+    expect(pitchNeedsWork("  I fix pipelines. ", "I fix pipelines.")).toBe(true);
+    expect(pitchNeedsWork("", "x")).toBe(true);
+    expect(pitchNeedsWork("My own words.", "I fix pipelines.")).toBe(false);
+  });
+});
