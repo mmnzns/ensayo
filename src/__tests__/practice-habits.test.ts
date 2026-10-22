@@ -147,3 +147,71 @@ describe("the sessions list", () => {
     expect(rows[1]).toMatchObject({ title: "Recruiter · general questions", headline: "1 answer", group: "Last week" });
   });
 });
+
+import { drillView, lastTenResults, nextHabitChoices } from "../practice/habits";
+
+describe("what a finished drill says", () => {
+  const s = (over: Partial<RepSummary> & { text?: string } = {}) => ({ ...rep({ session_id: "now", recorded_at: "2026-10-21T20:00:00Z", ...over }), text: over.text ?? "I said it." });
+
+  it("reports the focus habit in seconds, first try against best try, per question", () => {
+    const reps = [
+      s({ question_id: "a", checks: [chk("answer_first", false), chk("time_to_point", false, 41), chk("clean_stop", false, 20)], fix: "answer_first" }),
+      s({ question_id: "a", attempt: 2, checks: [chk("answer_first", true), chk("time_to_point", true, 6), chk("clean_stop", true, 3)] }),
+      s({ question_id: "b", checks: [chk("answer_first", true), chk("time_to_point", true, 9), chk("clean_stop", true, 2)] }),
+    ];
+    const v = drillView(habits, reps, reps, ["to_the_point"])!;
+    expect(v.focusHabitId).toBe("to_the_point");
+    expect(v.kind).toBe("seconds");
+    expect(v.questions).toEqual([{ id: "a", firstTry: 41, bestTry: 6 }, { id: "b", firstTry: 9, bestTry: 9 }]);
+    expect(v.targetSeconds).toBe(10);
+    expect(v.fixes).toEqual({ stuck: 1, of: 1 });
+    expect(v.totals).toMatchObject({ answers: 3, followUps: 0 });
+  });
+
+  it("falls back to the habit that went worst when no focus habit came up, and reports flags for yes-or-no habits", () => {
+    const reps = [s({ question_id: "a", checks: [chk("ownership", false), chk("proof", true)] }), s({ question_id: "a", attempt: 2, checks: [chk("ownership", true), chk("proof", true)] })];
+    const v = drillView(habits, reps, reps, [])!;
+    expect(v.focusHabitId).toBe("ownership");
+    expect(v.kind).toBe("flags");
+    expect(v.questions).toEqual([{ id: "a", firstTry: 0, bestTry: 1 }]);
+  });
+
+  it("picks the best answer: the attempt with the fewest misses, the latest on a tie, and says what went well", () => {
+    const reps = [
+      s({ question_id: "a", n: 1, checks: [chk("proof", false), chk("ownership", false)], text: "first" }),
+      s({ question_id: "a", n: 2, attempt: 2, recorded_at: "2026-10-21T20:05:00Z", checks: [chk("proof", true), chk("ownership", true), chk("time_to_point", true, 5), chk("clean_stop", true, 2)], text: "second" }),
+    ];
+    const v = drillView(habits, reps, reps, [])!;
+    expect(v.best).toMatchObject({ attempt: 2, pointAtSeconds: 5, spoken: "second", n: 2, note: "stopped right after the result and said your number" });
+  });
+
+  it("names one habit to carry (not the focus) and how long you kept going after the result", () => {
+    const reps = [s({ question_id: "a", checks: [chk("time_to_point", false, 30), chk("answer_first", false), chk("clean_stop", false, 14), chk("fillers", false)], tail_ms: 14_000 }), s({ question_id: "b", checks: [chk("time_to_point", false, 25), chk("answer_first", false), chk("clean_stop", false, 20), chk("fillers", true)], tail_ms: 20_000 })];
+    const v = drillView(habits, reps, reps, ["to_the_point"])!;
+    expect(v.nextTime.habitId).toBe("clean_stop");
+    expect(v.nextTime.keptGoingSeconds).toBe(17);
+    expect(v.nextTime.advice).toBe("Try ending on the number.");
+  });
+
+  it("sees a habit graduate during this session and not one that had already", () => {
+    const old = Array.from({ length: 10 }, (_, i) => rep({ session_id: "old", recorded_at: `2026-10-1${i}T10:00:00Z`, checks: [chk("ownership", i >= 2 && i <= 7)] })); // 6 of 10: not yet; two more passes make 8 of the last 10
+    const now = [s({ question_id: "z1", checks: [chk("ownership", true)] }), s({ question_id: "z2", checks: [chk("ownership", true)] })];
+    const v = drillView(habits, now, [...old, ...now], [])!;
+    expect(v.graduatedHabit).toBe("ownership");
+    const done = Array.from({ length: 10 }, (_, i) => rep({ session_id: "old", recorded_at: `2026-10-1${i}T10:00:00Z`, checks: [chk("ownership", true)] }));
+    expect(drillView(habits, now, [...done, ...now], [])!.graduatedHabit).toBeNull();
+  });
+
+  it("an empty session has nothing to show", () => {
+    expect(drillView(habits, [], [], [])).toBeNull();
+  });
+
+  it("offers the next habits, not the one that stuck, weakest first", () => {
+    const reps = Array.from({ length: 10 }, (_, i) => rep({ checks: [chk("ownership", true), chk("proof", i < 3), chk("fillers", i < 8)] }));
+    const { choices, suggested } = nextHabitChoices(habits, reps, "ownership");
+    expect(choices[0]).toBe("numbers");
+    expect(choices).not.toContain("ownership");
+    expect(suggested).toBe("numbers");
+    expect(lastTenResults(H("numbers"), reps)).toEqual([true, true, true, false, false, false, false, false, false, false]);
+  });
+});

@@ -208,3 +208,147 @@ export function sessionList(reps: RepSummary[], now: Date, companyOf: (applicati
     .sort((a, b) => (a.started < b.started ? 1 : -1))
     .map((x) => x.row);
 }
+
+// ---------- one finished session ----------
+
+import type { FullRep } from "./types";
+
+/** A rep loaded with its words (`load_session`) as the compact summary the habit functions read, plus what was said. */
+export function summaryOfFull(r: FullRep, session: { mode: string; stage: string; application_id: string | null; started: string }): RepSummary & { text: string } {
+  return {
+    session_id: r.session_id,
+    mode: session.mode,
+    stage: session.stage,
+    application_id: session.application_id,
+    started: session.started,
+    n: r.n,
+    question_id: r.question_id,
+    question_text: r.question_text,
+    question_type: r.question_type,
+    attempt: r.attempt,
+    follow_up: r.follow_up !== null,
+    recorded_at: r.recorded_at,
+    rubric_version: r.metrics.rubric_version,
+    fix: r.fix,
+    note: r.note,
+    note_was_wrong: r.feedback?.note_was_wrong ?? false,
+    checks: r.metrics.checks,
+    speaking_ms: r.metrics.speaking_ms,
+    fillers: r.metrics.fillers.count,
+    tail_ms: r.metrics.proof.tail_ms,
+    ai_cost_usd: r.ai?.cost_usd ?? null,
+    text: r.metrics.sentences.map((s) => s.text).join(" "),
+  };
+}
+
+export type FocusKind = "seconds" | "flags";
+
+export interface DrillQuestion {
+  id: string;
+  /** In the focus habit's unit (seconds) for "seconds" habits; 1 when it passed and 0 when it did not for "flags". */
+  firstTry: number;
+  bestTry: number;
+}
+
+export interface DrillView {
+  applicationId: string | null;
+  stage: string;
+  focusHabitId: HabitId;
+  kind: FocusKind;
+  /** Target in seconds for "seconds" habits. */
+  targetSeconds: number;
+  chartMaxSeconds: number;
+  questions: DrillQuestion[];
+  fixes: { stuck: number; of: number };
+  /** null when the session had no answer to show. */
+  best: { question: string; attempt: number; pointAtSeconds: number; note: string; spoken: string; sessionId: string; n: number } | null;
+  nextTime: { habitId: HabitId; keptGoingSeconds: number; advice: string };
+  totals: { answers: number; followUps: number; costCents: number };
+  /** A habit that reached the graduation line during this session, if any. */
+  graduatedHabit: HabitId | null;
+}
+
+const ADVICE: Record<HabitId, string> = {
+  to_the_point: "Open with the result, then tell the story.",
+  clean_stop: "Try ending on the number.",
+  numbers: "Say the number out loud, not just the result.",
+  ownership: 'Say what you decided, with "I".',
+  why_first: "Say why before you say what you built.",
+  method_first: "Open with how you handle this kind of problem.",
+  conviction: "Say it without the hedge.",
+  fillers: "Pause instead of filling the gap.",
+};
+
+const SECONDS_HABITS: Partial<Record<HabitId, { check: string; target: number }>> = { to_the_point: { check: "time_to_point", target: 10 }, clean_stop: { check: "clean_stop", target: 15 } };
+
+const secondsOf = (r: RepSummary, habitId: HabitId): number | null => {
+  const spec = SECONDS_HABITS[habitId];
+  if (!spec) return null;
+  return r.checks.find((c) => c.id === spec.check)?.seconds ?? null;
+};
+
+/** What a finished Drill says (Build Plan, "Session results"): the delta on the focus habit, what stuck, the best answer,
+ *  and the one habit to carry. `session` is this session's answers; `all` is every answer ever, for graduation. */
+export function drillView(habits: Habit[], session: (RepSummary & { text?: string })[], all: RepSummary[], focusHabits: HabitId[]): DrillView | null {
+  const scored = session.filter((r) => r.checks.length > 0);
+  if (scored.length === 0) return null;
+  const firsts = scored.filter((r) => r.attempt === 1 && !r.follow_up);
+  const failures = (h: Habit) => firsts.filter((r) => habitResult(h, r) === false).length;
+  const inSession = (h: Habit) => firsts.some((r) => habitResult(h, r) !== null);
+  const focus = habits.find((h) => focusHabits.includes(h.id) && inSession(h)) ?? [...habits].filter(inSession).sort((a, b) => failures(b) - failures(a))[0] ?? habits[0];
+  const spec = SECONDS_HABITS[focus.id];
+  const questionIds = [...new Set(firsts.map((r) => r.question_id))];
+  const questions: DrillQuestion[] = questionIds.map((id) => {
+    const tries = scored.filter((r) => r.question_id === id && !r.follow_up).sort((a, b) => a.attempt - b.attempt);
+    if (spec) {
+      const secs = tries.map((r) => secondsOf(r, focus.id)).filter((s): s is number => s !== null);
+      return { id, firstTry: secs[0] ?? 0, bestTry: secs.length ? Math.min(...secs) : 0 };
+    }
+    const results = tries.map((r) => (habitResult(focus, r) ? 1 : 0));
+    return { id, firstTry: results[0] ?? 0, bestTry: results.length ? Math.max(...results) : 0 };
+  });
+
+  const done = scored.filter((r) => !r.follow_up);
+  const passCount = (r: RepSummary) => r.checks.filter((c) => c.passed === false).length;
+  const best = [...done].sort((a, b) => passCount(a) - passCount(b) || (a.recorded_at < b.recorded_at ? 1 : -1))[0];
+  const pointCheck = best?.checks.find((c) => c.id === "time_to_point");
+  const notes = [best?.checks.find((c) => c.id === "clean_stop")?.passed ? "stopped right after the result" : "", best?.checks.find((c) => c.id === "proof")?.passed ? "said your number" : ""].filter(Boolean);
+
+  const carry = habits.filter((h) => h.id !== focus.id && inSession(h)).sort((a, b) => failures(b) - failures(a))[0] ?? focus;
+  const tails = firsts.map((r) => r.tail_ms).filter((t): t is number => t !== null);
+  const sessionId = scored[0].session_id;
+  const before = all.filter((r) => r.session_id !== sessionId && r.recorded_at < scored[0].recorded_at);
+  const graduatedHabit = habits.find((h) => graduated(h, all) && !graduated(h, before))?.id ?? null;
+
+  return {
+    applicationId: scored[0].application_id,
+    stage: scored[0].stage,
+    focusHabitId: focus.id,
+    kind: spec ? "seconds" : "flags",
+    targetSeconds: spec?.target ?? 0,
+    chartMaxSeconds: Math.max(60, ...questions.flatMap((q) => [q.firstTry, q.bestTry])),
+    questions,
+    fixes: fixesStuck(scored),
+    best: best ? { question: best.question_text, attempt: best.attempt, pointAtSeconds: pointCheck?.seconds ?? 0, note: notes.join(" and ") || "that is the one to keep", spoken: (best as { text?: string }).text ?? "", sessionId: best.session_id, n: best.n } : null,
+    nextTime: { habitId: carry.id, keptGoingSeconds: tails.length ? Math.round(tails.reduce((a, b) => a + b, 0) / tails.length / 1000) : 0, advice: ADVICE[carry.id] },
+    totals: { answers: done.length, followUps: scored.filter((r) => r.follow_up).length, costCents: Math.round(scored.reduce((s, r) => s + (r.ai_cost_usd ?? 0), 0) * 100) },
+    graduatedHabit,
+  };
+}
+
+/** The last ten first-attempt results for a habit, oldest first, for the graduation dots. */
+export function lastTenResults(habit: Habit, reps: RepSummary[]): boolean[] {
+  return applicable(habit, reps).slice(-GRADUATION_OF).map((x) => x.pass);
+}
+
+/** The habits still worth working on after one graduates: those not graduated, lowest pass rate first. */
+export function nextHabitChoices(habits: Habit[], reps: RepSummary[], justGraduated: HabitId): { choices: HabitId[]; suggested: HabitId } {
+  const open = habits.filter((h) => h.id !== justGraduated && !graduated(h, reps));
+  const ranked = [...open].sort((a, b) => {
+    const [ap, at] = firstTryStat(a, reps);
+    const [bp, bt] = firstTryStat(b, reps);
+    return (at ? ap / at : 1) - (bt ? bp / bt : 1);
+  });
+  const choices = ranked.slice(0, 4).map((h) => h.id);
+  return { choices, suggested: choices[0] ?? justGraduated };
+}
