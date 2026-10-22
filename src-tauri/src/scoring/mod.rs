@@ -6,6 +6,7 @@ pub mod followup;
 #[cfg(test)]
 pub mod fixtures;
 pub mod inputs;
+pub mod parse_story;
 pub mod pipeline;
 pub mod prompts;
 pub mod run;

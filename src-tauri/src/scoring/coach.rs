@@ -30,7 +30,7 @@ fn no_em_dash(s: &str) -> String {
 
 /// "seven-day", "three-step" and "24-hour" are compound adjectives that name a metric, not a claim; "twenty-four" is a
 /// number. Compounds are left out of the check so a metric's name cannot make a good rewrite look invented.
-fn without_compounds(text: &str) -> String {
+pub(super) fn without_compounds(text: &str) -> String {
     text.split_whitespace()
         .filter(|tok| match tok.split_once('-') {
             Some((_, after)) => numbers::extract(after.trim_matches(|c: char| !c.is_alphanumeric())).first().is_some(),
