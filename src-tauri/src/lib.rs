@@ -59,6 +59,7 @@ pub fn run() {
             rep_commands::read_rep_audio,
             rep_commands::load_session,
             rep_commands::list_sessions,
+            rep_commands::rep_summaries,
             rep_commands::sweep_audio,
             rep_commands::audio_retention,
             rep_commands::set_audio_retention,

@@ -652,6 +652,72 @@ pub async fn load_session(session_id: String) -> Cmd<Option<SessionDetail>> {
     .await
 }
 
+/// A rep in brief (no words, no sentences) for the habit and history screens: what was asked, how it went, which
+/// checks passed. Every scored rep in every session, oldest first.
+#[derive(Debug, Serialize)]
+pub struct RepSummary {
+    pub session_id: String,
+    pub mode: String,
+    pub stage: String,
+    pub application_id: Option<String>,
+    pub started: String,
+    pub n: u32,
+    pub question_id: String,
+    pub question_text: String,
+    pub question_type: String,
+    pub attempt: u32,
+    pub follow_up: bool,
+    pub recorded_at: String,
+    pub rubric_version: u32,
+    pub fix: Option<String>,
+    pub note: Option<String>,
+    pub note_was_wrong: bool,
+    pub checks: Vec<crate::metrics::Check>,
+    pub speaking_ms: u64,
+    pub fillers: usize,
+    pub tail_ms: Option<u64>,
+    pub ai_cost_usd: Option<f64>,
+}
+
+pub fn summaries_with(storage: &Storage) -> StorageResult<Vec<RepSummary>> {
+    let mut out = Vec::new();
+    let mut sessions = storage.sessions()?.items;
+    sessions.sort_by(|a, b| a.started.cmp(&b.started));
+    for s in sessions {
+        for r in storage.reps(&s.id)?.items {
+            out.push(RepSummary {
+                session_id: s.id.clone(),
+                mode: s.mode.clone(),
+                stage: s.stage.clone(),
+                application_id: s.application_id.clone(),
+                started: s.started.clone(),
+                n: r.rep.n,
+                question_id: r.rep.question_id.clone(),
+                question_text: r.rep.question_text.clone(),
+                question_type: r.rep.question_type.clone(),
+                attempt: r.rep.attempt,
+                follow_up: r.rep.follow_up.is_some(),
+                recorded_at: r.rep.recorded_at.clone(),
+                rubric_version: r.metrics.rubric_version,
+                fix: r.rep.fix.clone(),
+                note: r.rep.note.clone(),
+                note_was_wrong: r.rep.feedback.as_ref().is_some_and(|f| f.note_was_wrong),
+                checks: r.metrics.checks.clone(),
+                speaking_ms: r.metrics.speaking_ms,
+                fillers: r.metrics.fillers.count,
+                tail_ms: r.metrics.proof.tail_ms,
+                ai_cost_usd: r.rep.ai.as_ref().map(|a| a.cost_usd),
+            });
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn rep_summaries() -> Cmd<Vec<RepSummary>> {
+    blocking(|| open().and_then(|s| summaries_with(&s)).map_err(plain)).await
+}
+
 #[tauri::command]
 pub async fn list_sessions() -> Cmd<Vec<Session>> {
     blocking(|| Ok(open().and_then(|s| s.sessions()).map_err(plain)?.items)).await
@@ -863,6 +929,23 @@ mod tests {
         let two = finish_with(&storage, &audio, &args(&tmp, 2, Some(&one.session_id)), words(40), true, now(), None).unwrap();
         assert_eq!(one.session_id, two.session_id);
         assert_eq!(storage.reps(&one.session_id).unwrap().items.len(), 2);
+    }
+
+    #[test]
+    fn summaries_list_every_scored_rep_oldest_session_first_without_the_words() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let audio = tmp.join("audio");
+        let one = finish_with(&storage, &audio, &args(&tmp, 1, None), words(40), true, now(), None).unwrap();
+        let later = now() + chrono::Duration::days(1);
+        finish_with(&storage, &audio, &args(&tmp, 1, None), words(40), true, later, None).unwrap();
+        finish_with(&storage, &audio, &args(&tmp, 2, Some(&one.session_id)), words(4), true, now(), None).unwrap();
+        let s = summaries_with(&storage).unwrap();
+        assert_eq!(s.len(), 3);
+        assert_eq!(s[0].session_id, one.session_id);
+        assert_eq!(s.iter().filter(|r| r.session_id == one.session_id).map(|r| r.attempt).collect::<Vec<_>>(), vec![1, 2]);
+        assert!(s[0].checks.iter().any(|c| c.id == "clean_stop") && s[0].speaking_ms > 0);
+        assert!(!s[0].follow_up);
     }
 
     // ---------- with a model ----------
