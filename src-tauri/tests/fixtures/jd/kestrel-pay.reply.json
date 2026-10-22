@@ -1,0 +1,37 @@
+{
+  "company_stage": "early_startup",
+  "stage_evidence": "A 40-person, founder-led payments startup, per the posting.",
+  "startup": true,
+  "great_eight": [
+    {"priority": "retain_customers", "why": "Activation and early retention are reported to the founders every week."},
+    {"priority": "productivity", "why": "No ops team behind you: one person builds and runs lifecycle."},
+    {"priority": "attract_customers", "why": "From first signup to the tenth payment."}
+  ],
+  "must_believe": [
+    {"belief": "You can own lifecycle end to end, with no ops team.", "best_story_id": null},
+    {"belief": "You move activation, not just send messages.", "best_story_id": "st_onboarding"},
+    {"belief": "You'll run it week to week until the number moves.", "best_story_id": "st_reactivation"}
+  ],
+  "unsaid": [],
+  "mirror_language": ["first signup to the tenth payment", "no ops team behind you", "report on activation and early retention", "run the experiments"],
+  "summary": "A founder-led payments startup needs one person to build and run lifecycle from signup to the tenth payment, and to report activation and early retention to the founders weekly.",
+  "questions": [
+    {"stage": "recruiter", "text": "Give me the short version of your background, and what you're looking for next.", "type": "tell_me_about_yourself", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "best_story_id": null, "why": "Opens the process."},
+    {"stage": "recruiter", "text": "What's your notice period, and what range are you hoping for?", "type": "factual", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "best_story_id": null, "why": "Logistics the recruiter has to settle."},
+    {"stage": "recruiter", "text": "What caught your eye about Kestrel Pay?", "type": "motivation", "behavioral_situation": "motivation", "commitment_check": false, "builder_operator_check": false, "best_story_id": null, "why": "Why this company."},
+    {"stage": "hiring_manager", "text": "Tell me about a time you found out why new customers weren't activating. What did you do about it?", "type": "behavioral", "behavioral_situation": "problem_solving", "commitment_check": false, "builder_operator_check": false, "best_story_id": "st_onboarding", "why": "Tests: you move activation."},
+    {"stage": "hiring_manager", "text": "Tell me about a lifecycle program that didn't work the first time. What did you change?", "type": "behavioral", "behavioral_situation": "problem_solving", "commitment_check": false, "builder_operator_check": false, "best_story_id": "st_reactivation", "why": "Tests: you run it until the number moves."},
+    {"stage": "hiring_manager", "text": "You only have SQL access to the warehouse. How would you set up a cohort view of 7-day activation?", "type": "technical", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "best_story_id": null, "why": "The posting asks for hands-on SQL."},
+    {"stage": "panel", "text": "Tell me about a time you disagreed with product or engineering about a launch. How did it end?", "type": "behavioral", "behavioral_situation": "disagreement", "commitment_check": false, "builder_operator_check": false, "best_story_id": null, "why": "Panel with product and engineering."},
+    {"stage": "leadership", "text": "Why a 40-person startup instead of a bigger company?", "type": "motivation", "behavioral_situation": "motivation", "commitment_check": false, "builder_operator_check": false, "best_story_id": null, "why": "Founder call: judgment."},
+    {"stage": "leadership", "text": "Are you all in? Would you run this yourself, week after week, until the number moves?", "type": "motivation", "behavioral_situation": null, "commitment_check": true, "builder_operator_check": false, "best_story_id": null, "why": "Commitment."},
+    {"stage": "leadership", "text": "There's no ops team behind you. What would you do yourself, and what would you ask us to hire for?", "type": "future_looking", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": true, "best_story_id": null, "why": "Builder or operator."}
+  ],
+  "gap_questions": [
+    {"stage": "hiring_manager", "text": "Your background is mostly email. How would you handle push notifications at scale?", "requirement": "Push notifications at scale"},
+    {"stage": "hiring_manager", "text": "Have you pulled your own cohort numbers with SQL?", "requirement": "Hands-on SQL for cohort analysis"}
+  ],
+  "no_match": [
+    {"priority_or_belief": "You can own lifecycle end to end, with no ops team.", "story_needed": "A story where you did the data, the build and the reporting yourself."}
+  ]
+}

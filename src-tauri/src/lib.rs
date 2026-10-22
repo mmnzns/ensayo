@@ -1,6 +1,7 @@
 // The modules the `ensayo-eval` command line tool also uses are public.
 pub mod ai;
 pub mod ai_commands;
+pub mod applications;
 mod audio_retention;
 mod commands;
 mod data_commands;
