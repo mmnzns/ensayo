@@ -31,7 +31,7 @@ describe("every screen renders", () => {
         const href = m[1];
         if (EXTERNAL.test(href)) continue;
         expect(href.startsWith("#/"), `${id} has a link that is not a screen: ${href}`).toBe(true);
-        expect(known.has(href.slice(2)), `${id} links to an unknown screen: ${href}`).toBe(true);
+        expect(known.has(href.slice(2).split("?")[0]), `${id} links to an unknown screen: ${href}`).toBe(true);
       }
     }
   });
