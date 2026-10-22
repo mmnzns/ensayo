@@ -99,8 +99,8 @@ impl Engine {
     /// The model client for this engine. The local one is shared, so the loaded model stays warm between answers.
     pub fn client(&self) -> Box<dyn Llm> {
         match self {
-            Engine::Cloud(r) => Box::new(r.client()),
-            Engine::Local(l) => Box::new(local::shared(&local::helper_path(), &l.file, l.id)),
+            Engine::Cloud(r) => Box::new(crate::logging::LoggedLlm::new(Box::new(r.client()), r.provider.key_id())),
+            Engine::Local(l) => Box::new(crate::logging::LoggedLlm::new(Box::new(local::shared(&local::helper_path(), &l.file, l.id)), "local")),
         }
     }
 
@@ -243,6 +243,7 @@ pub struct TestResult {
 #[tauri::command]
 pub async fn test_ai(provider: String, base_url: Option<String>, key: Option<String>) -> Cmd<TestResult> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("test_ai");
         let p = Provider::parse(&provider).ok_or("Unknown provider")?;
         let key = key.filter(|k| !k.trim().is_empty()).or_else(|| keys::get(p.key_id())).unwrap_or_default();
         if p != Provider::Compatible && key.is_empty() {

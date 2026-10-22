@@ -6,6 +6,47 @@ import { setDeveloperTools, useDeveloperTools } from "./devtools";
 import { CheckIcon, SettingsLayout, ToggleRow, useLater } from "./parts";
 import { isApp } from "../../data/real";
 import { useAppVersion } from "./version";
+import { tauriDiagnostics } from "../../data/diagnostics";
+import { copyText } from "../../ui/clipboard";
+import { readPrefs } from "./prefs";
+
+/** Copy diagnostics and Show log folder: for a bug report. Only in the app (the browser preview has no log). */
+function DiagnosticsRow() {
+  const [line, setLine] = useState<{ text: string; bad: boolean } | null>(null);
+  const later = useLater();
+  const say = (text: string, bad = false) => {
+    setLine({ text, bad });
+    later(() => setLine(null), 8000);
+  };
+  const copy = async () => {
+    const bridge = tauriDiagnostics();
+    if (!bridge) return;
+    try {
+      const text = await bridge.text(readPrefs().speech.model);
+      say((await copyText(text)) ? "Copied. Paste it into a message to Miguel." : "Couldn't copy here. Use the Feedback screen to see and send it.", false);
+    } catch {
+      say("Ensayo couldn't read its diagnostics.", true);
+    }
+  };
+  const reveal = async () => {
+    try {
+      await tauriDiagnostics()?.reveal();
+    } catch {
+      say("Ensayo couldn't open the log folder.", true);
+    }
+  };
+  return (
+    <div className="e-rowline">
+      <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+        Diagnostics
+        <span className="e-small">Your system, the state of the engines and the last lines of Ensayo's log. No answers, stories or keys.</span>
+        {line && <span className="e-small" role="status" style={{ color: line.bad ? "var(--e-danger)" : "var(--e-primary-dark)" }}>{line.text}</span>}
+      </span>
+      <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => void copy()}>Copy diagnostics</button>
+      <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => void reveal()}>Show log folder</button>
+    </div>
+  );
+}
 
 /** Updates in the app: Ensayo checks by itself; this row checks now and installs what it finds. */
 function UpdatesRow() {
@@ -68,6 +109,7 @@ export default function SettingsAbout() {
               <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={checking} onClick={checkForUpdates}>Check for updates</button>
             </div>
           )}
+          {app && <DiagnosticsRow />}
           <div className="e-rowline">
             <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
               by craft concepts digital<span className="e-small">The studio behind Talaan, Parlato and Ensayo.</span>

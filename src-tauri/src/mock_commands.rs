@@ -57,6 +57,7 @@ pub fn debrief_with(storage: &Storage, ai: &mut AiCtx, args: &DebriefArgs) -> Re
 #[tauri::command]
 pub async fn mock_debrief(args: DebriefArgs) -> Cmd<Quality> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("mock_debrief");
         let storage = open().map_err(plain)?;
         if !args.refresh {
             if let Some(saved) = storage.debrief(&args.session_id).map_err(plain)? {

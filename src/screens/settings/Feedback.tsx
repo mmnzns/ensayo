@@ -1,13 +1,15 @@
 // Draft generated from Design/screens/html/9-1-feedback.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { useStore } from "../../data/store";
 import { copyText } from "../../ui/clipboard";
 import { isApp } from "../../data/real";
-import { buildFeedbackEmail, describeSystem, FEEDBACK_ADDRESS, fitMailto } from "./feedbackEmail";
+import { buildFeedbackEmail, DIAGNOSTICS_HEADING, describeSystem, FEEDBACK_ADDRESS, fitMailto } from "./feedbackEmail";
 import { useLater } from "./parts";
 import { useAppVersion } from "./version";
+import { tauriDiagnostics } from "../../data/diagnostics";
+import { readPrefs } from "./prefs";
 
 const payChip = { minHeight: "38px", padding: "6px 14px", fontSize: "14px" } as const;
 const fairChip = { minHeight: "34px", padding: "5px 12px", fontSize: "13px" } as const;
@@ -33,15 +35,34 @@ export default function Feedback() {
   const [pay, setPay] = useState<string | null>(sample ? feedback.pay : null);
   const [fair, setFair] = useState<string | null>(sample ? feedback.fair : null);
   const [email, setEmail] = useState("");
-  const [includeSystem, setIncludeSystem] = useState(true);
+  const [includeDiagnostics, setIncludeDiagnostics] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<string | null>(null);
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
   const later = useLater();
 
   const version = useAppVersion();
-  const system = `Ensayo ${version} · ${systemName()}`;
-  const mail = buildFeedbackEmail({ topic, message, pay, fair, email, includeSystem, system });
+  // In the browser preview there is no backend to ask, so the block is just the version and system.
+  const fallback = `Ensayo ${version} · ${systemName()}`;
+  const diagnosticsText = diagnostics ?? (tauriDiagnostics() ? "" : fallback);
+  const mail = buildFeedbackEmail({ topic, message, pay, fair, email, includeDiagnostics, diagnostics: diagnosticsText });
   const link = fitMailto(mail);
   const asksFair = pay === "Maybe" || pay === "Yes";
+
+  // Read the block once, when the person first ticks the box or opens the preview.
+  const wantsText = includeDiagnostics || showDiagnostics;
+  useEffect(() => {
+    const bridge = tauriDiagnostics();
+    if (!wantsText || diagnostics !== null || !bridge) return;
+    let gone = false;
+    bridge.text(readPrefs().speech.model).then(
+      (t) => !gone && setDiagnostics(t),
+      () => !gone && setDiagnostics("Ensayo couldn't read its diagnostics."),
+    );
+    return () => {
+      gone = true;
+    };
+  }, [wantsText, diagnostics]);
 
   const copy = async () => {
     setCopied((await copyText(mail.body)) ? "yes" : "no");
@@ -94,18 +115,27 @@ export default function Feedback() {
             </label>
             <input id="em" className="e-input" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
-            <input type="checkbox" className="e-check" checked={includeSystem} onChange={(e) => setIncludeSystem(e.target.checked)} />
-            <span className="e-meta">Include the app version and system ({system})</span>
-          </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input type="checkbox" className="e-check" checked={includeDiagnostics} onChange={(e) => setIncludeDiagnostics(e.target.checked)} />
+              <span className="e-meta">Include diagnostics</span>
+            </label>
+            <span className="e-small">The app version, your system, the state of the speech and feedback engines, and the last lines of Ensayo's log. No answers, stories, applications or keys.</span>
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ alignSelf: "flex-start" }} aria-expanded={showDiagnostics} aria-controls="diag-preview" onClick={() => setShowDiagnostics(!showDiagnostics)}>
+              {showDiagnostics ? "Hide what would be sent" : "See what would be sent"}
+            </button>
+            {showDiagnostics && (
+              <textarea id="diag-preview" className="e-input" readOnly rows={10} aria-label="Diagnostics preview" style={{ fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: "12px" }} value={`${DIAGNOSTICS_HEADING}\n${diagnostics ?? (tauriDiagnostics() ? "Reading…" : fallback)}`} />
+            )}
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", borderTop: "1px solid var(--e-line)", paddingTop: "16px" }}>
-            <span className="e-small" style={{ maxWidth: "380px" }}>Only what you type here is sent. Never your recordings, answers, stories or applications.</span>
+            <span className="e-small" style={{ maxWidth: "380px" }}>Only what you type here is sent, plus the diagnostics if you tick them. Never your recordings, answers, stories or applications.</span>
             <div style={{ display: "flex", gap: "10px" }}>
               <button type="button" className="e-btn e-btn-ghost" onClick={copy}>Copy message</button>
               <Link to={link.mailto} className="e-btn e-btn-primary">Send by email</Link>
             </div>
           </div>
-          {link.cut && <span className="e-small" role="status">Your message is long, so the email carries the start of it. Copy message gives you all of it to paste.</span>}
+          {link.cut && <span className="e-small" role="status">This is too long for an email link, so the email carries the start of it. Copy message gives you all of it to paste.</span>}
           {copied && (
             <span className="e-meta" role="status" style={{ color: "var(--e-primary-dark)" }}>
               {copied === "yes" ? `Copied. Paste it into an email to ${FEEDBACK_ADDRESS}.` : `Couldn't copy here. Select the message and copy it, then paste it into an email to ${FEEDBACK_ADDRESS}.`}

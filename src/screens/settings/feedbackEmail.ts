@@ -11,10 +11,14 @@ export interface FeedbackInput {
   /** The "what feels fair" answer; only used with Maybe or Yes. */
   fair: string | null;
   email: string;
-  includeSystem: boolean;
-  /** "Ensayo 0.1.0 · macOS" and so on; only added when includeSystem is true. */
-  system: string;
+  /** The "Include diagnostics" tick. Off by default: nothing about the computer is sent unless it is on. */
+  includeDiagnostics: boolean;
+  /** The diagnostics block (Settings › About › Copy diagnostics); only added when includeDiagnostics is true. */
+  diagnostics: string;
 }
+
+/** The line that opens the diagnostics in the email, so the reader knows where the block came from. */
+export const DIAGNOSTICS_HEADING = "Diagnostics (from Settings › About)";
 
 export interface FeedbackEmail {
   to: string;
@@ -33,8 +37,8 @@ export function buildFeedbackEmail(input: FeedbackInput): FeedbackEmail {
     extra.push(`Would I pay: ${input.pay}${fair}`);
   }
   if (input.email.trim()) extra.push(`Reply to: ${input.email.trim()}`);
-  if (input.includeSystem && input.system.trim()) extra.push(input.system.trim());
   if (extra.length) lines.push("", ...extra);
+  if (input.includeDiagnostics && input.diagnostics.trim()) lines.push("", DIAGNOSTICS_HEADING, input.diagnostics.trim());
   const body = lines.join("\n");
   const mailto = `mailto:${FEEDBACK_ADDRESS}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return { to: FEEDBACK_ADDRESS, subject, body, mailto };
