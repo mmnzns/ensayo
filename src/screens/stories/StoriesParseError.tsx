@@ -2,18 +2,20 @@ import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
-import { pasteDraft, setBlankReview } from "./selection";
+import { getParseFailure, pasteDraft, setBlankReview, setParsedDraft } from "./selection";
 
 /** After "Read it" when the engine could not turn the text into a story. The text the user pasted is kept. */
 export default function StoriesParseError() {
   const store = useStore();
   const { engine } = store;
   const kept = pasteDraft.raw ?? store.screens.stories.pasteSample;
-  const reason = engine.offline
-    ? "You seem to be offline, so Ensayo couldn't reach your AI engine."
-    : engine.kind === "timing"
-      ? "No AI engine is set up, and reading pasted text needs one."
-      : "The AI engine didn't send back anything Ensayo could use.";
+  const reason =
+    getParseFailure() ??
+    (engine.offline
+      ? "You seem to be offline, so Ensayo couldn't reach your AI engine."
+      : engine.kind === "timing"
+        ? "No AI engine is set up, and reading pasted text needs one."
+        : "The AI engine didn't send back anything Ensayo could use.");
   return (
     <AppShell nav="stories">
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -37,6 +39,7 @@ export default function StoriesParseError() {
               className="e-btn e-btn-line"
               onClick={() => {
                 setBlankReview(true);
+                setParsedDraft(null);
                 go("5-3-add-a-story-review");
               }}
             >

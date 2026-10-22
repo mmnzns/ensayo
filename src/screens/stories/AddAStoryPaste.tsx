@@ -1,9 +1,11 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
+import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
-import { pasteDraft, setBlankReview } from "./selection";
+import { pasteDraft, setBlankReview, setParseFailure, setParsedDraft, type ParsedDraft } from "./selection";
 
 export default function AddAStoryPaste() {
   const { pasteSample } = useStore().screens.stories;
@@ -11,15 +13,32 @@ export default function AddAStoryPaste() {
   const [company, setCompany] = useState(pasteDraft.company);
   const empty = raw.trim() === "";
 
-  const readIt = () => {
-    if (empty) return;
+  const [reading, setReading] = useState(false);
+
+  const readIt = async () => {
+    if (empty || reading) return;
     pasteDraft.raw = raw;
     pasteDraft.company = company;
     setBlankReview(false);
+    setParsedDraft(null);
+    setParseFailure(null);
+    // In the app the engine reads the text; in the browser preview the sample parse is shown.
+    if (isApp()) {
+      setReading(true);
+      try {
+        setParsedDraft(await invoke<ParsedDraft>("parse_story", { raw, employerHint: company }));
+      } catch (e) {
+        setParseFailure(String(e));
+        setReading(false);
+        return go("stories-parse-error");
+      }
+      setReading(false);
+    }
     go("5-3-add-a-story-review");
   };
   const startBlank = () => {
     setBlankReview(true);
+    setParsedDraft(null);
     go("5-3-add-a-story-review");
   };
 
@@ -46,9 +65,10 @@ export default function AddAStoryPaste() {
             <input id="emp" className="e-input" placeholder="e.g. Brightwave" value={company} onChange={(e) => setCompany(e.target.value)} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button type="button" className="e-btn e-btn-primary" onClick={readIt} disabled={empty} style={empty ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>Read it</button>
+            <button type="button" className="e-btn e-btn-primary" onClick={() => void readIt()} disabled={empty || reading} style={empty || reading ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>{reading ? "Reading..." : "Read it"}</button>
             <Link to="5-1-stories" className="e-btn e-btn-ghost">Cancel</Link>
             {empty && <span className="e-small">Paste something first, or start blank.</span>}
+            {reading && <span className="e-small" role="status">Sorting your story into its parts. A local model can take a minute.</span>}
           </div>
         </section>
         <aside className="e-card" style={{ flex: "1 1 280px", minWidth: "0", display: "flex", flexDirection: "column", gap: "14px" }}>

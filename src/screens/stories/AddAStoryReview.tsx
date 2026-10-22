@@ -1,29 +1,33 @@
 import { useState } from "react";
-import { cardHeadline, emptyStory, proofPointsFromRows } from "../../data/actions";
 import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import Numbers, { type NumberRow } from "./Numbers";
-import { isBlankReview, pasteDraft } from "./selection";
+import { draftToReview, storyFromReview } from "./parseDraft";
+import { getParsedDraft, isBlankReview, pasteDraft, setParsedDraft } from "./selection";
 
 const WORDS = ["No", "One", "Two"];
 
 export default function AddAStoryReview() {
   const { parsed, missingNotes, goodForOptions } = useStore().screens.stories;
   const blank = isBlankReview();
+  // In the app the engine's reading of the pasted text; in the browser preview the sample parse.
+  const draft = blank ? null : getParsedDraft();
+  const review = draft ? draftToReview(draft.story, draft.missing, draft.dropped) : null;
 
-  const [title, setTitle] = useState(blank ? "" : parsed.title);
-  const [company, setCompany] = useState(blank ? "" : pasteDraft.company.trim() || parsed.company);
-  const [headline, setHeadline] = useState(blank ? "" : parsed.headline);
-  const [context, setContext] = useState(blank ? "" : parsed.context);
-  const [approach, setApproach] = useState(blank ? "" : parsed.approach);
-  const [action, setAction] = useState(blank ? "" : parsed.action);
-  const [ownership, setOwnership] = useState(blank ? "" : parsed.ownership);
-  const [result, setResult] = useState(blank ? "" : parsed.result);
-  const [numbers, setNumbers] = useState<NumberRow[]>(blank ? [] : parsed.numbers.map((n) => ({ ...n, checked: false })));
-  const [goodFor, setGoodFor] = useState<string[]>(blank ? [] : parsed.goodFor);
+  const first = review ?? (blank ? null : { ...parsed, company: pasteDraft.company.trim() || parsed.company, numbers: parsed.numbers.map((n) => ({ ...n, checked: false })) });
+  const [title, setTitle] = useState(first?.title ?? "");
+  const [company, setCompany] = useState(first?.company ?? "");
+  const [headline, setHeadline] = useState(first?.headline ?? "");
+  const [context, setContext] = useState(first?.context ?? "");
+  const [approach, setApproach] = useState(first?.approach ?? "");
+  const [action, setAction] = useState(first?.action ?? "");
+  const [ownership, setOwnership] = useState(first?.ownership ?? "");
+  const [result, setResult] = useState(first?.result ?? "");
+  const [numbers, setNumbers] = useState<NumberRow[]>(first?.numbers ?? []);
+  const [goodFor, setGoodFor] = useState<string[]>(first ? (review ? review.goodFor : parsed.goodFor) : []);
   const [adding, setAdding] = useState(false);
   const [custom, setCustom] = useState("");
 
@@ -33,22 +37,9 @@ export default function AddAStoryReview() {
   const save = async (next: string) => {
     setSaving(true);
     setSaveError(false);
-    const points = proofPointsFromRows(numbers.map((n) => ({ ...n, isNew: true })), []);
     try {
-      await saveStory({
-        ...emptyStory(),
-        title: title.trim() || "Untitled story",
-        employer: company.trim(),
-        direct_answer: headline.trim(),
-        context: context.trim(),
-        approach: approach.trim(),
-        action: action.trim(),
-        ownership: ownership.trim(),
-        result: result.trim(),
-        best_for: goodFor,
-        proof_points: points,
-        headline: cardHeadline(points, ""),
-      });
+      await saveStory(storyFromReview(draft?.story ?? null, { title, company, headline, context, approach, action, ownership, result, goodFor }, numbers));
+      setParsedDraft(null);
       go(next);
     } catch {
       setSaveError(true);
@@ -82,6 +73,14 @@ export default function AddAStoryReview() {
           <button type="button" className="e-btn e-btn-primary" disabled={saving} onClick={() => save("3-1-practice-interviewer-asking")}>Save and practice</button>
         </div>
       </header>
+      {review && review.dropped.length > 0 && (
+        <div className="e-soft" role="status" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span style={{ fontSize: "14px", fontWeight: "600" }}>Left out because it is not in your text</span>
+          {review.dropped.map((d) => (
+            <span key={d} className="e-meta">{d}</span>
+          ))}
+        </div>
+      )}
       {saveError && <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>Ensayo could not save this story. Check that your data folder is available, then try again.</span>}
       <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
@@ -170,10 +169,10 @@ export default function AddAStoryReview() {
         </div>
         <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: "10px" }}>
           <span className="e-h3">Likely follow-ups</span>
-          {blank || parsed.followUps.length === 0 ? (
+          {blank || (review ? review.followUps : parsed.followUps).length === 0 ? (
             <span className="e-meta">None yet. They show up once there is more of your story to ask about.</span>
           ) : (
-            parsed.followUps.map((f) => (
+            (review ? review.followUps : parsed.followUps).map((f) => (
               <span key={f.question} className="e-meta">"{f.question}" · {f.angle}</span>
             ))
           )}
