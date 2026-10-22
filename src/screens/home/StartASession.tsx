@@ -238,7 +238,7 @@ export default function StartASession() {
             <span className="e-meta" style={{ flex: "1" }}>
               Focus this session: <strong style={{ color: "var(--e-ink)" }}>{lowerFirst(focusHabit.label)}</strong>
             </span>
-            <Link to="8-1-settings-profile" className="e-small">Change</Link>
+            <Link to="8-1-settings-you" className="e-small">Change</Link>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>

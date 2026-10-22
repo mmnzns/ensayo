@@ -111,3 +111,16 @@ export function targetReadiness(target: Target, input: ReadinessInput): Readines
 
   return { lines: [pitch, leadLine, mock, gaps], applications: open.map((a) => a.company) };
 }
+
+/** What an archived target still holds, for "2 applications and 6 sessions kept". */
+export function keptCounts(target: Target, input: Pick<ReadinessInput, "targets" | "applications" | "reps">): { applications: number; sessions: number } {
+  const applications = input.applications.filter((a) => applicationTarget(a, input.targets)?.id === target.id).length;
+  const sessions = new Set(input.reps.filter((r) => repTargetId(r, input.applications, input.targets) === target.id).map((r) => r.session_id)).size;
+  return { applications, sessions };
+}
+
+/** "2 applications and 6 sessions kept", "1 session kept", or "nothing to keep" when it is empty. */
+export function keptLine({ applications, sessions }: { applications: number; sessions: number }): string {
+  const parts = [applications > 0 ? `${applications} ${applications === 1 ? "application" : "applications"}` : "", sessions > 0 ? `${sessions} ${sessions === 1 ? "session" : "sessions"}` : ""].filter(Boolean);
+  return parts.length ? `${parts.join(" and ")} kept` : "nothing in it yet";
+}

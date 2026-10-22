@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { Application, Story, Target } from "../data/types";
 import type { RepApi } from "../practice/api";
-import { banksFor, pickQuestions } from "../practice/questions";
+import { banksFor, packSize, pickQuestions } from "../practice/questions";
 import { beginRecording, getLive, resetLive, setRepApi, startLive, stopAndFinish } from "../practice/live";
 import { pickStories } from "../practice/stories";
 import { practiceTargetFor } from "../practice/sessionTarget";
@@ -21,6 +21,10 @@ describe("the question pack follows the target's kind of role", () => {
   });
   it("gives the other kinds the general set, since only the lifecycle pack exists today", () => {
     for (const roleFamily of ["marketing_ops", "growth", "product_marketing", "other"] as const) expect(banksFor(t("a", { roleFamily })).length).toBe(general);
+  });
+  it("says how big each pack is, none for a kind of role without one", () => {
+    expect(packSize("lifecycle")).toBe(70);
+    expect(packSize("marketing_ops")).toBe(0);
   });
   it("still takes a role in words, as before", () => {
     expect(banksFor("Senior Lifecycle Marketing Manager").length).toBe(general + 70);

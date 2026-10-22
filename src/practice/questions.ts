@@ -40,6 +40,9 @@ const packFor = (family: RoleFamily): BankQuestion[] => {
   return (file && PACK_FILES[`../../questions/${file}.json`]?.questions) || [];
 };
 
+/** How many questions the pack for this kind of role adds to the general set; 0 while its file does not exist. */
+export const packSize = (family: RoleFamily): number => packFor(family).length;
+
 /** The general set, plus the pack that fits the target's kind of role. A role in words (the v0 profile) is read for its kind. */
 export function banksFor(target: string | Pick<Target, "roleFamily">): BankQuestion[] {
   const family = typeof target === "string" ? roleFamilyOf(target) : target.roleFamily;

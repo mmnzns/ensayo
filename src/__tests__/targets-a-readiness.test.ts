@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateLabel, repTargetId, targetReadiness } from "../data/readiness";
+import { dateLabel, keptCounts, keptLine, repTargetId, targetReadiness } from "../data/readiness";
 import { mockStore } from "../data/mock";
 import type { Application, Story, Target } from "../data/types";
 import type { RepSummary } from "../practice/habits";
@@ -122,5 +122,22 @@ describe("dates", () => {
   it("are short and the same in every language", () => {
     expect(dateLabel("2026-10-05T10:00:00")).toBe("Oct 5");
     expect(dateLabel("nonsense")).toBe("");
+  });
+});
+
+describe("what an archived target keeps", () => {
+  it("counts its applications and its sessions", () => {
+    const old = t("tg_3", { archived: true });
+    const all = [...targets, old];
+    const apps = [app("a1", "A", "tg_3", []), app("a2", "B", "tg_3", []), app("a3", "C", "tg_1", [])];
+    const reps = [rep({ session_id: "s1", target_id: "tg_3" }), rep({ session_id: "s1", n: 2, target_id: "tg_3" }), rep({ session_id: "s2", application_id: "a2" }), rep({ session_id: "s9" })];
+    const k = keptCounts(old, { targets: all, applications: apps, reps });
+    expect(k).toEqual({ applications: 2, sessions: 2 });
+    expect(keptLine(k)).toBe("2 applications and 2 sessions kept");
+  });
+  it("words one, and none", () => {
+    expect(keptLine({ applications: 1, sessions: 0 })).toBe("1 application kept");
+    expect(keptLine({ applications: 0, sessions: 1 })).toBe("1 session kept");
+    expect(keptLine({ applications: 0, sessions: 0 })).toBe("nothing in it yet");
   });
 });
