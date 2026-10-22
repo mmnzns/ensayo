@@ -4,7 +4,9 @@
 //! never an empty bank created in its place.
 
 pub mod bank;
+pub mod conflicts;
 pub mod io;
+pub mod lock;
 pub mod migrate;
 pub mod model;
 pub mod versioned;
