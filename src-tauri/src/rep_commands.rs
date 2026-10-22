@@ -13,7 +13,9 @@ use crate::scoring::run::Budget;
 use crate::speech::words::Word;
 use crate::speech::{engine, models, transcribe};
 use crate::storage::model::Story;
-use crate::storage::reps::{AiMeta, FullRep, Rep, Session};
+use crate::scoring::followup::{self, FollowScoreInput, FollowScored, GenInput};
+use crate::scoring::inputs::{transcript_text, transcript_text_first};
+use crate::storage::reps::{AiMeta, FollowUpMeta, FullRep, Rep, Session};
 use crate::storage::{settings, Result as StorageResult, Storage, StorageError};
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,10 +53,21 @@ pub struct FinishArgs {
     pub is_major_story: bool,
     #[serde(default)]
     pub founder_variant: bool,
+    /// Set when this recording answers a follow-up question.
+    #[serde(default)]
+    pub follow_up: Option<FollowUpArgs>,
     /// 1, 2 or 3.
     pub attempt: u32,
     pub story_ids: Vec<String>,
     pub audio_path: PathBuf,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FollowUpArgs {
+    /// The rep this follow-up probes.
+    pub parent_n: u32,
+    pub kind: String,
+    pub number: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -70,6 +83,8 @@ pub struct RepOutcome {
     pub audio_kept: bool,
     /// Plain words on why the AI did not judge this one (no key, over the cap, an unreadable reply).
     pub notice: Option<String>,
+    /// What was said, for a clarifying question (the interviewer's reply is generated from it).
+    pub transcript_text: Option<String>,
 }
 
 /// The numbers a story's proof points stand for: before and after, with their unit.
@@ -192,6 +207,53 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
     }
 }
 
+/// Judges the answer to a follow-up: F1, F2, F3 and (for a skeptic push) F5 by the model, F4 by code, then the coach.
+fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &FinishArgs, f: &FollowUpArgs, metrics: &mut Metrics) -> Judged {
+    let Some(parent) = storage.rep(session_id, f.parent_n).ok().flatten() else { return Judged::Fallback("Ensayo couldn't find the answer this follow-up belongs to, so this one was checked for timing only.".into()) };
+    let profile = storage.profile().ok().flatten();
+    let stories_all = storage.load_stories().map(|l| l.items).unwrap_or_default();
+    let stories: Vec<Story> = parent.rep.story_ids.iter().filter_map(|id| stories_all.iter().find(|s| &s.id == id).cloned()).collect();
+    let method = parent
+        .rep
+        .behavioral_situation
+        .as_deref()
+        .and_then(|sit| storage.methods().ok().and_then(|ms| ms.into_iter().find(|m| m.situation == sit)))
+        .map(|m| m.spoken)
+        .unwrap_or_default();
+    let first = transcript_text_first(&parent.metrics);
+    let follow = transcript_text(metrics);
+    let input = FollowScoreInput {
+        original_question: &parent.rep.question_text,
+        first_transcript: &first,
+        follow_up_type: &f.kind,
+        follow_up_question: &args.question_text,
+        follow_up_transcript: &follow,
+        stories: &stories,
+        stage: &args.stage,
+        founder_variant: args.founder_variant,
+        question_type: &parent.rep.question_type,
+        metrics,
+        first_speaking_ms: parent.metrics.speaking_ms,
+        method: &method,
+        identity_statement: profile.as_ref().map(|p| p.identity_statement.as_str()).unwrap_or(""),
+    };
+    match followup::score_follow_up(ai.llm, &input, ai.budget) {
+        Err(e) => Judged::Fallback(e.notice()),
+        Ok(FollowScored::Clarifying) => Judged::Clarifying,
+        Ok(FollowScored::NotAnAnswer) => Judged::NotAnAnswer,
+        Ok(FollowScored::Scored { checks, fix, coach }) => {
+            metrics.checks = checks;
+            Judged::Scored {
+                fix,
+                note: coach.note,
+                rewrite: coach.rewrite,
+                meta: AiMeta { prompts: vec!["score-follow-up v1".into(), "coach-note v1".into()], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd },
+                question_type: parent.rep.question_type.clone(),
+            }
+        }
+    }
+}
+
 /// The change since the previous attempt at the same question, about the fix that attempt was told.
 fn delta_for(storage: &Storage, session: &str, question_id: &str, attempt: u32, current: &Metrics) -> Option<fix::Delta> {
     if attempt < 2 {
@@ -203,7 +265,7 @@ fn delta_for(storage: &Storage, session: &str, question_id: &str, attempt: u32, 
 }
 
 fn outcome_without_rep(name: &'static str, session_id: String) -> RepOutcome {
-    RepOutcome { outcome: name, session_id, rep: None, delta: None, restart_offered: false, audio_kept: false, notice: None }
+    RepOutcome { outcome: name, session_id, rep: None, delta: None, restart_offered: false, audio_kept: false, notice: None, transcript_text: None }
 }
 
 /// Measures and saves one rep from its words. The audio file moves to `audio_root/<session>/<n>.wav` (or is deleted
@@ -216,6 +278,10 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
     if metrics.outcome == Outcome::DidntCatch {
         let _ = std::fs::remove_file(&args.audio_path);
         return Ok(outcome_without_rep("didnt_catch", session_id));
+    }
+    if args.follow_up.is_some() {
+        // A follow-up answer is judged on F1 to F5, not on the number or the stop; timing alone keeps only the fillers.
+        metrics.checks.retain(|c| c.id == "fillers");
     }
     let mut question_type = type_for_rules.to_string();
     let mut note = None;
@@ -234,7 +300,11 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             is_major_story: args.is_major_story,
             founder_variant: args.founder_variant,
         };
-        match judge(storage, ctx, &args.stage, &args.story_ids, &asked, &mut metrics) {
+        let judged = match &args.follow_up {
+            Some(f) => judge_follow_up(storage, ctx, &session_id, args, f, &mut metrics),
+            None => judge(storage, ctx, &args.stage, &args.story_ids, &asked, &mut metrics),
+        };
+        match judged {
             Judged::Scored { fix, note: n, rewrite: r, meta: m, question_type: t } => {
                 fix_id = fix;
                 note = Some(n);
@@ -244,7 +314,9 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             }
             Judged::Clarifying => {
                 let _ = std::fs::remove_file(&args.audio_path);
-                return Ok(outcome_without_rep("clarifying", session_id));
+                let mut out = outcome_without_rep("clarifying", session_id);
+                out.transcript_text = Some(metrics.sentences.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" "));
+                return Ok(out);
             }
             Judged::NotAnAnswer => {
                 let _ = std::fs::remove_file(&args.audio_path);
@@ -278,6 +350,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             note,
             rewrite,
             ai: meta,
+            follow_up: args.follow_up.as_ref().map(|f| FollowUpMeta { parent_n: f.parent_n, kind: f.kind.clone(), question: args.question_text.clone(), number: f.number }),
             feedback: None,
         },
         transcript: words,
@@ -288,7 +361,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
     if !audio_kept {
         let _ = std::fs::remove_file(&args.audio_path);
     }
-    Ok(RepOutcome { outcome: "scored", session_id, rep: Some(full), delta, restart_offered, audio_kept, notice })
+    Ok(RepOutcome { outcome: "scored", session_id, rep: Some(full), delta, restart_offered, audio_kept, notice, transcript_text: None })
 }
 
 fn move_audio(from: &Path, to: &Path) -> bool {
@@ -337,7 +410,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
     storage.save_rep(session_id, &full)?;
     let delta = delta_for(storage, session_id, &full.rep.question_id, full.rep.attempt, &full.metrics);
     let audio_kept = audio_path(audio_root, session_id, n).is_file();
-    Ok(RepOutcome { outcome: "scored", session_id: session_id.to_string(), rep: Some(full), delta, restart_offered: false, audio_kept, notice })
+    Ok(RepOutcome { outcome: "scored", session_id: session_id.to_string(), rep: Some(full), delta, restart_offered: false, audio_kept, notice, transcript_text: None })
 }
 
 /// Scores a saved rep again with the current scorer, for the eval harness: the same measuring and judging as a new
@@ -414,6 +487,71 @@ pub async fn finish_rep(mut args: FinishArgs, model_id: String) -> Cmd<RepOutcom
         Ok(out)
     })
     .await
+}
+
+#[derive(Debug, Serialize)]
+pub struct FollowUpQuestion {
+    pub kind: String,
+    pub question: String,
+    pub targets: String,
+    /// Which follow-up of this question this is, and how many the stage allows.
+    pub number: u32,
+    pub of: u32,
+}
+
+/// The next follow-up for a saved rep: aimed at its weakest part, never a type already used for this question, and no
+/// more than the stage allows (recruiter 1, the rest 2).
+pub fn next_follow_up_with(storage: &Storage, ai: &mut AiCtx, session_id: &str, parent_n: u32) -> Result<FollowUpQuestion, String> {
+    let parent = storage.rep(session_id, parent_n).map_err(plain)?.ok_or("Ensayo couldn't find that answer.")?;
+    let session = storage.session(session_id).map_err(plain)?.ok_or("Ensayo couldn't find that session.")?;
+    let of = followup::max_follow_ups(&session.stage);
+    let earlier: Vec<FullRep> = storage.reps(session_id).map_err(plain)?.items.into_iter().filter(|r| r.rep.follow_up.is_some() && r.rep.question_id == parent.rep.question_id).collect();
+    if earlier.len() as u32 >= of {
+        return Err("That is all the follow-ups for this question.".into());
+    }
+    let used: Vec<String> = earlier.iter().filter_map(|r| r.rep.follow_up.as_ref().map(|f| f.kind.clone())).collect();
+    let stories_all = storage.load_stories().map(|l| l.items).unwrap_or_default();
+    let stories: Vec<Story> = parent.rep.story_ids.iter().filter_map(|id| stories_all.iter().find(|s| &s.id == id).cloned()).collect();
+    let transcript = transcript_text(&parent.metrics);
+    let branches = followup::branches_text(&stories);
+    let g = GenInput { question: &parent.rep.question_text, transcript: &transcript, checks: &parent.metrics.checks, stage: &session.stage, founder_variant: parent.rep.founder_variant, branches: &branches, used: &used, jd_summary: "" };
+    let f = followup::generate(ai.llm, &g, ai.budget).map_err(|e| e.notice())?;
+    Ok(FollowUpQuestion { kind: f.kind, question: f.question, targets: f.targets, number: earlier.len() as u32 + 1, of })
+}
+
+const NO_ENGINE: &str = "A follow-up needs a feedback engine. Choose one in Settings › AI.";
+
+/// The interviewer's next question for a rep the user just kept.
+#[tauri::command]
+pub async fn next_follow_up(session_id: String, parent_n: u32) -> Cmd<FollowUpQuestion> {
+    blocking(move || {
+        let storage = open().map_err(plain)?;
+        let (out, unavailable) = with_ai(&session_id, |ai| match ai {
+            Some(mut ctx) => next_follow_up_with(&storage, &mut ctx, &session_id, parent_n),
+            None => Err(NO_ENGINE.to_string()),
+        });
+        out.map_err(|e| unavailable.unwrap_or(e))
+    })
+    .await
+}
+
+/// The interviewer's reply to a clarifying question. Nothing is saved; the real answer is recorded next.
+#[tauri::command]
+pub async fn clarify_reply(session_id: String, question: String, clarification: String, stage: String) -> Cmd<String> {
+    blocking(move || {
+        let (out, unavailable) = with_ai(&session_id, |ai| match ai {
+            Some(ctx) => followup::clarification_reply(ctx.llm, &question, &clarification, &stage, "", ctx.budget).map_err(|e| e.notice()),
+            None => Err(NO_ENGINE.to_string()),
+        });
+        out.map_err(|e| unavailable.unwrap_or(e))
+    })
+    .await
+}
+
+/// Whether a feedback engine is set up and usable right now (follow-ups need one).
+#[tauri::command]
+pub fn ai_ready() -> bool {
+    matches!(crate::ai_commands::resolved_from_disk(), Ok(Some(_)))
 }
 
 /// "Keep it" after "Start this rep again?": measure from after the restart.
@@ -609,6 +747,7 @@ mod tests {
             builder_operator_check: false,
             is_major_story: true,
             founder_variant: false,
+            follow_up: None,
             attempt,
             story_ids: vec!["st_a".into()],
             audio_path: wav,
@@ -831,6 +970,111 @@ mod tests {
         let r = rescore_with(&storage, &audio, &out.session_id, 1, true, Some(AiCtx { llm: &again, budget: &mut budget })).unwrap();
         assert_eq!(again.calls(), 2);
         assert_eq!(r.rep.unwrap().rep.note.as_deref(), Some("Clean."));
+    }
+
+    // ---------- follow-ups ----------
+
+    fn follow_score_json(fail: &[&str]) -> String {
+        let v = |id: &str| json!({"result": if fail.contains(&id) { "fail" } else { "pass" }, "sentences": [1], "quote": "I owned it", "reason": "t"});
+        json!({"rubric_version": 1, "clarifying_question": false, "not_an_answer": false, "first_answer_sentence": 1,
+               "criteria": {"f1_answer_push": v("f1_answer_push"), "f2_new_specific": v("f2_new_specific"), "f3_consistent": v("f3_consistent"), "f5_held_position": v("f5_held_position")}})
+        .to_string()
+    }
+
+    fn gen_json(kind: &str, q: &str) -> String {
+        json!({"type": kind, "question": q, "targets": "ownership", "why": "t"}).to_string()
+    }
+
+    /// A kept first answer in a hiring-manager session, judged by the model.
+    fn first_answer(storage: &Storage, tmp: &Path, stage: &str) -> String {
+        let mut a = args(tmp, 1, None);
+        a.stage = stage.into();
+        let llm = Scripted::new(vec![Ok(&score_json(1, 1, &[("answer_first", "pass"), ("proof", "pass"), ("ownership", "fail")], false)), Ok(COACH)]);
+        ai_run(&llm, &a, storage, &tmp.join("audio"), words(40)).session_id
+    }
+
+    #[test]
+    fn the_next_follow_up_aims_at_the_saved_answer_and_counts_up_to_the_stage_limit() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let session = first_answer(&storage, &tmp, "hiring_manager");
+        let mut budget = Budget::new(Provider::Claude, 0.0);
+        let llm = Scripted::new(vec![Ok(&gen_json("ownership_probe", "What was your part in that, specifically?"))]);
+        let f = next_follow_up_with(&storage, &mut AiCtx { llm: &llm, budget: &mut budget }, &session, 1).unwrap();
+        assert_eq!((f.kind.as_str(), f.number, f.of), ("ownership_probe", 1, 2));
+        assert!(llm.seen.lock().unwrap()[0].user.contains("Score summary: failed: ") && llm.seen.lock().unwrap()[0].user.contains("ownership"), "aimed at the weak spots");
+        // Answer it, then ask for another: number 2, and the used type is passed along.
+        let mut a2 = args(&tmp, 1, Some(&session));
+        a2.stage = "hiring_manager".into();
+        a2.follow_up = Some(FollowUpArgs { parent_n: 1, kind: "ownership_probe".into(), number: 1 });
+        a2.question_text = f.question.clone();
+        let llm = Scripted::new(vec![Ok(&follow_score_json(&[])), Ok(r#"{"note":"Held up.","rewrite":null,"offer_follow_up":true}"#)]);
+        ai_run(&llm, &a2, &storage, &tmp.join("audio"), words(8));
+        let llm = Scripted::new(vec![Ok(&gen_json("metric_probe", "How did you measure that?"))]);
+        let f2 = next_follow_up_with(&storage, &mut AiCtx { llm: &llm, budget: &mut budget }, &session, 1).unwrap();
+        assert_eq!((f2.kind.as_str(), f2.number), ("metric_probe", 2));
+        assert!(llm.seen.lock().unwrap()[0].user.contains("already asked for this question: ownership_probe"));
+    }
+
+    #[test]
+    fn a_recruiter_gets_one_follow_up_and_then_no_more() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let session = first_answer(&storage, &tmp, "recruiter");
+        let mut budget = Budget::new(Provider::Claude, 0.0);
+        let mut a2 = args(&tmp, 1, Some(&session));
+        a2.follow_up = Some(FollowUpArgs { parent_n: 1, kind: "metric_probe".into(), number: 1 });
+        let llm = Scripted::new(vec![Ok(&follow_score_json(&[])), Ok(r#"{"note":"Fine.","rewrite":null,"offer_follow_up":true}"#)]);
+        ai_run(&llm, &a2, &storage, &tmp.join("audio"), words(8));
+        let none = Scripted::new(vec![]);
+        let err = next_follow_up_with(&storage, &mut AiCtx { llm: &none, budget: &mut budget }, &session, 1).unwrap_err();
+        assert!(err.contains("all the follow-ups"), "{err}");
+        assert_eq!(none.calls(), 0, "no model call is wasted past the limit");
+    }
+
+    #[test]
+    fn a_follow_up_answer_is_saved_with_what_was_asked_and_judged_on_f1_to_f5_not_the_number_or_the_stop() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let session = first_answer(&storage, &tmp, "hiring_manager");
+        let mut a2 = args(&tmp, 1, Some(&session));
+        a2.stage = "hiring_manager".into();
+        a2.question_text = "Wouldn't that have happened anyway?".into();
+        a2.follow_up = Some(FollowUpArgs { parent_n: 1, kind: "skeptic_push".into(), number: 1 });
+        let llm = Scripted::new(vec![Ok(&follow_score_json(&["f5_held_position"])), Ok(r#"{"note":"You backed off. Hold the claim.","rewrite":null,"offer_follow_up":true}"#)]);
+        let out = ai_run(&llm, &a2, &storage, &tmp.join("audio"), words(8));
+        let rep = out.rep.unwrap();
+        assert_eq!(rep.rep.n, 2);
+        let meta = rep.rep.follow_up.unwrap();
+        assert_eq!((meta.parent_n, meta.kind.as_str(), meta.number, meta.question.as_str()), (1, "skeptic_push", 1, "Wouldn't that have happened anyway?"));
+        assert_eq!(rep.rep.fix.as_deref(), Some("f5_held_position"));
+        let ids: Vec<&str> = rep.metrics.checks.iter().map(|c| c.id.as_str()).collect();
+        assert!(ids.contains(&"f1_answer_push") && ids.contains(&"f4_short") && !ids.contains(&"proof") && !ids.contains(&"clean_stop"), "{ids:?}");
+        assert_eq!(rep.rep.ai.unwrap().prompts[0], "score-follow-up v1");
+    }
+
+    #[test]
+    fn a_follow_up_the_model_cannot_judge_keeps_only_the_timing_of_the_fillers() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let session = first_answer(&storage, &tmp, "hiring_manager");
+        let mut a2 = args(&tmp, 1, Some(&session));
+        a2.follow_up = Some(FollowUpArgs { parent_n: 1, kind: "metric_probe".into(), number: 1 });
+        let llm = Scripted::new(vec![Err(AiError::Unavailable("offline".into()))]);
+        let out = ai_run(&llm, &a2, &storage, &tmp.join("audio"), words(8));
+        let rep = out.rep.unwrap();
+        assert!(rep.metrics.checks.iter().all(|c| c.id == "fillers"));
+        assert!(out.notice.is_some());
+    }
+
+    #[test]
+    fn a_clarifying_question_comes_back_with_what_was_said_so_the_interviewer_can_reply() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let llm = Scripted::new(vec![Ok(&score_json(1, 1, &[], true))]);
+        let out = ai_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40));
+        assert_eq!(out.outcome, "clarifying");
+        assert!(out.transcript_text.unwrap().starts_with("We cut churn"));
     }
 
     /// Real speech model, real recording: `ENSAYO_SMOKE_WAV=answer.wav ENSAYO_SMOKE_MODEL=whisper-turbo cargo test real_rep -- --ignored --nocapture`.

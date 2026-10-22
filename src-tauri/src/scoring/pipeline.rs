@@ -60,6 +60,43 @@ pub struct AiScore {
     pub offer_follow_up: bool,
 }
 
+/// Everything prompt 03 needs to word the one note.
+pub struct CoachInput<'a> {
+    /// The check code picked. None means nothing failed (all-pass mode).
+    pub fix: Option<&'a str>,
+    pub evidence: Option<String>,
+    pub measurements: String,
+    pub question: &'a str,
+    pub question_type: &'a str,
+    pub stage: &'a str,
+    /// The sentence-indexed transcript the model reads.
+    pub transcript: &'a str,
+    /// The same words as plain text, for checking that a rewrite invents no number.
+    pub plain_transcript: &'a str,
+    pub stories: &'a str,
+    pub method: &'a str,
+    pub identity_statement: &'a str,
+}
+
+/// Prompt 03 plus what code does to its reply (`coach::finalise`).
+pub fn word_note(llm: &dyn Llm, c: &CoachInput, budget: &mut Budget) -> Result<Coach, CallError> {
+    let vars = Vars::new()
+        .set("mode", if c.fix.is_some() { "fix" } else { "all_pass" })
+        .set("question", escape_data(c.question))
+        .set("question_type", c.question_type)
+        .set("stage", c.stage)
+        .set("transcript", escape_data(c.transcript))
+        .set_if("top_fix", c.fix.map(String::from))
+        .set_if("top_fix_evidence", c.evidence.as_deref().map(escape_data))
+        .set("measurements", c.measurements.clone())
+        .set("stories", escape_data(c.stories))
+        .set("method", escape_data(c.method))
+        .set("identity_statement", escape_data(c.identity_statement));
+    let called = call_json(llm, get(PromptId::Coach), &vars, 700, budget)?;
+    let raw: Coach = serde_json::from_value(called.value).map_err(|e| CallError::Invalid(e.to_string()))?;
+    Ok(coach::finalise(raw, c.fix, c.plain_transcript, c.stories))
+}
+
 /// What prompt 01 returns for a question the bank did not tag (a typed question, or one from a pasted posting).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Classification {
@@ -150,22 +187,24 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
     let ttp = score.first_answer_sentence.and_then(|i| m.sentences.iter().find(|s| s.index == i)).map(|s| s.end_ms.saturating_sub(t0));
     let measure = fix.as_deref().map(|f| coach::measurements(f, m, criteria::tail_ms(&score, m), score.proof_landed_sentence, ttp)).unwrap_or_default();
 
-    let coach_vars = Vars::new()
-        .set("mode", if fix.is_some() { "fix" } else { "all_pass" })
-        .set("question", escape_data(&q.text))
-        .set("question_type", &q.question_type)
-        .set("stage", input.stage)
-        .set("transcript", escape_data(&transcript))
-        .set_if("top_fix", fix.clone())
-        .set_if("top_fix_evidence", fix_check.map(|c| escape_data(&coach::evidence(c))))
-        .set("measurements", measure)
-        .set("stories", escape_data(&stories))
-        .set("method", escape_data(input.method))
-        .set("identity_statement", escape_data(input.identity_statement));
-    let called = call_json(llm, get(PromptId::Coach), &coach_vars, 700, budget)?;
-    let raw: Coach = serde_json::from_value(called.value).map_err(|e| CallError::Invalid(e.to_string()))?;
     let plain_transcript = m.sentences.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ");
-    let finished = coach::finalise(raw, fix.as_deref(), &plain_transcript, &stories);
+    let finished = word_note(
+        llm,
+        &CoachInput {
+            fix: fix.as_deref(),
+            evidence: fix_check.map(coach::evidence),
+            measurements: measure,
+            question: &q.text,
+            question_type: &q.question_type,
+            stage: input.stage,
+            transcript: &transcript,
+            plain_transcript: &plain_transcript,
+            stories: &stories,
+            method: input.method,
+            identity_statement: input.identity_statement,
+        },
+        budget,
+    )?;
 
     Ok(AiScore {
         rubric_version: RUBRIC_VERSION,

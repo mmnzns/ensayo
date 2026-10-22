@@ -12,6 +12,12 @@ pub fn transcript_text(m: &Metrics) -> String {
     m.sentences.iter().map(|s| format!("[{}] ({} to {}) {}", s.index, secs(s.start_ms), secs(s.end_ms), s.text)).collect::<Vec<_>>().join("\n")
 }
 
+/// The first answer as the follow-up scorer reads it: sentences numbered `[A n]` so they cannot be confused with the
+/// follow-up answer's own `[n]`.
+pub fn transcript_text_first(m: &Metrics) -> String {
+    transcript_text(m).lines().map(|l| l.replacen('[', "[A ", 1)).collect::<Vec<_>>().join("\n")
+}
+
 /// Up to three stories, most relevant first (the caller has already picked them).
 pub fn stories_text(stories: &[Story]) -> String {
     stories

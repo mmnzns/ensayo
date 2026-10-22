@@ -55,6 +55,9 @@ pub struct Rep {
     /// Stories whose numbers this answer is measured against, picked by code when the question was asked.
     #[serde(default)]
     pub story_ids: Vec<String>,
+    /// Set when this answer is to a follow-up question: which rep it follows and what was asked.
+    #[serde(default)]
+    pub follow_up: Option<FollowUpMeta>,
     /// The check the note was about, picked by code.
     pub fix: Option<String>,
     /// The coach's note and the one line to say instead. None when the rep was measured by rules only.
@@ -66,6 +69,17 @@ pub struct Rep {
     #[serde(default)]
     pub ai: Option<AiMeta>,
     pub feedback: Option<Feedback>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FollowUpMeta {
+    /// The rep this follow-up probes.
+    pub parent_n: u32,
+    /// "ownership_probe", "skeptic_push", ...
+    pub kind: String,
+    pub question: String,
+    /// 1 or 2: which follow-up of the question this is.
+    pub number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -306,7 +320,7 @@ mod tests {
         let metrics = compute(Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: numbers::extract("24%"), keep_restart: false });
         FullRep {
             session_id: "ses_a".into(),
-            rep: Rep { n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), note: None, rewrite: None, ai: None, feedback: None },
+            rep: Rep { n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), note: None, rewrite: None, ai: None, follow_up: None, feedback: None },
             transcript: words,
             metrics,
         }

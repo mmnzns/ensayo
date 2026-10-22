@@ -206,6 +206,7 @@ mod tests {
                     note: None,
                     rewrite: None,
                     ai: None,
+                    follow_up: None,
                     feedback: None,
                 },
                 transcript: words,
