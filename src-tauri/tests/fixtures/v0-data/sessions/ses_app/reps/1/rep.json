@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "n": 1,
+  "question_id": "gen-001",
+  "question_text": "Tell me about yourself.",
+  "question_type": "tell_me_about_yourself",
+  "behavioral_situation": null,
+  "commitment_check": false,
+  "builder_operator_check": false,
+  "is_major_story": true,
+  "founder_variant": false,
+  "attempt": 1,
+  "recorded_at": "2026-10-21T10:00:00Z",
+  "story_ids": [],
+  "follow_up": null,
+  "fix": "proof",
+  "note": null,
+  "rewrite": null,
+  "ai": null,
+  "feedback": null
+}

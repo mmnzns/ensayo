@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "st_deliverability",
+  "title": "Deliverability repair",
+  "employer": "Fernhill",
+  "best_for": [
+    "problem_solving"
+  ],
+  "direct_answer": "I fixed Deliverability repair.",
+  "context": "The funnel stalled.",
+  "approach": "I looked at where people dropped.",
+  "action": "I rebuilt the first week.",
+  "ownership": "I owned it end to end.",
+  "result": "Inbox placement went from 62% to 94%.",
+  "proof_points": [
+    {
+      "label": "Inbox placement",
+      "metric": "Inbox placement",
+      "before": "62",
+      "after": "94",
+      "unit": "%",
+      "approximate": false,
+      "verified": true
+    }
+  ],
+  "scale": "",
+  "competencies": [],
+  "great_eight": [],
+  "branches": [],
+  "verified": true,
+  "headline": "Inbox placement 62% to 94%",
+  "usage": {
+    "practiced": 0,
+    "fits": 0
+  }
+}

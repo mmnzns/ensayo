@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "Dana",
+  "fullName": "Dana Ortiz",
+  "targetRole": "Senior Lifecycle Marketing Manager",
+  "seniority": "senior",
+  "industry": "Fintech",
+  "sellsTo": "b2c",
+  "identityStatement": "I find where activation breaks and build the fix.",
+  "focusHabits": [
+    "to_the_point",
+    "numbers"
+  ]
+}

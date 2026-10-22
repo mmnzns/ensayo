@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "id": "app_kestrel",
+  "company": "Kestrel Pay",
+  "role": "Senior Lifecycle Marketing Manager",
+  "status": "applied",
+  "closed_reason": null,
+  "applied_on": "2026-10-06",
+  "source": "",
+  "contacts": [],
+  "notes": "",
+  "startup": false,
+  "process": [
+    {
+      "id": "stg_1",
+      "stage": "recruiter",
+      "label": "Recruiter",
+      "at": null,
+      "done": false,
+      "previous_at": []
+    },
+    {
+      "id": "stg_2",
+      "stage": "hiring_manager",
+      "label": "Hiring manager",
+      "at": null,
+      "done": false,
+      "previous_at": []
+    },
+    {
+      "id": "stg_3",
+      "stage": "panel",
+      "label": "Panel",
+      "at": null,
+      "done": false,
+      "previous_at": []
+    },
+    {
+      "id": "stg_4",
+      "stage": "leadership",
+      "label": "Leadership",
+      "at": null,
+      "done": false,
+      "previous_at": []
+    }
+  ],
+  "edited_by_user": [],
+  "was_values": {},
+  "no_resume": false,
+  "next_stage_n": 4,
+  "created": "2026-10-22T09:00:23Z"
+}

@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "rubric_version": 1,
+  "outcome": "scored",
+  "words": [
+    {
+      "text": "word",
+      "start_ms": 0,
+      "end_ms": 400
+    },
+    {
+      "text": "word",
+      "start_ms": 500,
+      "end_ms": 900
+    },
+    {
+      "text": "word",
+      "start_ms": 1000,
+      "end_ms": 1400
+    },
+    {
+      "text": "word",
+      "start_ms": 1500,
+      "end_ms": 1900
+    },
+    {
+      "text": "word",
+      "start_ms": 2000,
+      "end_ms": 2400
+    },
+    {
+      "text": "word",
+      "start_ms": 2500,
+      "end_ms": 2900
+    },
+    {
+      "text": "word",
+      "start_ms": 3000,
+      "end_ms": 3400
+    },
+    {
+      "text": "word",
+      "start_ms": 3500,
+      "end_ms": 3900
+    },
+    {
+      "text": "word",
+      "start_ms": 4000,
+      "end_ms": 4400
+    },
+    {
+      "text": "word",
+      "start_ms": 4500,
+      "end_ms": 4900
+    },
+    {
+      "text": "word",
+      "start_ms": 5000,
+      "end_ms": 5400
+    },
+    {
+      "text": "it.",
+      "start_ms": 5500,
+      "end_ms": 5900
+    }
+  ],
+  "sentences": [
+    {
+      "index": 1,
+      "text": "word word word word word word word word word word word it.",
+      "start_ms": 0,
+      "end_ms": 5900,
+      "first_word": 0,
+      "word_count": 12
+    }
+  ],
+  "word_count": 12,
+  "speaking_ms": 5900,
+  "wpm": 122.0,
+  "window": {
+    "min_s": 45,
+    "max_s": 60
+  },
+  "length": "short",
+  "fillers": {
+    "count": 0,
+    "per_minute": 0.0,
+    "items": []
+  },
+  "pauses": [],
+  "proof": {
+    "matched": [],
+    "landed_sentence": null,
+    "tail_ms": null
+  },
+  "unbanked": [],
+  "restart_at": null,
+  "checks": [
+    {
+      "id": "proof",
+      "passed": false,
+      "evidence": "No number or result from your stories came up.",
+      "sentences": [],
+      "seconds": null
+    },
+    {
+      "id": "clean_stop",
+      "passed": null,
+      "evidence": "No number to measure from.",
+      "sentences": [],
+      "seconds": null
+    },
+    {
+      "id": "length",
+      "passed": true,
+      "evidence": "0:05 against a window of 45 to 60 seconds.",
+      "sentences": [],
+      "seconds": 5
+    },
+    {
+      "id": "fillers",
+      "passed": true,
+      "evidence": "0 filler words, 0.0 a minute.",
+      "sentences": [],
+      "seconds": null
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "st_activation",
+  "title": "Activation rebuild",
+  "employer": "Fernhill",
+  "best_for": [
+    "problem_solving"
+  ],
+  "direct_answer": "I fixed Activation rebuild.",
+  "context": "The funnel stalled.",
+  "approach": "I looked at where people dropped.",
+  "action": "I rebuilt the first week.",
+  "ownership": "I owned it end to end.",
+  "result": "7-day activation went from 31% to 44%.",
+  "proof_points": [
+    {
+      "label": "7-day activation",
+      "metric": "7-day activation",
+      "before": "31",
+      "after": "44",
+      "unit": "%",
+      "approximate": false,
+      "verified": true
+    }
+  ],
+  "scale": "",
+  "competencies": [],
+  "great_eight": [],
+  "branches": [],
+  "verified": true,
+  "headline": "7-day activation 31% to 44%",
+  "usage": {
+    "practiced": 0,
+    "fits": 0
+  }
+}

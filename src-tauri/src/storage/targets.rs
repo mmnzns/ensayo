@@ -451,6 +451,11 @@ impl Storage {
     }
 
     /// Makes `id` the active target when `you` exists and names none that can be used.
+    #[cfg(test)]
+    fn profile_unchecked(&self) -> Profile {
+        load_record(&self.profile_path(), migrate::unchanged).unwrap().unwrap()
+    }
+
     fn adopt_active(&self, id: &str) -> Result<()> {
         if let Some(mut you) = self.you()? {
             let targets = self.targets()?;
@@ -1051,6 +1056,173 @@ mod tests {
         let t = s.targets().unwrap().remove(0);
         assert_eq!((t.sells_to.as_str(), t.seniority.as_str()), ("both", "senior"));
         assert!(s.save_target(&t).is_ok());
+    }
+
+
+    // ---------- a v0 data folder ----------
+
+    const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/v0-data");
+
+    fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+        fs::create_dir_all(to).unwrap();
+        for e in fs::read_dir(from).unwrap().flatten() {
+            let target = to.join(e.file_name());
+            if e.path().is_dir() { copy_dir(&e.path(), &target) } else { fs::copy(e.path(), target).unwrap(); }
+        }
+    }
+
+    /// Every file under `dir` with its bytes, by relative path.
+    fn snapshot(dir: &std::path::Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+        fn walk(base: &std::path::Path, dir: &std::path::Path, out: &mut std::collections::BTreeMap<String, Vec<u8>>) {
+            for e in fs::read_dir(dir).unwrap().flatten() {
+                if e.path().is_dir() { walk(base, &e.path(), out) } else { out.insert(e.path().strip_prefix(base).unwrap().to_string_lossy().into_owned(), fs::read(e.path()).unwrap()); }
+            }
+        }
+        let mut out = Default::default();
+        walk(dir, dir, &mut out);
+        out
+    }
+
+    fn v0_folder() -> (tempfile::TempDir, Storage) {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("data");
+        copy_dir(std::path::Path::new(FIXTURE), &root);
+        let s = Storage::open(root).unwrap();
+        (d, s)
+    }
+
+    #[test]
+    fn the_fixture_really_is_a_v0_folder() {
+        let (_d, s) = v0_folder();
+        assert!(s.root().join("profile.json").is_file());
+        assert!(!s.root().join("you.json").exists() && !s.root().join("targets").exists());
+    }
+
+    #[test]
+    fn the_first_read_of_a_v0_folder_makes_you_and_target_one_and_moves_the_profile_aside() {
+        let (_d, s) = v0_folder();
+        let original = fs::read(s.root().join("profile.json")).unwrap();
+        let you = s.you().unwrap().unwrap();
+        assert_eq!((you.name.as_str(), you.full_name.as_str(), you.targets_note_pending), ("Dana", "Dana Ortiz", true));
+        assert_eq!(you.focus_habits, vec!["to_the_point", "numbers"]);
+        let targets = s.targets().unwrap();
+        assert_eq!(targets.len(), 1);
+        let t = &targets[0];
+        assert_eq!(you.active_target_id.as_deref(), Some(t.id.as_str()));
+        assert_eq!((t.name.as_str(), t.color.as_str(), t.role.as_str(), t.role_family.as_str(), t.seniority.as_str(), t.industry.as_str(), t.sells_to.as_str(), t.company_stage.as_str()), ("B2C lifecycle", "coral", "Senior Lifecycle Marketing Manager", "lifecycle", "senior", "Fintech", "b2c", "any"));
+        assert_eq!(t.pitch, "I find where activation breaks and build the fix.");
+        assert_eq!(t.default_process, vec!["recruiter", "hiring_manager", "technical", "panel"]);
+        assert!(t.pinned_story_ids.is_empty() && t.hidden_story_ids.is_empty() && t.lead_with.is_empty() && t.base_resume.is_none() && t.pay_range.is_none() && !t.archived);
+        assert!(!s.root().join("profile.json").exists());
+        assert_eq!(fs::read(s.root().join("profile.v0.json")).unwrap(), original, "the old file is kept as it was");
+        assert_eq!(s.profile().unwrap().unwrap().identity_statement, "I find where activation breaks and build the fix.");
+    }
+
+    #[test]
+    fn migrating_loses_nothing_and_touches_no_other_file() {
+        let (d, s) = v0_folder();
+        let before = snapshot(s.root());
+        s.targets().unwrap();
+        let after = snapshot(s.root());
+        for (name, bytes) in &before {
+            if name == "profile.json" {
+                assert_eq!(after.get("profile.v0.json"), Some(bytes));
+            } else {
+                assert_eq!(after.get(name), Some(bytes), "{name} must be byte for byte the same");
+            }
+        }
+        let added: Vec<_> = after.keys().filter(|k| !before.contains_key(*k)).cloned().collect();
+        assert_eq!(added, vec!["profile.v0.json", "targets/tg_1.json", "you.json"]);
+        let _ = d;
+    }
+
+    #[test]
+    fn stories_applications_sessions_and_reps_all_read_back_and_those_without_a_target_belong_to_the_first_one() {
+        let (_d, s) = v0_folder();
+        assert_eq!(s.load_stories().unwrap().items.len(), 2);
+        let first = s.targets().unwrap().remove(0);
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 10, 22).unwrap().and_hms_opt(12, 0, 0).unwrap();
+        let apps = crate::applications::view::load_all(&s, now).unwrap();
+        assert!(apps.problems.is_empty(), "{:?}", apps.problems);
+        assert_eq!(apps.applications.len(), 1);
+        assert_eq!(apps.applications[0].company, "Kestrel Pay");
+        assert_eq!(apps.applications[0].target_id.as_deref(), Some(first.id.as_str()));
+        let rec = s.application("app_kestrel").unwrap();
+        assert_eq!(rec.target_id, None, "the file is not rewritten: the target is decided at read time");
+        let summaries = crate::rep_commands::summaries_with(&s).unwrap();
+        assert_eq!(summaries.len(), 1, "the rep is still there");
+        assert_eq!(summaries[0].target_id.as_deref(), Some(first.id.as_str()));
+        assert_eq!(s.sessions().unwrap().items.len(), 2);
+        for sess in s.sessions().unwrap().items {
+            assert_eq!(s.session_target(&sess).unwrap().as_deref(), Some(first.id.as_str()), "{}", sess.id);
+            assert_eq!(sess.target_id, None);
+        }
+    }
+
+    #[test]
+    fn reading_again_changes_nothing() {
+        let (_d, s) = v0_folder();
+        s.targets().unwrap();
+        let once = snapshot(s.root());
+        s.you().unwrap();
+        s.targets().unwrap();
+        s.profile().unwrap();
+        assert_eq!(snapshot(s.root()), once);
+    }
+
+    #[test]
+    fn a_folder_that_already_has_you_is_never_migrated() {
+        let (_d, s) = v0_folder();
+        s.targets().unwrap();
+        // A profile.json shows up again (another computer synced an old copy): it is left alone.
+        save_record(&s.profile_path(), &Profile { name: "Someone else".into(), ..profile() }).unwrap();
+        let before = snapshot(s.root());
+        assert_eq!(s.you().unwrap().unwrap().name, "Dana");
+        assert_eq!(s.targets().unwrap().len(), 1);
+        assert_eq!(snapshot(s.root()), before);
+    }
+
+    #[test]
+    fn a_profile_from_a_newer_ensayo_is_refused_and_left_where_it_is() {
+        let (_d, s) = fresh();
+        let text = r#"{"schema_version": 99, "name": "From the future"}"#;
+        fs::write(s.root().join("profile.json"), text).unwrap();
+        assert!(matches!(s.you(), Err(StorageError::TooNew(_, 99, 1))));
+        assert!(matches!(s.targets(), Err(StorageError::TooNew(_, 99, 1))));
+        assert_eq!(fs::read_to_string(s.root().join("profile.json")).unwrap(), text);
+        assert!(!s.root().join("you.json").exists() && !s.root().join("targets").exists() && !s.root().join("profile.v0.json").exists());
+    }
+
+    #[test]
+    fn a_migration_cut_short_is_finished_without_a_second_target() {
+        let (_d, s) = v0_folder();
+        // The first run wrote target one and then stopped.
+        let (_you, target) = migrate_profile(&s.profile_unchecked(), "2026-10-22T00:00:00Z");
+        save_record(&s.target_path(&target.id), &target).unwrap();
+        assert!(!s.root().join("you.json").exists());
+        assert_eq!(s.targets().unwrap().len(), 1);
+        assert!(s.root().join("you.json").is_file() && s.root().join("profile.v0.json").is_file());
+    }
+
+    #[test]
+    fn migrating_never_overwrites_an_existing_backup() {
+        let (_d, s) = v0_folder();
+        fs::write(s.root().join("profile.v0.json"), "my backup").unwrap();
+        s.targets().unwrap();
+        assert_eq!(fs::read_to_string(s.root().join("profile.v0.json")).unwrap(), "my backup");
+        assert!(s.root().join("you.json").is_file());
+    }
+
+    #[test]
+    fn the_migration_is_pure_and_names_the_target_from_role_and_customers() {
+        let mut p = profile();
+        p.target_role = "Marketing Operations Manager".into();
+        p.sells_to = "b2b".into();
+        let (you, t) = migrate_profile(&p, "now");
+        assert_eq!((t.name.as_str(), t.role_family.as_str(), t.id.as_str(), t.created_at.as_str()), ("B2B marketing ops", "marketing_ops", MIGRATED_TARGET_ID, "now"));
+        assert_eq!(you.active_target_id.as_deref(), Some(MIGRATED_TARGET_ID));
+        p.target_role = "Chef".into();
+        assert_eq!(migrate_profile(&p, "now").1.name, "Chef");
     }
 
     // ---------- helpers ----------
