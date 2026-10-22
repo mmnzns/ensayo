@@ -89,6 +89,14 @@ export function pickQuestions(o: PickOptions): BankQuestion[] {
   return [...openers.slice(0, 1), ...rest, ...openers.slice(1)].slice(0, o.count);
 }
 
+/** The interviewer's closing "what questions do you have for me?" for a stage. Its type is the Mock's own-questions moment, which is judged together at the end rather than as an answer. */
+export function pickClosing(bank: BankQuestion[], stage: string, seed = 1): BankQuestion | undefined {
+  const pool = bank.filter((q) => q.moment === "candidate_questions" && q.stages.includes(stage) && q.modes.includes("mock") && !q.founder_variant);
+  if (pool.length === 0) return undefined;
+  const q = shuffle(pool, seed)[0];
+  return { ...q, type: "candidate_questions" };
+}
+
 /** A question the user typed. Nobody tagged it, so its type is empty and the engine classifies it on the first answer. */
 export function ownQuestion(text: string): BankQuestion {
   let h = 0;

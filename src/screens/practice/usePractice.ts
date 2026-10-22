@@ -2,7 +2,7 @@
 
 import type { PracticeSession } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { cancelLive, currentQuestion, currentQuestionText, liveSession, liveWindow, useLive } from "../../practice/live";
+import { cancelLive, currentQuestion, MOCK_DEBRIEF, currentQuestionText, liveSession, liveWindow, useLive } from "../../practice/live";
 import { END_SESSION } from "./practiceFlow";
 
 export interface PracticeView {
@@ -28,7 +28,7 @@ export function usePractice(): PracticeView {
     original: currentQuestion()?.text ?? "",
     targetSeconds: liveWindow(),
     // Once something was scored, ending a session shows what it said; otherwise there is nothing to show.
-    endTo: live.lastSessionId ? END_SESSION : "2-1-home",
+    endTo: live.lastSessionId ? (live.mode === "mock" ? MOCK_DEBRIEF : END_SESSION) : "2-1-home",
     onEnd: () => void cancelLive(),
   };
 }

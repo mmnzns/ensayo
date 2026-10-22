@@ -5,9 +5,10 @@
 import { useSyncExternalStore } from "react";
 import type { PracticeAttempt, PracticeSession } from "../data/screens/practice";
 import type { Method, Story } from "../data/types";
+import type { QuestionQuality } from "./debrief";
 import { isApp, tauriApi, type RepApi, type SessionDetail } from "./api";
 import { attemptFromOutcome } from "./attempt";
-import { banksFor, ownQuestion, pickQuestions, type BankQuestion } from "./questions";
+import { banksFor, ownQuestion, pickClosing, pickQuestions, type BankQuestion } from "./questions";
 import { pickStories } from "./stories";
 import type { FinishArgs, FullRep, RepOutcome } from "./types";
 
@@ -65,6 +66,10 @@ export interface LiveState {
   aiReady: boolean;
   /** The session the results screen shows once the practice ends. Kept after the session is over. */
   lastSessionId: string | null;
+  /** Mock: follow-ups asked so far in the whole run. */
+  mockFollowUps: number;
+  /** Mock: the run reached the closing "what questions do you have for me?" and it was answered. */
+  mockFinished: boolean;
 }
 
 const INITIAL: LiveState = {
@@ -92,6 +97,8 @@ const INITIAL: LiveState = {
   clarify: null,
   aiReady: false,
   lastSessionId: null,
+  mockFollowUps: 0,
+  mockFinished: false,
 };
 
 let state: LiveState = INITIAL;
@@ -129,6 +136,11 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
   return (await repApi()).loadSession(sessionId);
 }
 
+/** The notes on the candidate's own questions for a finished Mock (one model call, then saved). */
+export async function askMockDebrief(sessionId: string, ctx: { company?: string; role?: string } = {}): Promise<QuestionQuality> {
+  return (await repApi()).mockDebrief({ session_id: sessionId, company: ctx.company ?? "this company", role: ctx.role ?? "this role", jd_summary: "", priorities: "", must_say: [] });
+}
+
 /** Whether a session started from the Start screen runs the real loop: only inside the app. */
 export const liveAvailable = () => isApp() || api !== null;
 
@@ -161,7 +173,9 @@ export function startLive(o: StartOptions, ctx: { targetRole: string; stories: S
     o.source === "own" && o.ownQuestion?.trim()
       ? [ownQuestion(o.ownQuestion)]
       : pickQuestions({ bank: banksFor(ctx.targetRole), stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed: o.seed ?? Date.now() });
-  state = { ...INITIAL, active: true, mode: o.mode, stage: o.stage, applicationId: o.applicationId ?? null, founderVariant: o.startup === true, questions, phase: "asking" };
+  const seed = o.seed ?? Date.now();
+  const closing = o.mode === "mock" ? pickClosing(banksFor(ctx.targetRole), o.stage, seed) : undefined;
+  state = { ...INITIAL, active: true, mode: o.mode, stage: o.stage, applicationId: o.applicationId ?? null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
   listeners.forEach((l) => l());
 }
 
@@ -187,6 +201,7 @@ export function liveWindow(): { from: number; to: number } {
   const last = state.outcomes[state.outcomes.length - 1]?.rep?.metrics.window;
   if (last) return { from: last.min_s, to: last.max_s };
   const t = currentQuestion()?.type;
+  if (t === "candidate_questions") return { from: 10, to: 90 };
   if (t === "factual") return { from: 3, to: 20 };
   if (t === "technical" || state.stage === "technical") return { from: 30, to: 180 };
   if (state.stage === "recruiter") return { from: 45, to: 60 };
@@ -311,6 +326,7 @@ async function apply(out: RepOutcome) {
   if (state.view === "followup") {
     set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, followUpOutcome: out, followUpAttempt: attemptFromOutcome(out), restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
     announceHistory();
+    if (state.mode === "mock") await advanceMock(out);
     return;
   }
   const i = state.attempt - 1;
@@ -318,6 +334,36 @@ async function apply(out: RepOutcome) {
   const outcomes = [...state.outcomes.slice(0, i), out];
   set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
   announceHistory();
+  if (state.mode === "mock") await advanceMock(out);
+}
+
+export const isClosingQuestion = () => currentQuestion()?.type === "candidate_questions";
+
+/** Where the screen for what is being asked now lives: a follow-up, the closing questions, or an ordinary question. */
+export function askRoute(): string {
+  if (state.view === "followup") return "3-6-follow-up";
+  return isClosingQuestion() ? "4-2-mock-your-questions" : "3-1-practice-interviewer-asking";
+}
+
+export const MOCK_DEBRIEF = "4-4-session-results-mock-debrief";
+
+/** A Mock gives no note after an answer: the interviewer moves on, to a follow-up when one is due, else the next question. */
+async function advanceMock(out: RepOutcome) {
+  if (isClosingQuestion()) {
+    set({ mockFinished: true, phase: "idle", view: "attempt" });
+    return;
+  }
+  const asked = out.rep?.is_major_story === true && state.view === "attempt";
+  const cap = state.stage === "recruiter" ? 1 : 2;
+  if (asked && state.aiReady && state.mockFollowUps < cap) {
+    const question = await requestFollowUp();
+    if (question) {
+      set({ mockFollowUps: state.mockFollowUps + 1, phase: "asking", notice: null });
+      return;
+    }
+  }
+  const next = nextLiveQuestion();
+  if (next === "done") set({ phase: "idle", mockFinished: true });
 }
 
 /** Tells the data layer a rep was saved, so Home, Progress and the history list read the new one. */

@@ -77,6 +77,7 @@ function fake(outcomes: RepOutcome[]) {
     audioAvailable: async () => true,
     readAudio: async () => new ArrayBuffer(4),
     loadSession: async () => null,
+    mockDebrief: async () => Promise.reject(new Error("no engine")),
   };
   return { api, calls };
 }
@@ -385,5 +386,57 @@ describe("a clarifying question back to the interviewer", () => {
     await stopAndFinish();
     expect(getLive().phase).toBe("notice");
     expect(getLive().notice).toContain("question back to the interviewer");
+  });
+});
+
+describe("a Mock", () => {
+  const beginMock = (over = {}) => begin({ mode: "mock", stage: "hiring_manager", count: 2, ...over });
+
+  it("ends with the interviewer asking for the candidate's own questions", () => {
+    beginMock();
+    const s = getLive();
+    expect(s.questions).toHaveLength(3);
+    expect(s.questions[2].type).toBe("candidate_questions");
+    expect(liveSession()).toMatchObject({ mode: "Mock", total: 3 });
+  });
+
+  it("gives no note after an answer: it moves on to the next question", async () => {
+    const { api, calls } = fake([scored(1)]);
+    setRepApi(api);
+    ready = false;
+    beginMock();
+    await stopAndFinish();
+    const s = getLive();
+    expect(s.index).toBe(1);
+    expect(s.phase).toBe("asking");
+    expect(calls.some((c) => c.startsWith("followup"))).toBe(false);
+  });
+
+  it("asks one follow-up when an engine is set up, then moves on after it is answered", async () => {
+    const { api, calls } = fake([scored(1), scored(1)]);
+    setRepApi(api);
+    beginMock();
+    await checkAi();
+    await stopAndFinish();
+    expect(calls).toContain("followup:1");
+    expect(getLive()).toMatchObject({ view: "followup", phase: "asking", mockFollowUps: 1, index: 0 });
+    await stopAndFinish();
+    const s = getLive();
+    expect(s.view).toBe("attempt");
+    expect(s.index).toBe(1);
+  });
+
+  it("finishes when the own questions are answered, so the debrief can open", async () => {
+    const { api } = fake([scored(1)]);
+    setRepApi(api);
+    ready = false;
+    beginMock({ count: 1 });
+    nextLiveQuestion();
+    expect(getLive().questions[getLive().index].type).toBe("candidate_questions");
+    await stopAndFinish();
+    const s = getLive();
+    expect(s.mockFinished).toBe(true);
+    expect(s.phase).toBe("idle");
+    expect(s.lastSessionId).toBe("ses_a");
   });
 });

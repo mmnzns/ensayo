@@ -114,6 +114,9 @@ export function fakeApi(): RepApi {
     repLabels: async () => ({}),
     audioAvailable: async () => false,
     readAudio: async () => new ArrayBuffer(0),
+    mockDebrief: async () => {
+      throw new Error("The notes on your questions need a feedback engine. Choose one in Settings › AI.");
+    },
     loadSession: async (id) => (kept.length ? { session: { id, ...started, application_id: null, started: kept[0].recorded_at }, reps: kept } : null),
   };
 }

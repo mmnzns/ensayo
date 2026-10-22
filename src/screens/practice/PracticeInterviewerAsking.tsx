@@ -1,6 +1,6 @@
 // Practice, interviewer asking. Draft from Design/screens/html/3-1-practice-interviewer-asking.html, wired to useStore().screens.practice.
 import { useEffect } from "react";
-import { nextLiveQuestion, retryQuestion, useLive } from "../../practice/live";
+import { askRoute, nextLiveQuestion, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { HearItAgain, Kbd, MicButton, Presence, SessionHeader } from "./parts";
@@ -25,6 +25,7 @@ export default function PracticeInterviewerAsking() {
     hush();
     if (live) {
       if (nextLiveQuestion() === "done") go(endTo);
+      else go(askRoute());
       return;
     }
     resetFlow();

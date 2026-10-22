@@ -2,11 +2,11 @@
 import { useEffect } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { resultRoute, retryQuestion, useLive } from "../../practice/live";
+import { askRoute, MOCK_DEBRIEF, resultRoute, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { SessionHeader } from "./parts";
-import { ASK, FOLLOW_UP, getAttempt, resultAfterThinking, setFollowUp } from "./practiceFlow";
+import { getAttempt, resultAfterThinking, setFollowUp } from "./practiceFlow";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
 
@@ -29,11 +29,15 @@ export default function PracticeThinking() {
   // Live: wait for the measuring to finish, then show the result (or the way back when nothing was heard).
   useEffect(() => {
     if (!live) return;
-    if (state.phase === "result") go(resultRoute());
+    const mock = state.mode === "mock";
+    // A Mock gives no note after an answer: the interviewer moves on to a follow-up, the next question, or the end.
+    if (state.phase === "result" && !mock) go(resultRoute());
+    if (mock && state.phase === "asking") go(askRoute());
+    if (mock && state.phase === "idle" && state.mockFinished) go(MOCK_DEBRIEF);
     if (state.phase === "didnt_catch") go("states-didnt-catch-that");
     if (state.phase === "clarify") go("3-7-clarifying-question");
-    if (state.phase === "notice") go(state.view === "followup" ? FOLLOW_UP : ASK);
-  }, [live, state.phase]);
+    if (state.phase === "notice") go(askRoute());
+  }, [live, state.phase, state.mode, state.mockFinished]);
 
   useEffect(() => {
     if (live) return;

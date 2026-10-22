@@ -1,5 +1,6 @@
 // The Rust rep commands as one object, so the live practice flow can be driven by a fake in tests and in the browser.
 
+import type { MustSayItem, QuestionQuality } from "./debrief";
 import type { FinishArgs, FollowUpQuestion, FullRep, RepOutcome } from "./types";
 
 /** What `load_session` returns: the session record and every rep in it. */
@@ -25,6 +26,8 @@ export interface RepApi {
   audioAvailable(sessionId: string, n: number): Promise<boolean>;
   readAudio(sessionId: string, n: number): Promise<ArrayBuffer>;
   loadSession(sessionId: string): Promise<SessionDetail | null>;
+  /** Judges the candidate's own questions (and the must-say list) for a finished Mock. Rejects with a plain line when no engine is set up. */
+  mockDebrief(args: { session_id: string; company: string; role: string; jd_summary: string; priorities: string; must_say: MustSayItem[] }): Promise<QuestionQuality>;
 }
 
 /** Speech models in the order Ensayo prefers them; the first one on this computer is used. */
@@ -62,5 +65,6 @@ export async function tauriApi(): Promise<RepApi> {
     audioAvailable: (sessionId, n) => invoke("rep_audio_available", { sessionId, n }),
     readAudio: (sessionId, n) => invoke("read_rep_audio", { sessionId, n }),
     loadSession: (sessionId) => invoke("load_session", { sessionId }),
+    mockDebrief: (args) => invoke("mock_debrief", { args }),
   };
 }

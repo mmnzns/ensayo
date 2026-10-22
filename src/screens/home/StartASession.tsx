@@ -9,6 +9,9 @@ import { clearSessionPreset, peekSessionPreset, type SessionSource } from "./pre
 
 const LENGTHS = [3, 5, 10];
 
+/** Questions in a Mock before the closing "what questions do you have for me?". */
+const MOCK_QUESTIONS = 6;
+
 export default function StartASession() {
   const store = useStore();
   const { habits, profile, stories, applications } = store;
@@ -47,17 +50,18 @@ export default function StartASession() {
   const focusHabit = habits.find((h) => h.id === profile.focusHabits[0]);
   const noPosting = source === "application" && !!next && next.application.analysis === null;
   const needsText = source === "own" && question.trim() === "";
-  const startTo = noPosting ? "home-session-no-questions" : mock ? "4-1-mock-in-progress" : "3-1-practice-interviewer-asking";
+  // In the app a Mock runs on the practice screens too (no note after an answer); the browser preview keeps the Mock demo.
+  const startTo = noPosting ? "home-session-no-questions" : mock && !liveAvailable() ? "4-1-mock-in-progress" : "3-1-practice-interviewer-asking";
 
   // In the app a Drill runs the real loop; in the browser preview it stays the mock demo.
   const beginLive = () => {
-    if (mock || noPosting || !liveAvailable()) return;
+    if (noPosting || !liveAvailable()) return;
     const app = source === "application" ? next : undefined;
     startLive(
       {
-        mode: "drill",
+        mode: mock ? "mock" : "drill",
         stage: app ? app.stage.stage : stage,
-        count: length,
+        count: mock ? MOCK_QUESTIONS : length,
         source,
         storyId,
         ownQuestion: question,

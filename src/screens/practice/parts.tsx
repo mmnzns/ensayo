@@ -46,7 +46,7 @@ export function SessionHeader({
       </div>
       {right === "end" ? (
         <Link to={endTo} onClick={onEnd} className="e-btn e-btn-white e-btn-sm">
-          End session
+          {session.mode === "Mock" ? "End mock" : "End session"}
         </Link>
       ) : (
         right

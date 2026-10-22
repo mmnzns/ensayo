@@ -4,10 +4,32 @@ import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import Wordmark from "../../ui/Wordmark";
 import { clock, ListenButton, stageWithKind } from "./speak";
+import type { MockDebriefData } from "../../data/screens/results";
+import { useDebrief } from "./useDebrief";
 
 export default function SessionResultsMockDebrief() {
-  const { applications, screens } = useStore();
-  const d = screens.results.debrief;
+  const state = useDebrief();
+  const { screens } = useStore();
+  if (state.status === "loading" || state.status === "empty") {
+    return (
+      <FocusShell>
+        <div className="e-wrap">
+          <section className="e-card" style={{ padding: "40px", display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
+            <span className="e-h2">{state.status === "loading" ? "Opening your mock…" : "Nothing to show here yet"}</span>
+            {state.status === "empty" && <span className="e-meta">Once you have answered a question in a Mock, the notes show up here.</span>}
+            <Link to="2-1-home" className="e-btn e-btn-primary">Back home</Link>
+          </section>
+        </div>
+      </FocusShell>
+    );
+  }
+  if (state.status === "demo") return <Debrief d={screens.results.debrief} />;
+  const notice = state.judging ? "Reading how your own questions landed…" : state.judgeError;
+  return <Debrief d={state.debrief.data} notice={notice} />;
+}
+
+function Debrief({ d, notice = null }: { d: MockDebriefData; notice?: string | null }) {
+  const { applications } = useStore();
   const app = applications.find((a) => a.id === d.applicationId);
   const stageText = stageWithKind(d.stageLabel, app?.startup);
   // Flags the user has kept ("Two weeks is right now") for this visit only.
@@ -31,7 +53,7 @@ export default function SessionResultsMockDebrief() {
           <div style={{ flex: "1 1 360px", display: "flex", flexDirection: "column", gap: "8px" }}>
             <span className="e-label">How it went</span>
             <span className="e-hand" style={{ fontSize: "38px", color: "var(--e-win)" }}>
-              {d.openedWithPoint.count} of {d.openedWithPoint.of} opened with the point
+              {d.openedWithPoint.of > 0 ? `${d.openedWithPoint.count} of ${d.openedWithPoint.of} opened with the point` : "Mock finished"}
             </span>
             <span className="e-meta">{d.summary}</span>
           </div>
@@ -58,6 +80,11 @@ export default function SessionResultsMockDebrief() {
             </div>
           </div>
         </section>
+        {notice && (
+          <div className="e-soft" role="status" style={{ padding: "14px 20px" }}>
+            <span className="e-meta">{notice}</span>
+          </div>
+        )}
         {d.flags.map((f) => {
           const isKept = kept.includes(f.id);
           return (
