@@ -215,6 +215,8 @@ export function mockApplication(input: NewApplicationInput, today: Date): AppBun
     claims: [],
     answersPracticed: 0,
     no_resume: false,
+    ...(input.targetId ? { targetId: input.targetId } : {}),
+    targetFit: null,
   };
   return { application, extras: { ...EMPTY_EXTRAS } };
 }
@@ -266,6 +268,7 @@ export function patchApplication(bundle: AppBundle, patch: AppPatch): AppBundle 
     next.startup = patch.startup;
     mark("startup", old);
   }
+  if (patch.targetId !== undefined && patch.targetId !== next.targetId) next.targetId = patch.targetId;
   return { application: next, extras: { ...bundle.extras, wasValues: was } };
 }
 

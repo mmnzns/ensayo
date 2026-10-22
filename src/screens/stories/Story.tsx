@@ -9,10 +9,13 @@ import { go } from "../../ui/router";
 import { BRANCH_LABELS, CORE_BRANCHES, numberText } from "./helpers";
 import Numbers, { type NumberRow } from "./Numbers";
 import { chosenStory } from "./selection";
+import StoryTabs from "./StoryTabs";
+import { useHashParam } from "../../data/selection";
 
 export default function Story() {
   const store = useStore();
-  const story = store.stories.find((s) => s.id === chosenStory()) ?? store.stories[0];
+  const named = useHashParam("story");
+  const story = store.stories.find((s) => s.id === (named ?? chosenStory())) ?? store.stories[0];
   if (!story) {
     return (
       <AppShell nav="stories">
@@ -133,6 +136,7 @@ function StoryEditor({ story }: { story: StoryType }) {
         </div>
         <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary">Practice this story</Link>
       </header>
+      <StoryTabs story={story} current="story" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
         <section className="e-card" style={{ flex: "999 1 520px", minWidth: "0", display: "flex", flexDirection: "column", gap: "20px" }}>
           <Field id="h" label="Headline">
