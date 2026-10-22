@@ -3,6 +3,7 @@
 // filler words, and there is no "try saying" line (it needs the transcript and the stories read by a model).
 
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine, type TranscriptSegment } from "../data/screens/practice";
+import { consistencySentences, unknownCheckLabel } from "./applied";
 import type { Check, Delta, FullRep, Metrics, RepOutcome } from "./types";
 
 const checkOf = (m: Metrics, id: string): Check | undefined => m.checks.find((c) => c.id === id);
@@ -32,6 +33,8 @@ function rulesNote(rep: FullRep): string {
       return `That ran ${clock(seconds(m.speaking_ms))}. This stage wants ${m.window.min_s} to ${m.window.max_s} seconds. Cut the setup.`;
     case "fillers":
       return `${m.fillers.count} filler words, about ${m.fillers.per_minute} a minute. Pause instead of filling.`;
+    case "c1_consistent":
+      return consistencySentences(checkOf(m, "c1_consistent")).join(" ");
     case "f4_short":
       return `A follow-up answer should take under half the time of the first. This one ran ${clock(seconds(m.speaking_ms))}.`;
     case undefined:
@@ -128,6 +131,7 @@ const ROW_LABELS: [string, string][] = [
   ["f5_held_position", "Held your position"],
   ["answer_first", "Answered the question first"],
   ["proof", "Said your number"],
+  ["c1_consistent", "Said it the way you said it before"],
   ["story_fit", "Picked a story that fits"],
   ["context_short", "Kept the setup short"],
   ["clean_stop", "Stopped once the number landed"],
@@ -160,10 +164,16 @@ function rowNote(rep: FullRep, c: Check): string {
       return `${clock(seconds(m.speaking_ms))} · window ${m.window.min_s} to ${m.window.max_s} s`;
     case "fillers":
       return `${m.fillers.per_minute} a minute${m.fillers.items.length > 0 ? ` · ${[...new Set(m.fillers.items.map((f) => f.text))].join(", ")}` : ""}`;
+    case "c1_consistent":
+      return consistencySentences(c).join(" ");
     default:
       return c.passed ? "" : c.evidence;
   }
 }
+
+/** Checks that are measured but never listed as a row of their own (the time to the point is shown on the answer-first row). */
+const NOT_LISTED = new Set(["time_to_point"]);
+const KNOWN = new Set(ROW_LABELS.map(([id]) => id));
 
 function rows(rep: FullRep): DetailRow[] {
   const m = rep.metrics;
@@ -171,6 +181,11 @@ function rows(rep: FullRep): DetailRow[] {
   for (const [id, label] of ROW_LABELS) {
     const c = checkOf(m, id);
     if (c && c.passed !== null) out.push({ id, label, state: c.passed ? "yes" : "notyet", note: rowNote(rep, c) });
+  }
+  // A check this version has no wording for still shows, in the words of its id, so nothing the engine measured is hidden.
+  for (const c of m.checks) {
+    if (c.passed === null || KNOWN.has(c.id) || NOT_LISTED.has(c.id)) continue;
+    out.push({ id: c.id, label: unknownCheckLabel(c.id), state: c.passed ? "yes" : "notyet", note: c.passed ? "" : c.evidence });
   }
   out.push({ label: "Pace", state: "info", note: `${m.wpm} words a minute · ${clock(seconds(m.speaking_ms))}` });
   if (m.pauses.length > 0) out.push({ label: "Pauses", state: "info", note: `${m.pauses.length} of a second or more, never counted against you` });

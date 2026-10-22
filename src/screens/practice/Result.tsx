@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { anotherFollowUp, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, requestFollowUp, savedLabels, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
+import { consistencyCheckOf, consistencySentences } from "../../practice/applied";
+import { anotherFollowUp, currentRep, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, requestFollowUp, savedLabels, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { Kbd, SessionHeader } from "./parts";
@@ -138,6 +139,9 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const trySayingLine = attempt?.trySaying;
   useEffect(() => speakTrySaying(trySayingLine), [trySayingLine, repKey]);
 
+  // Inside an application, an answer that was said differently from an earlier stage says so, in the words the check found.
+  const saidBefore = live ? consistencySentences(consistencyCheckOf(currentRep())) : [];
+
   const wins = attempt?.wins ?? [];
   const everythingWorked = wins.length > 0;
   const maxTries = live ? state.tries : MAX_ATTEMPTS;
@@ -241,6 +245,15 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
               <span className="e-label">Coach's note</span>
               <p className="e-hand" style={{ margin: "0", fontSize: `${handSize}px` }}>{attempt.coachNote}</p>
             </div>
+            {saidBefore.length > 0 && (
+              <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <span className="e-label">Said differently</span>
+                {saidBefore.map((line) => (
+                  <p key={line} style={{ margin: "0", fontSize: "16px", lineHeight: "1.5" }}>{line}</p>
+                ))}
+                <span className="e-small">Pick one and say it the same way every time.</span>
+              </div>
+            )}
             {attempt.trySaying && (
               <div className="e-soft" style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
                 <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "8px" }}>
