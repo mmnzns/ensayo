@@ -1,19 +1,66 @@
 // Shared pieces for the application detail screens (6-3 to 6-8 and Questions): the header, the tab bar, the status menu.
-import { useState, type ComponentType, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { EMPTY_EXTRAS, plainError } from "../../data/actions";
+import { useActions, useApplicationExtras } from "../../data/real";
+import { useHashParam, withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
 import type { ApplicationExtras } from "../../data/screens/applications";
 import type { Application, ApplicationStatus, ClosedReason } from "../../data/types";
 import { CLOSED_LABEL, STATUSES, STATUS_LABEL, nextStage, shortDate, statusStyle, STAGE_LABEL, whenText } from "./format";
 
-export const EMPTY_EXTRAS: ApplicationExtras = {
-  postingText: "",
-  postingPastedOn: "",
-  wasValues: {},
-  practicedByStage: {},
-  questions: [],
-};
+export { EMPTY_EXTRAS };
+
+/** The application the screen on show is about, so every link inside it carries the choice along. */
+const SelectedContext = createContext<string | undefined>(undefined);
+
+/** A link target for one of the application screens, for the application on show. */
+export function useAppLink(): (screen: string, extra?: Record<string, string | null | undefined>) => string {
+  const id = useContext(SelectedContext);
+  return useCallback((screen, extra) => withParams(screen, { app: id, ...extra }), [id]);
+}
+
+/** The application most recently on show, for a screen reached with nothing said about which one. */
+let lastSelected: string | undefined;
+
+/** Runs a command and keeps its plain-words error for the screen. */
+export function useRun() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+    setBusy(true);
+    setError("");
+    try {
+      return await fn();
+    } catch (e) {
+      setError(plainError(e));
+      return undefined;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+  return { busy, error, run, setError };
+}
+
+/** A rejected command, in plain words, where the person is looking. */
+export function ErrorLine({ error }: { error: string }) {
+  if (!error) return null;
+  return (
+    <span role="alert" className="e-small" style={{ color: "var(--e-danger)" }}>
+      {error}
+    </span>
+  );
+}
+
+/** A quiet note, for what Ensayo did instead of what was asked (the posting read by keywords) or what it kept. */
+export function Notice({ children }: { children: ReactNode }) {
+  return (
+    <div className="e-soft" role="status" style={{ padding: "14px 18px" }}>
+      <span className="e-meta">{children}</span>
+    </div>
+  );
+}
 
 export interface Featured {
   app: Application;
@@ -21,12 +68,23 @@ export interface Featured {
   now: Date;
 }
 
-/** The application the detail screens show (one route per tab in M1). Undefined when the store has none. */
+/** The application the detail screens show: the one the link named, else the last one looked at, else the sample's
+ *  featured one, else the first open one. Undefined when there are none. */
 export function useFeatured(): { app?: Application; extras: ApplicationExtras; now: Date } {
   const store = useStore();
-  const data = store.screens.applications;
-  const app = store.applications.find((a) => a.id === data.featuredId) ?? store.applications.find((a) => a.status !== "closed") ?? store.applications[0];
-  return { app, extras: (app && data.byApp[app.id]) || EMPTY_EXTRAS, now: store.now() };
+  const named = useHashParam("app");
+  const apps = store.applications;
+  const app =
+    apps.find((a) => a.id === named) ??
+    apps.find((a) => a.id === lastSelected) ??
+    apps.find((a) => a.id === store.screens.applications.featuredId) ??
+    apps.find((a) => a.status !== "closed") ??
+    apps[0];
+  const extras = useApplicationExtras(app?.id);
+  useEffect(() => {
+    if (app) lastSelected = app.id;
+  }, [app]);
+  return { app, extras, now: store.now() };
 }
 
 /** Wraps a screen so it reads the featured application once, and shows a quiet empty state when there is none. */
@@ -45,7 +103,11 @@ export function withFeatured(Inner: ComponentType<Featured>): ComponentType {
         </AppShell>
       );
     }
-    return <Inner app={app} extras={extras} now={now} />;
+    return (
+      <SelectedContext.Provider value={app.id}>
+        <Inner app={app} extras={extras} now={now} />
+      </SelectedContext.Provider>
+    );
   };
 }
 
@@ -61,15 +123,16 @@ const TABS: { id: TabId; to: string; label: string }[] = [
 ];
 
 export function AppTabs({ current }: { current: TabId }) {
+  const link = useAppLink();
   return (
     <nav style={{ display: "flex", flexWrap: "wrap", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)", alignSelf: "flex-start" }} aria-label="Application sections">
       {TABS.map((t) =>
         t.id === current ? (
-          <Link key={t.id} to={t.to} aria-current="page" className="e-btn e-btn-sm" style={{ background: "var(--e-tint)", color: "var(--e-ink)" }}>
+          <Link key={t.id} to={link(t.to)} aria-current="page" className="e-btn e-btn-sm" style={{ background: "var(--e-tint)", color: "var(--e-ink)" }}>
             {t.label}
           </Link>
         ) : (
-          <Link key={t.id} to={t.to} className="e-btn e-btn-sm e-btn-ghost">
+          <Link key={t.id} to={link(t.to)} className="e-btn e-btn-sm e-btn-ghost">
             {t.label}
           </Link>
         ),
@@ -79,24 +142,30 @@ export function AppTabs({ current }: { current: TabId }) {
 }
 
 /** The status chip. Opens a menu to change the status; Closed asks why with an inline select. */
-export function StatusMenu({ initial, initialReason }: { initial: ApplicationStatus; initialReason: ClosedReason | null }) {
+export function StatusMenu({ app }: { app: Application }) {
+  const actions = useActions();
+  const { busy, error, run } = useRun();
   const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<ApplicationStatus>(initial);
-  const [reason, setReason] = useState<ClosedReason | "">(initialReason ?? "");
   const [asking, setAsking] = useState(false);
+  const status = app.status;
+  const reason = app.closed_reason;
   const label = status === "closed" && reason ? `Closed · ${CLOSED_LABEL[reason]}` : STATUS_LABEL[status];
+  const change = async (patch: { status: ApplicationStatus; closed_reason?: ClosedReason }) => {
+    const done = await run(() => actions.updateApplication(app.id, patch));
+    if (done) {
+      setAsking(false);
+      setOpen(false);
+    }
+  };
   const pick = (s: ApplicationStatus) => {
     if (s === "closed") {
       setAsking(true);
       return;
     }
-    setStatus(s);
-    setReason("");
-    setAsking(false);
-    setOpen(false);
+    void change({ status: s });
   };
   return (
-    <span style={{ position: "relative", display: "inline-flex" }}>
+    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: "10px" }}>
       <button
         type="button"
         className="e-pill"
@@ -113,10 +182,11 @@ export function StatusMenu({ initial, initialReason }: { initial: ApplicationSta
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
+      {!open && <ErrorLine error={error} />}
       {open && (
         <span role="menu" className="e-card" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 5, padding: "8px", display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 8px 28px rgba(43,39,34,.16)" }}>
           {STATUSES.map((s) => (
-            <button key={s} type="button" role="menuitem" className="e-btn e-btn-ghost e-btn-sm" style={{ justifyContent: "flex-start", fontWeight: s === status ? 700 : 500 }} onClick={() => pick(s)}>
+            <button key={s} type="button" role="menuitem" className="e-btn e-btn-ghost e-btn-sm" disabled={busy} style={{ justifyContent: "flex-start", fontWeight: s === status ? 700 : 500 }} onClick={() => pick(s)}>
               {STATUS_LABEL[s]}
             </button>
           ))}
@@ -127,13 +197,9 @@ export function StatusMenu({ initial, initialReason }: { initial: ApplicationSta
                 id="closed-why"
                 className="e-input"
                 style={{ minHeight: "40px", padding: "8px 10px", fontSize: "14px" }}
-                value={reason}
-                onChange={(e) => {
-                  setReason(e.target.value as ClosedReason);
-                  setStatus("closed");
-                  setAsking(false);
-                  setOpen(false);
-                }}
+                value={reason ?? ""}
+                disabled={busy}
+                onChange={(e) => void change({ status: "closed", closed_reason: e.target.value as ClosedReason })}
               >
                 <option value="" disabled>Why?</option>
                 {(Object.keys(CLOSED_LABEL) as ClosedReason[]).map((r) => (
@@ -142,6 +208,7 @@ export function StatusMenu({ initial, initialReason }: { initial: ApplicationSta
               </select>
             </span>
           )}
+          <ErrorLine error={error} />
         </span>
       )}
     </span>
@@ -150,6 +217,7 @@ export function StatusMenu({ initial, initialReason }: { initial: ApplicationSta
 
 /** Company, badges, role line and the two actions, shared by the application detail screens. */
 export function AppHeader({ app, now, children }: { app: Application; now: Date; children?: ReactNode }) {
+  const link = useAppLink();
   const next = nextStage(app);
   const nextBit = next ? ` · next: ${next.label || STAGE_LABEL[next.stage]}, ${next.at ? whenText(next.at, now) : "date to come"}` : "";
   return (
@@ -159,14 +227,14 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <h1 className="e-h1">{app.company}</h1>
           {app.startup && <span className="e-pill">Startup</span>}
-          <StatusMenu initial={app.status} initialReason={app.closed_reason} />
+          <StatusMenu app={app} />
         </div>
         <span className="e-meta">{`${app.role} · applied ${shortDate(app.applied_on)}${nextBit}`}</span>
         {children}
       </div>
       <div style={{ display: "flex", gap: "10px" }}>
-        <Link to="6-4-application-edit-details" className="e-btn e-btn-line">Edit details</Link>
-        <Link to="2-3-start-a-session" className="e-btn e-btn-primary">Practice the next stage</Link>
+        <Link to={link("6-4-application-edit-details")} className="e-btn e-btn-line">Edit details</Link>
+        <Link to={link("2-3-start-a-session", { stage: next?.id })} className="e-btn e-btn-primary">Practice the next stage</Link>
       </div>
     </header>
   );
