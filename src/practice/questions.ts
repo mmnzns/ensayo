@@ -25,9 +25,9 @@ export interface BankQuestion {
 }
 
 // Question packs by kind of role (a target's `roleFamily`). The general set is always asked. A pack is a file in
-// questions/ named below; one that does not exist yet adds nothing. Today only the lifecycle pack exists, so marketing
-// ops, growth, product marketing and other roles get the general set until Opus drafts their packs. Drop the file in
-// questions/ and the pack starts to apply, with no code change.
+// questions/ named below; one that does not exist yet adds nothing. Lifecycle and marketing ops share one pack;
+// growth and product marketing have their own (drafts awaiting Miguel's review); other roles get the general set only.
+// Drop a file in questions/ and the pack starts to apply, with no code change.
 const PACK_FILE: Partial<Record<RoleFamily, string>> = {
   lifecycle: "pack-lifecycle-marketing-ops",
   marketing_ops: "pack-lifecycle-marketing-ops",

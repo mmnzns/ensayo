@@ -1,0 +1,1874 @@
+{
+  "bank_version": 1,
+  "set_id": "product-marketing",
+  "set_name": "Product marketing pack",
+  "description": "DRAFT, drafted by Opus on 2026-10-22, not yet reviewed by Miguel. Product marketing roles: positioning and messaging, launches, competitive intelligence, sales enablement, pricing and packaging input, customer and market research, and go to market.",
+  "questions": [
+    {
+      "id": "pmm-001",
+      "text": "How do you position a product that does a lot of different things?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you leave out",
+        "how would you know you picked right"
+      ]
+    },
+    {
+      "id": "pmm-002",
+      "text": "How do you work out which category a product should compete in?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "category"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "when would you create a new category",
+        "what does picking wrong cost"
+      ]
+    },
+    {
+      "id": "pmm-003",
+      "text": "How do you decide which customer segment to position for first?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "segmentation"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what about the customers you're not choosing",
+        "what data would you use"
+      ]
+    },
+    {
+      "id": "pmm-004",
+      "text": "How do you turn positioning into messaging people will actually use?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "messaging"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who uses it first",
+        "how do you know it stuck"
+      ]
+    },
+    {
+      "id": "pmm-005",
+      "text": "How do you test messaging before a launch?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "messaging",
+        "research"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many people would you test with",
+        "what result would make you rewrite it"
+      ]
+    },
+    {
+      "id": "pmm-006",
+      "text": "How do you know when positioning needs to change?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "judgment"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what signal would you watch",
+        "who has to agree"
+      ]
+    },
+    {
+      "id": "pmm-007",
+      "text": "How do you keep messaging consistent across sales, product and the website?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "messaging",
+        "alignment"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what happens when someone goes off script",
+        "who owns the source"
+      ]
+    },
+    {
+      "id": "pmm-008",
+      "text": "How do you decide whether a release gets a full launch or a quiet note?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "prioritization"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who else decides",
+        "what do you do with the small ones"
+      ]
+    },
+    {
+      "id": "pmm-009",
+      "text": "Walk me through how you'd plan a major product launch.",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "planning"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the first thing you'd lock",
+        "what usually goes wrong"
+      ]
+    },
+    {
+      "id": "pmm-010",
+      "text": "How do you measure whether a launch worked?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "measurement"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you set as the goal beforehand",
+        "how long after launch do you judge it"
+      ]
+    },
+    {
+      "id": "pmm-011",
+      "text": "Two weeks before go-live, the launch date slips. What do you do?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "problem solving"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "who do you tell first",
+        "what do you keep and what do you move"
+      ]
+    },
+    {
+      "id": "pmm-012",
+      "text": "How do you get product to bring marketing in early enough on a launch?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you bring them in return",
+        "what if they still don't"
+      ]
+    },
+    {
+      "id": "pmm-013",
+      "text": "How do you run win and loss analysis?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "competitive intel",
+        "research"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who do you talk to",
+        "what did the last one change"
+      ]
+    },
+    {
+      "id": "pmm-014",
+      "text": "How do you keep up with competitors without it becoming a full-time job?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "competitive intel"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you track and what do you ignore",
+        "who gets the updates"
+      ]
+    },
+    {
+      "id": "pmm-015",
+      "text": "What goes into a competitive battlecard sales will actually open?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "competitive intel",
+        "sales enablement"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how long is it",
+        "how do you keep it current"
+      ]
+    },
+    {
+      "id": "pmm-016",
+      "text": "A competitor just cut its price in half. What do you do in the first week?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "competitive intel",
+        "pricing"
+      ],
+      "great_eight": [
+        "market_share",
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what do you tell sales on day one",
+        "when would you match it"
+      ]
+    },
+    {
+      "id": "pmm-017",
+      "text": "A competitor keeps winning deals on features we don't have. How do you handle it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "competitive intel",
+        "sales enablement"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what do you tell product",
+        "how do you change the conversation in the deal"
+      ]
+    },
+    {
+      "id": "pmm-018",
+      "text": "How do you decide what sales enablement to build first?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sales enablement",
+        "prioritization"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who do you ask",
+        "what would you skip"
+      ]
+    },
+    {
+      "id": "pmm-019",
+      "text": "How do you know if sales is actually using what you made for them?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sales enablement",
+        "adoption"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you do with the material nobody uses",
+        "how do you hear about gaps"
+      ]
+    },
+    {
+      "id": "pmm-020",
+      "text": "How would you get a sales team ready to sell a new product in one week?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sales enablement",
+        "training"
+      ],
+      "great_eight": [
+        "develop_people",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you cut from the training",
+        "how would you check they're ready"
+      ]
+    },
+    {
+      "id": "pmm-021",
+      "text": "How do you build a pitch deck sales will use instead of rebuilding their own?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sales enablement",
+        "messaging"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who do you build it with",
+        "what do you let them change"
+      ]
+    },
+    {
+      "id": "pmm-022",
+      "text": "What should product marketing bring to pricing and packaging decisions?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "pricing"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who owns the final call",
+        "where have you pushed back"
+      ]
+    },
+    {
+      "id": "pmm-023",
+      "text": "How would you research what customers are willing to pay?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "pricing",
+        "research"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "why not just ask them",
+        "how many conversations is enough"
+      ]
+    },
+    {
+      "id": "pmm-024",
+      "text": "How would you decide which features go in which plan?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "packaging"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what goes in the top plan",
+        "what if sales wants everything in the cheapest one"
+      ]
+    },
+    {
+      "id": "pmm-025",
+      "text": "How do you tell existing customers about a price increase?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "pricing",
+        "customer"
+      ],
+      "great_eight": [
+        "retain_customers",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how much notice",
+        "what do you give sales and support"
+      ]
+    },
+    {
+      "id": "pmm-026",
+      "text": "How do you run customer interviews so you learn something you didn't already believe?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer research"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you avoid leading questions",
+        "who else listens in"
+      ]
+    },
+    {
+      "id": "pmm-027",
+      "text": "How would you size the market for a new product?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "market research",
+        "data"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "top down or bottom up",
+        "how would you check the number"
+      ]
+    },
+    {
+      "id": "pmm-028",
+      "text": "How do you build a buyer profile people actually use?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer research",
+        "segmentation"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "where does the information come from",
+        "how often do you update it"
+      ]
+    },
+    {
+      "id": "pmm-029",
+      "text": "How do you decide between a survey and interviews?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "research methods"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "when do you do both",
+        "how many responses is enough"
+      ]
+    },
+    {
+      "id": "pmm-030",
+      "text": "How do you turn research findings into something the business acts on?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "research",
+        "influence"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who do you share it with first",
+        "what did the last one change"
+      ]
+    },
+    {
+      "id": "pmm-031",
+      "text": "How would you build a go-to-market plan for entering a new segment?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "gtm",
+        "planning"
+      ],
+      "great_eight": [
+        "market_share",
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you test before committing",
+        "who needs to be involved"
+      ]
+    },
+    {
+      "id": "pmm-032",
+      "text": "How do you decide whether a product should be sold top down to leaders or bottom up to users?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "gtm",
+        "sales motion"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what if it's both",
+        "what changes in the messaging"
+      ]
+    },
+    {
+      "id": "pmm-033",
+      "text": "How is product marketing different in a product-led company than a sales-led one?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "gtm",
+        "plg"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which have you done more of",
+        "what would you change here"
+      ]
+    },
+    {
+      "id": "pmm-034",
+      "text": "How do you work with demand gen so campaigns carry the positioning?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "collaboration",
+        "messaging"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you hand them",
+        "what if their best ads ignore it"
+      ]
+    },
+    {
+      "id": "pmm-035",
+      "text": "How do you get a customer story sales will actually send to prospects?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer evidence",
+        "content"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you find the customer",
+        "what goes in it"
+      ]
+    },
+    {
+      "id": "pmm-036",
+      "text": "How do you build a group of customers willing to speak for you?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer advocacy"
+      ],
+      "great_eight": [
+        "retain_customers",
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's in it for them",
+        "how do you avoid wearing them out"
+      ]
+    },
+    {
+      "id": "pmm-037",
+      "text": "How do you show product marketing's effect on revenue?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "measurement",
+        "revenue"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you claim and what wouldn't you",
+        "what would a skeptical sales leader say"
+      ]
+    },
+    {
+      "id": "pmm-038",
+      "text": "How do you use AI in research or content without losing accuracy?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "ai",
+        "judgment"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you check by hand",
+        "what stays with a person"
+      ]
+    },
+    {
+      "id": "pmm-039",
+      "text": "Tell me about a launch you led and what it moved.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue",
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was the goal before launch",
+        "how did you separate the launch from other causes",
+        "what was your part specifically"
+      ]
+    },
+    {
+      "id": "pmm-040",
+      "text": "Tell me about a launch that underperformed. What did you do?",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "failure"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "when did you know",
+        "what would you change"
+      ]
+    },
+    {
+      "id": "pmm-041",
+      "text": "Tell me about a time you repositioned a product.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "problem solving"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what told you it needed to change",
+        "how did you get people to adopt it"
+      ]
+    },
+    {
+      "id": "pmm-042",
+      "text": "Tell me about a time research told you something the team didn't want to hear.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "research",
+        "communication"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you share it",
+        "what changed because of it"
+      ]
+    },
+    {
+      "id": "pmm-043",
+      "text": "Tell me about a time you disagreed with product on how to describe a feature.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "messaging"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who was right",
+        "how was it decided"
+      ]
+    },
+    {
+      "id": "pmm-044",
+      "text": "Tell me about a time you changed a pricing or packaging decision you didn't own.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence",
+        "pricing"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what evidence did you bring",
+        "what happened after"
+      ]
+    },
+    {
+      "id": "pmm-045",
+      "text": "Tell me about a time a customer conversation changed your messaging.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer",
+        "messaging"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did they say",
+        "how did you check it wasn't just one person"
+      ]
+    },
+    {
+      "id": "pmm-046",
+      "text": "Tell me about a time you led a launch team that didn't report to you.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "launches"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you keep people on track",
+        "what did you do when someone slipped"
+      ]
+    },
+    {
+      "id": "pmm-047",
+      "text": "Tell me about a time you said no to a launch request.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "judgment",
+        "prioritization"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did they take it",
+        "would you say no again"
+      ]
+    },
+    {
+      "id": "pmm-048",
+      "text": "Tell me about a time your read on a competitor turned out to be wrong.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "competitive intel",
+        "learning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how did you find out",
+        "what do you check now that you didn't before"
+      ]
+    },
+    {
+      "id": "pmm-049",
+      "text": "Have you marketed a technical or developer product?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes with a technical buyer",
+        "how would you get up to speed"
+      ]
+    },
+    {
+      "id": "pmm-050",
+      "text": "Have you supported an enterprise sales team, or mostly self-serve buyers?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sales enablement",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes in a long sales cycle",
+        "who was the buyer"
+      ]
+    },
+    {
+      "id": "pmm-051",
+      "text": "Have you owned pricing work, or only given input?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "pricing",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you do first on ours",
+        "who would you need with you"
+      ]
+    },
+    {
+      "id": "pmm-052",
+      "text": "Have you launched a brand new product, or mostly features on an existing one?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's different about a new product",
+        "what would you do first"
+      ]
+    },
+    {
+      "id": "pmm-053",
+      "text": "Have you done product marketing for consumers, or only for businesses?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers",
+        "what would you need to learn"
+      ]
+    },
+    {
+      "id": "pmm-054",
+      "text": "Have you run customer research yourself, or worked through a research team?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer research"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many interviews have you run yourself",
+        "what would you need help with"
+      ]
+    },
+    {
+      "id": "pmm-055",
+      "text": "Have you used a call recording tool like Gong to learn from sales calls?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "sales enablement"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "pmm-056",
+      "text": "Have you used a competitive intelligence tool like Klue or Crayon?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "competitive intel"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "pmm-057",
+      "text": "Have you marketed a product in a regulated industry?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "compliance",
+        "experience"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what slowed you down",
+        "what would you check first here"
+      ]
+    },
+    {
+      "id": "pmm-058",
+      "text": "Have you worked with industry analysts?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "analyst relations"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you do first",
+        "what would you expect from them"
+      ]
+    },
+    {
+      "id": "pmm-059",
+      "text": "How many launches have you led in the last two years?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "launches",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which was the biggest"
+      ]
+    },
+    {
+      "id": "pmm-060",
+      "text": "What kinds of buyers have you marketed to?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience",
+        "customer"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which one most recently",
+        "which one did you know best"
+      ]
+    },
+    {
+      "id": "pmm-061",
+      "text": "How many years have you worked in product marketing?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "hands on or managing"
+      ]
+    },
+    {
+      "id": "pmm-062",
+      "text": "What would your first 90 days in this role look like?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning",
+        "positioning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who would you talk to first",
+        "what's your first early win"
+      ]
+    },
+    {
+      "id": "pmm-063",
+      "text": "We're losing more deals to our main competitor than we used to. Where would you start?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "competitive intel",
+        "problem solving"
+      ],
+      "great_eight": [
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's your first hypothesis",
+        "what data would you want"
+      ]
+    },
+    {
+      "id": "pmm-064",
+      "text": "Sales says our messaging doesn't land with buyers. What would you do?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "messaging",
+        "sales enablement"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how would you find out why",
+        "what would you change first"
+      ]
+    },
+    {
+      "id": "pmm-065",
+      "text": "If you were our first product marketer, what would you set up first?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you do yourself",
+        "what would you leave for later"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "pmm-066",
+      "text": "What would you need from product and sales to do this job well?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you need first",
+        "what would you do without it"
+      ]
+    },
+    {
+      "id": "pmm-067",
+      "text": "Are you more drawn to positioning and strategy, or to the hands-on work of launches and content?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "when did you last write the copy yourself",
+        "what did you ship"
+      ],
+      "notes": "Builder vs operator in product marketing wording. Scored on the literal answer first."
+    },
+    {
+      "id": "pmm-068",
+      "text": "Give me the version of your background that matters for a product marketing role.",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "product marketing"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that move",
+        "what you want next"
+      ]
+    },
+    {
+      "id": "pmm-069",
+      "text": "Why product marketing, and not product management or another part of marketing?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "pmm-070",
+      "text": "Before we finish, what would you like to ask me about how product marketing works here?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "curiosity",
+        "product marketing"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "anything else"
+      ],
+      "moment": "candidate_questions",
+      "notes": "Candidate's-own-questions moment, typed motivation as closest. The spoken reply is scored by question_quality (prompt 10), not the normal rubric."
+    }
+  ]
+}

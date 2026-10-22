@@ -20,15 +20,19 @@ const q = (id: string, over: Partial<BankQuestion> = {}): BankQuestion => ({
 });
 
 describe("the real bank", () => {
-  it("loads the general set, and the lifecycle pack only for a matching role", () => {
+  it("loads the general set, and a role pack only for a matching role", () => {
     expect(banksFor("Accountant").length).toBe(109);
     expect(banksFor("Senior Lifecycle Marketing Manager").length).toBe(179);
+    expect(banksFor("Head of Growth").length).toBe(179);
+    expect(banksFor("Senior Product Marketing Manager").length).toBe(179);
   });
 
   it("has enough drill questions in every stage", () => {
-    const bank = banksFor("Senior Lifecycle Marketing Manager");
-    for (const stage of ["recruiter", "hiring_manager", "technical", "panel", "leadership"]) {
-      expect(pickQuestions({ bank, stage, mode: "drill", count: 10 }).length, stage).toBe(10);
+    for (const role of ["Senior Lifecycle Marketing Manager", "Head of Growth", "Senior Product Marketing Manager"]) {
+      const bank = banksFor(role);
+      for (const stage of ["recruiter", "hiring_manager", "technical", "panel", "leadership"]) {
+        expect(pickQuestions({ bank, stage, mode: "drill", count: 10 }).length, `${role} ${stage}`).toBe(10);
+      }
     }
   });
 });

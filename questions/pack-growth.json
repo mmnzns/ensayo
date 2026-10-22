@@ -1,0 +1,1873 @@
+{
+  "bank_version": 1,
+  "set_id": "growth",
+  "set_name": "Growth marketing pack",
+  "description": "DRAFT, drafted by Opus on 2026-10-22, not yet reviewed by Miguel. Growth marketing, acquisition, demand generation, experimentation, paid and organic channels, funnel and unit economics, and product-led growth roles.",
+  "questions": [
+    {
+      "id": "gro-001",
+      "text": "How do you decide which acquisition channels to test first for a new product?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "channels",
+        "prioritization"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you rule out straight away",
+        "how much would you spend before deciding"
+      ]
+    },
+    {
+      "id": "gro-002",
+      "text": "How would you run paid search for a product people don't know to search for yet?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "paid search",
+        "demand creation"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you bid on instead",
+        "when would you give up on search"
+      ]
+    },
+    {
+      "id": "gro-003",
+      "text": "How do you decide a paid social campaign has had enough time and budget to judge?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "paid social",
+        "experimentation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's your minimum spend before a call",
+        "what makes you stop early"
+      ]
+    },
+    {
+      "id": "gro-004",
+      "text": "Cost per acquisition on paid social doubled in two weeks. What do you look at?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "paid social",
+        "problem solving"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how would you tell a tracking change from a real rise",
+        "what would you pause first"
+      ]
+    },
+    {
+      "id": "gro-005",
+      "text": "How do you run creative testing on paid social?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "creative testing",
+        "paid social"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many variants at once",
+        "how do you know the winner isn't just new"
+      ]
+    },
+    {
+      "id": "gro-006",
+      "text": "How do you know when a channel is saturated?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "channels",
+        "data"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what does the cost curve look like",
+        "what do you do once it is"
+      ]
+    },
+    {
+      "id": "gro-007",
+      "text": "How do you decide how much budget to move between channels each month?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "budget allocation",
+        "data"
+      ],
+      "great_eight": [
+        "reduce_costs",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the smallest move worth making",
+        "who signs off on a big shift"
+      ]
+    },
+    {
+      "id": "gro-008",
+      "text": "How do you decide whether to use an agency, a freelancer or run a channel in house?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "resourcing",
+        "judgment"
+      ],
+      "great_eight": [
+        "reduce_costs",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would make you bring it in house",
+        "how do you keep an agency honest"
+      ]
+    },
+    {
+      "id": "gro-009",
+      "text": "How would you build organic search for a site that gets almost no traffic today?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "seo",
+        "content"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you publish first",
+        "how long before you'd expect results"
+      ]
+    },
+    {
+      "id": "gro-010",
+      "text": "How do you decide which topics or keywords are worth writing for?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "seo",
+        "prioritization"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you weigh volume against intent",
+        "what would you skip"
+      ]
+    },
+    {
+      "id": "gro-011",
+      "text": "Organic traffic dropped by a third after a search update. What do you do?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "seo",
+        "problem solving"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "which pages would you check first",
+        "what would you tell leadership this week"
+      ]
+    },
+    {
+      "id": "gro-012",
+      "text": "How has AI search changed the way you think about organic growth?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "seo",
+        "ai"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what are you doing differently because of it",
+        "how do you measure it"
+      ]
+    },
+    {
+      "id": "gro-013",
+      "text": "How would you design a referral program, and how would you know it's not paying people who'd have joined anyway?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "referral",
+        "incrementality"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's the reward and who gets it",
+        "how would you catch abuse"
+      ]
+    },
+    {
+      "id": "gro-014",
+      "text": "How do you find the biggest drop-off in a signup funnel?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "funnel",
+        "data"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which steps would you instrument first",
+        "what if the drop is on mobile only"
+      ]
+    },
+    {
+      "id": "gro-015",
+      "text": "A landing page gets plenty of traffic but few signups. How would you improve it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conversion",
+        "experimentation"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you test first",
+        "how would you know the traffic is the problem"
+      ]
+    },
+    {
+      "id": "gro-016",
+      "text": "How do you decide whether a signup form should ask for more information or less?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conversion",
+        "lead quality"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who wants the extra fields",
+        "how would you test it"
+      ]
+    },
+    {
+      "id": "gro-017",
+      "text": "How would you pull signup-to-paid conversion by acquisition channel?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sql",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "talk me through the query",
+        "how would you handle people who came through two channels"
+      ]
+    },
+    {
+      "id": "gro-018",
+      "text": "How do you work out how big an experiment needs to be before you launch it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what effect size would you plan for",
+        "what if the answer is six months"
+      ]
+    },
+    {
+      "id": "gro-019",
+      "text": "A test wins on the main metric but hurts something else. What do you do?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "who makes the call",
+        "what guardrail metrics do you set up front"
+      ]
+    },
+    {
+      "id": "gro-020",
+      "text": "How do you run experiments when there isn't much traffic?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you test instead of small tweaks",
+        "when would you skip testing altogether"
+      ]
+    },
+    {
+      "id": "gro-021",
+      "text": "How do you stop a team from calling tests too early?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "rigor"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what happens when a leader wants the answer now",
+        "how do you write the rule down"
+      ]
+    },
+    {
+      "id": "gro-022",
+      "text": "You have forty growth ideas and room for five this quarter. How do you choose?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization",
+        "experimentation"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would make an idea jump the queue",
+        "what do you tell the people whose ideas lost"
+      ]
+    },
+    {
+      "id": "gro-023",
+      "text": "How do you measure whether a channel is actually adding customers and not just taking credit?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "attribution",
+        "incrementality"
+      ],
+      "great_eight": [
+        "generate_revenue",
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's your control",
+        "what would a skeptical finance lead say"
+      ]
+    },
+    {
+      "id": "gro-024",
+      "text": "Your attribution report says one thing and the ad platforms say another. Which do you trust?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "attribution",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how do you explain the gap to leadership",
+        "what would settle it"
+      ]
+    },
+    {
+      "id": "gro-025",
+      "text": "How do you connect signups back to campaigns now that tracking keeps getting weaker?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tracking",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you do with the traffic you can't track",
+        "would you ask people where they heard of us"
+      ]
+    },
+    {
+      "id": "gro-026",
+      "text": "What would be on the weekly growth dashboard you'd want, and what would you leave off?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "reporting",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which number leads",
+        "who reads it"
+      ]
+    },
+    {
+      "id": "gro-027",
+      "text": "How do you show a growth team's work in pipeline and revenue, not just signups?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "reporting",
+        "revenue"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how far down the funnel can you track",
+        "what do you do when sales disagrees"
+      ]
+    },
+    {
+      "id": "gro-028",
+      "text": "Walk me through how you'd work out acquisition cost for a single channel.",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "unit economics",
+        "data"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what costs do you include beyond media",
+        "how do you treat organic"
+      ]
+    },
+    {
+      "id": "gro-029",
+      "text": "How do you set a payback period target, and what happens to spend when you miss it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "unit economics"
+      ],
+      "great_eight": [
+        "generate_revenue",
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "who sets the target",
+        "would you ever spend past it on purpose"
+      ]
+    },
+    {
+      "id": "gro-030",
+      "text": "Where does comparing lifetime value to acquisition cost mislead you?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "unit economics",
+        "judgment"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how do you estimate lifetime value for a young product",
+        "what do you use instead"
+      ]
+    },
+    {
+      "id": "gro-031",
+      "text": "What does product-led growth mean to you in practice?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "plg"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "where have you seen it fail",
+        "what does marketing own in it"
+      ]
+    },
+    {
+      "id": "gro-032",
+      "text": "How would you find the moment a free user is ready to pay?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "plg",
+        "monetization"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which signals would you look at",
+        "what do you do at that moment"
+      ]
+    },
+    {
+      "id": "gro-033",
+      "text": "How do you decide what goes in the free plan and what's paid?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "plg",
+        "pricing"
+      ],
+      "great_eight": [
+        "generate_revenue",
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what if free is too good",
+        "who else is in that decision"
+      ]
+    },
+    {
+      "id": "gro-034",
+      "text": "How would you get more free users to invite their teammates?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "plg",
+        "virality"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's in it for the person inviting",
+        "how would you measure it"
+      ]
+    },
+    {
+      "id": "gro-035",
+      "text": "How do you define a qualified lead, and who gets a say?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "demand gen",
+        "lead quality"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how often does the definition change",
+        "what happens to leads that don't qualify"
+      ]
+    },
+    {
+      "id": "gro-036",
+      "text": "Sales says marketing's leads are junk. How would you find out if they're right?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lead quality",
+        "collaboration"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what data would you pull",
+        "what if they are right"
+      ]
+    },
+    {
+      "id": "gro-037",
+      "text": "How would you build a demand gen plan for a new customer segment?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "demand gen",
+        "planning"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "market_share"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how would you learn what they care about",
+        "what would you spend in the first month"
+      ]
+    },
+    {
+      "id": "gro-038",
+      "text": "How do you decide whether content should sit behind a form or be free to read?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "content",
+        "lead capture"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you gate",
+        "how would you test it"
+      ]
+    },
+    {
+      "id": "gro-039",
+      "text": "Tell me about a growth experiment you ran that moved a number.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "data"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was the number before",
+        "how did you rule out other causes",
+        "what was your part specifically"
+      ]
+    },
+    {
+      "id": "gro-040",
+      "text": "Tell me about a test you were sure would win that lost.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experimentation",
+        "learning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why were you so sure",
+        "what did you do with the result"
+      ]
+    },
+    {
+      "id": "gro-041",
+      "text": "Tell me about a time a channel stopped working and you had to find the next one.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "channels",
+        "problem solving"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how did you notice",
+        "what did you try that didn't work"
+      ]
+    },
+    {
+      "id": "gro-042",
+      "text": "Tell me about a time you found a tracking or data error that changed your numbers.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data",
+        "quality"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you find it",
+        "who did you tell and how"
+      ]
+    },
+    {
+      "id": "gro-043",
+      "text": "Tell me about a time you disagreed with sales on lead quality or who to target.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "conflict",
+        "lead quality"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who was right",
+        "how was it decided"
+      ]
+    },
+    {
+      "id": "gro-044",
+      "text": "Tell me about a time you got product or engineering to build something growth needed.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "influence",
+        "collaboration"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you do while you waited",
+        "what did it move once it shipped"
+      ]
+    },
+    {
+      "id": "gro-045",
+      "text": "Tell me about a time talking to customers changed where you spent your budget.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "customer",
+        "budget allocation"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many people did you talk to",
+        "what did you stop doing"
+      ]
+    },
+    {
+      "id": "gro-046",
+      "text": "Tell me about a time you got a team that didn't test into the habit of testing.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "develop people",
+        "experimentation"
+      ],
+      "great_eight": [
+        "develop_people",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what made it stick",
+        "who pushed back"
+      ]
+    },
+    {
+      "id": "gro-047",
+      "text": "Tell me about a time you shut down a channel or campaign others wanted to keep.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "judgment",
+        "data"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how did you make the case",
+        "what happened after"
+      ]
+    },
+    {
+      "id": "gro-048",
+      "text": "Tell me about a time growth came with a cost you didn't expect, like churn or support load.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "judgment",
+        "retention"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "when did you notice",
+        "what would you do differently"
+      ]
+    },
+    {
+      "id": "gro-049",
+      "text": "Have you run paid social at a budget like ours?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "paid social",
+        "scale"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was the largest monthly budget you ran",
+        "what changes as spend grows"
+      ]
+    },
+    {
+      "id": "gro-050",
+      "text": "Have you managed paid search hands on, or through an agency?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "paid search"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "gro-051",
+      "text": "Have you owned SEO yourself, or worked alongside a specialist?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "seo"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "gro-052",
+      "text": "Have you worked on a product with a free plan or free trial?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "plg"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes when people can try before paying",
+        "what would you learn first here"
+      ]
+    },
+    {
+      "id": "gro-053",
+      "text": "Have you done demand generation for a B2B sales team?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "demand gen",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes when there's a sales team",
+        "who was the buyer"
+      ]
+    },
+    {
+      "id": "gro-054",
+      "text": "How comfortable are you pulling your own data with SQL?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "sql",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the most complex query you've written",
+        "do you need an analyst to check it"
+      ]
+    },
+    {
+      "id": "gro-055",
+      "text": "Have you used an experimentation tool like Optimizely or Statsig?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "experimentation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "gro-056",
+      "text": "Have you worked in product analytics tools like Amplitude or Mixpanel?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "gro-057",
+      "text": "Have you run growth for a mobile app?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "channels",
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes with app stores in the way",
+        "what would you learn first"
+      ]
+    },
+    {
+      "id": "gro-058",
+      "text": "Have you owned a growth budget yourself, with the final call on where it goes?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "budget allocation",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you do first with ours",
+        "how would you report on it"
+      ]
+    },
+    {
+      "id": "gro-059",
+      "text": "Which channels have you owned end to end?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "channels"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which one most recently",
+        "which one would you rather not run again"
+      ]
+    },
+    {
+      "id": "gro-060",
+      "text": "Roughly how much monthly ad spend have you managed?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience",
+        "scale"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "across how many channels"
+      ]
+    },
+    {
+      "id": "gro-061",
+      "text": "How many years have you worked in growth or performance marketing?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "hands on or managing"
+      ]
+    },
+    {
+      "id": "gro-062",
+      "text": "What would your first 90 days in this role look like?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning",
+        "growth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you look at first",
+        "what's your first early win"
+      ]
+    },
+    {
+      "id": "gro-063",
+      "text": "Our acquisition costs keep climbing. Where would you start?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "unit economics",
+        "problem solving"
+      ],
+      "great_eight": [
+        "attract_customers",
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's your first hypothesis",
+        "what data would you want"
+      ]
+    },
+    {
+      "id": "gro-064",
+      "text": "Most of our signups come from one channel. What would you do about that?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "channels",
+        "risk"
+      ],
+      "great_eight": [
+        "market_share",
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the risk if you do nothing",
+        "what would you test first"
+      ]
+    },
+    {
+      "id": "gro-065",
+      "text": "If we're starting growth from almost nothing with a small budget, what would you do first?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "growth",
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you run yourself",
+        "what number would you move first"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gro-066",
+      "text": "What would you need from product, data and sales to do this job well?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "panel",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "collaboration",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you need first",
+        "what would you do without it"
+      ]
+    },
+    {
+      "id": "gro-067",
+      "text": "Do you set the growth strategy, or are you the one running the campaigns day to day?",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "when were you last in an ad account",
+        "what did you change there"
+      ],
+      "notes": "Builder vs operator in growth wording. Scored on the literal answer first."
+    },
+    {
+      "id": "gro-068",
+      "text": "Give me the version of your background that matters for a growth role.",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "growth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that move",
+        "what you want next"
+      ]
+    },
+    {
+      "id": "gro-069",
+      "text": "Why growth, and not brand or another part of marketing?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "gro-070",
+      "text": "Before we finish, what would you like to ask me about how growth works here?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "curiosity",
+        "growth"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "anything else"
+      ],
+      "moment": "candidate_questions",
+      "notes": "Candidate's-own-questions moment, typed motivation as closest. The spoken reply is scored by question_quality (prompt 10), not the normal rubric."
+    }
+  ]
+}
