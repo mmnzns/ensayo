@@ -39,6 +39,43 @@ pub fn sweep(root: &Path, days: u32, keep: &HashSet<String>, now: SystemTime) ->
     removed
 }
 
+/// Bytes of answer audio on this computer: every file under `root`.
+pub fn audio_bytes(root: &Path) -> u64 {
+    fn walk(dir: &Path) -> u64 {
+        let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
+        entries.flatten().map(|e| match e.metadata() {
+            Ok(m) if m.is_dir() => walk(&e.path()),
+            Ok(m) => m.len(),
+            Err(_) => 0,
+        }).sum()
+    }
+    walk(root)
+}
+
+/// Removes every recording, the ones kept for the eval set too: the person asked for all of them to go. The text of
+/// the answers stays. Returns how many files went.
+pub fn remove_all(root: &Path) -> Result<usize, String> {
+    let Ok(sessions) = std::fs::read_dir(root) else { return Ok(0) };
+    let mut removed = 0;
+    for s in sessions.flatten() {
+        let dir = s.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        if let Ok(files) = std::fs::read_dir(&dir) {
+            for f in files.flatten() {
+                let path = f.path();
+                if path.extension().is_some_and(|e| e == "wav") {
+                    std::fs::remove_file(&path).map_err(|e| format!("Couldn't remove {}: {e}", path.display()))?;
+                    removed += 1;
+                }
+            }
+        }
+        let _ = std::fs::remove_dir(&dir); // only succeeds when empty
+    }
+    Ok(removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,7 +107,23 @@ mod tests {
     }
 
     #[test]
+    fn the_size_counts_every_recording_and_removing_all_clears_them_even_labelled_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        touch(root, "ses_a", "1.wav");
+        touch(root, "ses_a", "2.wav");
+        touch(root, "ses_b", "1.wav");
+        assert_eq!(audio_bytes(root), 12);
+        assert_eq!(remove_all(root).unwrap(), 3);
+        assert_eq!(audio_bytes(root), 0);
+        assert!(!root.join("ses_a").exists());
+        assert_eq!(remove_all(root).unwrap(), 0);
+    }
+
+    #[test]
     fn a_missing_audio_folder_is_fine() {
+        assert_eq!(audio_bytes(Path::new("/definitely/not/here")), 0);
+        assert_eq!(remove_all(Path::new("/definitely/not/here")), Ok(0));
         assert_eq!(sweep(Path::new("/definitely/not/here"), 30, &HashSet::new(), SystemTime::now()), 0);
     }
 }

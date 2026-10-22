@@ -8,6 +8,7 @@ pub mod conflicts;
 pub mod io;
 pub mod lock;
 pub mod migrate;
+pub mod relocate;
 pub mod reps;
 pub mod model;
 pub mod settings;

@@ -744,6 +744,18 @@ pub fn audio_retention() -> String {
     settings::load(&paths::settings_file()).audio_retention.unwrap_or_else(|| "30".to_string())
 }
 
+/// Megabytes of answer audio on this computer, for Settings, Privacy.
+#[tauri::command]
+pub async fn audio_usage_mb() -> Cmd<u64> {
+    blocking(|| Ok(audio_retention::audio_bytes(&paths::audio_dir()).div_ceil(1_000_000))).await
+}
+
+/// Delete every recording now. The transcripts and notes stay.
+#[tauri::command]
+pub async fn delete_all_audio() -> Cmd<usize> {
+    blocking(|| audio_retention::remove_all(&paths::audio_dir())).await
+}
+
 #[tauri::command]
 pub async fn set_audio_retention(choice: String) -> Cmd<()> {
     blocking(move || {

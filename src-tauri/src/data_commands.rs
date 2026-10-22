@@ -6,6 +6,7 @@ use crate::paths;
 use crate::storage::conflicts::{Conflict, Keep};
 use crate::storage::lock::{machine_name, LockState};
 use crate::storage::model::{Method, Profile, Story};
+use crate::storage::relocate;
 use crate::storage::settings;
 use crate::storage::{Result as StorageResult, Storage, StorageError};
 use chrono::{DateTime, Utc};
@@ -143,6 +144,23 @@ pub async fn resolve_conflict(copy: PathBuf, keep: Keep) -> Cmd<()> {
 #[tauri::command]
 pub async fn set_data_folder(folder: PathBuf) -> Cmd<()> {
     blocking(move || settings::set_data_folder(&paths::settings_file(), &folder).map_err(plain)).await
+}
+
+/// Changes the data folder to `folder`: copies the data there when it is empty, or switches to the Ensayo data already
+/// in it. Answers "copied" or "existing". The old folder is left as it was. The window reloads afterwards.
+#[tauri::command]
+pub async fn move_data_folder(folder: PathBuf) -> Cmd<&'static str> {
+    blocking(move || {
+        let from = data_folder();
+        let moved = relocate::prepare_move(&from, &folder).map_err(plain)?;
+        // Let go of the old folder's "open here" note before switching, or it would read as another computer's.
+        if let Ok(old) = Storage::open(from) {
+            let _ = old.release_lock(&machine_name());
+        }
+        settings::set_data_folder(&paths::settings_file(), &folder).map_err(plain)?;
+        Ok(if moved == relocate::Moved::Copied { "copied" } else { "existing" })
+    })
+    .await
 }
 
 /// Delete all Ensayo data: what Ensayo wrote in the data folder, saved keys, answer audio, Ensayo's own speech models
