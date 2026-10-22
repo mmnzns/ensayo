@@ -120,7 +120,7 @@ export default function Applications() {
             {rows.map((a, i) => {
               const nx = nextColumn(a);
               const filed = applicationTarget(a, store.targets);
-              const check = a.status !== "closed" && fitBanner(a, store.targets) !== null && !isKept(a.id, filed?.id);
+              const check = a.status !== "closed" && fitBanner(a, store.targets) !== null && !isKept(a.id, filed?.id, undefined, a.fitDismissedFor);
               return (
                 <Link key={a.id} to={withParams("6-3-application-overview", { app: a.id })} className="e-rowline" style={{ padding: "18px 0", textDecoration: "none", color: "var(--e-ink)", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
                   <span style={{ flex: "2 1 0", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>

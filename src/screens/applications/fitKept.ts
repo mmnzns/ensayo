@@ -1,5 +1,6 @@
-// "Keep <target>": the person looked at the banner and chose to leave the application where it is. Remembered on this
-// computer only (it is a convenience, not data), per application and target, so moving it later brings the banner back.
+// "Keep <target>": the person looked at the banner and chose to leave the application where it is. In the app it is saved
+// on the application (`fitDismissedFor`, cleared when it moves or its posting changes); this local list is the browser
+// preview's stand-in and a fallback.
 
 const KEY = "ensayo.fit-kept";
 
@@ -20,7 +21,9 @@ const defaultStorage = (): Storage | undefined => {
   }
 };
 
-export function isKept(appId: string, targetId: string | undefined, storage: Pick<Storage, "getItem"> | undefined = defaultStorage()): boolean {
+/** Kept when the application says so (saved in the data folder by the app), or, in the browser preview, on this computer. */
+export function isKept(appId: string, targetId: string | undefined, storage: Pick<Storage, "getItem"> | undefined = defaultStorage(), saved?: string | null): boolean {
+  if (saved && saved === targetId) return true;
   return !!storage && read(storage).includes(`${appId}:${targetId ?? ""}`);
 }
 

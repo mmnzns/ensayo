@@ -246,6 +246,8 @@ export interface Application {
   targetId?: string;
   /** How the posting reads against the targets; null until a posting is read. */
   targetFit?: TargetFit | null;
+  /** The target the person chose to keep on the fit banner; the banner stays quiet while it is still the filed target. */
+  fitDismissedFor?: string | null;
 }
 
 export interface SessionSummary {

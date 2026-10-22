@@ -16,7 +16,7 @@ export default function FitBanner({ app }: { app: Application }) {
   const [confirming, setConfirming] = useState(false);
   const [kept, setKept] = useState(false);
   const note = fitNote(app, store.targets);
-  if (!note || kept || isKept(app.id, note.filed?.id)) return null;
+  if (!note || kept || isKept(app.id, note.filed?.id, undefined, app.fitDismissedFor)) return null;
   const { suggested, filed } = note;
   const move = async () => {
     if (!suggested) return;
@@ -50,6 +50,8 @@ export default function FitBanner({ app }: { app: Application }) {
             onClick={() => {
               keepTarget(app.id, filed?.id);
               setKept(true);
+              // Saved on the application in the app; the browser preview keeps the local note only.
+              if (filed) void actions.updateApplication(app.id, { fitDismissedFor: filed.id }).catch(() => {});
             }}
           >{`Keep ${filed?.name ?? "this target"}`}</button>
         </div>

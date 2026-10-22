@@ -42,6 +42,8 @@ export interface AppPatch {
   targetId?: string;
   /** With a new `targetId`: make the question set again for that target (questions the person edited stay). */
   rebuildQuestions?: boolean;
+  /** "Keep <target>" on the fit banner: the target to stop suggesting another for; "" clears it. */
+  fitDismissedFor?: string;
 }
 
 /** One row of the whole stage list. A row without an id (or with one the process does not have) is a new stage. */
