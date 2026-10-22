@@ -215,6 +215,11 @@ pub fn attach_with(storage: &Storage, ai: Option<AiCtx>, unavailable: Option<&st
     finish_attach(storage, ai, unavailable, id, attach, read, at)
 }
 
+pub fn attach_bytes_with(storage: &Storage, ai: Option<AiCtx>, unavailable: Option<&str>, id: &str, file_name: &str, data: &[u8], confirm_replace: bool, read: bool, at: NaiveDateTime) -> StorageResult<ResumeOutcome> {
+    let attach = resume::attach_bytes(storage, id, file_name, data, confirm_replace, &NoFallback)?;
+    finish_attach(storage, ai, unavailable, id, attach, read, at)
+}
+
 pub fn use_from_with(storage: &Storage, ai: Option<AiCtx>, unavailable: Option<&str>, id: &str, from_id: &str, confirm_replace: bool, read: bool, at: NaiveDateTime) -> StorageResult<ResumeOutcome> {
     let attach = resume::use_resume_from(storage, id, from_id, confirm_replace, &NoFallback)?;
     finish_attach(storage, ai, unavailable, id, attach, read, at)
@@ -464,6 +469,18 @@ fn fix_resume_notice(mut out: ResumeOutcome, unavailable: Option<String>) -> Cmd
     Ok(out)
 }
 
+/// The same as `attach_resume`, for a file the window has in memory (a drop or the file picker gives no path):
+/// `data` is the file's bytes as an array of numbers, `file_name` its name with the extension.
+#[tauri::command]
+pub async fn attach_resume_bytes(application_id: String, file_name: String, data: Vec<u8>, confirm_replace: bool, read: bool) -> Cmd<ResumeOutcome> {
+    blocking(move || {
+        let s = open().map_err(plain)?;
+        let (out, unavailable) = with_engine(&application_id, |ai| attach_bytes_with(&s, ai, None, &application_id, &file_name, &data, confirm_replace, read, now()));
+        fix_resume_notice(out.map_err(plain)?, unavailable)
+    })
+    .await
+}
+
 /// "Use one from another application": copies that application's resume file.
 #[tauri::command]
 pub async fn use_resume_from(application_id: String, from_application_id: String, confirm_replace: bool, read: bool) -> Cmd<ResumeOutcome> {
@@ -512,6 +529,27 @@ pub async fn read_resume(application_id: String) -> Cmd<ResumeOutcome> {
         Ok(ResumeOutcome { attach: None, read: Some(read), bundle: bundle(&s, &application_id, now()).map_err(plain)? })
     })
     .await
+}
+
+/// "Open" on the Resume tab: shows the attached file in the computer's own viewer. The file is never changed.
+#[tauri::command]
+pub async fn open_resume(application_id: String) -> Cmd<()> {
+    blocking(move || {
+        let s = open().map_err(plain)?;
+        let path = resume::resume_file(&s, &application_id).map_err(plain)?.ok_or("There is no resume file to open. It was pasted as text, or none is attached.")?;
+        open_with_system(&path)
+    })
+    .await
+}
+
+fn open_with_system(path: &Path) -> Cmd<()> {
+    #[cfg(target_os = "macos")]
+    let spawned = std::process::Command::new("open").arg(path).spawn();
+    #[cfg(target_os = "windows")]
+    let spawned = std::process::Command::new("cmd").args(["/C", "start", ""]).arg(path).spawn();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let spawned = std::process::Command::new("xdg-open").arg(path).spawn();
+    spawned.map(|_| ()).map_err(|_| "Ensayo couldn't open the resume in your viewer.".to_string())
 }
 
 /// The Mock debrief reports which "say these out loud" items (`ms-1`...) were said in a Mock.

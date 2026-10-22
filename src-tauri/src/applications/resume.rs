@@ -306,26 +306,40 @@ fn install_file(storage: &Storage, id: &str, file_name: &str, kind: &str, bytes:
     Ok(result)
 }
 
-/// Attaches the resume the user sent. A resume that is already attached asks first (`needs_confirm`); on the yes the
-/// old one's lines are removed and the new file starts unread: reading it (`read_resume`) is the next step.
+/// Attaches the resume the user sent, from a file on this computer. See `attach_bytes`.
 pub fn attach_resume(storage: &Storage, id: &str, source: &Path, confirm_replace: bool, fallback: &dyn PdfFallback) -> StorageResult<AttachResult> {
     storage.application(id)?;
     let name = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "resume".into());
-    let ext = source.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    let kind = match ext.as_str() {
-        "pdf" => "pdf",
-        "docx" => "docx",
-        "doc" => return Err(StorageError::Invalid("Ensayo can read a PDF or a Word file saved as .docx, not the old .doc kind. Save it as a PDF or .docx, or paste the text of your resume.".into())),
-        _ => return Err(StorageError::Invalid("Ensayo can read a PDF or a Word (.docx) file. Choose one of those, or paste the text of your resume.".into())),
-    };
+    // The kind is checked before the file is read, so a wrong kind of file is refused without being opened.
+    resume_kind(&name)?;
     let bytes = std::fs::read(source).map_err(|_| StorageError::Invalid("Ensayo couldn't open that file. Check that it is still where you chose it.".into()))?;
+    attach_bytes(storage, id, &name, &bytes, confirm_replace, fallback)
+}
+
+fn resume_kind(name: &str) -> StorageResult<&'static str> {
+    let ext = Path::new(name).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "pdf" => Ok("pdf"),
+        "docx" => Ok("docx"),
+        "doc" => Err(StorageError::Invalid("Ensayo can read a PDF or a Word file saved as .docx, not the old .doc kind. Save it as a PDF or .docx, or paste the text of your resume.".into())),
+        _ => Err(StorageError::Invalid("Ensayo can read a PDF or a Word (.docx) file. Choose one of those, or paste the text of your resume.".into())),
+    }
+}
+
+/// Attaches the resume the user sent, from the file's bytes and name (what a drop or a file picker in the window
+/// gives). A resume that is already attached asks first (`needs_confirm`); on the yes the old one's lines are removed
+/// and the new file starts unread: reading it (`read_resume`) is the next step.
+pub fn attach_bytes(storage: &Storage, id: &str, file_name: &str, bytes: &[u8], confirm_replace: bool, fallback: &dyn PdfFallback) -> StorageResult<AttachResult> {
+    storage.application(id)?;
+    let kind = resume_kind(file_name)?;
     if bytes.len() > MAX_FILE_BYTES {
         return Err(StorageError::Invalid("That file is over 25 MB, which is too big for a resume. Choose a smaller one.".into()));
     }
     if load_resume(storage, id)?.is_some() && !confirm_replace {
         return Ok(AttachResult::plain("needs_confirm"));
     }
-    install_file(storage, id, &name, kind, &bytes, fallback)
+    let name = Path::new(file_name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "resume".into());
+    install_file(storage, id, &name, kind, bytes, fallback)
 }
 
 /// The text of a resume the user pasted, for a scanned PDF (or a resume with no file at all).
@@ -792,6 +806,14 @@ pub fn drop_story_suggestion(storage: &Storage, id: &str, bullet: &str) -> Stora
         return Err(StorageError::NotFound("that suggestion".into()));
     }
     save_resume(storage, id, &rec)
+}
+
+/// The attached file, for the Open button. None for a resume that was pasted (no file) or when nothing is attached.
+pub fn resume_file(storage: &Storage, id: &str) -> StorageResult<Option<PathBuf>> {
+    let Some(rec) = load_resume(storage, id)? else { return Ok(None) };
+    let Some(file) = rec.file else { return Ok(None) };
+    let path = resume_path(storage, id, &file)?;
+    Ok(path.is_file().then_some(path))
 }
 
 /// The Mock debrief says which "say these out loud" items were said in a Mock: counted per item and per Mock.
@@ -1438,5 +1460,30 @@ mod tests {
         let after = s.application(&id).unwrap();
         assert_eq!((after.role.as_str(), after.source.as_str()), ("Lifecycle Lead", "Referral from Sam"));
         assert_eq!(after.edited_by_user, before.edited_by_user);
+    }
+
+    #[test]
+    fn a_file_dropped_on_the_window_arrives_as_bytes_and_is_treated_the_same() {
+        let (_d, s, id) = setup();
+        let bytes = dana_pdf();
+        let r = attach_bytes(&s, &id, "C:\\Users\\dana\\Resume, Kestrel.pdf", &bytes, false, &NoFallback).unwrap();
+        assert_eq!(r.status, "attached");
+        let rec = resume_rec(&s, &id);
+        assert!(rec.file_name.ends_with("Kestrel.pdf") && !rec.file_name.contains('/'), "{}", rec.file_name);
+        assert_eq!(std::fs::read(s.application_path(&id, "resume/resume.pdf").unwrap()).unwrap(), bytes);
+        assert_eq!(attach_bytes(&s, &id, "second.pdf", &bytes, false, &NoFallback).unwrap().status, "needs_confirm");
+        assert!(attach_bytes(&s, &id, "second.exe", &bytes, true, &NoFallback).is_err());
+    }
+
+    #[test]
+    fn the_open_button_finds_the_attached_file_and_nothing_for_pasted_text() {
+        let (d, s, id) = setup();
+        assert!(resume_file(&s, &id).unwrap().is_none());
+        attach(&s, &id, &write(d.path(), "dana.pdf", &dana_pdf()), false);
+        let p = resume_file(&s, &id).unwrap().unwrap();
+        assert!(p.ends_with("resume/resume.pdf") && p.is_file());
+        let other = s.create_application(NewApplication { company: "Northpine".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 7).unwrap()).unwrap();
+        paste_resume_text(&s, &other.id, DANA, false).unwrap();
+        assert!(resume_file(&s, &other.id).unwrap().is_none(), "pasted text has no file to open");
     }
 }
