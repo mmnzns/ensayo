@@ -17,7 +17,7 @@ Ensayo is a free practice app for interviews: you answer out loud, it gives you 
 
 ## Updates
 
-New versions arrive by themselves. Ensayo checks in the background; when one is ready a note at the top says so, and **Update now** installs it and restarts. **Later** hides it until the next time you open Ensayo. **Settings, About** shows your version and has **Check for updates**. Ensayo never updates in the middle of a practice answer.
+New versions arrive by themselves. Ensayo checks in the background; when one is ready a note at the top says so, and **Update now** installs it and restarts. **Later** hides it until the next time you open Ensayo. **Settings, About** shows your version and has **Check for updates**. Ensayo never updates in the middle of a practice answer. On a Mac, an update keeps the microphone permission you gave the first time.
 
 ## First run
 

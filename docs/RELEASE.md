@@ -25,15 +25,23 @@ How it fits together:
 
 The first release with the updater (0.2.0 or later, whatever carries this change) is still installed by hand. From then on, testers on that version get the next one by themselves.
 
-## Code signing: deliberately none
+## Code signing: free and self-signed only
 
-Ensayo ships unsigned, like Talaan and Parlato, until an app earns the money for certificates (decided 2026-10-22). What that
-means, and what INSTALL.md already tells testers:
+Ensayo pays for no certificates, like Talaan and Parlato, until an app earns the money for them (decided 2026-10-22).
+What that means, and what INSTALL.md tells testers:
 
-- **Mac:** the app is ad-hoc signed. First open is right-click, Open. Because the signature changes with every build, macOS
-  asks for the microphone again after each update. To stop that later, add the secrets `APPLE_CERTIFICATE` (base64 of a
-  `.p12`), `APPLE_CERTIFICATE_PASSWORD` and `APPLE_SIGNING_IDENTITY`; the Mac job already passes them when present.
-- **Windows:** SmartScreen shows "Windows protected your PC" once; More info, Run anyway. A code-signing certificate removes it.
+- **Mac:** signed with "Parlato Code Signing", the free self-signed certificate Parlato and Talaan already use (decided
+  2026-10-22). The Mac jobs import it from the secrets `APPLE_CERTIFICATE` (base64 of the exported `.p12`),
+  `APPLE_CERTIFICATE_PASSWORD` and `APPLE_SIGNING_IDENTITY` (`Parlato Code Signing`). Because every build carries the same
+  signature, macOS keeps the microphone permission across updates. It is not an Apple certificate and the app is not
+  notarized, so the first open is still right-click, Open. Signed builds use the hardened runtime, so
+  `src-tauri/Entitlements.plist` must keep `com.apple.security.device.audio-input` or the microphone is blocked.
+  If the three secrets are missing, the Mac job builds ad-hoc signed, and macOS asks for the microphone again after each update.
+- **Windows:** unsigned. SmartScreen shows "Windows protected your PC" once; More info, Run anyway. A paid code-signing
+  certificate would remove it.
+
+Local signed Mac build (the certificate must be in the login keychain):
+`APPLE_SIGNING_IDENTITY="Parlato Code Signing" TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/ensayo.key)" npm run tauri build`.
 
 The updater's own signature (the minisign key above) is separate from both and is always on: it is what stops a tampered
 download from installing.
