@@ -112,13 +112,24 @@ pub fn http_error(provider: Provider, status: u16, body: &Value) -> AiError {
     }
 }
 
-fn client(timeout: Duration) -> reqwest::blocking::Client {
+pub(super) fn client(timeout: Duration) -> reqwest::blocking::Client {
     reqwest::blocking::Client::builder()
         .user_agent(concat!("Ensayo/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(10))
         .timeout(timeout)
         .build()
         .expect("http client")
+}
+
+/// A failure to get any answer at all (as opposed to an HTTP error status), in plain words.
+pub(super) fn transport_error(provider: Provider, url: &str, e: &reqwest::Error) -> AiError {
+    if e.is_connect() {
+        AiError::Unavailable(format!("Couldn't reach {} at {url}. Is it running, and is this computer online?", provider.name()))
+    } else if e.is_timeout() {
+        AiError::Failed(format!("{} took too long to answer.", provider.name()))
+    } else {
+        AiError::Failed(format!("Couldn't reach {}: {e}", provider.name()))
+    }
 }
 
 fn send(provider: Provider, method: reqwest::Method, url: &str, headers: &[(String, String)], body: Option<&Value>, timeout: Duration) -> Result<Value, AiError> {
@@ -129,15 +140,7 @@ fn send(provider: Provider, method: reqwest::Method, url: &str, headers: &[(Stri
     if let Some(b) = body {
         req = req.json(b);
     }
-    let resp = req.send().map_err(|e| {
-        if e.is_connect() {
-            AiError::Unavailable(format!("Couldn't reach {} at {url}. Is it running, and is this computer online?", provider.name()))
-        } else if e.is_timeout() {
-            AiError::Failed(format!("{} took too long to answer.", provider.name()))
-        } else {
-            AiError::Failed(format!("Couldn't reach {}: {e}", provider.name()))
-        }
-    })?;
+    let resp = req.send().map_err(|e| transport_error(provider, url, &e))?;
     let status = resp.status().as_u16();
     let body: Value = resp.json().unwrap_or(Value::Null);
     if !(200..300).contains(&status) {
