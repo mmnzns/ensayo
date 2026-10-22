@@ -2,6 +2,7 @@
 #[allow(dead_code)]
 mod ai;
 mod commands;
+mod data_commands;
 #[allow(dead_code)]
 mod keys;
 mod paths;
@@ -24,6 +25,20 @@ pub fn run() {
             commands::recording_level,
             commands::stop_recording,
             commands::transcribe_recording,
+            data_commands::data_status,
+            data_commands::acquire_data_lock,
+            data_commands::data_heartbeat,
+            data_commands::release_data_lock,
+            data_commands::load_all,
+            data_commands::save_profile,
+            data_commands::save_story,
+            data_commands::delete_story,
+            data_commands::set_proof_verified,
+            data_commands::save_method,
+            data_commands::delete_method,
+            data_commands::resolve_conflict,
+            data_commands::set_data_folder,
+            data_commands::delete_all_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ensayo");

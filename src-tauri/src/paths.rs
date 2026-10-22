@@ -16,3 +16,13 @@ pub fn models_dir() -> PathBuf {
 pub fn audio_dir() -> PathBuf {
     app_local().join("audio")
 }
+
+/// Where the data folder lives unless the user chose another one (Settings › Privacy › Data folder).
+pub fn default_data_dir() -> PathBuf {
+    app_local().join("data")
+}
+
+/// Machine-local settings (which data folder to use). Never inside the data folder: it may be synced between computers.
+pub fn settings_file() -> PathBuf {
+    app_local().join("settings.json")
+}

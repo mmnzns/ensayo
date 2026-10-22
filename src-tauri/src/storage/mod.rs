@@ -9,6 +9,7 @@ pub mod io;
 pub mod lock;
 pub mod migrate;
 pub mod model;
+pub mod settings;
 pub mod versioned;
 
 use std::path::PathBuf;
