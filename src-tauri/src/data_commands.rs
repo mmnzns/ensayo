@@ -150,6 +150,8 @@ pub async fn set_data_folder(folder: PathBuf) -> Cmd<()> {
 #[tauri::command]
 pub async fn delete_all_data() -> Cmd<()> {
     blocking(|| {
+        // The built-in local AI holds its model file open (Windows will not delete it then).
+        crate::ai::local::stop_shared();
         if let Ok(storage) = open_storage() {
             storage.delete_all().map_err(plain)?;
         }

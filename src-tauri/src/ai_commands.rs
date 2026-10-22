@@ -3,13 +3,18 @@
 //! the model client the rep loop uses, and keeps each session's running cost.
 
 use crate::ai::chat::ProviderLlm;
+use crate::ai::llm::Llm;
+use crate::ai::local;
+use crate::ai::local_models::{self, LocalModel};
 use crate::ai::providers::{catalog, compatible_base, default_base, list_models, recommended_model, AiError, Provider};
 use crate::keys;
 use crate::paths;
 use crate::scoring::run::Budget;
+use crate::speech::models::Location;
 use crate::storage::settings::{self, AiSettings};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 type Cmd<T> = std::result::Result<T, String>;
@@ -72,10 +77,61 @@ impl Resolved {
     }
 }
 
+/// The `AiSettings::provider` value that means the built-in local AI (the `ensayo-llm` helper).
+pub const LOCAL: &str = "local";
+
+/// The built-in local AI, ready to run: which model, and where its file is.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalChoice {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub file: PathBuf,
+}
+
+/// Which engine judges the answers.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Engine {
+    Cloud(Resolved),
+    Local(LocalChoice),
+}
+
+impl Engine {
+    /// The model client for this engine. The local one is shared, so the loaded model stays warm between answers.
+    pub fn client(&self) -> Box<dyn Llm> {
+        match self {
+            Engine::Cloud(r) => Box::new(r.client()),
+            Engine::Local(l) => Box::new(local::shared(&local::helper_path(), &l.file, l.id)),
+        }
+    }
+
+    /// The provider and spending cap a session's budget is kept with. Local use costs nothing, so it is counted
+    /// like a local server (`Provider::Compatible` is free) with no cap.
+    pub fn budget_basis(&self) -> (Provider, f64) {
+        match self {
+            Engine::Cloud(r) => (r.provider, r.cap_usd),
+            Engine::Local(_) => (Provider::Compatible, 0.0),
+        }
+    }
+}
+
+/// `resolve`, plus the built-in local AI (provider "local"): it needs no key but needs its model on this computer,
+/// Ensayo's own copy or one Talaan downloaded. `locate` finds a model (the real one reads the models folder).
+/// The model is named by `fast_model` (empty, or anything that is not a local model id, means the recommended one);
+/// Fast and Strong tasks use the same model.
+pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, locate: impl Fn(&LocalModel) -> Location) -> Result<Option<Engine>, String> {
+    if s.provider.trim() != LOCAL {
+        return resolve(s, key_of).map(|r| r.map(Engine::Cloud));
+    }
+    let model = local_models::choose(&s.fast_model);
+    let file = model.file_in(&locate(model)).ok_or_else(|| "Download the local AI model in Settings › AI.".to_string())?;
+    Ok(Some(Engine::Local(LocalChoice { id: model.info.id, name: model.info.name, file })))
+}
+
 /// The saved settings with the key looked up in the system's key storage.
-pub fn resolved_from_disk() -> Result<Option<Resolved>, String> {
+pub fn resolved_from_disk() -> Result<Option<Engine>, String> {
     let saved = settings::load(&paths::settings_file());
-    resolve(&saved.ai.unwrap_or_default(), keys::get)
+    let store = local_models::store();
+    resolve_engine(&saved.ai.unwrap_or_default(), keys::get, |m| store.locate(&m.info))
 }
 
 /// What each session has spent so far, kept in memory for the life of the app.
@@ -88,6 +144,8 @@ fn budgets() -> &'static Mutex<HashMap<String, Budget>> {
 pub fn with_budget<T>(session: &str, provider: Provider, cap_usd: f64, f: impl FnOnce(&mut Budget) -> T) -> T {
     let mut taken = budgets().lock().unwrap_or_else(|e| e.into_inner()).remove(session).unwrap_or_else(|| Budget::new(provider, cap_usd));
     taken.cap_usd = cap_usd;
+    // Settings may have changed engine since the last rep (cloud to local, say): the new one's prices apply.
+    taken.provider = provider;
     let out = f(&mut taken);
     budgets().lock().unwrap_or_else(|e| e.into_inner()).insert(session.to_string(), taken);
     out
@@ -145,8 +203,12 @@ pub async fn ai_settings() -> Cmd<AiView> {
 #[tauri::command]
 pub async fn save_ai_settings(ai: AiSettings) -> Cmd<()> {
     blocking(move || {
-        if !ai.provider.is_empty() && Provider::parse(&ai.provider).is_none() {
+        if !ai.provider.is_empty() && ai.provider != LOCAL && Provider::parse(&ai.provider).is_none() {
             return Err("That is not a feedback engine Ensayo knows.".to_string());
+        }
+        // Leaving the built-in local AI frees its memory now instead of after its idle minutes.
+        if ai.provider != LOCAL {
+            local::stop_shared();
         }
         let path = paths::settings_file();
         let mut s = settings::load(&path);
@@ -250,6 +312,82 @@ mod tests {
         assert_eq!(r.strong, "llama3.2:3b", "one local model does both jobs");
         a.base_url = "localhost:1234".into();
         assert_eq!(resolve(&a, no_keys).unwrap().unwrap().base, "http://localhost:1234/v1");
+    }
+
+    fn found(m: &LocalModel) -> Location {
+        Location::Own(PathBuf::from("/models/llm").join(m.info.id))
+    }
+
+    fn not_found(_: &LocalModel) -> Location {
+        Location::Missing
+    }
+
+    #[test]
+    fn the_local_engine_needs_its_model_and_says_where_to_download_it() {
+        let err = resolve_engine(&s("local"), no_keys, not_found).unwrap_err();
+        assert!(err.contains("Download the local AI model") && err.contains("Settings"), "{err}");
+    }
+
+    #[test]
+    fn the_local_engine_needs_no_key_and_runs_the_model_where_it_was_found() {
+        let Some(Engine::Local(l)) = resolve_engine(&s("local"), no_keys, found).unwrap() else { panic!("expected the local engine") };
+        assert_eq!((l.id, l.name), ("qwen3.5-4b", "Qwen3.5 4B"));
+        assert_eq!(l.file, PathBuf::from("/models/llm/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"));
+        // A copy Talaan downloaded counts too.
+        let talaan = |m: &LocalModel| Location::OnThisComputer(PathBuf::from("/talaan/models").join(m.info.id));
+        let Some(Engine::Local(l)) = resolve_engine(&s("local"), no_keys, talaan).unwrap() else { panic!() };
+        assert_eq!(l.file, PathBuf::from("/talaan/models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"));
+    }
+
+    #[test]
+    fn the_saved_model_picks_the_local_size_and_a_cloud_leftover_means_the_recommended_one() {
+        let mut a = s("local");
+        a.fast_model = "qwen3.5-9b".into();
+        let Some(Engine::Local(l)) = resolve_engine(&a, no_keys, found).unwrap() else { panic!() };
+        assert_eq!(l.id, "qwen3.5-9b");
+        a.fast_model = "claude-haiku-5-5".into();
+        let Some(Engine::Local(l)) = resolve_engine(&a, no_keys, found).unwrap() else { panic!() };
+        assert_eq!(l.id, "qwen3.5-4b");
+        // Only the chosen model has to be there.
+        a.fast_model = "qwen3.5-9b".into();
+        assert!(resolve_engine(&a, no_keys, |m| if m.recommended { found(m) } else { Location::Missing }).is_err());
+    }
+
+    #[test]
+    fn the_other_engines_resolve_as_before() {
+        assert_eq!(resolve_engine(&AiSettings::default(), no_keys, not_found), Ok(None));
+        assert!(resolve_engine(&s("claude"), no_keys, found).unwrap_err().contains("no Claude API key"));
+        let Some(Engine::Cloud(r)) = resolve_engine(&s("claude"), |_| Some("k".into()), not_found).unwrap() else { panic!() };
+        assert_eq!(Some(r), resolve(&s("claude"), |_| Some("k".into())).unwrap());
+    }
+
+    #[test]
+    fn local_use_is_free_and_uncapped() {
+        use crate::ai::llm::LlmReply;
+        let local = Engine::Local(LocalChoice { id: "qwen3.5-4b", name: "Qwen3.5 4B", file: PathBuf::from("/m.gguf") });
+        let (provider, cap) = local.budget_basis();
+        assert_eq!(cap, 0.0);
+        // Even a model id that is in the price table (a local server or a mislabelled reply) costs nothing here.
+        let reply = LlmReply { text: String::new(), input_tokens: 5_000_000, output_tokens: 1_000_000, model: "claude-opus-5-5".into() };
+        with_budget("ses_local_free", provider, cap, |b| {
+            b.spend.add_from(b.provider, &reply);
+            assert_eq!((b.spend.usd, b.spend.calls, b.spend.input_tokens, b.spend.approx), (0.0, 1, 5_000_000, false));
+            assert!(!b.spend.would_exceed(0.25));
+        });
+        assert_eq!(session_cost("ses_local_free".into()), 0.0);
+        let cloud = Engine::Cloud(resolve(&s("claude"), |_| Some("k".into())).unwrap().unwrap());
+        assert_eq!(cloud.budget_basis().0, Provider::Claude);
+    }
+
+    #[test]
+    fn switching_engine_mid_session_uses_the_new_engines_prices() {
+        use crate::ai::llm::LlmReply;
+        let id = "ses_switch_test";
+        let reply = LlmReply { text: String::new(), input_tokens: 1_000_000, output_tokens: 0, model: "claude-haiku-5-5".into() };
+        with_budget(id, Provider::Compatible, 0.0, |b| b.spend.add_from(b.provider, &reply));
+        assert_eq!(session_cost(id.into()), 0.0);
+        with_budget(id, Provider::Claude, 1.0, |b| b.spend.add_from(b.provider, &reply));
+        assert!(session_cost(id.into()) > 0.0, "a session that started on a free engine still counts Claude's price once it switches");
     }
 
     #[test]

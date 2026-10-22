@@ -361,9 +361,10 @@ fn transcribe_path(path: &Path, model_id: &str) -> Cmd<transcribe::Transcript> {
 /// timing only), runs it without one and returns the reason in plain words.
 fn with_ai<T>(session_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -> (T, Option<String>) {
     match crate::ai_commands::resolved_from_disk() {
-        Ok(Some(r)) => {
-            let llm = r.client();
-            let out = crate::ai_commands::with_budget(session_id, r.provider, r.cap_usd, |budget| f(Some(AiCtx { llm: &llm, budget })));
+        Ok(Some(engine)) => {
+            let llm = engine.client();
+            let (provider, cap_usd) = engine.budget_basis();
+            let out = crate::ai_commands::with_budget(session_id, provider, cap_usd, |budget| f(Some(AiCtx { llm: llm.as_ref(), budget })));
             (out, None)
         }
         Ok(None) => (f(None), None),
