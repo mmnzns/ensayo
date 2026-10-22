@@ -1,0 +1,17 @@
+{
+  "id": "st_deliverability",
+  "title": "Deliverability rescue",
+  "employer": "Brightwave",
+  "direct_answer": "I got newsletter opens from 21 back to 36 percent by fixing our sender reputation, not the subject lines.",
+  "context": "Newsletter opens dropped from 38 to 21 percent in a month. The team blamed subject lines and kept testing copy.",
+  "approach": "",
+  "action": "I moved us to a dedicated IP, set up a warmup, cleaned 40,000 inactive addresses and fixed DMARC.",
+  "ownership": "",
+  "result": "Sender score went from 62 to 94 in six weeks, and opens came back to 36 percent.",
+  "numbers": [
+    { "label": "Sender score", "before": "62", "after": "94" },
+    { "label": "Open rate", "before": "21", "after": "36", "unit": "%" }
+  ],
+  "best_for": ["fixing what's broken"],
+  "verified": false
+}

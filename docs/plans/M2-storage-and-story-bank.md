@@ -19,7 +19,7 @@
 3. **Version 0:** the shape stories would have had before `schema_version` existed. Defined here and kept as a fixture (`src-tauri/tests/fixtures/story-v0.json`): no `schema_version`, `numbers[]` instead of `proof_points[]`, no `branches`, `competencies`, `great_eight`, `usage` or `scale`. Migration fills them; the card `headline` is rebuilt from the first number.
 4. **A file from a newer Ensayo is never touched or rewritten** (error `TooNew`), so a second machine on an older build cannot corrupt data.
 5. **Verified rule (Build Plan):** a story is `verified` only when it has at least one proof point and every proof point is verified. `save_story` recomputes it; the user ticks proof points, not the story.
-6. **Methods on disk** are `{ schema_version, situation, spoken, story_ids }`. The UI-only `label` and `prompt` stay constants keyed by situation.
+6. **Names on disk.** Stories use the Build Plan and prompt-example names (`direct_answer`, `proof_points`, ...). Profile and methods use the UI's own names (`fullName`, `targetRole`, `storyIds`, ...), so no translation layer sits between the files and the screens. A method file is `{ schema_version, situation, spoken, storyIds }`; the UI-only `label` and `prompt` stay constants keyed by situation.
 7. **Delete all** removes only what Ensayo wrote (the profile, `bank/`, and the other known folders, the lock file), never the data folder itself and never unrelated files in it (it may be a user's synced Drive folder). The command also removes machine-local settings, audio, models and saved keys.
 8. **Browser fallback:** `npm run dev` (no Tauri) keeps working on the mock data, with edits held in memory only.
 

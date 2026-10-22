@@ -4,6 +4,9 @@
 //! never an empty bank created in its place.
 
 pub mod io;
+pub mod migrate;
+pub mod model;
+pub mod versioned;
 
 use std::path::PathBuf;
 
