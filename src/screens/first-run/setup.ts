@@ -143,7 +143,7 @@ export function downloadErrorLine(e: unknown): string {
   const text = message(e).trim();
   if (!text) return "The download didn't finish. Try again in a moment.";
   if (/^Couldn't download/i.test(text) && OFFLINE.test(text)) {
-    return "Ensayo couldn't reach the internet to download the speech model. Check your connection and try again, or press Skip and do it later in Settings, under Speech. Nothing is lost; a download picks up where it stopped.";
+    return "Ensayo couldn't reach the internet to download the speech model. Check your connection and try again, or press Skip and finish it later. Home reminds you until it is done. Nothing is lost; a download picks up where it stopped.";
   }
   return text;
 }
