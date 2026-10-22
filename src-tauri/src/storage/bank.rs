@@ -1,6 +1,8 @@
 //! Profile, stories and methods in the data folder: one small file per record.
 
 use super::io::{is_safe_id, list_json};
+use crate::metrics::numbers;
+use crate::scoring::coach::without_compounds;
 use super::migrate;
 use super::model::{Method, Story, SITUATIONS};
 use super::versioned::{load_record, save_record};
@@ -60,10 +62,31 @@ impl Storage {
         if story.title.trim().is_empty() {
             return Err(StorageError::Invalid("A story needs a title".into()));
         }
+        self.check_angles(story)?;
         let mut saved = story.clone();
         saved.verified = all_verified(&saved);
         save_record(&self.story_path(&saved.id), &saved)?;
         Ok(saved)
+    }
+
+    /// An angle may change what a story opens with, never its numbers: the headline can only carry numbers that are in
+    /// the story's proof points (same value, any wording; "seven-day" is a name, not a number). Angles for a target that
+    /// no longer exists are kept as they are.
+    fn check_angles(&self, story: &Story) -> Result<()> {
+        if story.angles.is_empty() {
+            return Ok(());
+        }
+        let targets = self.targets()?;
+        let known = crate::rep_commands::bank_numbers(std::slice::from_ref(story), std::slice::from_ref(&story.id));
+        for angle in &story.angles {
+            let Some(target) = targets.iter().find(|t| t.id == angle.target_id) else { continue };
+            let said = numbers::extract(&without_compounds(&angle.headline));
+            if let Some(bad) = said.iter().find(|n| !known.iter().any(|k| numbers::same(k.value, n.value))) {
+                let shown = if bad.percent { format!("{}%", bad.value) } else { bad.raw.clone() };
+                return Err(StorageError::Invalid(format!("The opening sentence for {} says {shown}, which is not one of this story's numbers.", target.name)));
+            }
+        }
+        Ok(())
     }
 
     /// Deletes a story and takes it out of every method that listed it.
@@ -313,6 +336,81 @@ mod tests {
         assert_eq!(fs::read_to_string(s.root().join("notes.txt")).unwrap(), "mine");
         assert_eq!(s.you().unwrap(), None);
         assert!(s.targets().unwrap().is_empty());
+    }
+
+    // ---------- story angles ----------
+
+    fn with_targets() -> (tempfile::TempDir, Storage, String) {
+        let (d, s) = fresh();
+        let t = s.save_target(&crate::storage::targets::Target { name: "B2B marketing ops".into(), ..Default::default() }).unwrap();
+        (d, s, t.id)
+    }
+
+    fn angled(target: &str, headline: &str) -> Story {
+        let mut st = story("st_act", "Activation");
+        st.proof_points = vec![ProofPoint { label: "activation".into(), metric: "7-day activation".into(), before: "31".into(), after: "44".into(), unit: "%".into(), approximate: false, verified: true }, point("team", true)];
+        st.proof_points[1].before = "".into();
+        st.proof_points[1].after = "12".into();
+        st.angles = vec![crate::storage::model::StoryAngle { target_id: target.into(), headline: headline.into(), emphasis: vec!["the test design".into()], lead_branch: Some("ownership".into()) }];
+        st
+    }
+
+    #[test]
+    fn an_angle_headline_may_use_the_numbers_of_the_story_in_any_wording() {
+        let (_d, s, t) = with_targets();
+        for ok in ["Activation up from 31% to 44%", "Activation went from thirty-one percent to forty-four percent", "I led a team of 12 and lifted activation", "No numbers here at all", ""] {
+            assert!(s.save_story(&angled(&t, ok)).is_ok(), "{ok}");
+        }
+    }
+
+    #[test]
+    fn compound_adjectives_like_seven_day_are_not_numbers() {
+        let (_d, s, t) = with_targets();
+        assert!(s.save_story(&angled(&t, "Seven-day activation from 31% to 44%")).is_ok());
+        assert!(s.save_story(&angled(&t, "7-day activation from 31% to 44%")).is_ok());
+        assert!(s.save_story(&angled(&t, "A three-step fix that lifted it 31% to 44%")).is_ok());
+    }
+
+    #[test]
+    fn a_number_that_is_not_in_the_story_is_refused_with_the_plain_line_and_nothing_is_saved() {
+        let (_d, s, t) = with_targets();
+        let err = s.save_story(&angled(&t, "Activation up 52% in a quarter")).unwrap_err();
+        assert!(matches!(err, StorageError::Invalid(_)));
+        assert_eq!(err.to_string(), "The opening sentence for B2B marketing ops says 52%, which is not one of this story's numbers.");
+        assert!(matches!(s.story("st_act"), Err(StorageError::NotFound(_))), "nothing was saved");
+        let err = s.save_story(&angled(&t, "Activation went up by fifty two percent")).unwrap_err();
+        assert!(err.to_string().contains("which is not one of this story's numbers."), "{err}");
+        let err = s.save_story(&angled(&t, "I led 30 people")).unwrap_err();
+        assert_eq!(err.to_string(), "The opening sentence for B2B marketing ops says 30, which is not one of this story's numbers.");
+    }
+
+    #[test]
+    fn an_angle_for_a_target_that_no_longer_exists_is_kept_as_it_is() {
+        let (_d, s, t) = with_targets();
+        let mut st = angled(&t, "Activation from 31% to 44%");
+        st.angles.push(crate::storage::model::StoryAngle { target_id: "tg_gone".into(), headline: "Up 99%".into(), emphasis: vec![], lead_branch: None });
+        let saved = s.save_story(&st).unwrap();
+        assert_eq!(saved.angles.len(), 2);
+        assert_eq!(s.story("st_act").unwrap().angles[1].target_id, "tg_gone");
+    }
+
+    #[test]
+    fn angles_are_written_in_snake_case_like_the_rest_of_the_story_and_a_story_without_any_has_no_angles_key() {
+        let (_d, s, t) = with_targets();
+        s.save_story(&angled(&t, "Activation from 31% to 44%")).unwrap();
+        let text = fs::read_to_string(s.root().join("bank/stories/st_act.json")).unwrap();
+        assert!(text.contains("\"angles\"") && text.contains("\"target_id\"") && text.contains("\"lead_branch\": \"ownership\"") && text.contains("\"emphasis\""), "{text}");
+        s.save_story(&story("st_plain", "Plain")).unwrap();
+        assert!(!fs::read_to_string(s.root().join("bank/stories/st_plain.json")).unwrap().contains("angles"));
+        let back = s.story("st_act").unwrap();
+        assert_eq!(back.angles[0].lead_branch.as_deref(), Some("ownership"));
+    }
+
+    #[test]
+    fn a_story_saved_by_v0_has_no_angles_and_still_reads() {
+        let (_d, s) = fresh();
+        fs::write(s.root().join("bank/stories/st_old.json"), r#"{"schema_version": 1, "id": "st_old", "title": "Old"}"#).unwrap();
+        assert!(s.story("st_old").unwrap().angles.is_empty());
     }
 
     #[test]
