@@ -30,7 +30,7 @@ export interface BankQuestion {
 // questions/ and the pack starts to apply, with no code change.
 const PACK_FILE: Partial<Record<RoleFamily, string>> = {
   lifecycle: "pack-lifecycle-marketing-ops",
-  marketing_ops: "pack-marketing-ops",
+  marketing_ops: "pack-lifecycle-marketing-ops",
   growth: "pack-growth",
   product_marketing: "pack-product-marketing",
 };

@@ -19,12 +19,16 @@ describe("the question pack follows the target's kind of role", () => {
   it("gives lifecycle the lifecycle pack and the general set", () => {
     expect(banksFor(t("a")).length).toBe(general + 70);
   });
-  it("gives the other kinds the general set, since only the lifecycle pack exists today", () => {
-    for (const roleFamily of ["marketing_ops", "growth", "product_marketing", "other"] as const) expect(banksFor(t("a", { roleFamily })).length).toBe(general);
+  it("gives marketing ops the same pack, which covers both kinds of role", () => {
+    expect(banksFor(t("a", { roleFamily: "marketing_ops" })).length).toBe(general + 70);
+  });
+  it("gives the other kinds the general set, since no pack exists for them yet", () => {
+    for (const roleFamily of ["growth", "product_marketing", "other"] as const) expect(banksFor(t("a", { roleFamily })).length).toBe(general);
   });
   it("says how big each pack is, none for a kind of role without one", () => {
     expect(packSize("lifecycle")).toBe(70);
-    expect(packSize("marketing_ops")).toBe(0);
+    expect(packSize("marketing_ops")).toBe(70);
+    expect(packSize("growth")).toBe(0);
   });
   it("still takes a role in words, as before", () => {
     expect(banksFor("Senior Lifecycle Marketing Manager").length).toBe(general + 70);
