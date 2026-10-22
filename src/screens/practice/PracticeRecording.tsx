@@ -1,8 +1,10 @@
 // Practice, recording. Draft from Design/screens/html/3-2-practice-recording.html. The timer and level bars are live; no audio.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
 import { useLive, beginRecording, getLive, HARD_CAP_SECONDS, recordingLevel, restartRecording, stopAndFinish } from "../../practice/live";
+import { SILENCE_START, silenceStep, silenceStop } from "../../practice/silence";
+import { readPrefs } from "../settings/prefs";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { THINK } from "./practiceFlow";
@@ -36,7 +38,12 @@ function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
 export default function PracticeRecording() {
   const { timerMaxSeconds, levelBars } = useStore().screens.practice;
   const { live, session, question, targetSeconds, endTo, onEnd } = usePractice();
-  const noClock = useLive().mode === "mock" && live;
+  const mode = useLive().mode;
+  // Mock is like the real call, so no clock. In a Drill the clock follows "Show the timer in Drill" in Settings.
+  const [showTimer] = useState(() => readPrefs().practice.timer);
+  const noClock = live && (mode === "mock" || !showTimer);
+  const silence = useRef(SILENCE_START);
+  const stopRef = useRef<() => void>(() => {});
   const [seconds, setSeconds] = useState(0);
   const [level, setLevel] = useState(0);
   const max = live ? Math.max(timerMaxSeconds, targetSeconds.to + 30) : timerMaxSeconds;
@@ -45,7 +52,18 @@ export default function PracticeRecording() {
   useEffect(() => {
     if (!live) return;
     if (getLive().phase !== "recording") void beginRecording();
-    const id = window.setInterval(() => void recordingLevel().then(setLevel), 130);
+    const autoStop = readPrefs().practice.autoStop;
+    silence.current = SILENCE_START;
+    const id = window.setInterval(
+      () =>
+        void recordingLevel().then((l) => {
+          setLevel(l);
+          if (!autoStop) return;
+          silence.current = silenceStep(silence.current, l, 130);
+          if (silenceStop(silence.current)) stopRef.current();
+        }),
+      130,
+    );
     return () => window.clearInterval(id);
   }, [live]);
 
@@ -59,12 +77,14 @@ export default function PracticeRecording() {
     if (live) void stopAndFinish();
     go(THINK);
   };
+  stopRef.current = stop;
   const end = () => {
     onEnd?.();
     go(endTo);
   };
   const startOver = () => {
     setSeconds(0);
+    silence.current = SILENCE_START;
     if (live) void restartRecording();
   };
   useEffect(() => {

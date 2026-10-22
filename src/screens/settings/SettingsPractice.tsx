@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useStore } from "../../data/store";
 import { ChipChoice, RowText, SettingsLayout, ToggleRow } from "./parts";
+import { readPrefs, stageIdOf, stageLabelOf, updatePractice, type PracticePrefs } from "./prefs";
 import { applyTheme, getStoredTheme, type ThemeMode } from "./theme";
 
 const APPEARANCE: { mode: ThemeMode; label: string }[] = [
@@ -9,6 +10,8 @@ const APPEARANCE: { mode: ThemeMode; label: string }[] = [
   { mode: "light", label: "Light" },
   { mode: "dark", label: "Dark" },
 ];
+
+const LENGTHS: PracticePrefs["questions"][] = [3, 5, 10];
 
 const SHORTCUTS: [string, string][] = [
   ["Space", "start and stop"],
@@ -20,14 +23,12 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 export default function SettingsPractice() {
-  const { stages, practice } = useStore().screens.settings;
-  const [stage, setStage] = useState(practice.stage);
-  const [drill, setDrill] = useState<number>(practice.drillQuestions);
-  const [tries, setTries] = useState<number>(practice.tries);
-  const [timer, setTimer] = useState(practice.timer);
-  const [followUps, setFollowUps] = useState(practice.followUps);
-  const [autoStop, setAutoStop] = useState(practice.autoStop);
+  const { stages } = useStore().screens.settings;
+  // These are kept on this computer (see prefs.ts), and Start a session begins from them.
+  const [prefs, setPrefs] = useState<PracticePrefs>(() => readPrefs().practice);
   const [theme, setTheme] = useState<ThemeMode>(getStoredTheme);
+  const change = (c: Partial<PracticePrefs>) => setPrefs(updatePractice(c).practice);
+  const { stage, questions: drill, tries, timer, followUps, autoStop } = prefs;
 
   const pickTheme = (mode: ThemeMode) => {
     setTheme(mode);
@@ -40,7 +41,7 @@ export default function SettingsPractice() {
         <span className="e-h2" style={{ paddingBottom: "10px" }}>Practice</span>
         <div className="e-rowline">
           <RowText title="Default stage" hint="Which interviewer you practice with when no application is picked." />
-          <select className="e-input" style={{ width: "200px" }} aria-label="Default stage" value={stage} onChange={(e) => setStage(e.target.value)}>
+          <select className="e-input" style={{ width: "200px" }} aria-label="Default stage" value={stageLabelOf(stage)} onChange={(e) => change({ stage: stageIdOf(e.target.value) })}>
             {stages.map((s) => (
               <option key={s}>{s}</option>
             ))}
@@ -48,18 +49,18 @@ export default function SettingsPractice() {
         </div>
         <div className="e-rowline">
           <RowText title="Questions per Drill" hint="Mock always runs the stage's natural length." />
-          <ChipChoice options={[3, 5, 10]} value={drill} onChange={setDrill} label="Questions per Drill" />
+          <ChipChoice options={LENGTHS} value={drill} onChange={(v) => change({ questions: v })} label="Questions per Drill" />
         </div>
         <div className="e-rowline">
           <span style={{ flex: "1" }}>Tries per question</span>
-          <select className="e-input" style={{ width: "200px" }} aria-label="Tries per question" value={tries} onChange={(e) => setTries(Number(e.target.value))}>
+          <select className="e-input" style={{ width: "200px" }} aria-label="Tries per question" value={tries} onChange={(e) => change({ tries: e.target.value === "2" ? 2 : 3 })}>
             <option value={2}>2</option>
             <option value={3}>3</option>
           </select>
         </div>
-        <ToggleRow title="Show the timer in Drill" hint="Hidden in Mock, like a real call." checked={timer} onChange={setTimer} />
-        <ToggleRow title="Follow-up questions" checked={followUps} onChange={setFollowUps} />
-        <ToggleRow title="Stop recording after 8 seconds of silence" hint="Off by default. Pausing to find a word shouldn't cut you off." checked={autoStop} onChange={setAutoStop} />
+        <ToggleRow title="Show the timer in Drill" hint="Hidden in Mock, like a real call." checked={timer} onChange={(v) => change({ timer: v })} />
+        <ToggleRow title="Follow-up questions" checked={followUps} onChange={(v) => change({ followUps: v })} />
+        <ToggleRow title="Stop recording after 8 seconds of silence" hint="Off by default. Pausing to find a word shouldn't cut you off." checked={autoStop} onChange={(v) => change({ autoStop: v })} />
         <div className="e-rowline">
           <span style={{ flex: "1" }}>Appearance</span>
           <div style={{ display: "flex", gap: "6px" }} role="group" aria-label="Appearance">

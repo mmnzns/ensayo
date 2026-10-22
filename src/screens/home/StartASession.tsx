@@ -4,6 +4,7 @@ import type { Mode, StageId } from "../../data/types";
 import { checkAi, liveAvailable, startLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
+import { readPrefs } from "../settings/prefs";
 import { dayBadge, lowerFirst } from "./format";
 import { clearSessionPreset, peekSessionPreset, type SessionSource } from "./preset";
 
@@ -21,6 +22,8 @@ export default function StartASession() {
   const nextAt = next ? new Date(next.stage.at as string) : null;
 
   const [preset] = useState(peekSessionPreset);
+  // What Settings, Practice says to start from: the stage, how many questions, tries and follow-ups.
+  const [saved] = useState(() => readPrefs().practice);
   useEffect(() => clearSessionPreset, []);
 
   const [mode, setModeState] = useState<Mode>(preset.mode ?? "drill");
@@ -31,11 +34,11 @@ export default function StartASession() {
     if (preset.mode === "mock" && (wanted === "story" || wanted === "own")) return next ? "application" : "stage";
     return wanted;
   });
-  const [stage, setStage] = useState<StageId>(preset.stage ?? next?.stage.stage ?? blurbs[0]?.stage ?? "recruiter");
+  const [stage, setStage] = useState<StageId>(preset.stage ?? next?.stage.stage ?? (blurbs.some((b) => b.stage === saved.stage) ? saved.stage : (blurbs[0]?.stage ?? "recruiter")));
   const [storyId, setStoryId] = useState(stories[0]?.id ?? "");
   const [question, setQuestion] = useState("");
-  const [length, setLength] = useState(5);
-  const [followUps, setFollowUps] = useState(true);
+  const [length, setLength] = useState<number>(saved.questions);
+  const [followUps, setFollowUps] = useState(saved.followUps);
 
   const mock = mode === "mock";
   const setMode = (m: Mode) => {
@@ -67,6 +70,8 @@ export default function StartASession() {
         ownQuestion: question,
         startup: app?.application.startup ?? false,
         applicationId: app?.application.id ?? null,
+        tries: saved.tries,
+        followUps,
       },
       { targetRole: profile.targetRole, stories, methods: store.methods },
     );
@@ -99,7 +104,7 @@ export default function StartASession() {
             </span>
             <ul className="e-meta" style={{ margin: "0", paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px", lineHeight: "1.45" }}>
               <li>A note right after every answer, with a line to say instead</li>
-              <li>Answer the same question again, up to 3 tries, and see what changed</li>
+              <li>Answer the same question again, up to {saved.tries} tries, and see what changed</li>
               <li>Timer on screen; follow-ups when your answer leaves a gap</li>
             </ul>
             <span className="e-small" style={{ paddingTop: "4px" }}>

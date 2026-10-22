@@ -43,6 +43,10 @@ export interface LiveState {
   index: number;
   /** 1 to 3: tries at the current question. */
   attempt: number;
+  /** How many tries a question gets in this session (Settings, Practice); 3 unless chosen otherwise. */
+  tries: number;
+  /** A Drill offers follow-up questions after an answer (Start a session, Settings, Practice). Always true in a Mock. */
+  followUps: boolean;
   phase: Phase;
   recordingPath: string | null;
   /** What each attempt at the current question showed, index 0 is attempt 1. */
@@ -81,6 +85,8 @@ const INITIAL: LiveState = {
   questions: [],
   index: 0,
   attempt: 1,
+  tries: MAX_ATTEMPTS,
+  followUps: true,
   phase: "idle",
   recordingPath: null,
   attempts: [],
@@ -162,6 +168,10 @@ export interface StartOptions {
   ownQuestion?: string;
   startup?: boolean;
   applicationId?: string | null;
+  /** Tries per question in a Drill: 2 or 3. */
+  tries?: number;
+  /** Follow-up questions in a Drill; the default is yes. */
+  followUps?: boolean;
   seed?: number;
 }
 
@@ -175,7 +185,7 @@ export function startLive(o: StartOptions, ctx: { targetRole: string; stories: S
       : pickQuestions({ bank: banksFor(ctx.targetRole), stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed: o.seed ?? Date.now() });
   const seed = o.seed ?? Date.now();
   const closing = o.mode === "mock" ? pickClosing(banksFor(ctx.targetRole), o.stage, seed) : undefined;
-  state = { ...INITIAL, active: true, mode: o.mode, stage: o.stage, applicationId: o.applicationId ?? null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
+  state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
   listeners.forEach((l) => l());
 }
 
@@ -380,7 +390,7 @@ export function resultRoute(): string {
 
 /** "Again": one more go at the same question, up to three. */
 export function tryAgain() {
-  set({ attempt: Math.min(MAX_ATTEMPTS, state.attempt + 1), phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null, clarify: null });
+  set({ attempt: Math.min(state.tries, state.attempt + 1), phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null, clarify: null });
 }
 
 /** Moves to the next question, or says the session is over. */

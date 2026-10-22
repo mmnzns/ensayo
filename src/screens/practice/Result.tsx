@@ -140,10 +140,11 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
 
   const wins = attempt?.wins ?? [];
   const everythingWorked = wins.length > 0;
-  const lastAttempt = number >= MAX_ATTEMPTS;
+  const maxTries = live ? state.tries : MAX_ATTEMPTS;
+  const lastAttempt = number >= maxTries;
   // A real session offers a follow-up after any answer once a feedback engine is set up (the interviewer needs one);
   // the preview keeps the old rule.
-  const canFollowUp = live ? state.aiReady && !inFollowUp : number >= 2 && !everythingWorked;
+  const canFollowUp = live ? state.aiReady && state.followUps && !inFollowUp : number >= 2 && !everythingWorked;
   const moreFollowUps = inFollowUp && !!state.followUp && state.followUp.number < state.followUp.of;
 
   const again = () => {
@@ -223,7 +224,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
           <section className="e-card" style={{ flex: "999 1 560px", minWidth: "0", padding: "36px", display: "flex", flexDirection: "column", gap: "24px" }}>
             {delta ? (
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-                <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${MAX_ATTEMPTS}`}</span>
+                <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${maxTries}`}</span>
                 {delta.caption ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
                     <span className="e-win" style={{ fontSize: "21px" }}>{deltaText}</span>
@@ -234,7 +235,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
                 )}
               </div>
             ) : (
-              <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${MAX_ATTEMPTS}`}</span>
+              <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${maxTries}`}</span>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
               <span className="e-label">Coach's note</span>
