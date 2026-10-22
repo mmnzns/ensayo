@@ -6,6 +6,7 @@ mod commands;
 mod keys;
 mod paths;
 mod platform;
+mod storage;
 mod recorder;
 mod speech;
 
