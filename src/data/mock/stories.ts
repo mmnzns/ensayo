@@ -26,6 +26,10 @@ export const stories: Story[] = [
     ],
     verified: true,
     usage: { practiced: 9, fits: 5, saidNumber: 8 },
+    angles: [
+      { target_id: "tg_b2c", headline: "I moved seven-day activation from 31 to 44 percent by fixing what happened after signup, not the emails.", emphasis: ["Activation", "Customer behavior", "Experiments"], lead_branch: "data" },
+      { target_id: "tg_b2b", headline: "Our activation problem turned out to be a broken handoff in the data, and fixing it took activation from 31 to 44 percent.", emphasis: ["Funnel data", "Systems", "Working across teams"], lead_branch: "failure" },
+    ],
   },
   {
     id: "st_reactivation",
