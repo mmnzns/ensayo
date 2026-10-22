@@ -9,7 +9,8 @@ name: Release
 #   latest.json:   built by scripts/latest-json.mjs from every .sig, after all three builds finished
 # Publish the draft by hand, in the public repo, after trying the installers (docs/RELEASE.md). Until it is
 # published the updater doesn't see it (latest/download only serves published releases).
-# Nothing here is signed with a paid certificate: testers get one-time steps in INSTALL.md.
+# Nothing here uses a paid certificate: the Mac is signed with the free self-signed one, Windows is unsigned, and
+# testers get one-time steps in INSTALL.md.
 #
 # Secrets:
 #   RELEASES_TOKEN                          fine-grained token with contents:write on RELEASE_REPO only
@@ -116,12 +117,18 @@ jobs:
       - run: npm ci
       # Builds ensayo-llm for this runner's own architecture (the helper script uses the host triple).
       - run: sh scripts/build-llm-helper.sh
+      # Tauri's own certificate import cannot trust a self-signed certificate; Talaan needed this step too (three
+      # failed CI runs). So the certificate goes into a temporary keychain first and Tauri only gets the name.
+      - name: Signing certificate into a temporary keychain
+        uses: ./.github/actions/mac-signing
+        with:
+          certificate: ${{ secrets.APPLE_CERTIFICATE }}
+          password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
       - name: Build the app, the disk image and the updater package
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: npm run tauri build -- --target ${{ matrix.target }} --bundles app,dmg
       - name: Check the Mac signature
@@ -196,15 +203,23 @@ jobs:
         run: |
           . ./scripts/cpu-baseline.ps1
           npm run tauri build -- --bundles nsis
+          $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
+          if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }
+      - name: Mac helper
+        if: runner.os == 'macOS'
+        run: sh scripts/build-llm-helper.sh
+      - name: Signing certificate into a temporary keychain
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/mac-signing
+        with:
+          certificate: ${{ secrets.APPLE_CERTIFICATE }}
+          password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
       - name: Mac disk image
         if: runner.os == 'macOS'
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: |
-          sh scripts/build-llm-helper.sh
-          npm run tauri build -- --bundles app,dmg
+        run: npm run tauri build -- --bundles app,dmg
       - name: Check the Mac signature
         if: runner.os == 'macOS'
         env:

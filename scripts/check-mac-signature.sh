@@ -11,6 +11,6 @@ if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
   exit 0
 fi
 echo "$info" | grep -q "^Authority=$APPLE_SIGNING_IDENTITY\$" || { echo "::error::not signed by $APPLE_SIGNING_IDENTITY"; exit 1; }
-codesign -d --entitlements - --xml "$app" 2>/dev/null | grep -q "com.apple.security.device.audio-input" \
+codesign -d --entitlements - "$app" 2>&1 | grep -q "com.apple.security.device.audio-input" \
   || { echo "::error::the microphone entitlement is missing, so a signed build cannot hear anyone"; exit 1; }
 echo "Signed by $APPLE_SIGNING_IDENTITY with the microphone entitlement."
