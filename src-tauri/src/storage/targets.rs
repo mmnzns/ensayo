@@ -1075,7 +1075,7 @@ mod tests {
     fn snapshot(dir: &std::path::Path) -> std::collections::BTreeMap<String, Vec<u8>> {
         fn walk(base: &std::path::Path, dir: &std::path::Path, out: &mut std::collections::BTreeMap<String, Vec<u8>>) {
             for e in fs::read_dir(dir).unwrap().flatten() {
-                if e.path().is_dir() { walk(base, &e.path(), out) } else { out.insert(e.path().strip_prefix(base).unwrap().to_string_lossy().into_owned(), fs::read(e.path()).unwrap()); }
+                if e.path().is_dir() { walk(base, &e.path(), out) } else { out.insert(e.path().strip_prefix(base).unwrap().to_string_lossy().replace('\\', "/"), fs::read(e.path()).unwrap()); }
             }
         }
         let mut out = Default::default();

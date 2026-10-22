@@ -91,7 +91,9 @@ describe("the result of an answer that was said differently", () => {
     expect(html).toContain("In the recruiter stage you said &quot;four weeks&quot;. Here you said &quot;two weeks&quot;.");
     expect(html).toContain("Said it the way you said it before");
     expect(html).not.toContain("c1_consistent");
-    for (const banned of ["STAR", "rubric", "criterion", "score", "fail"]) expect(html, banned).not.toContain(banned);
+    // The question itself is picked from the bank and may say "failed"; what Ensayo writes must not.
+    const ours = html.replace(/<h1[^>]*>.*?<\/h1>/s, "");
+    for (const banned of ["STAR", "rubric", "criterion", "score", "fail"]) expect(ours, banned).not.toContain(banned);
   });
 });
 
