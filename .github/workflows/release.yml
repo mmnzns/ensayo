@@ -161,11 +161,11 @@ jobs:
   test-build:
     if: github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      LIBCLANG_PATH: C:\Program Files\LLVM\bin
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
@@ -183,6 +183,9 @@ jobs:
       - name: Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
+        # Only here: on the Mac a Windows LLVM path stops bindgen finding libclang.
+        env:
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
         run: |
           ./scripts/build-llm-helper.ps1
           . ./scripts/cpu-baseline.ps1
