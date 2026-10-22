@@ -126,7 +126,9 @@ export default function StartASession() {
               <span className="e-meta" style={{ flex: "1" }}>
                 Practicing for <strong style={{ color: "var(--e-ink)" }}>{sessionTarget.name}</strong>: its pitch, question pack and lead stories.
               </span>
-              {!appFiled && (
+              {appFiled ? (
+                <span className="e-small" title="An application keeps its own target. Change it in the application's details.">set by the application</span>
+              ) : (
                 <button type="button" className="e-small" aria-expanded={changing} onClick={() => setChanging(!changing)} style={{ border: "none", background: "none", padding: 0, cursor: "pointer", font: "inherit", fontSize: "13px", color: "var(--e-primary-dark)", textDecoration: "underline" }}>
                   {changing ? "Close" : "Change"}
                 </button>

@@ -6,7 +6,7 @@ import { isApp, useActions } from "../../data/real";
 import { useHashParam } from "../../data/selection";
 import { useStore } from "../../data/store";
 import { blankTarget } from "../../data/targetState";
-import { angleFor, applicationTarget } from "../../data/targets";
+import { angleFor, applicationTarget, roleFamilyOf } from "../../data/targets";
 import type { CompanyStage, RoleFamily, SellsTo, Seniority, StageId, Story, Target } from "../../data/types";
 import { STAGE_LABELS } from "../../practice/habits";
 import { packSize } from "../../practice/questions";
@@ -106,6 +106,9 @@ function EditorForm({ base, pitchCopied, draftFailed }: { base: Target | undefin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [shown, setShown] = useState(false);
+  // The kind of role follows the role words until it is chosen by hand.
+  const familyChosen = useRef(!isNew);
+  const setRole = (role: string) => setF((x) => ({ ...x, role, roleFamily: familyChosen.current ? x.roleFamily : roleFamilyOf(role) }));
 
   const save = async () => {
     setShown(true);
@@ -161,12 +164,12 @@ function EditorForm({ base, pitchCopied, draftFailed }: { base: Target | undefin
               </div>
               <div className="e-field">
                 <label htmlFor="rl">Role you're going for</label>
-                <input id="rl" className="e-input" value={f.role} onChange={(e) => set("role", e.target.value)} aria-invalid={shown && !!problem?.role} />
+                <input id="rl" className="e-input" value={f.role} onChange={(e) => setRole(e.target.value)} aria-invalid={shown && !!problem?.role} />
                 {shown && problem?.role && <span className="e-small" role="alert" style={{ color: "var(--e-ink)" }}>{problem.role}</span>}
               </div>
               <div className="e-field">
                 <label htmlFor="rf">Kind of role</label>
-                <select id="rf" className="e-input" value={f.roleFamily} onChange={(e) => set("roleFamily", e.target.value as RoleFamily)}>
+                <select id="rf" className="e-input" value={f.roleFamily} onChange={(e) => { familyChosen.current = true; set("roleFamily", e.target.value as RoleFamily); }}>
                   {FAMILIES.map((x) => (
                     <option key={x.id} value={x.id}>{x.label}</option>
                   ))}
