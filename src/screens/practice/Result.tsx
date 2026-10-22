@@ -7,7 +7,7 @@ import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { Kbd, SessionHeader } from "./parts";
 import { ASK, FOLLOW_UP, MAX_ATTEMPTS, nextAttempt, nextQuestion, RECORD, setAttempt } from "./practiceFlow";
-import { hush, speak } from "./speak";
+import { hush, speak, speakTrySaying } from "./speak";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
 
@@ -133,6 +133,10 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
       stopListening();
     };
   }, [number, live]);
+
+  // The better line is read on its own when both voice switches in Settings are on.
+  const trySayingLine = attempt?.trySaying;
+  useEffect(() => speakTrySaying(trySayingLine), [trySayingLine, repKey]);
 
   const wins = attempt?.wins ?? [];
   const everythingWorked = wins.length > 0;

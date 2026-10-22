@@ -1,27 +1,14 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { say, stopSaying } from "../../practice/voice";
 import { useRoute } from "../../ui/router";
 
-/** Read a line aloud with the browser's voice when there is one. Returns false when nothing can speak. */
+/** Read a line aloud in the voice chosen in Settings. Returns false when nothing can speak. */
 export function speak(text: string, onEnd?: () => void): boolean {
-  if (typeof window === "undefined" || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return false;
-  try {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.onend = () => onEnd?.();
-    u.onerror = () => onEnd?.();
-    window.speechSynthesis.speak(u);
-    return true;
-  } catch {
-    return false;
-  }
+  return say(text, onEnd);
 }
 
 export function stopSpeaking() {
-  try {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
-  } catch {
-    /* nothing to stop */
-  }
+  stopSaying();
 }
 
 /** A Listen button: reads `text` aloud, and says Stop while it speaks. Quiet when the device has no voice. */

@@ -5,7 +5,7 @@ import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { HearItAgain, Kbd, MicButton, Presence, SessionHeader } from "./parts";
 import { ASK, RECORD, resetFlow } from "./practiceFlow";
-import { hush, speak } from "./speak";
+import { hush, speak, speakQuestion } from "./speak";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
 
@@ -18,6 +18,9 @@ export default function PracticeInterviewerAsking() {
     resetFlow();
     return hush;
   }, []);
+
+  // Read the question on its own when Settings, Voice says so; "Hear it again" always works.
+  useEffect(() => speakQuestion(question), [question]);
 
   const start = () => go(RECORD);
   const hear = () => speak(question);

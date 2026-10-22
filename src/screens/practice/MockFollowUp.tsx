@@ -4,7 +4,7 @@ import { useStore } from "../../data/store";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { HearItAgain, Kbd, MicButton, Presence, SessionHeader } from "./parts";
-import { hush, speak } from "./speak";
+import { hush, speak, speakQuestion } from "./speak";
 import { useKeys } from "./useKeys";
 
 const NEXT = "4-2-mock-your-questions";
@@ -14,6 +14,7 @@ export default function MockFollowUp() {
   const { session, followUp } = useStore().screens.practice.mockFollowUp;
 
   useEffect(() => hush, []);
+  useEffect(() => speakQuestion(followUp.question), [followUp.question]);
 
   const answer = () => go(NEXT);
   const hear = () => speak(followUp.question);

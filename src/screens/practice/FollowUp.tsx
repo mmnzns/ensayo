@@ -6,7 +6,7 @@ import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { HearItAgain, Kbd, MicButton, Presence, SessionHeader } from "./parts";
 import { ASK, RECORD, resetFlow, setFollowUp, THINK } from "./practiceFlow";
-import { hush, speak } from "./speak";
+import { hush, speak, speakQuestion } from "./speak";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
 
@@ -19,6 +19,7 @@ export default function FollowUp() {
   const failed = live && state.phase === "error";
 
   useEffect(() => hush, []);
+  useEffect(() => speakQuestion(followUp.question), [followUp.question]);
 
   const answer = () => {
     if (live) return go(RECORD);
