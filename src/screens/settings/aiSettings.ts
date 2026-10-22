@@ -37,31 +37,35 @@ export const OTHER_MODEL = "Other model…";
 const RECOMMENDED = " (recommended)";
 const AUTOMATIC = "Automatic · ";
 const COMPATIBLE = "compatible";
+/** The provider id for the built-in local AI (Ensayo's own helper and a model on this computer). */
+export const BUILT_IN = "local";
 
 // ---------- Kinds and providers ----------
 
-export const kindOfProvider = (id: string): AiKind => (id === "" ? "timing" : id === COMPATIBLE ? "local" : "key");
+export const kindOfProvider = (id: string): AiKind => (id === "" ? "timing" : id === COMPATIBLE || id === BUILT_IN ? "local" : "key");
 
 export function providerIdForKind(kind: AiKind, cloudId: string): string {
   return kind === "timing" ? "" : kind === "local" ? COMPATIBLE : cloudId;
 }
 
-/** Every provider that needs a key and a company behind it; the compatible one is the local engines. */
-export const cloudProviders = (providers: ProviderInfo[]): ProviderInfo[] => providers.filter((p) => p.id !== COMPATIBLE);
+/** Every provider that needs a key and a company behind it; the compatible one and the built-in one are the local engines. */
+export const cloudProviders = (providers: ProviderInfo[]): ProviderInfo[] => providers.filter((p) => p.id !== COMPATIBLE && p.id !== BUILT_IN);
 
 export interface LocalEngine {
   name: string;
   address: string;
-  /** Built-in local AI is not built yet: shown, never selected. */
+  /** The provider id saved for this engine. */
+  provider: string;
   available: boolean;
 }
 
 export const LOCAL_ENGINES: LocalEngine[] = [
-  { name: "Built-in local AI", address: "", available: false },
-  { name: "Ollama", address: "http://localhost:11434", available: true },
-  { name: "LM Studio", address: "http://localhost:1234", available: true },
+  { name: "Built-in local AI", address: "", provider: BUILT_IN, available: true },
+  { name: "Ollama", address: "http://localhost:11434", provider: COMPATIBLE, available: true },
+  { name: "LM Studio", address: "http://localhost:1234", provider: COMPATIBLE, available: true },
 ];
 
+const BUILT_IN_ENGINE = LOCAL_ENGINES[0];
 const OLLAMA = LOCAL_ENGINES[1];
 const LM_STUDIO = LOCAL_ENGINES[2];
 
@@ -69,6 +73,9 @@ const LM_STUDIO = LOCAL_ENGINES[2];
 export function localEngineFor(baseUrl: string): LocalEngine {
   return /^https?:\/\/[^/]*:1234(\/|$)/i.test(baseUrl.trim()) ? LM_STUDIO : OLLAMA;
 }
+
+/** The engine the saved settings mean: the built-in one, or Ollama or LM Studio by address. */
+export const localEngineOf = (s: AiSettings): LocalEngine => (s.provider === BUILT_IN ? BUILT_IN_ENGINE : localEngineFor(s.base_url));
 
 const hostOf = (url: string): string => {
   const m = /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:[^@/]*@)?(\[[^\]]*\]|[^/:?#]*)/i.exec(url.trim());
@@ -191,7 +198,50 @@ export function withProvider(state: AiScreenState, id: string, providers: Provid
 export function withLocalEngine(state: AiScreenState, name: string): AiScreenState {
   const engine = LOCAL_ENGINES.find((e) => e.name === name);
   if (state.kind !== "local" || !engine || !engine.available) return state;
-  return { ...state, settings: { ...noModels(state.settings), provider: COMPATIBLE, base_url: engine.address } };
+  return { ...state, settings: { ...noModels(state.settings), provider: engine.provider, base_url: engine.address } };
+}
+
+// ---------- The built-in local AI ----------
+
+export interface LocalModel {
+  id: string;
+  name: string;
+  maker: string;
+  note: string;
+  licence: string;
+  size_mb: number;
+  recommended: boolean;
+  /** "ready", "on_this_computer" (a copy Talaan downloaded, used where it is) or "missing". */
+  state: "ready" | "on_this_computer" | "missing";
+}
+
+/** What `local_ai_status` returns. */
+export interface LocalAiView {
+  models: LocalModel[];
+  selected: string;
+  helper_found: boolean;
+}
+
+/** The model the settings mean: the saved one, or the recommended one when none (or one that is not a local model) is saved. Null before the list is known. */
+export function localModelOf(status: LocalAiView | null, s: AiSettings): LocalModel | null {
+  const models = status?.models ?? [];
+  return models.find((m) => m.id === s.fast_model) ?? models.find((m) => m.recommended) ?? models[0] ?? null;
+}
+
+/** The recommended model is stored as empty, so it keeps following the recommendation. */
+export function withLocalModel(status: LocalAiView, s: AiSettings, id: string): AiSettings {
+  const m = status.models.find((x) => x.id === id);
+  if (!m) return s;
+  return { ...s, fast_model: m.recommended ? "" : m.id };
+}
+
+export function localModelLine(m: LocalModel): string {
+  return m.state === "ready" ? "Ready" : m.state === "on_this_computer" ? "Found on this computer" : "Download the model to use it";
+}
+
+export function localProgressLine(fraction: number): string {
+  const f = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
+  return `Downloading… ${Math.round(f * 100)}%`;
 }
 
 // ---------- What leaves this computer ----------
@@ -217,6 +267,7 @@ export function privacySetup(view: AiView): { ai: AiKind; provider: string; assi
   const { settings, providers } = view;
   const id = settings.provider;
   if (id === "") return { ai: "timing", provider: "", assistant: "" };
+  if (id === BUILT_IN) return { ai: "local", provider: "", assistant: "the local model" };
   if (id === COMPATIBLE) {
     if (isLocalAddress(settings.base_url)) return { ai: "local", provider: "", assistant: "the local model" };
     return { ai: "key", provider: hostOf(settings.base_url), assistant: "the model you pick" };

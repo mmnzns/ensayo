@@ -13,6 +13,10 @@ import {
   initialState,
   kindOfProvider,
   localEngineFor,
+  localEngineOf,
+  localModelLine,
+  localModelOf,
+  localProgressLine,
   modelChoices,
   modelFromChoice,
   privacySetup,
@@ -22,13 +26,16 @@ import {
   withCap,
   withKind,
   withLocalEngine,
+  withLocalModel,
   withModelChoice,
   withProvider,
   withTypedModel,
   withWriting,
   type AiView,
+  type LocalAiView,
   type ProviderInfo,
 } from "../screens/settings/aiSettings";
+import { leavesRows } from "../screens/settings/privacy";
 
 const p = (id: string, over: Partial<ProviderInfo> = {}): ProviderInfo => ({ id, name: id, models: [], fast_default: "", strong_default: "", has_key: false, needs_key: id !== "compatible", base_default: "", ...over });
 const claude = p("claude", { name: "Claude", models: ["claude-opus-4", "claude-sonnet-4", "claude-haiku-4"], fast_default: "claude-haiku-4", strong_default: "claude-opus-4", has_key: true });
@@ -43,6 +50,7 @@ describe("engine kinds", () => {
   it("maps a provider id to the screen's three kinds", () => {
     expect(kindOfProvider("")).toBe("timing");
     expect(kindOfProvider("compatible")).toBe("local");
+    expect(kindOfProvider("local")).toBe("local");
     expect(kindOfProvider("claude")).toBe("key");
     expect(kindOfProvider("openrouter")).toBe("key");
   });
@@ -55,6 +63,10 @@ describe("engine kinds", () => {
 
   it("lists cloud providers without the compatible one", () => {
     expect(cloudProviders(providers).map((x) => x.id)).toEqual(["claude", "openai", "openrouter"]);
+  });
+
+  it("never lists the built-in engine as a company to bring a key to", () => {
+    expect(cloudProviders([...providers, p("local", { needs_key: false })]).map((x) => x.id)).toEqual(["claude", "openai", "openrouter"]);
   });
 
   it("tells LM Studio from Ollama by its address", () => {
@@ -223,9 +235,80 @@ describe("changing the engine", () => {
     expect(s.settings).toMatchObject({ provider: "compatible", base_url: "http://localhost:1234", fast_model: "" });
   });
 
-  it("never selects the built-in engine", () => {
+  it("selects the built-in engine as provider local with no address and no model carried over", () => {
     const local = withKind(start, "local", providers);
-    expect(withLocalEngine(local, "Built-in local AI")).toBe(local);
+    const s = withLocalEngine({ ...local, settings: { ...local.settings, fast_model: "llama3.2", strong_model: "x" } }, "Built-in local AI");
+    expect(s.settings).toMatchObject({ provider: "local", base_url: "", fast_model: "", strong_model: "" });
+    expect(s.kind).toBe("local");
+    expect(localEngineOf(s.settings).name).toBe("Built-in local AI");
+  });
+
+  it("goes from the built-in engine back to Ollama or to a key", () => {
+    const built = withLocalEngine(withKind(start, "local", providers), "Built-in local AI");
+    expect(withLocalEngine(built, "Ollama").settings).toMatchObject({ provider: "compatible", base_url: "http://localhost:11434", fast_model: "" });
+    expect(withKind({ ...built, settings: { ...built.settings, fast_model: "qwen3.5-9b" } }, "key", providers).settings).toMatchObject({ provider: "claude", base_url: "", fast_model: "" });
+  });
+
+  it("does not select an engine that is not in the list", () => {
+    const local = withKind(start, "local", providers);
+    expect(withLocalEngine(local, "Something else")).toBe(local);
+  });
+
+  it("only picks a built-in engine while on this computer", () => {
+    expect(withLocalEngine(start, "Built-in local AI")).toBe(start);
+  });
+});
+
+describe("the built-in local AI", () => {
+  const model = (id: string, over: object = {}) => ({ id, name: id, maker: "m", note: "n", licence: "Apache 2.0", size_mb: 2740, recommended: false, state: "missing" as const, ...over });
+  const status: LocalAiView = { models: [model("qwen3.5-4b", { name: "Qwen3.5 4B", recommended: true }), model("qwen3.5-9b", { size_mb: 5680 })], selected: "qwen3.5-4b", helper_found: true };
+  const builtIn = { ...settings, provider: "local" };
+
+  it("is read as the on this computer kind, and the settings round trip untouched", () => {
+    const s = initialState({ settings: { ...builtIn, fast_model: "qwen3.5-9b" }, providers });
+    expect(s.kind).toBe("local");
+    expect(s.settings).toEqual({ ...builtIn, fast_model: "qwen3.5-9b" });
+    expect(localEngineOf(s.settings).name).toBe("Built-in local AI");
+    expect(s.cloudId).toBe("claude");
+  });
+
+  it("keeps the compatible engines on compatible", () => {
+    expect(localEngineOf({ ...settings, provider: "compatible", base_url: "http://localhost:1234" }).name).toBe("LM Studio");
+    expect(localEngineOf({ ...settings, provider: "compatible", base_url: "" }).name).toBe("Ollama");
+  });
+
+  it("shows the recommended model when nothing, or a model that is not local, is saved", () => {
+    expect(localModelOf(status, builtIn)?.id).toBe("qwen3.5-4b");
+    expect(localModelOf(status, { ...builtIn, fast_model: "claude-haiku-4" })?.id).toBe("qwen3.5-4b");
+  });
+
+  it("shows the saved local model", () => {
+    expect(localModelOf(status, { ...builtIn, fast_model: "qwen3.5-9b" })?.id).toBe("qwen3.5-9b");
+  });
+
+  it("has no model to show before the list has loaded", () => {
+    expect(localModelOf(null, builtIn)).toBeNull();
+    expect(localModelOf({ ...status, models: [] }, builtIn)).toBeNull();
+  });
+
+  it("stores the recommended model as empty so it keeps following the recommendation", () => {
+    expect(withLocalModel(status, { ...builtIn, fast_model: "qwen3.5-9b" }, "qwen3.5-4b").fast_model).toBe("");
+    expect(withLocalModel(status, builtIn, "qwen3.5-9b")).toEqual({ ...builtIn, fast_model: "qwen3.5-9b" });
+    expect(withLocalModel(status, builtIn, "nope")).toBe(builtIn);
+  });
+
+  it("says in plain words where a model stands", () => {
+    expect(localModelLine(model("a", { state: "ready" }))).toBe("Ready");
+    expect(localModelLine(model("a", { state: "on_this_computer" }))).toBe("Found on this computer");
+    expect(localModelLine(model("a", { state: "missing" }))).toBe("Download the model to use it");
+  });
+
+  it("words the progress as a whole percent that never runs backwards or past 100", () => {
+    expect(localProgressLine(0)).toBe("Downloading… 0%");
+    expect(localProgressLine(0.426)).toBe("Downloading… 43%");
+    expect(localProgressLine(1.4)).toBe("Downloading… 100%");
+    expect(localProgressLine(-1)).toBe("Downloading… 0%");
+    expect(localProgressLine(Number.NaN)).toBe("Downloading… 0%");
   });
 });
 
@@ -250,6 +333,19 @@ describe("what leaves this computer", () => {
   it("derives the setup for a server on this computer", () => {
     expect(privacySetup({ settings: { ...settings, provider: "compatible", base_url: "http://localhost:11434" }, providers }).ai).toBe("local");
     expect(privacySetup({ settings: { ...settings, provider: "compatible", base_url: "" }, providers }).ai).toBe("local");
+  });
+
+  it("counts the built-in engine as staying on this computer, with or without its model yet", () => {
+    expect(privacySetup({ settings: { ...settings, provider: "local" }, providers })).toEqual({ ai: "local", provider: "", assistant: "the local model" });
+    expect(privacySetup({ settings: { ...settings, provider: "local", fast_model: "qwen3.5-9b", base_url: "https://llm.example.com" }, providers }).ai).toBe("local");
+  });
+
+  it("lists the built-in engine's transcripts and stories as staying here", () => {
+    const setup = privacySetup({ settings: { ...settings, provider: "local" }, providers });
+    const rows = leavesRows({ speech: "Whisper", speechLocal: true, ...setup });
+    const mine = rows.filter((r) => r.title === "Transcripts of your answers" || r.title.startsWith("Stories"));
+    expect(mine).toHaveLength(2);
+    expect(mine.every((r) => r.stays && r.badge === "Stays here")).toBe(true);
   });
 
   it("does not claim a server elsewhere stays on this computer", () => {

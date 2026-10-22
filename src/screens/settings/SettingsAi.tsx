@@ -1,10 +1,12 @@
 // Draft generated from Design/screens/html/8-5-settings-ai.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import type { AiKind } from "../../data/screens/settings";
 import {
+  BUILT_IN,
   LOCAL_ENGINES,
   OTHER_MODEL,
   advancedChoices,
@@ -15,13 +17,17 @@ import {
   explainTestError,
   initialState,
   isLocalAddress,
-  localEngineFor,
+  localEngineOf,
+  localModelLine,
+  localModelOf,
+  localProgressLine,
   modelChoices,
   shownModel,
   testedLine,
   withCap,
   withKind,
   withLocalEngine,
+  withLocalModel,
   withModelChoice,
   withProvider,
   withScoring,
@@ -29,9 +35,10 @@ import {
   withWriting,
   type AiScreenState,
   type AiView,
+  type LocalAiView,
   type ProviderInfo,
 } from "./aiSettings";
-import { formatCents } from "./format";
+import { formatCents, formatSize } from "./format";
 import { CheckIcon, KeyResult, SettingsLayout, useKeyTests } from "./parts";
 
 const KINDS: { id: AiKind; title: string; blurb: string }[] = [
@@ -227,6 +234,134 @@ function SettingsAiLive() {
 
 const fallbackProvider = (id: string): ProviderInfo => ({ id, name: id, models: [], fast_default: "", strong_default: "", has_key: false, needs_key: id !== "compatible", base_default: "" });
 
+/** What the built-in local AI row knows: the models and where each stands, and one download at a time with its progress. */
+function useLocalAi(active: boolean) {
+  const [status, setStatus] = useState<LocalAiView | null>(null);
+  const [busy, setBusy] = useState<{ id: string; fraction: number } | null>(null);
+  const [error, setError] = useState("");
+  const cancelled = useRef(false);
+
+  const refresh = () => invoke<LocalAiView>("local_ai_status").then(setStatus, (e) => setError(explainTestError(e)));
+  useEffect(() => {
+    if (active) void refresh();
+  }, [active]);
+
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let gone = false;
+    listen<{ id: string; fraction: number }>("local-ai-progress", (e) => setBusy((b) => (b ? { id: e.payload.id, fraction: e.payload.fraction } : b))).then(
+      (off) => (gone ? off() : (stop = off)),
+      () => {},
+    );
+    return () => {
+      gone = true;
+      stop?.();
+    };
+  }, []);
+
+  const download = (id: string) => {
+    cancelled.current = false;
+    setError("");
+    setBusy({ id, fraction: 0 });
+    invoke("download_local_ai", { id }).then(
+      () => {
+        setBusy(null);
+        void refresh();
+      },
+      (e) => {
+        setBusy(null);
+        setError(cancelled.current ? "Download stopped. Press Download to pick up where it left off." : explainTestError(e));
+        void refresh();
+      },
+    );
+  };
+  const cancel = () => {
+    cancelled.current = true;
+    invoke("cancel_local_ai_download").catch((e) => setError(explainTestError(e)));
+  };
+  return { status, busy, error, download, cancel };
+}
+
+type LocalAi = ReturnType<typeof useLocalAi>;
+
+const percent = (fraction: number) => Math.round(Math.min(1, Math.max(0, fraction || 0)) * 100);
+
+/** The built-in local AI: which model, where it stands, and the download. Nothing here needs a key. */
+function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenState; change: (next: AiScreenState) => void }) {
+  const { status, busy, error } = ai;
+  const [sizeOpen, setSizeOpen] = useState(false);
+  const m = localModelOf(status, st.settings);
+
+  if (status && !status.helper_found) {
+    return (
+      <span className="e-meta" role="status" style={{ color: "var(--e-ink)" }}>
+        The built-in local AI can't run on this installation, because a part of it is missing. Reinstalling Ensayo brings it back. Until then, pick another engine or use timing only.
+      </span>
+    );
+  }
+  if (!status || !m) {
+    return (
+      <span className="e-meta" role="status" style={{ color: error ? "var(--e-ink)" : undefined }}>
+        {error || "Looking at what is on this computer…"}
+      </span>
+    );
+  }
+  const downloading = busy?.id === m.id;
+  const showSizes = status.models.length > 1 && (sizeOpen || !m.recommended);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <span className="e-h3" style={{ fontSize: "15px" }}>{m.name}</span>
+            <span className="e-small">{formatSize(m.size_mb)} · {m.licence} licence · made by {m.maker}</span>
+          </span>
+          {m.state !== "missing" ? (
+            <span className="e-badge e-badge-ok">{localModelLine(m)}</span>
+          ) : (
+            !downloading && <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => ai.download(m.id)}>Download</button>
+          )}
+        </div>
+        <span className="e-small">{m.note}</span>
+        {downloading && busy && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div className="e-bar" role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(busy.fraction)}>
+              <span style={{ width: `${percent(busy.fraction)}%` }} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+              <span className="e-meta" role="status">{localProgressLine(busy.fraction)}</span>
+              <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={ai.cancel}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {m.state === "missing" && !downloading && <span className="e-meta">{localModelLine(m)}. Until then you'll get timing notes only.</span>}
+      </div>
+      {status.models.length > 1 && (
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          {showSizes ? (
+            <>
+              <label htmlFor="ls" className="e-small">Size</label>
+              <select id="ls" className="e-input" style={{ width: "320px" }} disabled={!!busy} value={m.id} onChange={(e) => change({ ...st, settings: withLocalModel(status, st.settings, e.target.value) })}>
+                {status.models.map((x) => (
+                  <option key={x.id} value={x.id}>{`${x.name} · ${formatSize(x.size_mb)}${x.recommended ? " (recommended)" : ""}`}</option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setSizeOpen(true)}>Other size</button>
+          )}
+        </div>
+      )}
+      <span className="e-meta">
+        No key needed, and nothing you say leaves this computer. A small model like this is good for judging your answers and reading your stories. It is weaker at follow-up questions, so if the follow-up drill matters to you, use a cloud key instead.
+      </span>
+      {error && (
+        <span className="e-meta" role="status" style={{ color: "var(--e-ink)" }}>{error}</span>
+      )}
+    </div>
+  );
+}
+
 function SettingsAiBody({ view }: { view: AiView }) {
   const { providers } = view;
   const [st, setSt] = useState<AiScreenState>(() => initialState(view));
@@ -236,6 +371,7 @@ function SettingsAiBody({ view }: { view: AiView }) {
   const [test, setTest] = useState<TestState | null>(null);
   const [found, setFound] = useState<string[]>([]);
   const [problem, setProblem] = useState("");
+  const local = useLocalAi(st.kind === "local");
 
   // Settings save a moment after the last change, and straight away if the screen is left first. The key is never kept here: it goes to the key store and the box empties.
   const latest = useRef(st.settings);
@@ -334,7 +470,8 @@ function SettingsAiBody({ view }: { view: AiView }) {
   const shown = shownModel(provider, settings);
   const choice = otherOpen ? OTHER_MODEL : shown.choice;
   const showTyped = choice === OTHER_MODEL;
-  const engine = localEngineFor(settings.base_url);
+  const engine = localEngineOf(settings);
+  const builtIn = settings.provider === BUILT_IN;
   const keyed = !!typedKey || hasKey[st.cloudId];
 
   const testLine =
@@ -374,11 +511,14 @@ function SettingsAiBody({ view }: { view: AiView }) {
                   <label htmlFor="pv">{kind === "local" ? "Engine" : "Provider"}</label>
                   {kind === "local" ? (
                     <select id="pv" className="e-input" value={engine.name} onChange={(e) => moved(withLocalEngine(st, e.target.value))}>
-                      {LOCAL_ENGINES.map((e) => (
-                        <option key={e.name} value={e.name} disabled={!e.available}>
-                          {e.available ? e.name : `${e.name} · Not installed yet`}
-                        </option>
-                      ))}
+                      {LOCAL_ENGINES.map((e) => {
+                        const broken = e.provider === BUILT_IN && local.status?.helper_found === false;
+                        return (
+                          <option key={e.name} value={e.name} disabled={!e.available || broken}>
+                            {broken ? `${e.name} · Can't run on this installation` : e.name}
+                          </option>
+                        );
+                      })}
                     </select>
                   ) : (
                     <select id="pv" className="e-input" value={st.cloudId} onChange={(e) => moved(withProvider(st, e.target.value, providers))}>
@@ -388,6 +528,7 @@ function SettingsAiBody({ view }: { view: AiView }) {
                     </select>
                   )}
                 </div>
+                {!builtIn && (
                 <div className="e-field">
                   <label htmlFor="md">Model</label>
                   <select
@@ -404,7 +545,12 @@ function SettingsAiBody({ view }: { view: AiView }) {
                     ))}
                   </select>
                 </div>
+                )}
               </div>
+              {builtIn ? (
+                <BuiltInPanel ai={local} st={st} change={change} />
+              ) : (
+              <>
               {(showTyped || kind === "local") && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
                   {kind === "local" && (
@@ -475,6 +621,8 @@ function SettingsAiBody({ view }: { view: AiView }) {
                   </div>
                 </div>
               )}
+              </>
+              )}
             </>
           )}
           {problem && (
@@ -483,7 +631,7 @@ function SettingsAiBody({ view }: { view: AiView }) {
             </span>
           )}
         </section>
-        {kind !== "timing" && (
+        {kind !== "timing" && !builtIn && (
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", paddingBottom: "8px" }}>
               <span className="e-h3">Advanced</span>
