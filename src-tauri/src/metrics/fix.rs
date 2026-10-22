@@ -24,9 +24,24 @@ pub const ORDER: [&str; 17] = [
     "other",
 ];
 
+/// The founder variant (leadership stage at a startup) puts these first, in this order, then the rest as above.
+pub const FOUNDER_FIRST: [&str; 3] = ["no_complaining", "commitment", "builder_operator"];
+
 /// The failed check that comes first in `ORDER`. None when nothing failed.
 pub fn top_fix(checks: &[Check]) -> Option<&str> {
-    let rank = |id: &str| ORDER.iter().position(|o| *o == id).unwrap_or(ORDER.len());
+    top_fix_for(checks, false)
+}
+
+pub fn top_fix_for(checks: &[Check], founder: bool) -> Option<&str> {
+    let rank = |id: &str| {
+        if founder {
+            if let Some(i) = FOUNDER_FIRST.iter().position(|o| *o == id) {
+                return i;
+            }
+            return FOUNDER_FIRST.len() + ORDER.iter().position(|o| *o == id).unwrap_or(ORDER.len());
+        }
+        ORDER.iter().position(|o| *o == id).unwrap_or(ORDER.len())
+    };
     checks.iter().filter(|c| c.passed == Some(false)).min_by_key(|c| rank(&c.id)).map(|c| c.id.as_str())
 }
 
@@ -87,6 +102,18 @@ mod tests {
         assert_eq!(top_fix(&checks), Some("clean_stop"));
         let checks = vec![check("fillers", Some(false)), check("proof", Some(false))];
         assert_eq!(top_fix(&checks), Some("proof"));
+    }
+
+    #[test]
+    fn the_founder_variant_puts_complaining_commitment_and_builder_first() {
+        let checks = vec![check("answer_first", Some(false)), check("builder_operator", Some(false)), check("commitment", Some(false))];
+        assert_eq!(top_fix_for(&checks, true), Some("commitment"));
+        assert_eq!(top_fix_for(&checks, false), Some("answer_first"));
+        let checks = vec![check("answer_first", Some(false)), check("no_complaining", Some(false))];
+        assert_eq!(top_fix_for(&checks, true), Some("no_complaining"));
+        assert_eq!(top_fix_for(&checks, false), Some("answer_first"), "in the normal order answer first outranks it");
+        let checks = vec![check("fillers", Some(false)), check("proof", Some(false)), check("builder_operator", Some(true))];
+        assert_eq!(top_fix_for(&checks, true), Some("proof"), "after the founder checks, the usual order");
     }
 
     #[test]
