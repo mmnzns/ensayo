@@ -1,0 +1,54 @@
+{
+  "_about": "Dana Ortiz's two targets (v0.1), as stored in targets/<id>.json, and the angles on her one bank story (st_onboarding in ../story-bank.json). Fictional test data. The same targets as the browser mock (src/data/mock/profile.ts), with lead-with points written out in full.",
+  "targets": [
+    {
+      "id": "tg_b2c",
+      "name": "B2C lifecycle",
+      "role": "Senior Lifecycle Marketing Manager",
+      "roleFamily": "lifecycle",
+      "seniority": "senior",
+      "industry": "Fintech and payments",
+      "sellsTo": "b2c",
+      "companyStage": "any",
+      "pitch": "I'm a lifecycle marketer who finds where activation and retention actually break, then builds the journeys that fix them.",
+      "leadWith": [
+        "I own lifecycle end to end, from strategy to the weekly readout, with no ops team",
+        "I find the real drop-off before I change a single message",
+        "I've built and led a lifecycle team of five"
+      ]
+    },
+    {
+      "id": "tg_b2b",
+      "name": "B2B marketing ops",
+      "role": "Marketing Operations Manager",
+      "roleFamily": "marketing_ops",
+      "seniority": "senior",
+      "industry": "B2B SaaS",
+      "sellsTo": "b2b",
+      "companyStage": "growth",
+      "pitch": "I'm a marketing ops lead who turns a messy stack into a pipeline the sales team trusts, then proves it in the numbers.",
+      "leadWith": [
+        "I run the stack myself: the automation platform, the data feeds and the triggers",
+        "I fix broken handoffs in the data before anyone writes a new campaign",
+        "I've run a migration from one marketing automation platform to another"
+      ]
+    }
+  ],
+  "story_angles": {
+    "st_onboarding": [
+      {
+        "target_id": "tg_b2c",
+        "headline": "I moved seven-day activation from 31 to 44 percent by fixing what happened after signup, not the emails.",
+        "emphasis": ["Activation", "Customer behavior", "Experiments"],
+        "lead_branch": "data"
+      },
+      {
+        "target_id": "tg_b2b",
+        "headline": "Our activation problem turned out to be a broken handoff in the data, and fixing it took activation from 31 to 44 percent.",
+        "emphasis": ["Funnel data", "Systems", "Working across teams", "Sync errors down by half"],
+        "lead_branch": null
+      }
+    ]
+  },
+  "_trap": "The tg_b2b emphasis 'Sync errors down by half' holds a number that is not one of the story's proof points. Emphasis is not checked on save (only the headline is), so prompts 02 and 03 must treat it as not in the bank and never use it as proof or in a rewrite."
+}
