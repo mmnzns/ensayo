@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isApp, type DataStatus } from "../../data/real";
 import { revealPath } from "../../ui/openExternal";
+import { pickFolder } from "../../ui/pickFile";
 import { useStore } from "../../data/store";
 import { formatSize } from "./format";
 import { SettingsLayout, useLater } from "./parts";
@@ -61,6 +62,13 @@ export default function SettingsPrivacy() {
   };
 
   const showFolder = () => void revealPath(folder).catch(() => setFolderError("Ensayo couldn't open the folder. It is at " + folder + "."));
+  const browseFolder = async () => {
+    const chosen = await pickFolder();
+    if (chosen) {
+      setNewFolder(chosen);
+      setFolderError("");
+    }
+  };
   const reopen = () => later(() => window.location.reload(), 1800);
   const moveFolder = async () => {
     const problem = folderPathProblem(newFolder);
@@ -147,9 +155,10 @@ export default function SettingsPrivacy() {
             </div>
             {app && folderNote === "move" && !folderDone && (
               <div style={{ flexBasis: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <span className="e-small">Make an empty folder first, or choose one that already holds your Ensayo data, then paste its full path. An empty folder gets a copy of your data. Ensayo reopens afterwards.</span>
+                <span className="e-small">Choose an empty folder, or one that already holds your Ensayo data. An empty folder gets a copy of your data. Ensayo reopens afterwards. You can also paste a full path.</span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
                   <input className="e-input" style={{ flex: "1 1 280px" }} aria-label="New data folder" placeholder="/Users/you/Drive/Ensayo" value={newFolder} onChange={(e) => { setNewFolder(e.target.value); setFolderError(""); }} />
+                  <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={busy} onClick={() => void browseFolder()}>Choose a folder…</button>
                   <button type="button" className="e-btn e-btn-primary e-btn-sm" disabled={busy} onClick={() => void moveFolder()}>{busy ? "Moving…" : "Use this folder"}</button>
                   <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={busy} onClick={() => { setFolderNote(null); setFolderError(""); }}>Cancel</button>
                 </div>

@@ -13,6 +13,7 @@ import { packSize } from "../../practice/questions";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
+import { pickResumePath } from "../../ui/pickFile";
 import { TargetMarker, useTargetChoice } from "../../ui/TargetSwitcher";
 import { setSessionPreset } from "../home/preset";
 import { addStage, fileNameOf, formatPay, isResumeFileName, MAX_LEAD_WITH, removeStage, RESUME_PROBLEM, stageChoices, targetToSave, type TargetFields } from "./targetForms";
@@ -397,6 +398,10 @@ function ResumeCard({ resume, onChange }: { resume: Target["baseResume"]; onChan
     setChoosing(false);
     setPath("");
   };
+  const browse = async () => {
+    const chosen = await pickResumePath();
+    if (chosen) take(fileNameOf(chosen), chosen);
+  };
   return (
     <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       <span className="e-h3">Base resume <span style={{ fontWeight: "400", color: "var(--e-muted)", fontSize: "14px" }}>· optional</span></span>
@@ -417,11 +422,14 @@ function ResumeCard({ resume, onChange }: { resume: Target["baseResume"]; onChan
       {(!resume || choosing) &&
         (app ? (
           <div className="e-field">
-            <label htmlFor="rp" className="e-small">Paste the full path to the PDF or Word file</label>
+            <span style={{ display: "flex", gap: "8px" }}>
+              <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => void browse()}>Choose a file</button>
+              {choosing && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => { setChoosing(false); setProblem(""); }}>Keep {resume?.fileName}</button>}
+            </span>
+            <label htmlFor="rp" className="e-small">Or paste the full path to the PDF or Word file</label>
             <input id="rp" className="e-input" value={path} placeholder="/Users/you/Documents/Resume.pdf" onChange={(e) => setPath(e.target.value)} />
             <span style={{ display: "flex", gap: "8px" }}>
               <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={!path.trim()} onClick={() => take(fileNameOf(path), path.trim())}>Use this file</button>
-              {choosing && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => { setChoosing(false); setProblem(""); }}>Keep {resume?.fileName}</button>}
             </span>
           </div>
         ) : (

@@ -23,6 +23,7 @@ mod speech;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(commands::RecorderState::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
