@@ -1,6 +1,6 @@
 // Small pure helpers for the application forms: dates the backend accepts, contacts, stage rows, files.
 
-import type { StageInput } from "../../data/applicationCommands";
+import type { ResumeOutcome, StageInput } from "../../data/applicationCommands";
 import type { Contact, StageId } from "../../data/types";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -111,4 +111,15 @@ export function keptWords(kept: string[]): string[] {
     return "something you edited";
   });
   return [...new Set(words)];
+}
+
+/** What a resume command did, in plain words: a file that could not be read, lines kept, what the reading found. */
+export function outcomeNotices(out: ResumeOutcome): string[] {
+  const said: string[] = [];
+  if (out.attach?.status === "no_text" && out.attach.message) said.push(out.attach.message);
+  const kept = out.attach?.kept_edited_claims.length ?? 0;
+  if (kept > 0) said.push(`You had fixed ${kept === 1 ? "a line" : `${kept} lines`} from the earlier resume. Ensayo kept ${kept === 1 ? "it" : "them"}. Remove any you don't want below.`);
+  if (out.read?.notice) said.push(out.read.notice);
+  else if (out.read?.status === "read") said.push(`Read it: ${out.read.claims} ${out.read.claims === 1 ? "line" : "lines"} picked out to check your answers against.`);
+  return said;
 }

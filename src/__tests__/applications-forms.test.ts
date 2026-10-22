@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytesOf, contactFromText, fileSlug, filledContacts, isResumeFile, isoDay, joinAt, keptWords, lockQuestions, moveItem, splitAt, stageInputs } from "../screens/applications/forms";
+import { bytesOf, contactFromText, fileSlug, filledContacts, isResumeFile, isoDay, joinAt, keptWords, lockQuestions, moveItem, outcomeNotices, splitAt, stageInputs } from "../screens/applications/forms";
 
 describe("dates the backend accepts", () => {
   it("splits a stored date-time into a date and a time", () => {
@@ -99,5 +99,30 @@ describe("what reading again kept", () => {
   it("does not show a path it does not know", () => {
     expect(keptWords(["something.odd"])).toEqual(["something you edited"]);
     expect(keptWords([])).toEqual([]);
+  });
+});
+
+describe("what a resume command did", () => {
+  const attach = (over: Partial<NonNullable<ResumeOutcome["attach"]>>) => ({ status: "attached" as const, reason: null, needs_paste: false, message: null, kept_edited_claims: [] as string[], text_chars: 100, ...over });
+  const out = (over: Partial<ResumeOutcome>): ResumeOutcome => ({ attach: null, read: null, bundle: {} as ResumeOutcome["bundle"], ...over });
+
+  it("says nothing for a plain attach", () => {
+    expect(outcomeNotices(out({ attach: attach({}) }))).toEqual([]);
+  });
+
+  it("passes on the backend's words for a scan", () => {
+    expect(outcomeNotices(out({ attach: attach({ status: "no_text", needs_paste: true, message: "We couldn't read the text in this file." }) }))).toEqual(["We couldn't read the text in this file."]);
+  });
+
+  it("says how many fixed lines were kept", () => {
+    expect(outcomeNotices(out({ attach: attach({ kept_edited_claims: ["cl_1"] }) }))[0]).toMatch(/a line.*kept it/);
+    expect(outcomeNotices(out({ attach: attach({ kept_edited_claims: ["cl_1", "cl_2"] }) }))[0]).toMatch(/2 lines.*kept them/);
+  });
+
+  it("says what the reading found, or the notice when the engine did not do it", () => {
+    const read = { status: "read" as const, source: "ai" as const, notice: null, changed: [], kept: [], claims: 5, must_say_state: "ready" };
+    expect(outcomeNotices(out({ read }))).toEqual(["Read it: 5 lines picked out to check your answers against."]);
+    expect(outcomeNotices(out({ read: { ...read, claims: 1 } }))[0]).toMatch(/1 line picked/);
+    expect(outcomeNotices(out({ read: { ...read, source: "patterns", notice: "No AI engine is set up, so the resume was read by pattern only." } }))).toEqual(["No AI engine is set up, so the resume was read by pattern only."]);
   });
 });
