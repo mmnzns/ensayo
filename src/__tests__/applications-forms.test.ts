@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ResumeOutcome } from "../data/applicationCommands";
 import { bytesOf, contactFromText, fileSlug, filledContacts, isResumeFile, isoDay, joinAt, keptWords, lockQuestions, moveItem, outcomeNotices, splitAt, stageInputs } from "../screens/applications/forms";
 
 describe("dates the backend accepts", () => {
