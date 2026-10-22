@@ -3,6 +3,8 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { dayAndTime, inDays, longDate, whenPhrase } from "./format";
 import { setSessionPreset } from "./preset";
+import { liveAvailable } from "../../practice/live";
+import { viewSession } from "../../practice/viewing";
 
 /** Home. `offline` is the same page with no connection and no AI engine (see HomeOffline). */
 export function HomeView({ offline = false }: { offline?: boolean }) {
@@ -26,9 +28,14 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
     .map((id) => homeHabitStats.find((s) => s.id === id))
     .filter((s): s is NonNullable<typeof s> => !!s);
 
-  const streak = home.streakBefore;
-  const last = home.lastSession;
-  const totals = home.totalsBefore;
+  // In the app these come from what was practised; the browser preview keeps the sample numbers.
+  const real = liveAvailable();
+  const latest = store.sessions[0];
+  const streak = real ? store.streak.daysInARow : home.streakBefore;
+  const last = real
+    ? latest && { id: latest.id, when: latest.when, mode: latest.mode, stageLabel: latest.title.split(" · ")[0], win: latest.headline }
+    : home.lastSession && { id: null as string | null, ...home.lastSession };
+  const totals = real ? store.streak : home.totalsBefore;
 
   return (
     <AppShell nav="home">
@@ -163,7 +170,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
             {last.when} · {last.mode === "mock" ? "Mock" : "Drill"} · {last.stageLabel} stage
           </span>
           <span className="e-win" style={{ fontSize: "18px" }}>{last.win}</span>
-          <Link to="4-3-session-results-drill" className="e-btn e-btn-ghost e-btn-sm">See results ›</Link>
+          <Link to={last.mode === "mock" ? "4-4-session-results-mock-debrief" : "4-3-session-results-drill"} className="e-btn e-btn-ghost e-btn-sm" onClick={() => viewSession(last.id)}>See results ›</Link>
         </section>
       )}
       <p className="e-small" style={{ margin: "0" }}>
