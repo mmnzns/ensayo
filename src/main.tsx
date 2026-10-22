@@ -3,6 +3,10 @@ import "./styles/ensayo.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { startErrorLogging } from "./data/diagnostics";
+
+// Errors in this window go to the app's log file (Settings › About › Show log folder).
+startErrorLogging();
 
 // Dev preview only: `?live=fake` runs the real practice loop against a stand-in for the Rust commands.
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("live")) {

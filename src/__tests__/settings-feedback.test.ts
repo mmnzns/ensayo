@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildFeedbackEmail, describeSystem, fitMailto, FEEDBACK_ADDRESS, MAILTO_LIMIT } from "../screens/settings/feedbackEmail";
+import { buildFeedbackEmail, DIAGNOSTICS_HEADING, describeSystem, fitMailto, FEEDBACK_ADDRESS, MAILTO_LIMIT } from "../screens/settings/feedbackEmail";
 
-const base = { topic: "An idea", message: "Let me practice one follow-up on its own.", pay: null, fair: null, email: "", includeSystem: false, system: "Ensayo 0.1.0 · macOS" };
+const BLOCK = "Ensayo 0.2.0\nSystem: macOS 15.1 (aarch64)\nData folder: ready\n\nLog (last 2 lines):\n10:00 INFO a\n10:01 INFO b";
+const base = { topic: "An idea", message: "Let me practice one follow-up on its own.", pay: null, fair: null, email: "", includeDiagnostics: false, diagnostics: BLOCK };
 
 describe("feedback email", () => {
   it("builds a mailto link to the feedback address with an encoded subject and body", () => {
@@ -20,9 +21,23 @@ describe("feedback email", () => {
     expect(new URL(m.mailto).searchParams.get("body")).toBe(message);
   });
 
-  it("adds the version and system only when ticked", () => {
-    expect(buildFeedbackEmail(base).body).not.toContain("Ensayo 0.1.0");
-    expect(buildFeedbackEmail({ ...base, includeSystem: true }).body).toContain("Ensayo 0.1.0 · macOS");
+  it("adds the diagnostics block under its heading only when ticked", () => {
+    expect(buildFeedbackEmail(base).body).not.toContain("Ensayo 0.2.0");
+    expect(buildFeedbackEmail(base).body).not.toContain(DIAGNOSTICS_HEADING);
+    const on = buildFeedbackEmail({ ...base, includeDiagnostics: true }).body;
+    expect(DIAGNOSTICS_HEADING).toBe("Diagnostics (from Settings › About)");
+    expect(on).toContain(`${DIAGNOSTICS_HEADING}\n${BLOCK}`);
+    expect(on.startsWith(base.message)).toBe(true);
+  });
+
+  it("leaves the heading out when ticked but there is nothing to send", () => {
+    expect(buildFeedbackEmail({ ...base, includeDiagnostics: true, diagnostics: "  " }).body).not.toContain(DIAGNOSTICS_HEADING);
+  });
+
+  it("puts the diagnostics after the pay answer and the reply address", () => {
+    const body = buildFeedbackEmail({ ...base, pay: "Yes", fair: "$10 to $25", email: "dana@example.com", includeDiagnostics: true }).body;
+    expect(body.indexOf("Would I pay")).toBeLessThan(body.indexOf("Reply to:"));
+    expect(body.indexOf("Reply to:")).toBeLessThan(body.indexOf(DIAGNOSTICS_HEADING));
   });
 
   it("adds the pay answer, and the fair price only for Maybe or Yes", () => {
@@ -73,6 +88,18 @@ describe("a long message in the email link", () => {
     expect(body.startsWith("I ran into a problem")).toBe(true);
     expect(body).toMatch(/Copy message/);
     expect(new URL(fit.mailto).searchParams.get("subject")).toBe(m.subject);
+  });
+
+  it("keeps the message and cuts the diagnostics first when both do not fit", () => {
+    const log = Array.from({ length: 60 }, (_, i) => `2026-10-22 10:00:${String(i).padStart(2, "0")}.000 INFO ensayo_lib::cmd: finish_rep ${i} ms`).join("\n");
+    const m = buildFeedbackEmail({ ...base, message: "The timer froze on my second try.", includeDiagnostics: true, diagnostics: `${BLOCK}\n${log}` });
+    const fit = fitMailto(m);
+    expect(fit.cut).toBe(true);
+    expect(fit.mailto.length).toBeLessThanOrEqual(MAILTO_LIMIT);
+    const body = new URL(fit.mailto).searchParams.get("body") ?? "";
+    expect(body.startsWith("The timer froze on my second try.")).toBe(true);
+    expect(body).toContain(DIAGNOSTICS_HEADING);
+    expect(body).not.toContain("finish_rep 59 ms");
   });
 
   it("never cuts in the middle of an encoded character", () => {
