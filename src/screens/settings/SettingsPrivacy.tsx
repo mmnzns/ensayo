@@ -10,6 +10,7 @@ import { SettingsLayout, useLater } from "./parts";
 import { privacySetup, type AiView } from "./aiSettings";
 import { deleteFailedLine, folderChangedLine, folderPathProblem, folderProblemLine, leavesRows, retentionChoice, retentionLabel } from "./privacy";
 import { clearPrefs, readPrefs } from "./prefs";
+import BackupSection from "./BackupSection";
 import { inUseModel, type SpeechModelEntry } from "./speechModels";
 
 /** Which delete is asking "are you sure" right now. */
@@ -167,6 +168,7 @@ export default function SettingsPrivacy() {
             )}
           </div>
         </section>
+        <BackupSection />
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <span className="e-h3">Delete</span>
           <div className="e-rowline" style={asking === "recordings" ? { flexWrap: "wrap" } : undefined}>

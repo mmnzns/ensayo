@@ -5,6 +5,8 @@
 import type { StageId } from "../../data/types";
 
 export const PREFS_KEY = "ensayo.prefs";
+/** When the last backup was made on this computer (an ISO time). Machine-local, so never in the data folder. */
+export const LAST_BACKUP_KEY = "ensayo.lastBackup";
 
 export type Speed = "Slower" | "Normal" | "Faster";
 
@@ -128,6 +130,7 @@ function writePrefs(prefs: Prefs, storage: Store | null): void {
 export function clearPrefs(storage: Pick<Storage, "removeItem"> | null = browserStorage() as Pick<Storage, "removeItem"> | null): void {
   try {
     storage?.removeItem(PREFS_KEY);
+    storage?.removeItem(LAST_BACKUP_KEY);
   } catch {
     // Storage is blocked; there is nothing to clear.
   }
