@@ -39,6 +39,7 @@ Speech and audio engine: built on the Talaan engine (Miguel Monzones, MIT), sour
 | winreg (Windows registry) | MIT | https://github.com/gentoo90/winreg-rs |
 | pdf-extract (text from a resume PDF, on this computer) | MIT | https://github.com/jrmuizel/pdf-extract |
 | docx-rs (text from a resume Word file, on this computer) | MIT | https://github.com/bokuweb/docx-rs |
+| zip (backup and restore of the data folder as one file) | MIT | https://github.com/zip-rs/zip2 |
 
 ## Models
 
