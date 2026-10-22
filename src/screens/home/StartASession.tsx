@@ -8,7 +8,8 @@ import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { readPrefs } from "../settings/prefs";
 import { dayBadge, lowerFirst } from "./format";
-import { clearSessionPreset, peekSessionPreset, rememberBlocked, type SessionSource } from "./preset";
+import { useHashParam } from "../../data/selection";
+import { clearSessionPreset, peekSessionPreset, rememberBlocked, type SessionPreset, type SessionSource } from "./preset";
 
 const LENGTHS = [3, 5, 10];
 
@@ -20,7 +21,15 @@ export default function StartASession() {
   const { habits, profile, stories, applications } = store;
   const blurbs = store.screens.home.stageBlurbs;
   const now = store.now();
-  const [preset] = useState(peekSessionPreset);
+  // A link from an application names it in the address (?app=&stage=&mode=); a button on Home names it through the preset.
+  const fromApp = useHashParam("app");
+  const fromStage = useHashParam("stage");
+  const fromMode = useHashParam("mode");
+  const [preset] = useState<SessionPreset>(() => ({
+    ...(fromApp ? { source: "application" as const, applicationId: fromApp, ...(fromStage ? { stageId: fromStage } : {}) } : {}),
+    ...(fromMode === "mock" ? { mode: "mock" as const } : {}),
+    ...peekSessionPreset(),
+  }));
   // The application to practise: the one a button named, else the nearest interview, else the open application with a stage left.
   const next = practiceTarget(applications, now, preset);
   const nextAt = next?.when?.date ?? null;

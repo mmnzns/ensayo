@@ -4,6 +4,7 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { dayAndTime, inDays, longDate, weekdayName, whenPhrase } from "./format";
 import { setSessionPreset } from "./preset";
+import { withParams } from "../../data/selection";
 import { liveAvailable } from "../../practice/live";
 import { startApplicationDrill, startQuickDrill } from "../../practice/quick";
 import { useApplicationExtras } from "../../practice/extras";
@@ -123,11 +124,11 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
                 Practice this stage
               </Link>
             ) : days === 1 ? (
-              <Link to="6-6-application-stages-and-night-before" className="e-btn e-btn-line e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "auto" }}>
+              <Link to={withParams("6-6-application-stages-and-night-before", { app: next.application.id, stage: next.stage.id })} className="e-btn e-btn-line e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "auto" }}>
                 Lock your night-before set
               </Link>
             ) : (
-              <Link to="6-7-cue-sheet" className="e-btn e-btn-line e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "auto" }}>
+              <Link to={withParams("6-7-cue-sheet", { app: next.application.id, stage: next.stage.id })} className="e-btn e-btn-line e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "auto" }}>
                 Open cue sheet
               </Link>
             )}

@@ -29,8 +29,8 @@ function DrillMock({ id, stageId }: { id: string; stageId: string }) {
   return (
     <>
       <div style={{ display: "flex", gap: "8px" }}>
-        <Link to={link("3-1-practice-interviewer-asking", { stage: stageId })} className="e-btn e-btn-primary e-btn-sm">Drill</Link>
-        <Link to={link("4-1-mock-in-progress", { stage: stageId })} className="e-btn e-btn-white e-btn-sm">Mock</Link>
+        <Link to={link("2-3-start-a-session", { stage: stageId })} className="e-btn e-btn-primary e-btn-sm">Drill</Link>
+        <Link to={link("2-3-start-a-session", { stage: stageId, mode: "mock" })} className="e-btn e-btn-white e-btn-sm">Mock</Link>
       </div>
       <span className="e-small" id={`dm-${id}`}>Drill: a note after each answer, try again. Mock: the whole stage straight through, notes at the end.</span>
     </>
@@ -162,7 +162,7 @@ function NightBeforeCard({ app, stage, stages, lock, onPick }: { app: Featured["
         {lock && dirty && <button type="button" className="e-btn e-btn-primary" disabled={busy} onClick={() => void save()}>Save the change</button>}
         {lock && !dirty && (
           <>
-            <Link to={link("3-1-practice-interviewer-asking", { stage: stage.id })} className="e-btn e-btn-primary">{`Rehearse just these · ${lock.rehearseMinutes} min`}</Link>
+            <Link to={link("2-3-start-a-session", { stage: stage.id })} className="e-btn e-btn-primary">{`Rehearse just these · ${lock.rehearseMinutes} min`}</Link>
             <Link to={link("6-7-cue-sheet", { stage: stage.id })} className="e-btn e-btn-white">Open cue sheet</Link>
           </>
         )}

@@ -72,8 +72,8 @@ function Overview({ app, extras, now }: Featured) {
             {next.decides && <span className="e-small">{next.decides}</span>}
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
-            <Link to={link("3-1-practice-interviewer-asking", { stage: next.id })} className="e-btn e-btn-primary e-btn-sm">Drill</Link>
-            <Link to={link("4-1-mock-in-progress", { stage: next.id })} className="e-btn e-btn-white e-btn-sm">Mock</Link>
+            <Link to={link("2-3-start-a-session", { stage: next.id })} className="e-btn e-btn-primary e-btn-sm">Drill</Link>
+            <Link to={link("2-3-start-a-session", { stage: next.id, mode: "mock" })} className="e-btn e-btn-white e-btn-sm">Mock</Link>
             <Link to={link("6-6-application-stages-and-night-before")} className="e-btn e-btn-line e-btn-sm">Stages</Link>
           </div>
         </section>
