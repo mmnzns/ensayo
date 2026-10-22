@@ -35,7 +35,8 @@ describe("the application list and targets", () => {
     const one: Store = { ...mockStore, targets: [mockStore.targets[0]] };
     const html = render("6-1-applications", one);
     expect(html).not.toContain('aria-label="Target"');
-    expect(strip(html)).not.toContain("B2C lifecycle");
+    // The sidebar names the active target; the page itself should not.
+    expect(strip(html).split("Everything you've applied to")[1]).not.toContain("B2C lifecycle");
   });
 });
 
