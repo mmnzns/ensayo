@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../../data/store";
 import { debriefOfSession, type LiveDebrief, type QuestionQuality } from "../../practice/debrief";
-import { askMockDebrief, liveAvailable, loadSessionDetail } from "../../practice/live";
+import { debriefContext } from "../../practice/applied";
+import { askMockDebrief, liveAvailable, loadSessionDetail, recordMustSay } from "../../practice/live";
 import { useViewedSession } from "../../practice/viewing";
 import type { SessionDetail } from "../../practice/api";
 
@@ -17,6 +18,7 @@ export function useDebrief(): DebriefState {
   const sessionId = useViewedSession();
   const live = liveAvailable();
   const [detail, setDetail] = useState<{ id: string; value: SessionDetail | null } | null>(null);
+  const { applications } = store;
   const [quality, setQuality] = useState<{ id: string; value: QuestionQuality | null; error: string | null; done: boolean } | null>(null);
 
   useEffect(() => {
@@ -36,8 +38,12 @@ export function useDebrief(): DebriefState {
         setQuality({ id: sessionId, value: null, error: null, done: true });
         return;
       }
+      // Inside an application the model is told about the posting and the resume's say-out-loud list; outside one, only the role.
+      const app = applications.find((a) => a.id === value?.session.application_id);
+      const about = app ? debriefContext(app) : null;
       try {
-        const q = await askMockDebrief(sessionId, { role: store.profile.targetRole });
+        const q = await askMockDebrief(sessionId, about ? { company: about.company, role: about.role, jdSummary: about.jdSummary, priorities: about.priorities, mustSay: about.mustSay } : { role: store.profile.targetRole });
+        if (about && about.mustSay.length > 0) void recordMustSay(sessionId, app!.id, q.must_say_said.filter((m) => m.said).map((m) => m.id));
         if (!cancelled) setQuality({ id: sessionId, value: q, error: null, done: true });
       } catch (e) {
         if (!cancelled) setQuality({ id: sessionId, value: null, error: e instanceof Error ? e.message : String(e), done: true });
@@ -53,7 +59,8 @@ export function useDebrief(): DebriefState {
   if (!detail || detail.id !== sessionId) return { status: "loading" };
   if (!detail.value) return { status: "empty" };
   const q = quality && quality.id === sessionId ? quality : null;
-  const debrief = debriefOfSession(store.habits, detail.value, q?.value ?? null, []);
+  const app = applications.find((a) => a.id === detail.value?.session.application_id);
+  const debrief = debriefOfSession(store.habits, detail.value, q?.value ?? null, app ? debriefContext(app).mustSay : []);
   if (!debrief) return { status: "empty" };
   return { status: "ready", debrief, judging: !q?.done, judgeError: q?.error ?? null };
 }

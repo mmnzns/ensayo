@@ -5,6 +5,7 @@
 import type { MockDebriefData, DebriefRow } from "../data/screens/results";
 import type { Habit } from "../data/types";
 import type { SessionDetail } from "./api";
+import { flagsOfReps } from "./applied";
 import { drillView, STAGE_LABELS, summaryOfFull } from "./habits";
 import type { FullRep } from "./types";
 
@@ -84,8 +85,9 @@ export function debriefOfSession(habits: Habit[], detail: SessionDetail, quality
     followUps: { held: held.length, of: heldOf.length },
     averageAnswerSeconds: average,
     numbers: { said: proofs.filter((r) => passed(r, "proof")).length, of: proofs.length },
-    flags: [],
-    consistencyChecked: false,
+    // Inside an application every scored answer was compared with what was said before; outside one nothing was.
+    flags: detail.session.application_id ? flagsOfReps(reps) : [],
+    consistencyChecked: detail.session.application_id !== null && detail.session.application_id !== undefined,
     mustSay: mustSay.map((m) => ({ id: m.id, text: m.text, said: quality?.must_say_said.find((f) => f.id === m.id)?.said ?? false })),
     rows,
     nextTime: view ? view.nextTime.advice : "Answer a few more questions and this will say what to carry.",

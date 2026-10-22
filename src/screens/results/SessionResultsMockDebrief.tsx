@@ -6,6 +6,8 @@ import Wordmark from "../../ui/Wordmark";
 import { clock, ListenButton, stageWithKind } from "./speak";
 import type { MockDebriefData } from "../../data/screens/results";
 import { useDebrief } from "./useDebrief";
+import { claimToUpdate } from "../../practice/applied";
+import { useClaimUpdater } from "../../practice/extras";
 
 export default function SessionResultsMockDebrief() {
   const state = useDebrief();
@@ -25,17 +27,35 @@ export default function SessionResultsMockDebrief() {
   }
   if (state.status === "demo") return <Debrief d={screens.results.debrief} />;
   const notice = state.judging ? "Reading how your own questions landed…" : state.judgeError;
-  return <Debrief d={state.debrief.data} notice={notice} />;
+  return <Debrief d={state.debrief.data} notice={notice} saves />;
 }
 
-function Debrief({ d, notice = null }: { d: MockDebriefData; notice?: string | null }) {
+/** `saves`: a real Mock, where "X is right now" changes what the application remembers (and is left out where it cannot). The preview keeps its sample walk-through. */
+export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefData; notice?: string | null; saves?: boolean }) {
   const { applications } = useStore();
   const app = applications.find((a) => a.id === d.applicationId);
+  const updateClaim = useClaimUpdater();
+  const [saveError, setSaveError] = useState<string | null>(null);
   const stageText = stageWithKind(d.stageLabel, app?.startup);
   // Flags the user has kept ("Two weeks is right now") for this visit only.
   const [kept, setKept] = useState<string[]>([]);
   const openFlags = d.flags.filter((f) => !kept.includes(f.id));
   const mismatch = openFlags.length;
+  const claimOf = (f: MockDebriefData["flags"][number]) => (saves && updateClaim ? claimToUpdate(app, f) : undefined);
+  const canKeep = (f: MockDebriefData["flags"][number]) => !saves || claimOf(f) !== undefined;
+  const keep = async (f: MockDebriefData["flags"][number]) => {
+    setSaveError(null);
+    const claimId = claimOf(f);
+    if (saves && app && updateClaim && claimId) {
+      try {
+        await updateClaim(app.id, claimId, f.nowSaid);
+      } catch {
+        setSaveError("Ensayo couldn't save that. Try again in a moment.");
+        return;
+      }
+    }
+    setKept((k) => [...k, f.id]);
+  };
   return (
     <FocusShell>
       <div className="e-wrap">
@@ -87,6 +107,11 @@ function Debrief({ d, notice = null }: { d: MockDebriefData; notice?: string | n
             <span className="e-meta">{notice}</span>
           </div>
         )}
+        {saveError && (
+          <div className="e-soft" role="status" style={{ padding: "14px 20px" }}>
+            <span className="e-meta">{saveError}</span>
+          </div>
+        )}
         {d.flags.map((f) => {
           const isKept = kept.includes(f.id);
           return (
@@ -97,12 +122,12 @@ function Debrief({ d, notice = null }: { d: MockDebriefData; notice?: string | n
                   f.keptNote
                 ) : (
                   <>
-                    In the {f.earlierStage} stage you said <strong>{f.earlierSaid}</strong>. Here you said <strong>{f.nowSaid}</strong>. Pick one and say it the same way every time.
+                    {f.earlierStage === "resume" ? "Your resume says" : `In the ${f.earlierStage} stage you said`} <strong>{f.earlierSaid}</strong>. Here you said <strong>{f.nowSaid}</strong>. Pick one and say it the same way every time.
                   </>
                 )}
               </span>
-              {!isKept && (
-                <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => setKept((k) => [...k, f.id])}>
+              {!isKept && canKeep(f) && (
+                <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => void keep(f)}>
                   {f.keepLabel}
                 </button>
               )}

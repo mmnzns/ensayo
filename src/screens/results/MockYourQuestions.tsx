@@ -4,6 +4,7 @@ import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import Wordmark from "../../ui/Wordmark";
+import { useApplicationExtras } from "../../practice/extras";
 import { cancelLive, currentQuestionText, liveSession, MOCK_DEBRIEF, useLive } from "../../practice/live";
 import { stageWithKind, useSpaceKey } from "./speak";
 
@@ -18,7 +19,9 @@ export default function MockYourQuestions() {
   const running = live.active && live.mode === "mock";
   const closing = running ? { asker: "Interviewer", text: currentQuestionText() } : mock.questions[mock.questions.length - 1];
   const dots = running ? live.questions : mock.questions;
-  const lockedQuestions = running ? [] : mock.lockedQuestions;
+  // Inside an application, the questions locked the night before for this stage; otherwise none yet (the preview shows its sample).
+  const extras = useApplicationExtras(running ? live.applicationId : null);
+  const lockedQuestions = running ? (live.stageId ? (extras?.lockedByStage?.[live.stageId]?.questions ?? []) : []) : mock.lockedQuestions;
   // Running: the mic records this moment on the practice screens. Demo: it goes straight on to the debrief.
   const answer = running ? "3-2-practice-recording" : MOCK_DEBRIEF;
   useSpaceKey("4-2-mock-your-questions", () => go(answer));

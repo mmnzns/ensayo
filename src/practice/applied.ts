@@ -149,3 +149,12 @@ export function debriefContext(app: Application): DebriefContext {
     mustSay: (app.resume?.mustSay ?? []).map((m) => ({ id: m.id, text: m.text })),
   };
 }
+
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** The claim "X is right now" changes for a flag: the earlier version when it is in the application's log or on its resume, else the new one. Every version of the same thing is retired when it is marked, so either id names the same line. */
+export function claimToUpdate(app: Application | undefined, flag: { earlierSaid: string; nowSaid: string }): string | undefined {
+  if (!app) return undefined;
+  const all = [...app.claims, ...(app.resume?.claims ?? [])];
+  return (all.find((c) => same(c.value, flag.earlierSaid)) ?? all.find((c) => same(c.value, flag.nowSaid)))?.id;
+}
