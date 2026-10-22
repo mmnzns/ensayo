@@ -8,6 +8,7 @@ import {
   stageIdOf,
   stageLabelOf,
   updatePractice,
+  clearPrefs,
   updateSpeech,
   updateVoice,
   voiceChoices,
@@ -45,6 +46,15 @@ describe("saved settings", () => {
     updateSpeech({ model: "whisper-small" }, s);
     expect(readPrefs(s).speech.model).toBe("whisper-small");
     expect(readPrefs(s).practice).toEqual(DEFAULT_PREFS.practice);
+  });
+
+  it("forgets every choice on request", () => {
+    const data = new Map<string, string>();
+    const s = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k) };
+    updatePractice({ tries: 2 }, s);
+    clearPrefs(s);
+    expect(readPrefs(s)).toEqual(DEFAULT_PREFS);
+    expect(() => clearPrefs({ removeItem: () => { throw new Error("blocked"); } })).not.toThrow();
   });
 
   it("changes one setting and leaves the rest", () => {

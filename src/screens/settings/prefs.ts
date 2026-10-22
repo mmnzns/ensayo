@@ -124,6 +124,15 @@ function writePrefs(prefs: Prefs, storage: Store | null): void {
   }
 }
 
+/** Forgets every saved choice (used by Delete all Ensayo data). */
+export function clearPrefs(storage: Pick<Storage, "removeItem"> | null = browserStorage() as Pick<Storage, "removeItem"> | null): void {
+  try {
+    storage?.removeItem(PREFS_KEY);
+  } catch {
+    // Storage is blocked; there is nothing to clear.
+  }
+}
+
 /** Saves a change to the practice defaults and returns everything as it now stands. */
 export function updatePractice(change: Partial<PracticePrefs>, storage: Store | null = browserStorage()): Prefs {
   const now = readPrefs(storage);

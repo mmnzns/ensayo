@@ -9,6 +9,12 @@ export async function openExternal(url: string): Promise<void> {
   await openUrl(url);
 }
 
+/** Shows a file or folder in Finder or File Explorer. Rejects when it cannot. */
+export async function revealPath(path: string): Promise<void> {
+  const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+  await revealItemInDir(path);
+}
+
 /** The click handler for an external link in the app, or undefined where the plain anchor already works. */
 export function externalClick(to: string, app: boolean, open: (url: string) => Promise<void> = openExternal): ((e: { preventDefault(): void }) => void) | undefined {
   if (!app || !isExternal(to)) return undefined;

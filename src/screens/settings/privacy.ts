@@ -43,3 +43,31 @@ const RETENTION: [string, string][] = [
 /** The label in the Keep recordings list for what the backend stores ("30"), and back. */
 export const retentionLabel = (choice: string): string => RETENTION.find(([, c]) => c === choice)?.[0] ?? "30 days";
 export const retentionChoice = (label: string): string => RETENTION.find(([l]) => l === label)?.[1] ?? "30";
+
+// ---------- Settings, Privacy in the app ----------
+
+/** What the data folder box says when its text can't be a folder yet; null when it can. */
+export function folderPathProblem(text: string): string | null {
+  const t = text.trim();
+  if (!t) return "Type or paste the folder you want to use.";
+  if (!/^(\/|~|[A-Za-z]:[\\/]|\\\\)/.test(t)) return "Use the full path to the folder, for example /Users/sam/Drive/Ensayo or C:\\Users\\Sam\\Drive\\Ensayo.";
+  return null;
+}
+
+/** What `move_data_folder` did, in a sentence. Ensayo reopens right after. */
+export function folderChangedLine(result: "copied" | "existing"): string {
+  return result === "copied"
+    ? "Your data is copied to the new folder. The old one is left as it was, so delete it yourself once you've checked. Ensayo is reopening."
+    : "That folder already had your Ensayo data, so Ensayo is using it as it is and reopening.";
+}
+
+const sentence = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : "").trim();
+
+/** The backend rejects with a plain sentence (not a folder, other files in it); never show an empty one. */
+export function folderProblemLine(e: unknown): string {
+  return sentence(e) || "The folder didn't change. Check the path and try again.";
+}
+
+export function deleteFailedLine(e: unknown): string {
+  return sentence(e) || "That didn't finish. Try again in a moment.";
+}
