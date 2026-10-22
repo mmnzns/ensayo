@@ -1,5 +1,6 @@
 import { daysUntil, greeting, useStore } from "../../data/store";
 import { nextDated } from "../../practice/applied";
+import { practiceTargetFor } from "../../practice/sessionTarget";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { dayAndTime, inDays, longDate, weekdayName, whenPhrase } from "./format";
@@ -15,21 +16,25 @@ import { viewSession } from "../../practice/viewing";
 /** Home. `offline` is the same page with no connection and no AI engine (see HomeOffline). */
 export function HomeView({ offline = false }: { offline?: boolean }) {
   const store = useStore();
-  const { profile, habits, homeHabitStats, applications } = store;
+  const { profile, habits, homeHabitStats, applications, targets, activeTarget } = store;
   const home = store.screens.home;
   const now = store.now();
   const next = nextDated(applications, now);
   const nextAt = next?.when.date ?? null;
   const days = next && nextAt ? daysUntil(nextAt, now) : null;
   const extras = useApplicationExtras(next?.application.id);
+  // The Drill is for the application's target when it starts from an application, else for the one practised now.
+  const target = practiceTargetFor(next?.application, targets, activeTarget);
 
   const focusId = profile.focusHabits[0];
   const practiceTitle = focusId ? home.practiceTitles[focusId] : "Practice a few general questions";
-  const drillLine = `A ${home.drill.questions}-question Drill, about ${home.drill.minutes} minutes.`;
+  const drillLine = `A ${home.drill.questions}-question Drill${target ? ` from your ${target.name} questions` : ""}, about ${home.drill.minutes} minutes.`;
   const practiceText =
     next && nextAt && days !== null
       ? `${drillLine} ${next.application.company}'s ${next.stage.label.toLowerCase()} questions first, since that interview is ${whenPhrase(nextAt, days)}.`
-      : `${drillLine} General questions for a ${profile.targetRole.toLowerCase()} role.`;
+      : target
+        ? drillLine
+        : `${drillLine} General questions for a ${profile.targetRole.toLowerCase()} role.`;
 
   const focusStats = (profile.focusHabits.length ? profile.focusHabits : homeHabitStats.map((s) => s.id))
     .map((id) => homeHabitStats.find((s) => s.id === id))
@@ -77,7 +82,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
           <p className="e-meta" style={{ margin: "0" }}>{practiceText}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "8px" }}>
             <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => {
-              const ctx = { targetRole: profile.targetRole, stories: store.stories, methods: store.methods };
+              const ctx = { targetRole: target?.role ?? profile.targetRole, stories: store.stories, methods: store.methods, target };
               if (next) startApplicationDrill(ctx, next, extras?.questions);
               else startQuickDrill(ctx);
             }}>

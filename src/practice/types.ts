@@ -134,6 +134,8 @@ export interface FinishArgs {
   mode: "drill" | "mock";
   stage: string;
   application_id: string | null;
+  /** The target this session is for: the application's, else the active one. Left out when none is known and the backend uses the active target. */
+  target_id?: string;
   /** The stage of the application's process being practised (a stage may repeat); null outside an application. */
   stage_id?: string | null;
   question_id: string;

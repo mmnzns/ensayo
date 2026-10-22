@@ -1,4 +1,5 @@
-import { DataProvider, useNeedsSetup } from "./data/real";
+import { DataProvider, useNeedsSetup, useTargetsNotePending } from "./data/real";
+import { UpgradeNoteDialog } from "./screens/first-run/UpgradeNote";
 import { manifest } from "./screens/manifest";
 import M0Check from "./m0/M0Check";
 import NotFound from "./screens/NotFound";
@@ -21,7 +22,14 @@ function Routed() {
   // Until a profile is saved, anything but the setup flow starts the setup flow.
   const id = needsSetup && route !== "m0" && !BEFORE_SETUP.has(route) && !/^(states|first-run|settings)-/.test(route) ? "1-1-welcome" : route === "" ? HOME : route;
   const Screen = id === "m0" ? M0Check : registry[id];
-  return Screen ? <Screen /> : <NotFound id={id} />;
+  // After the upgrade that adds targets, a one-time note opens over Home (never over practice or another screen).
+  const note = useTargetsNotePending() && !needsSetup && id === "2-1-home";
+  return (
+    <>
+      {Screen ? <Screen /> : <NotFound id={id} />}
+      {note && <UpgradeNoteDialog />}
+    </>
+  );
 }
 
 export default function App() {

@@ -7,6 +7,8 @@ export interface SessionPreset {
   mode?: Mode;
   source?: SessionSource;
   stage?: StageId;
+  /** With source "story": which story to practise (the target editor's "Practice it"). */
+  storyId?: string;
   /** With source "application": which application to practise, and which of its stages (a stage may repeat). Without them, the nearest interview. */
   applicationId?: string;
   stageId?: string;
