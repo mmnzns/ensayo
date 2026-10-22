@@ -36,7 +36,7 @@ const isWordChar = (c: string) => /[\p{L}\p{N}%.]/u.test(c);
 function tokens(text: string): string[] {
   const out: string[] = [];
   for (const raw of text.split(/\s+/).filter(Boolean)) {
-    for (const piece of raw.split(/[-–—]/)) {
+    for (const piece of raw.split(/[-\u2013\u2014]/)) {
       const chars = [...piece];
       let a = 0;
       let b = chars.length;
@@ -58,7 +58,7 @@ function percentFollows(toks: string[], at: number): number {
 
 /** A hyphenated token that names a thing rather than a number said: "seven-day", "7-day", "three-step". "twenty-four" is a number. */
 function isCompound(token: string): boolean {
-  const pieces = token.split(/[-–—]/);
+  const pieces = token.split(/[-\u2013\u2014]/);
   if (pieces.length < 2) return false;
   const isNum = (p: string) => /^\d/.test(p) || wordPart(p.toLowerCase().replace(/[^a-z]/g, "")) !== null;
   return isNum(pieces[0]) && pieces.slice(1).some((p) => /^[A-Za-z]/.test(p) && !isNum(p));

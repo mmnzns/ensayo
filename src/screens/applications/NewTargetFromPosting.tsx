@@ -9,6 +9,7 @@ import { useStore } from "../../data/store";
 import { blankTarget } from "../../data/targetState";
 import type { SellsTo, Seniority, StageId, Target } from "../../data/types";
 import { STAGE_LABEL } from "./format";
+import { keepTarget } from "./fitKept";
 import { ErrorLine, useFeatured, useRun } from "./parts";
 import { closestTarget, draftFromPosting, pitchNeedsWork, SELLS_TO_LABEL, SENIORITY_LABEL } from "./targetPick";
 
@@ -122,6 +123,8 @@ function Draft({ appId, back }: { appId: string; back: string }) {
       } catch (e) {
         throw new Error(`${saved.name} is saved, but ${app.company} wasn't moved: ${plainError(e)} Move it from Edit details.`);
       }
+      // The posting's reading still names the old best fit; the person chose this target, so the banner stays quiet for it.
+      keepTarget(appId, saved.id);
       go(back);
     });
 
