@@ -36,7 +36,7 @@ describe("results screens", () => {
     };
     const drill = render("4-3-session-results-drill", store);
     expect(drill).toContain("20s → 10s");
-    expect(drill).toContain("across 1 questions");
+    expect(drill).toContain("across 1 question");
     const debrief = render("4-4-session-results-mock-debrief", store);
     expect(debrief).toContain("All matched");
     expect(debrief).toContain("No answers to show yet.");
