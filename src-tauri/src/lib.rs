@@ -16,6 +16,7 @@ mod platform;
 pub mod rep_commands;
 pub mod storage;
 mod story_commands;
+mod target_commands;
 mod recorder;
 pub mod scoring;
 mod speech;
@@ -42,6 +43,16 @@ pub fn run() {
             data_commands::release_data_lock,
             data_commands::load_all,
             data_commands::save_profile,
+            target_commands::load_targets,
+            target_commands::save_you,
+            target_commands::save_target,
+            target_commands::duplicate_target,
+            target_commands::set_active_target,
+            target_commands::archive_target,
+            target_commands::restore_target,
+            target_commands::ack_targets_note,
+            target_commands::set_story_priority,
+            target_commands::target_from_posting,
             data_commands::save_story,
             data_commands::delete_story,
             data_commands::set_proof_verified,

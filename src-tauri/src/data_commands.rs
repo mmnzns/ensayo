@@ -8,6 +8,7 @@ use crate::storage::conflicts::{Conflict, Keep};
 use crate::storage::lock::{machine_name, LockState};
 use crate::storage::model::{Method, Profile, Story};
 use crate::storage::relocate;
+use crate::storage::targets::{Target, You};
 use crate::storage::settings;
 use crate::storage::{Result as StorageResult, Storage, StorageError};
 use chrono::{DateTime, Utc};
@@ -17,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 type Cmd<T> = std::result::Result<T, String>;
 
-fn plain(e: StorageError) -> String {
+pub(crate) fn plain(e: StorageError) -> String {
     match e {
         StorageError::Unavailable(p) => format!("The data folder isn't available: {}", p.display()),
         other => other.to_string(),
@@ -39,7 +40,7 @@ pub fn open_for(root: &Path, default: &Path) -> StorageResult<Storage> {
     }
 }
 
-fn open_storage() -> StorageResult<Storage> {
+pub(crate) fn open_storage() -> StorageResult<Storage> {
     open_for(&data_folder(), &paths::default_data_dir())
 }
 
@@ -66,7 +67,14 @@ pub fn status_for(root: &Path, default: &Path, me: &str, now: DateTime<Utc>) -> 
 
 #[derive(Debug, Serialize)]
 pub struct LoadAll {
+    /// The merged v0 view: you plus the active target, in the shape the screens had before targets. Null before setup.
     pub profile: Option<Profile>,
+    pub you: Option<You>,
+    /// Every target, archived ones included, in the order they were made.
+    pub targets: Vec<Target>,
+    /// The one-time note about targets has not been dismissed yet.
+    #[serde(rename = "targetsNotePending")]
+    pub targets_note_pending: bool,
     pub stories: Vec<Story>,
     pub methods: Vec<Method>,
     /// Applications in list order (active before closed, then the next interview), in the shape of `Application` in
@@ -83,14 +91,19 @@ pub fn load_all_from(storage: &Storage) -> StorageResult<LoadAll> {
 }
 
 pub fn load_all_at(storage: &Storage, now: chrono::NaiveDateTime) -> StorageResult<LoadAll> {
+    // Targets first: reading them moves a v0 profile over, which the other reads depend on.
+    let you = storage.you()?;
+    let targets = storage.load_targets()?;
     let stories = storage.load_stories()?;
     let apps = view::load_all(storage, now)?;
     let mut problems = stories.problems;
+    problems.extend(targets.problems);
     problems.extend(apps.problems);
-    Ok(LoadAll { profile: storage.profile()?, stories: stories.items, methods: storage.methods()?, applications: apps.applications, application_extras: apps.extras, problems })
+    let pending = you.as_ref().is_some_and(|y| y.targets_note_pending);
+    Ok(LoadAll { profile: storage.profile()?, you, targets: targets.items, targets_note_pending: pending, stories: stories.items, methods: storage.methods()?, applications: apps.applications, application_extras: apps.extras, problems })
 }
 
-async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
+pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
     tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
@@ -267,6 +280,44 @@ mod tests {
         let p = Profile { name: "D".into(), full_name: "D O".into(), target_role: "".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] };
         storage.save_profile(&p).unwrap();
         assert_eq!(load_all_from(&storage).unwrap().profile, Some(p));
+    }
+
+    #[test]
+    fn load_all_carries_you_the_targets_the_note_flag_and_the_merged_profile() {
+        use crate::storage::targets::Target;
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        let before = serde_json::to_value(load_all_from(&storage).unwrap()).unwrap();
+        assert!(before["you"].is_null() && before["profile"].is_null() && before["targets"] == serde_json::json!([]) && before["targetsNotePending"] == false, "{before}");
+        storage.save_profile(&Profile { name: "D".into(), full_name: "D O".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix funnels.".into(), focus_habits: vec!["numbers".into()] }).unwrap();
+        let second = storage.save_target(&Target { role: "Marketing Operations Manager".into(), sells_to: "b2b".into(), pitch: "I run the stack.".into(), ..Target::default() }).unwrap();
+        let json = serde_json::to_value(load_all_from(&storage).unwrap()).unwrap();
+        assert_eq!(json["you"]["name"], "D");
+        assert_eq!(json["you"]["activeTargetId"], json["targets"][0]["id"]);
+        assert_eq!(json["targets"].as_array().unwrap().len(), 2);
+        assert_eq!(json["targets"][1]["id"], second.id.as_str());
+        assert_eq!(json["profile"]["targetRole"], "Lifecycle Manager", "the merged view is today's shape: you plus the active target");
+        assert_eq!(json["profile"]["identityStatement"], "I fix funnels.");
+        storage.set_active_target(&second.id).unwrap();
+        assert_eq!(serde_json::to_value(load_all_from(&storage).unwrap()).unwrap()["profile"]["identityStatement"], "I run the stack.");
+        assert_eq!(load_all_from(&storage).unwrap().targets_note_pending, false);
+    }
+
+    #[test]
+    fn load_all_reports_the_pending_note_after_a_migration_and_a_target_file_that_cannot_be_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        crate::storage::versioned::save_record(&storage.root().join("profile.json"), &Profile { name: "D".into(), full_name: "D O".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] }).unwrap();
+        std::fs::create_dir_all(storage.root().join("targets")).unwrap();
+        std::fs::write(storage.root().join("targets/tg_bad.json"), "nope").unwrap();
+        let all = load_all_from(&storage).unwrap();
+        assert!(all.targets_note_pending);
+        assert_eq!(all.targets.len(), 1);
+        assert_eq!(all.problems.len(), 1, "{:?}", all.problems);
+        let bundle = crate::target_commands::bundle_of(&storage).unwrap();
+        let json = serde_json::to_value(&bundle).unwrap();
+        assert_eq!(json["targetsNotePending"], true);
+        assert!(json["you"]["name"] == "D" && json["targets"].is_array());
     }
 
     #[test]
