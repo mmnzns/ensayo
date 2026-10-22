@@ -57,6 +57,14 @@ mod tests {
     }
 
     #[test]
+    fn the_windows_uninstaller_deletes_every_account_this_list_names() {
+        let hook = include_str!("../windows/hooks.nsh");
+        for account in ACCOUNTS {
+            assert!(hook.contains(&format!("cmdkey /delete:{account}.{SERVICE}")), "the uninstall hook misses {account}");
+        }
+    }
+
+    #[test]
     fn the_service_name_is_ensayos_own_so_other_apps_keys_are_never_read() {
         assert_eq!(SERVICE, "Ensayo");
     }
