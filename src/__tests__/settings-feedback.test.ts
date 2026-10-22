@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFeedbackEmail, describeSystem, FEEDBACK_ADDRESS } from "../screens/settings/feedbackEmail";
+import { buildFeedbackEmail, describeSystem, fitMailto, FEEDBACK_ADDRESS, MAILTO_LIMIT } from "../screens/settings/feedbackEmail";
 
 const base = { topic: "An idea", message: "Let me practice one follow-up on its own.", pay: null, fair: null, email: "", includeSystem: false, system: "Ensayo 0.1.0 · macOS" };
 
@@ -52,5 +52,32 @@ describe("recording retention labels", () => {
     }
     expect(retentionLabel("garbage")).toBe("30 days");
     expect(retentionChoice("garbage")).toBe("30");
+  });
+});
+
+describe("a long message in the email link", () => {
+  const long = "I ran into a problem with the timer. ".repeat(120);
+
+  it("leaves a short message alone", () => {
+    const m = buildFeedbackEmail({ ...base, message: "Short and sweet." });
+    expect(fitMailto(m)).toEqual({ mailto: m.mailto, cut: false });
+  });
+
+  it("cuts a long one to fit an email link, keeping the start and saying so", () => {
+    const m = buildFeedbackEmail({ ...base, message: long });
+    const fit = fitMailto(m);
+    expect(m.mailto.length).toBeGreaterThan(MAILTO_LIMIT);
+    expect(fit.cut).toBe(true);
+    expect(fit.mailto.length).toBeLessThanOrEqual(MAILTO_LIMIT);
+    const body = new URL(fit.mailto).searchParams.get("body") ?? "";
+    expect(body.startsWith("I ran into a problem")).toBe(true);
+    expect(body).toMatch(/Copy message/);
+    expect(new URL(fit.mailto).searchParams.get("subject")).toBe(m.subject);
+  });
+
+  it("never cuts in the middle of an encoded character", () => {
+    const m = buildFeedbackEmail({ ...base, message: "é".repeat(2000) });
+    const fit = fitMailto(m);
+    expect(() => decodeURIComponent(fit.mailto.split("body=")[1])).not.toThrow();
   });
 });

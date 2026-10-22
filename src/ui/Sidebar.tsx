@@ -30,7 +30,7 @@ export default function Sidebar({ active }: { active: NavId }) {
       ))}
       <span style={{ flex: 1 }} />
       <Link
-        to="https://www.buymeacoffee.com/mnmnzns"
+        to="https://buymeacoffee.com/mnmnzns"
         title="Opens in your browser"
         style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start", margin: "6px 12px 2px", background: "#FFDD00", color: "#000000", border: "1px solid #000000", borderRadius: 999, padding: "5px 12px", fontFamily: "'Poppins', sans-serif", fontSize: "12.5px", fontWeight: 500, textDecoration: "none", whiteSpace: "nowrap" }}
       >

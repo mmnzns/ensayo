@@ -3,7 +3,9 @@ import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { useStore } from "../../data/store";
-import { buildFeedbackEmail, describeSystem, FEEDBACK_ADDRESS } from "./feedbackEmail";
+import { copyText } from "../../ui/clipboard";
+import { isApp } from "../../data/real";
+import { buildFeedbackEmail, describeSystem, FEEDBACK_ADDRESS, fitMailto } from "./feedbackEmail";
 import { useLater } from "./parts";
 import { useAppVersion } from "./version";
 
@@ -24,10 +26,12 @@ const OpenOut = () => (
 
 export default function Feedback() {
   const { feedback } = useStore().screens.settings;
+  // The browser preview starts from a sample message; in the app the form starts empty.
+  const sample = !isApp();
   const [topic, setTopic] = useState(feedback.topic);
-  const [message, setMessage] = useState(feedback.message);
-  const [pay, setPay] = useState<string | null>(feedback.pay);
-  const [fair, setFair] = useState<string | null>(feedback.fair);
+  const [message, setMessage] = useState(sample ? feedback.message : "");
+  const [pay, setPay] = useState<string | null>(sample ? feedback.pay : null);
+  const [fair, setFair] = useState<string | null>(sample ? feedback.fair : null);
   const [email, setEmail] = useState("");
   const [includeSystem, setIncludeSystem] = useState(true);
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
@@ -36,16 +40,11 @@ export default function Feedback() {
   const version = useAppVersion();
   const system = `Ensayo ${version} · ${systemName()}`;
   const mail = buildFeedbackEmail({ topic, message, pay, fair, email, includeSystem, system });
+  const link = fitMailto(mail);
   const asksFair = pay === "Maybe" || pay === "Yes";
 
   const copy = async () => {
-    try {
-      if (typeof navigator === "undefined" || !navigator.clipboard) throw new Error("no clipboard");
-      await navigator.clipboard.writeText(mail.body);
-      setCopied("yes");
-    } catch {
-      setCopied("no");
-    }
+    setCopied((await copyText(mail.body)) ? "yes" : "no");
     later(() => setCopied(null), 8000);
   };
 
@@ -103,9 +102,10 @@ export default function Feedback() {
             <span className="e-small" style={{ maxWidth: "380px" }}>Only what you type here is sent. Never your recordings, answers, stories or applications.</span>
             <div style={{ display: "flex", gap: "10px" }}>
               <button type="button" className="e-btn e-btn-ghost" onClick={copy}>Copy message</button>
-              <Link to={mail.mailto} className="e-btn e-btn-primary">Send by email</Link>
+              <Link to={link.mailto} className="e-btn e-btn-primary">Send by email</Link>
             </div>
           </div>
+          {link.cut && <span className="e-small" role="status">Your message is long, so the email carries the start of it. Copy message gives you all of it to paste.</span>}
           {copied && (
             <span className="e-meta" role="status" style={{ color: "var(--e-primary-dark)" }}>
               {copied === "yes" ? `Copied. Paste it into an email to ${FEEDBACK_ADDRESS}.` : `Couldn't copy here. Select the message and copy it, then paste it into an email to ${FEEDBACK_ADDRESS}.`}
@@ -135,7 +135,7 @@ export default function Feedback() {
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "14px", alignItems: "flex-start" }}>
             <span className="e-h3">Like it?</span>
             <span className="e-meta">Ensayo stays free. If it helped you walk in ready, a coffee keeps it going.</span>
-            <Link to="https://www.buymeacoffee.com/mnmnzns" style={{ display: "inline-flex", alignItems: "center", gap: "10px", background: "#FFDD00", color: "#000000", border: "1.5px solid #000000", borderRadius: "12px", padding: "10px 18px", fontFamily: "'Poppins', sans-serif", fontWeight: "500", fontSize: "16px", textDecoration: "none" }}>
+            <Link to="https://buymeacoffee.com/mnmnzns" style={{ display: "inline-flex", alignItems: "center", gap: "10px", background: "#FFDD00", color: "#000000", border: "1.5px solid #000000", borderRadius: "12px", padding: "10px 18px", fontFamily: "'Poppins', sans-serif", fontWeight: "500", fontSize: "16px", textDecoration: "none" }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#FFFFFF" />
                 <path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17" />

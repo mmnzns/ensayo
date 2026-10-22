@@ -47,3 +47,24 @@ export function describeSystem(userAgent: string): string {
   if (/Linux/i.test(userAgent)) return "Linux";
   return "an unknown system";
 }
+
+/** Windows and some email apps drop an email link past about two thousand characters. */
+export const MAILTO_LIMIT = 1900;
+
+const CUT_NOTE = "\n\n[Cut short to fit. Press Copy message in Ensayo for the whole of it.]";
+
+/** The email link, shortened when the message is too long for one. `cut` says the start of it was kept. */
+export function fitMailto(email: FeedbackEmail): { mailto: string; cut: boolean } {
+  if (email.mailto.length <= MAILTO_LIMIT) return { mailto: email.mailto, cut: false };
+  const head = `mailto:${email.to}?subject=${encodeURIComponent(email.subject)}&body=`;
+  const room = MAILTO_LIMIT - head.length - encodeURIComponent(CUT_NOTE).length;
+  // Cut the text, not the encoded form, so a character is never split in half.
+  const chars = Array.from(email.body);
+  let keep = chars.length;
+  let encoded = encodeURIComponent(chars.join(""));
+  while (encoded.length > room && keep > 0) {
+    keep = Math.max(0, Math.min(keep - 1, Math.floor((keep * room) / encoded.length)));
+    encoded = encodeURIComponent(chars.slice(0, keep).join(""));
+  }
+  return { mailto: head + encoded + encodeURIComponent(CUT_NOTE), cut: true };
+}
