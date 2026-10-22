@@ -8,7 +8,8 @@ import type { Method, Story } from "../data/types";
 import type { QuestionQuality } from "./debrief";
 import { isApp, tauriApi, type RepApi, type SessionDetail } from "./api";
 import { attemptFromOutcome } from "./attempt";
-import { banksFor, ownQuestion, pickClosing, pickQuestions, type BankQuestion } from "./questions";
+import { banksFor, ownQuestion, pickApplicationQuestions, pickClosing, pickQuestions, type BankQuestion, type ExtraQuestion } from "./questions";
+import type { MustSayItem } from "./debrief";
 import { pickStories } from "./stories";
 import type { FinishArgs, FullRep, RepOutcome } from "./types";
 
@@ -37,6 +38,8 @@ export interface LiveState {
   mode: "drill" | "mock";
   stage: string;
   applicationId: string | null;
+  /** The stage of the application's process being practised; null outside an application. */
+  stageId: string | null;
   sessionId: string | null;
   questions: BankQuestion[];
   /** 0-based position of the current question. */
@@ -81,6 +84,7 @@ const INITIAL: LiveState = {
   mode: "drill",
   stage: "hiring_manager",
   applicationId: null,
+  stageId: null,
   sessionId: null,
   questions: [],
   index: 0,
@@ -142,9 +146,49 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
   return (await repApi()).loadSession(sessionId);
 }
 
+/** What the debrief is told about the application, so it can judge the questions against the real posting. All optional: a Mock outside an application has none of it. */
+export interface DebriefAbout {
+  company?: string;
+  role?: string;
+  jdSummary?: string;
+  priorities?: string;
+  mustSay?: MustSayItem[];
+}
+
 /** The notes on the candidate's own questions for a finished Mock (one model call, then saved). */
-export async function askMockDebrief(sessionId: string, ctx: { company?: string; role?: string } = {}): Promise<QuestionQuality> {
-  return (await repApi()).mockDebrief({ session_id: sessionId, company: ctx.company ?? "this company", role: ctx.role ?? "this role", jd_summary: "", priorities: "", must_say: [] });
+export async function askMockDebrief(sessionId: string, ctx: DebriefAbout = {}): Promise<QuestionQuality> {
+  return (await repApi()).mockDebrief({ session_id: sessionId, company: ctx.company ?? "this company", role: ctx.role ?? "this role", jd_summary: ctx.jdSummary ?? "", priorities: ctx.priorities ?? "", must_say: ctx.mustSay ?? [] });
+}
+
+const MUST_SAY_KEY = "ensayo:must-say-recorded";
+const recordedMustSay = new Set<string>();
+
+/** Saves which "say these out loud" lines were said in a Mock, once per Mock (the backend counts each call as one more Mock checked). Quiet when it cannot: outside the app, or when the list changed since. */
+export async function recordMustSay(sessionId: string, applicationId: string, saidIds: string[]): Promise<boolean> {
+  if (!isApp() || recordedMustSay.has(sessionId)) return false;
+  try {
+    const before: string[] = JSON.parse(localStorage.getItem(MUST_SAY_KEY) ?? "[]");
+    if (before.includes(sessionId)) {
+      recordedMustSay.add(sessionId);
+      return false;
+    }
+  } catch {
+    // Storage may be unavailable: the in-memory guard still holds for this run.
+  }
+  recordedMustSay.add(sessionId);
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("record_must_say", { applicationId, saidIds });
+  } catch {
+    return false;
+  }
+  try {
+    const before: string[] = JSON.parse(localStorage.getItem(MUST_SAY_KEY) ?? "[]");
+    localStorage.setItem(MUST_SAY_KEY, JSON.stringify([...before, sessionId].slice(-200)));
+  } catch {
+    // Not remembered across runs; fine.
+  }
+  return true;
 }
 
 /** Whether a session started from the Start screen runs the real loop: only inside the app. */
@@ -168,6 +212,10 @@ export interface StartOptions {
   ownQuestion?: string;
   startup?: boolean;
   applicationId?: string | null;
+  /** The stage of the application's process to practise (a stage may repeat). Sent with every answer. */
+  stageId?: string | null;
+  /** The application's own questions (`ExtrasView.questions`); the questions for `stageId` are asked first. Absent while they have not loaded: the bank is used. */
+  extras?: ExtraQuestion[];
   /** Tries per question in a Drill: 2 or 3. */
   tries?: number;
   /** Follow-up questions in a Drill; the default is yes. */
@@ -179,13 +227,16 @@ export function startLive(o: StartOptions, ctx: { targetRole: string; stories: S
   stories = ctx.stories;
   methods = ctx.methods;
   const story = o.source === "story" ? ctx.stories.find((s) => s.id === o.storyId) : undefined;
+  const seed = o.seed ?? Date.now();
+  const bank = banksFor(ctx.targetRole);
   const questions =
     o.source === "own" && o.ownQuestion?.trim()
       ? [ownQuestion(o.ownQuestion)]
-      : pickQuestions({ bank: banksFor(ctx.targetRole), stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed: o.seed ?? Date.now() });
-  const seed = o.seed ?? Date.now();
+      : o.source === "application" && o.applicationId
+        ? pickApplicationQuestions({ bank, extras: o.extras, stageId: o.stageId, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, seed })
+        : pickQuestions({ bank, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed });
   const closing = o.mode === "mock" ? pickClosing(banksFor(ctx.targetRole), o.stage, seed) : undefined;
-  state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
+  state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, stageId: o.applicationId ? (o.stageId ?? null) : null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
   listeners.forEach((l) => l());
 }
 
@@ -278,6 +329,7 @@ export async function stopAndFinish() {
       mode: state.mode,
       stage: state.stage,
       application_id: state.applicationId,
+      stage_id: state.applicationId ? state.stageId : null,
       question_id: q.id,
       question_text: currentQuestionText(),
       question_type: q.type,

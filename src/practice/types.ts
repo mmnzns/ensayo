@@ -134,6 +134,8 @@ export interface FinishArgs {
   mode: "drill" | "mock";
   stage: string;
   application_id: string | null;
+  /** The stage of the application's process being practised (a stage may repeat); null outside an application. */
+  stage_id?: string | null;
   question_id: string;
   question_text: string;
   /** "" for a question nobody tagged: the engine classifies it. */
