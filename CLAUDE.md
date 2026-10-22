@@ -40,8 +40,15 @@ npm test                                           # frontend tests (Vitest)
 cargo test --manifest-path src-tauri/Cargo.toml    # Rust tests
 npm run build                                      # type-check + build frontend
 sh scripts/build-signed-debug.sh                   # Mac: signed debug .app, for real microphone permission
+sh scripts/build-llm-helper.sh                     # builds the ensayo-llm helper (built-in local AI); tauri dev/build run it first
+powershell -File scripts/build-llm-helper.ps1       # Windows: the same
+cargo test --manifest-path src-tauri/Cargo.toml --workspace   # all members: app, ensayo-llm, ensayo-llm-protocol
+# Real model through the real helper (needs the helper built and a GGUF, or the model downloaded in Settings):
+ENSAYO_LLM_MODEL=<qwen gguf> cargo test --release --manifest-path src-tauri/Cargo.toml local_ai_smoke -- --ignored --nocapture
 ENSAYO_SMOKE_WAV=<16 kHz mono wav> ENSAYO_SMOKE_MODEL=whisper-turbo cargo test --manifest-path src-tauri/Cargo.toml smoke_real_model -- --ignored --nocapture
 ```
+
+**The helper must exist before the app builds or tests**: `src-tauri/binaries/ensayo-llm-<target triple>` is Tauri's `externalBin`, and `tauri-build` fails without it (CI runs the script first). The first helper build compiles llama.cpp (a minute on an M-series Mac).
 
 Windows: dot-source `scripts/cpu-baseline.ps1` before release builds (whisper.cpp for the AVX2 baseline); `.cargo/config.toml` already forces `-O2` for whisper.cpp. `npm run tauri dev` needs no signing.
 
@@ -56,13 +63,14 @@ Windows: dot-source `scripts/cpu-baseline.ps1` before release builds (whisper.cp
 - **Claude-launched dev builds on Windows** save settings in Claude's sandbox folder. Test settings and data from a normally launched app.
 - One design for Mac and Windows; platform-neutral words ("this computer", "your system's secure key storage").
 - A "Delete all Ensayo data" button removes models, data, settings, logs and saved keys (M10).
+- **Never link llama.cpp into the app.** The built-in local AI is the `ensayo-llm` helper (`src-tauri/llm`, protocol in `src-tauri/llm-protocol`) because whisper.cpp and llama.cpp each bundle ggml; a crash or out-of-memory in the model also never takes the app down. The app side is `src-tauri/src/ai/local.rs`. v0 ships the processor and Metal builds only (no Windows GPU helper).
 - Dependencies are optimized even in debug builds (`[profile.dev.package."*"]`), or whisper.cpp is 10x slower.
 
 ## Architecture (after M0)
 
 Tauri 2 desktop app; Rust backend in focused modules behind commands; React + TypeScript frontend that talks only to those commands.
 
-Exists now: `recorder` (cpal mic, 16 kHz mono WAV, `Capture` for one answer), `speech` (model catalog and downloads, Silero VAD, Whisper and Parakeet engines returning words with times, `transcribe_wav`), `keys` (Keychain / Credential Manager), `ai::providers` (cloud provider table, auth, error wording, model lists), `commands`, `platform` (microphone permission).
+Exists now: `recorder` (cpal mic, 16 kHz mono WAV, `Capture` for one answer), `speech` (model catalog and downloads, Silero VAD, Whisper and Parakeet engines returning words with times, `transcribe_wav`), `keys` (Keychain / Credential Manager), `ai::providers` (cloud provider table, auth, error wording, model lists), `ai::local` and `ai::local_models` (the built-in local AI: helper supervision and the model catalog, downloads into `<models>/llm`), `commands`, `platform` (microphone permission).
 
 Later milestones add: `storage`, `metrics` (rules), `ai` routing and prompts, `bank`, `jd`, `drill`, `habits`, `eval`.
 
