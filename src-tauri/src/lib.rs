@@ -4,6 +4,8 @@ pub mod ai_commands;
 mod application_commands;
 pub mod applications;
 mod audio_retention;
+pub mod backup;
+mod backup_commands;
 mod commands;
 mod data_commands;
 pub mod eval;
@@ -149,6 +151,9 @@ pub fn run() {
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,
             local_ai_commands::stop_local_ai,
+            backup_commands::backup_data,
+            backup_commands::inspect_backup,
+            backup_commands::restore_backup,
             update_commands::updates_check,
             update_commands::updates_pending,
             update_commands::updates_install,

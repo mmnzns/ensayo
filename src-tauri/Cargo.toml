@@ -46,6 +46,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
 pdf-extract = "0.12.1"
 docx-rs = "0.4.22"
+# Backup and restore. Deflate through flate2 (pure Rust miniz_oxide): no C toolchain, no extra codecs.
+zip = { version = "8", default-features = false, features = ["deflate-flate2"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
