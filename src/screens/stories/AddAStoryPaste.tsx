@@ -1,11 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
-import { pasteDraft, setBlankReview, setParseFailure, setParsedDraft, type ParsedDraft } from "./selection";
+import { pasteDraft, setBlankReview, setFromSetup, setParseFailure, setParsedDraft, type ParsedDraft } from "./selection";
 
 export default function AddAStoryPaste() {
   const { pasteSample } = useStore().screens.stories;
@@ -14,6 +14,8 @@ export default function AddAStoryPaste() {
   const empty = raw.trim() === "";
 
   const [reading, setReading] = useState(false);
+  // Adding a story from here is never the setup step, whatever was left behind.
+  useEffect(() => setFromSetup(false), []);
 
   const readIt = async () => {
     if (empty || reading) return;

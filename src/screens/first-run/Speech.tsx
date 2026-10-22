@@ -2,8 +2,10 @@
 import { useEffect, useState } from "react";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
+import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import StepHeader from "./StepHeader";
+import { useSpeech } from "./useSpeech";
 
 type Choice = "local" | "download";
 type Download = "idle" | "downloading" | "ready";
@@ -11,7 +13,79 @@ type Download = "idle" | "downloading" | "ready";
 const cardStyle = { display: "flex", gap: "16px", alignItems: "flex-start", padding: "22px", cursor: "pointer" } as const;
 const onStyle = { boxShadow: "inset 0 0 0 2px var(--e-primary)", background: "var(--e-tint)" } as const;
 
+/** In the app the step reads and downloads the real speech model; in the browser preview it stays the sample below. */
 export default function Speech() {
+  return isApp() ? <SpeechLive /> : <SpeechMock />;
+}
+
+const percentOf = (fraction: number) => Math.round(Math.min(1, Math.max(0, fraction || 0)) * 100);
+
+function SpeechLive() {
+  const { plan, downloading, fraction, error, download } = useSpeech();
+  const pct = percentOf(fraction);
+  const ready = plan?.kind === "ready";
+
+  return (
+    <FocusShell>
+      <div className="e-wrap" style={{ width: "100%", gap: "32px" }}>
+        <StepHeader step={5} skipTo="1-6-feedback-engine" />
+        <div className="e-narrow" style={{ gap: "24px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <span className="e-label">Step 5 of 7</span>
+            <h1 className="e-h1">Turning your voice into text</h1>
+            <p className="e-meta" style={{ margin: "0" }}>A speech model runs on this computer, so your answers never leave it. It works offline.</p>
+          </div>
+          {!plan ? (
+            <span className="e-meta" role="status">{error || "Looking at what is on this computer…"}</span>
+          ) : plan.kind === "ready" ? (
+            <div className="e-card" style={{ ...cardStyle, ...onStyle, cursor: "default" }}>
+              <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
+                  <span className="e-h3">{plan.fromOtherApp ? "Use the one already on this computer" : "Ready on this computer"}</span>
+                  <span className="e-badge e-badge-ok">{plan.fromOtherApp ? "Found" : "Ready"}</span>
+                </span>
+                <span className="e-meta">{plan.name} · {plan.fromOtherApp ? "found from another app, nothing to download" : "nothing more to download"}</span>
+              </span>
+            </div>
+          ) : (
+            <div className="e-card" style={{ ...cardStyle, ...onStyle, cursor: "default" }}>
+              <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "10px" }}>
+                <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
+                  <span className="e-h3">{plan.onlyVoiceDetection ? "One small piece is missing" : "Download the recommended model"}</span>
+                  <span className="e-pill" style={{ background: "var(--e-ground)" }}>{plan.sizeMb} MB</span>
+                </span>
+                <span className="e-meta">
+                  {plan.onlyVoiceDetection ? "The part that tells your voice from silence. It is tiny." : `${plan.name}. Accurate, and keeps the "um"s Ensayo needs to count.`}
+                </span>
+                {downloading ? (
+                  <>
+                    <span className="e-bar" style={{ maxWidth: "420px" }} role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+                      <span style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className="e-small" role="status">Downloading, {pct}% of {plan.sizeMb} MB. You can leave this open and keep reading.</span>
+                  </>
+                ) : (
+                  <button type="button" className="e-btn e-btn-soft e-btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => void download()}>
+                    {error ? "Try again" : "Download"}
+                  </button>
+                )}
+                {error ? <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{error}</span> : null}
+              </span>
+            </div>
+          )}
+          {plan && !ready ? <p className="e-meta" style={{ margin: "0" }}>You can skip this for now. Until a speech model is here, Ensayo can't hear your answers.</p> : null}
+          <p className="e-meta" style={{ margin: "0" }}>Want something faster or online? More speech options are in Settings, under Speech.</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+            <Link to="1-4-microphone" className="e-btn e-btn-ghost">← Back</Link>
+            <Link to="1-6-feedback-engine" className="e-btn e-btn-primary">Continue</Link>
+          </div>
+        </div>
+      </div>
+    </FocusShell>
+  );
+}
+
+function SpeechMock() {
   const { screens } = useStore();
   const { local, download } = screens.firstRun.speech;
   const [choice, setChoice] = useState<Choice>("local");

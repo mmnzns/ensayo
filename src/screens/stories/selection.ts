@@ -36,3 +36,10 @@ export const setBlankReview = (blank: boolean) => {
   blankReview = blank;
 };
 export const isBlankReview = () => blankReview;
+
+/** True while the review screen belongs to the setup step "Add one story": saving goes on to "That's the loop" instead of the list. */
+let fromSetup = false;
+export const setFromSetup = (on: boolean) => {
+  fromSetup = on;
+};
+export const isFromSetup = () => fromSetup;
