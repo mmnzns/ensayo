@@ -63,6 +63,8 @@ export interface LiveState {
   clarify: ChatLine[] | null;
   /** A feedback engine is set up, so follow-ups can be offered. */
   aiReady: boolean;
+  /** The session the results screen shows once the practice ends. Kept after the session is over. */
+  lastSessionId: string | null;
 }
 
 const INITIAL: LiveState = {
@@ -89,6 +91,7 @@ const INITIAL: LiveState = {
   followUpAttempt: null,
   clarify: null,
   aiReady: false,
+  lastSessionId: null,
 };
 
 let state: LiveState = INITIAL;
@@ -301,13 +304,20 @@ async function apply(out: RepOutcome) {
     return;
   }
   if (state.view === "followup") {
-    set({ phase: "result", sessionId: out.session_id, followUpOutcome: out, followUpAttempt: attemptFromOutcome(out), restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
+    set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, followUpOutcome: out, followUpAttempt: attemptFromOutcome(out), restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
+    announceHistory();
     return;
   }
   const i = state.attempt - 1;
   const attempts = [...state.attempts.slice(0, i), attemptFromOutcome(out)];
   const outcomes = [...state.outcomes.slice(0, i), out];
-  set({ phase: "result", sessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
+  set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
+  announceHistory();
+}
+
+/** Tells the data layer a rep was saved, so Home, Progress and the history list read the new one. */
+function announceHistory() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("ensayo:history"));
 }
 
 /** The result screen for what was just measured. */

@@ -12,7 +12,7 @@ export interface PracticeView {
   /** The question being followed up: the first question, while a follow-up is on screen. */
   original: string;
   targetSeconds: { from: number; to: number };
-  /** Where End session goes. A live session has no results page yet (M9), so it goes home. */
+  /** Where End session goes: the results of what was practised, or home when nothing was scored. */
   endTo: string;
   onEnd?: () => void;
 }
@@ -27,7 +27,8 @@ export function usePractice(): PracticeView {
     question: currentQuestionText(),
     original: currentQuestion()?.text ?? "",
     targetSeconds: liveWindow(),
-    endTo: "2-1-home",
+    // Once something was scored, ending a session shows what it said; otherwise there is nothing to show.
+    endTo: live.lastSessionId ? END_SESSION : "2-1-home",
     onEnd: () => void cancelLive(),
   };
 }
