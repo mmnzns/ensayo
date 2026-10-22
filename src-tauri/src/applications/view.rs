@@ -202,6 +202,12 @@ pub struct ExtrasView {
     #[serde(rename = "lockedByStage")]
     pub locked_by_stage: BTreeMap<String, NightBeforeView>,
     pub questions: Vec<PrepQuestionView>,
+    /// What the person wrote after each interview, one note per stage (`interviews.json`).
+    #[serde(rename = "interviewNotes")]
+    pub interview_notes: Vec<crate::applications::interviews::NoteView>,
+    /// Questions asked at earlier stages come first in a later stage's Drill. On unless the person turned it off.
+    #[serde(rename = "askedFirst")]
+    pub asked_first: bool,
 }
 
 fn ts_kind(kind: &str, resume: bool) -> &'static str {
@@ -526,7 +532,10 @@ pub fn build_extras(storage: &Storage, app: &AppRecord, ctx: &Ctx) -> StorageRes
             }
         }
     }
+    let interviews = storage.load_application_part::<crate::storage::application_files::InterviewsFile>(&app.id, "interviews.json")?.unwrap_or_default();
     Ok(ExtrasView {
+        interview_notes: interviews.notes.into_iter().map(Into::into).collect(),
+        asked_first: interviews.asked_first,
         posting_pasted_on: if posting.is_empty() { String::new() } else { pasted_on(storage, &app.id) },
         posting_text: posting,
         was_values: app.was_values.clone(),
@@ -924,6 +933,22 @@ mod tests {
         assert_eq!((v["postingText"].as_str(), v["postingPastedOn"].as_str(), v["questions"].clone()), (Some(""), Some(""), json!([])));
         assert!(v.get("nightBefore").is_none(), "no lock yet: the screen says nothing to lock");
         assert_eq!(v["lockedByStage"], json!({}));
+    }
+
+    #[test]
+    fn the_extras_carry_the_interview_notes_and_the_switch_for_the_screens() {
+        let (_d, s, app) = setup();
+        let empty = json_of(&extras(&s, &app.id));
+        assert_eq!((empty["interviewNotes"].clone(), empty["askedFirst"].clone()), (json!([]), json!(true)));
+        let note = crate::applications::interviews::NoteInput { stage_id: "stg_1".into(), held_on: Some("2026-10-14".into()), rating: Some(3), asked: vec!["Why Kestrel?".into()], worked: "w".into(), differently: "d".into(), spoke_to: "Priya".into(), next_step: "Wait".into() };
+        crate::applications::interviews::save_note(&s, &app.id, note, NaiveDate::from_ymd_opt(2026, 10, 15).unwrap()).unwrap();
+        crate::applications::interviews::set_asked_first(&s, &app.id, false).unwrap();
+        let v = json_of(&extras(&s, &app.id));
+        assert_eq!(v["interviewNotes"][0]["stageId"], "stg_1");
+        assert_eq!(v["interviewNotes"][0]["spokeTo"], "Priya");
+        assert_eq!(v["interviewNotes"][0]["asked"], json!(["Why Kestrel?"]));
+        assert_eq!(v["askedFirst"], false);
+        assert!(v["questions"].as_array().unwrap().iter().any(|q| q["source"] == "asked" && q["text"] == "Why Kestrel?"));
     }
 
     // ---------- everything ----------
