@@ -38,7 +38,7 @@ function wins(rep: FullRep): string[] {
   if (m.proof.matched.length > 0) out.push(`Said ${m.proof.matched[0].raw}`);
   if (checkOf(m, "clean_stop")?.passed === true) out.push("Stopped right after it");
   if (checkOf(m, "length")?.passed === true) out.push(`${clock(seconds(m.speaking_ms))} long`);
-  if (checkOf(m, "fillers")?.passed === true) out.push(`${m.fillers.count} filler word${m.fillers.count === 1 ? "" : "s"}`);
+  if (checkOf(m, "fillers")?.passed === true) out.push(m.fillers.count === 0 ? "No filler words" : `${m.fillers.count} filler word${m.fillers.count === 1 ? "" : "s"}`);
   return out;
 }
 

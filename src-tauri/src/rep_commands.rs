@@ -469,4 +469,30 @@ mod tests {
         assert_eq!(one.session_id, two.session_id);
         assert_eq!(storage.reps(&one.session_id).unwrap().items.len(), 2);
     }
+
+    /// Real speech model, real recording: `ENSAYO_SMOKE_WAV=answer.wav ENSAYO_SMOKE_MODEL=whisper-turbo cargo test real_rep -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_rep_from_a_recording() {
+        let wav = PathBuf::from(std::env::var("ENSAYO_SMOKE_WAV").expect("set ENSAYO_SMOKE_WAV"));
+        let model = std::env::var("ENSAYO_SMOKE_MODEL").unwrap_or_else(|_| "whisper-tiny".into());
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let copy = tmp.join("rec.wav");
+        fs::copy(&wav, &copy).unwrap();
+        let t = transcribe_path(&copy, &model).unwrap();
+        eprintln!("{} words from {}", t.words.len(), t.engine);
+        let mut a = args(&tmp, 1, None);
+        a.audio_path = copy;
+        let out = finish_with(&storage, &tmp.join("audio"), &a, t.words, true, now()).unwrap();
+        let rep = out.rep.expect("scored");
+        let m = &rep.metrics;
+        eprintln!("speaking {}s, {} wpm, fillers {:?}, pauses {}, fix {:?}", m.speaking_ms / 1000, m.wpm, m.fillers.items.iter().map(|f| &f.text).collect::<Vec<_>>(), m.pauses.len(), rep.rep.fix);
+        for c in &m.checks {
+            eprintln!("  {} {:?}: {}", c.id, c.passed, c.evidence);
+        }
+        for s in &m.sentences {
+            eprintln!("  [{}] {:.1}s-{:.1}s {}", s.index, s.start_ms as f64 / 1000.0, s.end_ms as f64 / 1000.0, s.text);
+        }
+    }
 }

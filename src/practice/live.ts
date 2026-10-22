@@ -71,7 +71,7 @@ export const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => void listeners.delete(l);
 };
-export const useLive = () => useSyncExternalStore(subscribe, getLive);
+export const useLive = () => useSyncExternalStore(subscribe, getLive, getLive);
 
 /** True when the practice screens should run the real loop instead of the mock one. */
 export const isLive = () => state.active;
@@ -158,6 +158,28 @@ export async function beginRecording() {
 
 function storyIdsFor(q: BankQuestion, source?: Story): string[] {
   return (source ? [source] : pickStories(q, stories, methods)).map((s) => s.id);
+}
+
+/** "Start over" while recording: throw this take away and begin again. */
+export async function restartRecording() {
+  try {
+    const a = await repApi();
+    const rec = await a.stopRecording();
+    await a.discardRecording(rec.path);
+    await a.startRecording();
+    set({ phase: "recording", error: null });
+  } catch (e) {
+    set({ phase: "error", error: message(e) });
+  }
+}
+
+/** 0 to 1, how loud the mic is right now. 0 when it cannot be read. */
+export async function recordingLevel(): Promise<number> {
+  try {
+    return (await (await repApi()).level())?.level ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 export async function stopAndFinish() {

@@ -2,16 +2,18 @@
 import { useEffect, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
+import { beginRecording, getLive, HARD_CAP_SECONDS, recordingLevel, restartRecording, stopAndFinish } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
-import { END_SESSION, THINK } from "./practiceFlow";
+import { THINK } from "./practiceFlow";
 import { Kbd, SessionHeader } from "./parts";
+import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
 
 const reduceMotion = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Bars that move like a voice level. Heights breathe around the resting shape from the data. */
-function LevelBars({ bars }: { bars: number[] }) {
+function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (reduceMotion()) return;
@@ -23,7 +25,7 @@ function LevelBars({ bars }: { bars: number[] }) {
     <div style={{ display: "flex", alignItems: "center", gap: "5px", height: "96px" }} aria-label="Your voice level">
       {bars.map((h, i) => {
         const wave = 0.65 + 0.35 * Math.sin(tick * 0.9 + i * 1.3);
-        const height = Math.max(8, Math.min(100, h * wave));
+        const height = Math.max(8, Math.min(100, h * wave * (level === undefined ? 1 : Math.max(0.15, Math.min(1, level * 3)))));
         const opacity = [0.5, 0.6, 0.7][i] ?? ([0.8, 0.6, 0.5][i - (last - 2)] ?? 1);
         return <span key={i} style={{ width: "6px", height: `${height}%`, borderRadius: "3px", background: "var(--e-primary)", opacity, transition: "height 130ms ease-out" }} />;
       })}
@@ -32,8 +34,19 @@ function LevelBars({ bars }: { bars: number[] }) {
 }
 
 export default function PracticeRecording() {
-  const { session, question, targetSeconds, timerMaxSeconds, levelBars } = useStore().screens.practice;
+  const { timerMaxSeconds, levelBars } = useStore().screens.practice;
+  const { live, session, question, targetSeconds, endTo, onEnd } = usePractice();
   const [seconds, setSeconds] = useState(0);
+  const [level, setLevel] = useState(0);
+  const max = live ? Math.max(timerMaxSeconds, targetSeconds.to + 30) : timerMaxSeconds;
+
+  // A live session starts the microphone when the screen opens, shows its real level, and stops itself at the hard cap.
+  useEffect(() => {
+    if (!live) return;
+    if (getLive().phase !== "recording") void beginRecording();
+    const id = window.setInterval(() => void recordingLevel().then(setLevel), 130);
+    return () => window.clearInterval(id);
+  }, [live]);
 
   // Count up from 0:00 while the screen is mounted.
   useEffect(() => {
@@ -41,10 +54,25 @@ export default function PracticeRecording() {
     return () => window.clearInterval(id);
   }, []);
 
-  const stop = () => go(THINK);
-  useKeys({ space: stop, esc: () => go(END_SESSION) });
+  const stop = () => {
+    if (live) void stopAndFinish();
+    go(THINK);
+  };
+  const end = () => {
+    onEnd?.();
+    go(endTo);
+  };
+  const startOver = () => {
+    setSeconds(0);
+    if (live) void restartRecording();
+  };
+  useEffect(() => {
+    if (live && seconds >= HARD_CAP_SECONDS) stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seconds, live]);
+  useKeys({ space: stop, esc: end });
 
-  const pct = (n: number) => `${Math.min(100, (n / timerMaxSeconds) * 100)}%`;
+  const pct = (n: number) => `${Math.min(100, (n / max) * 100)}%`;
   const dot = (
     <span className="e-pill" style={{ gap: "8px" }}>
       <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--e-primary)" }} />
@@ -55,14 +83,14 @@ export default function PracticeRecording() {
   return (
     <FocusShell>
       <div className="e-wrap" style={{ width: "100%" }}>
-        <SessionHeader session={session} right={dot} />
+        <SessionHeader session={session} right={dot} endTo={endTo} onEnd={onEnd} />
       </div>
       <div style={{ flex: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "40px", textAlign: "center", padding: "32px 0" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "center", maxWidth: "820px" }}>
           <span className="e-label">You're answering</span>
           <p style={{ margin: "0", fontSize: "22px", fontWeight: "600", lineHeight: "1.35", color: "var(--e-muted)" }}>{question}</p>
         </div>
-        <LevelBars bars={levelBars} />
+        <LevelBars bars={levelBars} level={live ? level : undefined} />
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", width: "100%", maxWidth: "420px" }}>
           <span style={{ fontSize: "44px", fontWeight: "600", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{clock(seconds)}</span>
           <div style={{ position: "relative", width: "100%", height: "8px", borderRadius: "999px", background: "var(--e-line)" }} aria-label={`${seconds} seconds, target ${targetSeconds.from} to ${targetSeconds.to}`}>
@@ -72,7 +100,7 @@ export default function PracticeRecording() {
           <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
             <span className="e-small">{clock(0)}</span>
             <span className="e-small">target {clock(targetSeconds.from)} to {clock(targetSeconds.to)}</span>
-            <span className="e-small">{clock(timerMaxSeconds)}</span>
+            <span className="e-small">{clock(max)}</span>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
@@ -87,7 +115,7 @@ export default function PracticeRecording() {
       <div className="e-wrap" style={{ width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
           <span className="e-small">Pauses are fine. Take a second to find the word.</span>
-          <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setSeconds(0)}>Start over</button>
+          <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={startOver}>Start over</button>
         </div>
       </div>
     </FocusShell>

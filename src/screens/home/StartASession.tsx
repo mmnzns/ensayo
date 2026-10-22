@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { daysUntil, nextInterview, useStore } from "../../data/store";
 import type { Mode, StageId } from "../../data/types";
+import { liveAvailable, startLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { dayBadge, lowerFirst } from "./format";
@@ -47,6 +48,25 @@ export default function StartASession() {
   const noPosting = source === "application" && !!next && next.application.analysis === null;
   const needsText = source === "own" && question.trim() === "";
   const startTo = noPosting ? "home-session-no-questions" : mock ? "4-1-mock-in-progress" : "3-1-practice-interviewer-asking";
+
+  // In the app a Drill runs the real loop; in the browser preview it stays the mock demo.
+  const beginLive = () => {
+    if (mock || noPosting || !liveAvailable()) return;
+    const app = source === "application" ? next : undefined;
+    startLive(
+      {
+        mode: "drill",
+        stage: app ? app.stage.stage : stage,
+        count: length,
+        source,
+        storyId,
+        ownQuestion: question,
+        startup: app?.application.startup ?? false,
+        applicationId: app?.application.id ?? null,
+      },
+      { targetRole: profile.targetRole, stories, methods: store.methods },
+    );
+  };
 
   const modeCard = (on: boolean): React.CSSProperties => ({
     display: "flex",
@@ -203,7 +223,7 @@ export default function StartASession() {
               Start
             </button>
           ) : (
-            <Link to={startTo} className="e-btn e-btn-primary e-btn-big">Start</Link>
+            <Link to={startTo} onClick={beginLive} className="e-btn e-btn-primary e-btn-big">Start</Link>
           )}
         </div>
       </div>

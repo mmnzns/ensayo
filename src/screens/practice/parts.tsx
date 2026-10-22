@@ -17,11 +17,14 @@ export function SessionHeader({
   session,
   right = "end",
   endTo = END_SESSION,
+  onEnd,
   showModeNote = false,
 }: {
   session: PracticeSession;
   right?: "end" | ReactNode;
   endTo?: string;
+  /** Runs when End session is clicked (the live loop stops a recording and clears itself). */
+  onEnd?: () => void;
   showModeNote?: boolean;
 }) {
   return (
@@ -42,7 +45,7 @@ export function SessionHeader({
         <span style={{ width: progress(session) }} />
       </div>
       {right === "end" ? (
-        <Link to={endTo} className="e-btn e-btn-white e-btn-sm">
+        <Link to={endTo} onClick={onEnd} className="e-btn e-btn-white e-btn-sm">
           End session
         </Link>
       ) : (

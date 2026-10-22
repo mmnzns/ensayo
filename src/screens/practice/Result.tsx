@@ -2,11 +2,13 @@
 import { useEffect, useState } from "react";
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
+import { keepAfterRestart, listenToRep, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { Kbd, SessionHeader } from "./parts";
-import { END_SESSION, FOLLOW_UP, MAX_ATTEMPTS, nextAttempt, nextQuestion, RECORD, setAttempt } from "./practiceFlow";
+import { ASK, FOLLOW_UP, MAX_ATTEMPTS, nextAttempt, nextQuestion, RECORD, setAttempt } from "./practiceFlow";
 import { hush, speak } from "./speak";
+import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
 
 export interface ResultOptions {
@@ -72,41 +74,61 @@ function DetailsCard({ details, onHide }: { details: PracticeAttempt["details"];
 }
 
 export default function Result({ index, detailsStartOpen, detailsInAside, handSize, showKeyHint }: ResultOptions) {
-  const { session, question, attempts } = useStore().screens.practice;
-  const attempt = attempts[index];
+  const { attempts } = useStore().screens.practice;
+  const { live, session, question, endTo, onEnd } = usePractice();
+  const state = useLive();
+  const attempt = live ? state.attempts[state.attempt - 1] : attempts[index];
   const [open, setOpen] = useState(detailsStartOpen);
-  const [wrong, setWrong] = useState(false);
+  const [mockWrong, setMockWrong] = useState(false);
+  const [noAudio, setNoAudio] = useState(false);
+  const wrong = live ? state.noteWrong : mockWrong;
 
   // Keep the chain in step with the screen the user is looking at, so Again always means "one more than this".
   const number = attempt?.number ?? index + 1;
   useEffect(() => {
-    setAttempt(number);
-    return hush;
-  }, [number]);
+    if (!live) setAttempt(number);
+    return () => {
+      hush();
+      stopListening();
+    };
+  }, [number, live]);
 
   const wins = attempt?.wins ?? [];
   const everythingWorked = wins.length > 0;
   const lastAttempt = number >= MAX_ATTEMPTS;
-  const canFollowUp = number >= 2 && !everythingWorked;
+  // Follow-ups are built in M6; a live session does not offer them yet.
+  const canFollowUp = number >= 2 && !everythingWorked && !live;
 
   const again = () => {
-    nextAttempt();
+    if (live) tryAgain();
+    else nextAttempt();
     go(RECORD);
   };
-  const next = () => go(nextQuestion());
-  const followUp = () => go(FOLLOW_UP);
-  const listen = () => attempt && speak(attempt.transcript.map((l) => (typeof l.text === "string" ? l.text : l.text.map((p) => p.text).join(""))).join(" "));
+  const next = () => {
+    if (!live) return go(nextQuestion());
+    if (nextLiveQuestion() === "done") go(endTo);
+    else go(ASK);
+  };
+  const followUp = live ? next : () => go(FOLLOW_UP);
+  const end = () => {
+    onEnd?.();
+    go(endTo);
+  };
+  const listen = () => {
+    if (live) return void listenToRep().then((ok) => setNoAudio(!ok));
+    return attempt && speak(attempt.transcript.map((l) => (typeof l.text === "string" ? l.text : l.text.map((p) => p.text).join(""))).join(" "));
+  };
   const sayIt = () => attempt?.trySaying && speak(attempt.trySaying);
 
   // Enter does whatever the big button does.
   const primary = everythingWorked ? followUp : lastAttempt ? next : again;
-  useKeys({ enter: primary, n: next, l: listen, esc: () => go(END_SESSION) });
+  useKeys({ enter: primary, n: next, l: listen, esc: end });
 
   if (!attempt) {
     return (
       <FocusShell>
         <div className="e-wrap">
-          <SessionHeader session={session} />
+          <SessionHeader session={session} endTo={endTo} onEnd={onEnd} />
           <p className="e-meta">Nothing to show for this answer yet.</p>
         </div>
       </FocusShell>
@@ -120,13 +142,20 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const wrongLink = wrong ? (
     <span className="e-small" role="status">Thanks, noted</span>
   ) : (
-    <button type="button" className="e-small" style={wrongButton} onClick={() => setWrong(true)}>That note was wrong</button>
+    <button type="button" className="e-small" style={wrongButton} onClick={() => (live ? void markWrong(true) : setMockWrong(true))}>That note was wrong</button>
   );
 
   return (
     <FocusShell>
       <div className="e-wrap">
-        <SessionHeader session={session} />
+        <SessionHeader session={session} endTo={endTo} onEnd={onEnd} />
+        {live && state.restartOffered && (
+          <div className="e-soft" role="alert" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
+            <span className="e-meta" style={{ flex: "1 1 320px", color: "var(--e-ink)" }}>It sounds like you started again partway through. Start this answer again?</span>
+            <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={() => void startOverAfterRestart().then(() => go(RECORD))}>Start again</button>
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => void keepAfterRestart()}>Keep it, count from the restart</button>
+          </div>
+        )}
         <section style={{ display: "flex", gap: "18px", alignItems: "center" }}>
           <div className="e-presence" aria-hidden="true">
             <span />
@@ -178,8 +207,14 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", marginTop: "auto" }}>
               {everythingWorked ? (
                 <>
-                  <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={followUp}>Take a follow-up</button>
-                  <button type="button" className="e-btn e-btn-ghost" onClick={next}>Next question →</button>
+                  {live ? (
+                    <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={next}>Next question →</button>
+                  ) : (
+                    <>
+                      <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={followUp}>Take a follow-up</button>
+                      <button type="button" className="e-btn e-btn-ghost" onClick={next}>Next question →</button>
+                    </>
+                  )}
                 </>
               ) : lastAttempt ? (
                 <>
@@ -215,6 +250,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
                 Listen
               </button>
             </div>
+            {live && noAudio && <p className="e-small" role="status" style={{ margin: "0 0 8px" }}>The audio is no longer on this computer. The words are still here.</p>}
             {attempt.transcript.map((line, i) => (
               <TranscriptLineView key={i} line={line} last={i === lastLine} />
             ))}
