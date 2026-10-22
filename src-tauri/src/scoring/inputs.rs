@@ -81,6 +81,7 @@ mod tests {
             headline: "".into(),
             usage: Usage::default(),
             year: None,
+            angles: vec![],
         }
     }
 

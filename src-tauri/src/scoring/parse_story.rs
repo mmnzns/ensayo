@@ -128,6 +128,7 @@ pub fn parse_story(llm: &dyn Llm, raw_story: &str, employer_hint: &str, budget: 
         headline: String::new(),
         usage: Usage::default(),
         year: None,
+        angles: vec![],
     };
     Ok(ParsedStory { story, missing, dropped })
 }

@@ -179,7 +179,7 @@ mod tests {
     fn a_story_fits_a_question_by_shared_competencies_and_theme_words() {
         use crate::storage::model::Usage;
         let q = BankQuestion { id: "x".into(), text: "Tell me about a time you improved a metric.".into(), kind: "behavioral".into(), behavioral_situation: None, stages: vec![], modes: vec![], competencies: vec!["data analysis".into()], great_eight: vec![], commitment_check: false, builder_operator_check: false, difficulty: "standard".into(), founder_variant: None, moment: None };
-        let mut s = crate::storage::model::Story { id: "s".into(), title: "T".into(), employer: "".into(), best_for: vec!["improving a metric".into()], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec!["Data analysis".into()], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None };
+        let mut s = crate::storage::model::Story { id: "s".into(), title: "T".into(), employer: "".into(), best_for: vec!["improving a metric".into()], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec!["Data analysis".into()], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None, angles: vec![] };
         assert!(story_fit(&q, &s) >= 3);
         s.competencies.clear();
         s.best_for.clear();

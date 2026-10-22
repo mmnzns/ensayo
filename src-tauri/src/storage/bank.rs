@@ -2,14 +2,14 @@
 
 use super::io::{is_safe_id, list_json};
 use super::migrate;
-use super::model::{Method, Profile, Story, SITUATIONS};
+use super::model::{Method, Story, SITUATIONS};
 use super::versioned::{load_record, save_record};
 use super::{Loaded, Result, Storage, StorageError};
 use std::fs;
 use std::path::PathBuf;
 
 /// What Ensayo writes inside a data folder. `delete_all` removes exactly these and nothing else.
-const OWNED: [&str; 6] = ["profile.json", "bank", "applications", "sessions", "eval", "lock.json"];
+const OWNED: [&str; 9] = ["profile.json", "profile.v0.json", "you.json", "targets", "bank", "applications", "sessions", "eval", "lock.json"];
 
 fn checked_id(id: &str) -> Result<&str> {
     if is_safe_id(id) {
@@ -25,7 +25,7 @@ fn all_verified(story: &Story) -> bool {
 }
 
 impl Storage {
-    fn profile_path(&self) -> PathBuf {
+    pub(super) fn profile_path(&self) -> PathBuf {
         self.root().join("profile.json")
     }
     fn story_path(&self, id: &str) -> PathBuf {
@@ -33,16 +33,6 @@ impl Storage {
     }
     fn method_path(&self, situation: &str) -> PathBuf {
         self.root().join("bank/methods").join(format!("{situation}.json"))
-    }
-
-    // ---------- profile ----------
-
-    pub fn profile(&self) -> Result<Option<Profile>> {
-        load_record(&self.profile_path(), migrate::unchanged)
-    }
-
-    pub fn save_profile(&self, profile: &Profile) -> Result<()> {
-        save_record(&self.profile_path(), profile)
     }
 
     // ---------- stories ----------
@@ -147,8 +137,8 @@ impl Storage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::storage::model::{Method, Profile, ProofPoint, Story, Usage};
+    use crate::storage::versioned::save_record;
     use crate::storage::{Storage, StorageError};
     use std::fs;
 
@@ -177,6 +167,7 @@ mod tests {
             headline: "".into(),
             usage: Usage::default(),
             year: None,
+            angles: vec![],
         }
     }
 
@@ -305,6 +296,23 @@ mod tests {
         s.save_method(&Method { situation: "problem_solving".into(), spoken: "x".into(), story_ids: vec!["st_a".into(), "st_b".into()] }).unwrap();
         s.delete_story("st_a").unwrap();
         assert_eq!(s.methods().unwrap()[0].story_ids, vec!["st_b"]);
+    }
+
+    #[test]
+    fn delete_all_also_removes_you_the_targets_and_the_v0_backup() {
+        let (_d, s) = fresh();
+        save_record(&s.root().join("profile.json"), &profile()).unwrap();
+        assert!(s.you().unwrap().is_some(), "reading moves the profile to profile.v0.json");
+        s.save_target(&crate::storage::targets::Target::default()).unwrap();
+        assert!(s.root().join("you.json").is_file() && s.root().join("targets").is_dir() && s.root().join("profile.v0.json").is_file());
+        fs::write(s.root().join("notes.txt"), "mine").unwrap();
+        s.delete_all().unwrap();
+        for gone in ["you.json", "targets", "profile.v0.json", "profile.json"] {
+            assert!(!s.root().join(gone).exists(), "{gone}");
+        }
+        assert_eq!(fs::read_to_string(s.root().join("notes.txt")).unwrap(), "mine");
+        assert_eq!(s.you().unwrap(), None);
+        assert!(s.targets().unwrap().is_empty());
     }
 
     #[test]

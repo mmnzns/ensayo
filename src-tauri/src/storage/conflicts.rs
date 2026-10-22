@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Conflict {
-    /// "story", "method" or "profile".
+    /// "story", "method", "target" or "profile" (the profile's files: `you.json`, and `profile.json` before it moved).
     pub kind: String,
     pub original: PathBuf,
     pub copy: PathBuf,
@@ -43,9 +43,9 @@ fn modified(path: &Path) -> Option<String> {
 }
 
 impl Storage {
-    /// Every conflict copy in the profile, story and method folders.
+    /// Every conflict copy of the profile files and in the story, method and target folders.
     pub fn conflicts(&self) -> Result<Vec<Conflict>> {
-        let folders: [(PathBuf, &str); 3] = [(self.root().to_path_buf(), "profile"), (self.root().join("bank/stories"), "story"), (self.root().join("bank/methods"), "method")];
+        let folders: [(PathBuf, &str); 4] = [(self.root().to_path_buf(), "profile"), (self.root().join("bank/stories"), "story"), (self.root().join("bank/methods"), "method"), (self.root().join("targets"), "target")];
         let mut out = vec![];
         for (dir, kind) in folders {
             let Ok(entries) = fs::read_dir(&dir) else { continue };
@@ -57,7 +57,7 @@ impl Storage {
                     continue;
                 }
                 let Some(base) = original_stem(&stem) else { continue };
-                if kind == "profile" && base != "profile" {
+                if kind == "profile" && base != "profile" && base != "you" {
                     continue;
                 }
                 let original = dir.join(format!("{base}.json"));
@@ -117,6 +117,20 @@ mod tests {
         let found = s.conflicts().unwrap();
         assert_eq!(found.len(), 3, "{found:?}");
         assert!(found.iter().all(|c| c.original.ends_with("st_a.json") && c.original_exists && c.kind == "story"));
+    }
+
+    #[test]
+    fn copies_of_you_and_of_a_target_are_found_too() {
+        let (_d, s) = fresh();
+        put(&s, "you.json", "orig");
+        put(&s, "you (1).json", "copy");
+        put(&s, "targets/tg_1.json", "orig");
+        put(&s, "targets/tg_1 (1).json", "copy");
+        put(&s, "other (1).json", "not ours");
+        let found = s.conflicts().unwrap();
+        let mut kinds: Vec<_> = found.iter().map(|c| (c.kind.clone(), c.original.file_name().unwrap().to_string_lossy().into_owned())).collect();
+        kinds.sort();
+        assert_eq!(kinds, vec![("profile".to_string(), "you.json".to_string()), ("target".to_string(), "tg_1.json".to_string())]);
     }
 
     #[test]

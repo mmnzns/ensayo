@@ -45,6 +45,7 @@ pub fn story() -> Story {
         headline: "".into(),
         usage: Usage::default(),
         year: None,
+        angles: vec![],
     }
 }
 

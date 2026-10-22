@@ -435,6 +435,7 @@ mod tests {
             headline: "7-day activation 31% → 44%".into(),
             usage: Usage::default(),
             year: None,
+            angles: vec![],
         }
     }
 

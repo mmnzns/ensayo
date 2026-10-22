@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 /// What Ensayo keeps in a data folder, minus the lock file, which belongs to whoever has the folder open.
-const DATA: [&str; 5] = ["profile.json", "bank", "applications", "sessions", "eval"];
+const DATA: [&str; 8] = ["profile.json", "profile.v0.json", "you.json", "targets", "bank", "applications", "sessions", "eval"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Moved {
@@ -82,6 +82,28 @@ mod tests {
         assert!(to.join("profile.json").exists());
         assert!(!to.join("lock.json").exists(), "the lock belongs to whoever has the old folder open");
         assert!(from.join("profile.json").exists(), "the old copy is left alone");
+    }
+
+    #[test]
+    fn you_the_targets_and_the_v0_backup_are_copied_too() {
+        let (d, from) = seeded();
+        fs::create_dir_all(from.join("targets")).unwrap();
+        fs::write(from.join("targets/tg_1.json"), "{\"t\":1}").unwrap();
+        fs::write(from.join("you.json"), "{\"y\":1}").unwrap();
+        fs::write(from.join("profile.v0.json"), "{\"p\":1}").unwrap();
+        let to = d.path().join("new");
+        fs::create_dir_all(&to).unwrap();
+        assert_eq!(prepare_move(&from, &to).unwrap(), Moved::Copied);
+        assert_eq!(fs::read_to_string(to.join("targets/tg_1.json")).unwrap(), "{\"t\":1}");
+        assert!(to.join("you.json").exists() && to.join("profile.v0.json").exists());
+    }
+
+    #[test]
+    fn a_folder_that_only_holds_targets_counts_as_holding_ensayo_data() {
+        let (d, from) = seeded();
+        let to = d.path().join("drive");
+        fs::create_dir_all(to.join("targets")).unwrap();
+        assert_eq!(prepare_move(&from, &to).unwrap(), Moved::UsedExisting);
     }
 
     #[test]

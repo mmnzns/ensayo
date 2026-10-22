@@ -6,6 +6,7 @@
 use super::io::{atomic_write, is_safe_id, new_id, read_text};
 use super::migrate;
 use super::reps::Session;
+use super::targets::TargetFit;
 use super::versioned::{load_record, save_record};
 use super::{Loaded, Result, Storage, StorageError};
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, SecondsFormat, Utc};
@@ -116,6 +117,13 @@ pub struct AppRecord {
     pub next_stage_n: u32,
     #[serde(default)]
     pub created: String,
+    /// The target this application is filed under. Missing (an application from before targets) means the first
+    /// target that is not archived, decided when it is read, so old files need no rewrite.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_id: Option<String>,
+    /// How the posting read against the targets when it was last read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_fit: Option<TargetFit>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -149,6 +157,9 @@ pub struct NewApplication {
     /// None starts with the default four stages.
     #[serde(default)]
     pub stages: Option<Vec<NewStage>>,
+    /// None files it under the active target.
+    #[serde(default, alias = "targetId")]
+    pub target_id: Option<String>,
 }
 
 /// The fields of an application the user can change. A field that is sent and differs is saved and listed as edited.
@@ -163,6 +174,13 @@ pub struct AppPatch {
     pub contacts: Option<Vec<Contact>>,
     pub notes: Option<String>,
     pub startup: Option<bool>,
+    /// Files the application under another target.
+    #[serde(alias = "targetId")]
+    pub target_id: Option<String>,
+    /// With a new `target_id`: make the prepared questions again for the new target (the ones the user edited stay).
+    /// Done by the command, which has the engine; the storage only files the application.
+    #[serde(default, alias = "rebuildQuestions")]
+    pub rebuild_questions: bool,
 }
 
 /// One row of the stage list as the Edit details screen saves it.
@@ -445,6 +463,11 @@ impl Storage {
             no_resume: false,
             next_stage_n: 0,
             created: stamp(),
+            target_id: match new.target_id.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+                Some(id) => Some(self.checked_target(id)?),
+                None => self.active_target()?.map(|t| t.id),
+            },
+            target_fit: None,
         };
         if NaiveDate::parse_from_str(&rec.applied_on, "%Y-%m-%d").is_err() {
             return Err(StorageError::Invalid(format!("\"{}\" is not a date. Use a day like 2026-10-06.", rec.applied_on)));
@@ -498,6 +521,7 @@ impl Storage {
                 return Err(StorageError::Invalid(format!("\"{d}\" is not a date. Use a day like 2026-10-06.")));
             }
         }
+        let new_target = patch.target_id.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(|id| self.checked_target(id)).transpose()?;
         let (rec, ()) = self.change(id, |a| {
             let status = patch.status.unwrap_or(a.status);
             let reason = if status == Status::Closed { patch.closed_reason.or(a.closed_reason) } else { None };
@@ -539,6 +563,11 @@ impl Storage {
                 if *c != a.contacts {
                     a.contacts = c.clone();
                     a.mark_edited("contacts", None);
+                }
+            }
+            if let Some(t) = &new_target {
+                if a.target_id.as_deref() != Some(t.as_str()) {
+                    a.target_id = Some(t.clone());
                 }
             }
             if let Some(s) = patch.startup {
@@ -854,7 +883,7 @@ mod tests {
     }
 
     fn session(id: &str, app: Option<&str>, stage: &str, stage_id: Option<&str>) -> Session {
-        Session { id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into() }
+        Session { id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }
     }
 
     // ---------- create ----------

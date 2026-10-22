@@ -9,6 +9,7 @@ use crate::storage::application_files::{AnalysisFile, ClaimRec, ClaimsFile, Deri
 use crate::storage::applications::{stage_label, AppRecord, ClosedReason, Contact, NightBefore, Status};
 use crate::storage::model::Story;
 use crate::storage::reps::Session;
+use crate::storage::targets::{resolve_target, Target, TargetFit};
 use crate::storage::{Result as StorageResult, Storage};
 use chrono::NaiveDateTime;
 use serde::Serialize;
@@ -19,6 +20,9 @@ pub struct Ctx<'a> {
     pub now: NaiveDateTime,
     pub stories: &'a [Story],
     pub sessions: &'a [Session],
+    /// Every target (archived included), so an application with no target of its own, or one that names a target that
+    /// is gone, shows under the first target that is not archived.
+    pub targets: &'a [Target],
 }
 
 /// One line on what this interviewer is deciding (the same words as `STAGE_DECIDES` in the frontend).
@@ -145,6 +149,12 @@ pub struct ApplicationView {
     pub night_before: Option<NightBefore>,
     /// "I didn't send one".
     pub no_resume: bool,
+    /// The target this application is filed under (the first target that is not archived when it names none).
+    #[serde(rename = "targetId")]
+    pub target_id: Option<String>,
+    /// How the posting read against the targets; null until a posting has been read.
+    #[serde(rename = "targetFit")]
+    pub target_fit: Option<TargetFit>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -449,6 +459,8 @@ pub fn build(storage: &Storage, app: &AppRecord, ctx: &Ctx) -> StorageResult<App
         suggested_status: app.suggested_status(),
         night_before: app.night_before(ctx.now),
         no_resume: app.no_resume,
+        target_id: resolve_target(app.target_id.as_deref(), ctx.targets, ctx.targets.iter().find(|t| !t.archived).map(|t| t.id.as_str())),
+        target_fit: app.target_fit.clone(),
     })
 }
 
@@ -533,7 +545,8 @@ pub fn load_all(storage: &Storage, now: NaiveDateTime) -> StorageResult<AllAppli
     let loaded = storage.load_applications(now)?;
     let stories = storage.load_stories()?.items;
     let sessions = storage.sessions()?.items;
-    let ctx = Ctx { now, stories: &stories, sessions: &sessions };
+    let targets = storage.targets()?;
+    let ctx = Ctx { now, stories: &stories, sessions: &sessions, targets: &targets };
     let mut out = AllApplications { applications: vec![], extras: BTreeMap::new(), problems: loaded.problems };
     let mut seen: HashSet<String> = HashSet::new();
     for rec in &loaded.items {
@@ -585,6 +598,7 @@ mod tests {
             headline: "7-day activation 31% → 44%".into(),
             usage: Usage::default(),
             year: None,
+            angles: vec![],
         }
     }
 
@@ -600,14 +614,14 @@ mod tests {
         let rec = s.application(id).unwrap();
         let stories = s.load_stories().unwrap().items;
         let sessions = s.sessions().unwrap().items;
-        build(s, &rec, &Ctx { now: now(), stories: &stories, sessions: &sessions }).unwrap()
+        build(s, &rec, &Ctx { now: now(), stories: &stories, sessions: &sessions, targets: &[] }).unwrap()
     }
 
     fn extras(s: &Storage, id: &str) -> ExtrasView {
         let rec = s.application(id).unwrap();
         let stories = s.load_stories().unwrap().items;
         let sessions = s.sessions().unwrap().items;
-        build_extras(s, &rec, &Ctx { now: now(), stories: &stories, sessions: &sessions }).unwrap()
+        build_extras(s, &rec, &Ctx { now: now(), stories: &stories, sessions: &sessions, targets: &[] }).unwrap()
     }
 
     fn json_of<T: serde::Serialize>(v: &T) -> Value {
@@ -693,7 +707,7 @@ mod tests {
     fn answers_practiced_counts_reps_and_each_stage_counts_its_own_sessions() {
         let (_d, s, app) = setup();
         let mk = |id: &str, stage: &str, stage_id: Option<&str>, reps: u32, app_id: Option<&str>| {
-            s.save_session(&Session { id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app_id.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into() }).unwrap();
+            s.save_session(&Session { id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app_id.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }).unwrap();
             for n in 1..=reps {
                 std::fs::create_dir_all(s.root().join(format!("sessions/{id}/reps/{n}"))).unwrap();
             }

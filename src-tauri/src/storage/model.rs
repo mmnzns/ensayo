@@ -92,6 +92,22 @@ pub struct Story {
     pub usage: Usage,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub year: Option<String>,
+    /// One per target that has its own way in; targets without one use `headline`. An angle never changes a number: its
+    /// headline may only carry the numbers in `proof_points` (checked when the story is saved).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub angles: Vec<StoryAngle>,
+}
+
+/// A story's way in for one target (`StoryAngle` in `src/data/types.ts`: snake_case like the story).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StoryAngle {
+    pub target_id: String,
+    #[serde(default)]
+    pub headline: String,
+    #[serde(default)]
+    pub emphasis: Vec<String>,
+    #[serde(default)]
+    pub lead_branch: Option<String>,
 }
 
 /// How the user handles one kind of behavioral question, in one sentence.

@@ -14,6 +14,7 @@ pub mod relocate;
 pub mod reps;
 pub mod model;
 pub mod settings;
+pub mod targets;
 pub mod versioned;
 
 use std::path::PathBuf;

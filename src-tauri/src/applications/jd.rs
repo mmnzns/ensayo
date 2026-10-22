@@ -666,7 +666,7 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
     let rec = storage.application(id)?;
     let jd = storage.application_text(id, "jd.txt")?.filter(|t| !t.trim().is_empty()).ok_or_else(|| StorageError::Invalid("Paste the job posting first, then Ensayo can read it.".into()))?;
     let stories = storage.load_stories()?.items;
-    let profile = storage.profile()?;
+    let profile = storage.profile_for(storage.application_target(&rec)?.as_deref())?;
     let old = storage.load_application_part::<AnalysisFile>(id, "analysis.json")?;
     let attempt: Result<Reading, String> = match ai {
         Some(mut ctx) => ai_read(&mut ctx, &rec, &jd, &stories, &profile_text(profile.as_ref())).map_err(|e| failure_notice(&e)),
@@ -820,6 +820,7 @@ mod tests {
             headline: headline.into(),
             usage: Usage::default(),
             year: None,
+            angles: vec![],
         }
     }
 

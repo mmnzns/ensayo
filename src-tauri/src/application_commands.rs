@@ -55,7 +55,8 @@ pub fn bundle(storage: &Storage, id: &str, at: NaiveDateTime) -> StorageResult<A
     let rec = storage.application(id)?;
     let stories = storage.load_stories()?.items;
     let sessions = storage.sessions()?.items;
-    let ctx = view::Ctx { now: at, stories: &stories, sessions: &sessions };
+    let targets = storage.targets()?;
+    let ctx = view::Ctx { now: at, stories: &stories, sessions: &sessions, targets: &targets };
     Ok(AppBundle { application: view::build(storage, &rec, &ctx)?, extras: view::build_extras(storage, &rec, &ctx)? })
 }
 
@@ -650,6 +651,7 @@ mod tests {
             headline: "".into(),
             usage: Usage::default(),
             year: None,
+            angles: vec![],
         })
         .unwrap();
         (dir, s)
@@ -700,7 +702,7 @@ mod tests {
         let id = make(&s);
         let audio = d.path().join("audio");
         let mk = |ses: &str, app: Option<&str>| {
-            s.save_session(&Session { id: ses.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: app.map(String::from), stage_id: None, started: "2026-10-20T10:00:00Z".into() }).unwrap();
+            s.save_session(&Session { id: ses.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: app.map(String::from), stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: None }).unwrap();
             std::fs::create_dir_all(s.root().join(format!("sessions/{ses}/reps/1"))).unwrap();
             std::fs::create_dir_all(audio.join(ses)).unwrap();
             std::fs::write(audio_path(&audio, ses, 1), b"RIFF").unwrap();
@@ -723,7 +725,7 @@ mod tests {
     fn removing_a_stage_with_sessions_comes_back_as_a_question_and_then_as_a_saved_bundle() {
         let (_d, s) = setup();
         let id = make(&s);
-        s.save_session(&Session { id: "ses_1".into(), mode: "drill".into(), stage: "panel".into(), application_id: Some(id.clone()), stage_id: Some("stg_3".into()), started: "2026-10-20T10:00:00Z".into() }).unwrap();
+        s.save_session(&Session { id: "ses_1".into(), mode: "drill".into(), stage: "panel".into(), application_id: Some(id.clone()), stage_id: Some("stg_3".into()), started: "2026-10-20T10:00:00Z".into(), target_id: None }).unwrap();
         let ask = remove_stage_with(&s, &id, "stg_3", false, at()).unwrap();
         assert_eq!((ask.status, ask.sessions, ask.bundle.is_none()), ("needs_confirm", 1, true));
         let done = remove_stage_with(&s, &id, "stg_3", true, at()).unwrap();

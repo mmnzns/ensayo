@@ -26,6 +26,10 @@ pub struct Session {
     pub stage_id: Option<String>,
     /// RFC 3339, UTC.
     pub started: String,
+    /// The target this practice was for. Missing (a session from before targets) means the target of its application,
+    /// else the first target that is not archived, decided when it is read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -330,7 +334,7 @@ mod tests {
     }
 
     fn session(id: &str, started: &str) -> Session {
-        Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: started.into() }
+        Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: started.into(), target_id: None }
     }
 
     fn rep(n: u32) -> FullRep {

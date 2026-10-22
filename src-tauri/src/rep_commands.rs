@@ -65,6 +65,10 @@ pub struct FinishArgs {
     pub attempt: u32,
     pub story_ids: Vec<String>,
     pub audio_path: PathBuf,
+    /// The target this practice is for. Default: the application's target, else the active target. Kept on the session
+    /// when it starts.
+    #[serde(default)]
+    pub target_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -144,6 +148,8 @@ struct Asked {
     founder_variant: bool,
     /// What the application's posting is about (empty outside an application, or before it was read).
     jd_summary: String,
+    /// The target the practice is for: its pitch, level and role are what the answer is judged against.
+    target_id: Option<String>,
 }
 
 enum Judged {
@@ -158,7 +164,7 @@ enum Judged {
 /// Judges one answer with the model and, when it works, replaces the rules-only checks in `metrics` with the merged
 /// ones. Any failure falls back to the rules-only checks already there.
 fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], asked: &Asked, metrics: &mut Metrics) -> Judged {
-    let profile = storage.profile().ok().flatten();
+    let profile = storage.profile_for(asked.target_id.as_deref()).ok().flatten();
     let stories_all = storage.load_stories().map(|l| l.items).unwrap_or_default();
     let stories: Vec<Story> = story_ids.iter().filter_map(|id| stories_all.iter().find(|s| &s.id == id).cloned()).collect();
     let question = if asked.question_type.is_empty() {
@@ -215,9 +221,9 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
 }
 
 /// Judges the answer to a follow-up: F1, F2, F3 and (for a skeptic push) F5 by the model, F4 by code, then the coach.
-fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &FinishArgs, f: &FollowUpArgs, metrics: &mut Metrics) -> Judged {
+fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &FinishArgs, f: &FollowUpArgs, metrics: &mut Metrics, target_id: Option<&str>) -> Judged {
     let Some(parent) = storage.rep(session_id, f.parent_n).ok().flatten() else { return Judged::Fallback("Ensayo couldn't find the answer this follow-up belongs to, so this one was checked for timing only.".into()) };
-    let profile = storage.profile().ok().flatten();
+    let profile = storage.profile_for(target_id).ok().flatten();
     let stories_all = storage.load_stories().map(|l| l.items).unwrap_or_default();
     let stories: Vec<Story> = parent.rep.story_ids.iter().filter_map(|id| stories_all.iter().find(|s| &s.id == id).cloned()).collect();
     let method = parent
@@ -285,6 +291,11 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
     let app_ctx = hook::app_context(storage, args.application_id.as_deref(), session_stage.as_deref(), args.stage_id.as_deref(), &args.stage);
     let resolved = FinishArgs { founder_variant: hook::founder_variant(app_ctx.as_ref(), &args.stage, args.founder_variant), ..args.clone() };
     let args = &resolved;
+    let existing = storage.session(&session_id).ok().flatten();
+    let target_id = match &existing {
+        Some(sess) => storage.session_target(sess)?,
+        None => storage.resolve_session_target(args.target_id.as_deref(), app_ctx.as_ref().map(|c| &c.rec))?,
+    };
     let mut pending: Option<hook::Pending> = None;
     let type_for_rules = if args.question_type.is_empty() { "behavioral" } else { args.question_type.as_str() };
     let mut metrics = measure(storage, &args.stage, type_for_rules, &args.story_ids, words.clone(), false)?;
@@ -318,9 +329,10 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             is_major_story: args.is_major_story,
             founder_variant: args.founder_variant,
             jd_summary: if app_ctx.is_some() { hook::jd_summary(storage, args.application_id.as_deref()) } else { String::new() },
+            target_id: target_id.clone(),
         };
         let judged = match &args.follow_up {
-            Some(f) => judge_follow_up(storage, ctx, &session_id, args, f, &mut metrics),
+            Some(f) => judge_follow_up(storage, ctx, &session_id, args, f, &mut metrics, target_id.as_deref()),
             None => judge(storage, ctx, &args.stage, &args.story_ids, &asked, &mut metrics),
         };
         match judged {
@@ -332,7 +344,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
                 question_type = t;
                 if let Some(app) = &app_ctx {
                     // Claims for the consistency check (prompt 07): the answer is compared with what was said before.
-                    let identity = storage.profile().ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
+                    let identity = storage.profile_for(target_id.as_deref()).ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
                     let heard = hook::Heard { question: &args.question_text, question_type: &question_type, story_ids: &args.story_ids, identity_statement: &identity, founder: args.founder_variant && args.stage == "leadership" };
                     let (p, claims_notice) = hook::after_scored(storage, ctx, app, &heard, &mut metrics, &mut fix_id, &mut note, &mut rewrite);
                     pending = p;
@@ -357,7 +369,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         }
     }
     if storage.session(&session_id)?.is_none() {
-        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now) })?;
+        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now), target_id: target_id.clone() })?;
     }
     let n = storage.next_rep_number(&session_id)?;
     let delta = delta_for(storage, &session_id, &args.question_id, args.attempt, &metrics);
@@ -433,6 +445,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
             is_major_story: full.rep.is_major_story,
             founder_variant: full.rep.founder_variant,
             jd_summary: hook::jd_summary(storage, session.application_id.as_deref()),
+            target_id: storage.session_target(&session)?,
         };
         match judge(storage, ctx, &session.stage, &full.rep.story_ids.clone(), &asked, &mut full.metrics) {
             Judged::Scored { fix, note, rewrite, meta, .. } => {
@@ -444,7 +457,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
                 if let Some(app_id) = session.application_id.as_deref() {
                     let _ = hook::forget_rep(storage, app_id, session_id, Some(n));
                     if let Some(app) = hook::app_context(storage, Some(app_id), session.stage_id.as_deref(), None, &session.stage) {
-                        let identity = storage.profile().ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
+                        let identity = storage.profile_for(storage.session_target(&session).ok().flatten().as_deref()).ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
                         let heard = hook::Heard { question: &full.rep.question_text, question_type: &full.rep.question_type, story_ids: &full.rep.story_ids, identity_statement: &identity, founder: full.rep.founder_variant && session.stage == "leadership" };
                         let (p, claims_notice) = hook::after_scored(storage, ctx, &app, &heard, &mut full.metrics, &mut full.rep.fix, &mut full.rep.note, &mut full.rep.rewrite);
                         pending = p;
@@ -477,6 +490,7 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
     let stage = storage.session(&rep.session_id).ok().flatten().map(|s| s.stage).unwrap_or_else(|| "hiring_manager".to_string());
     let type_for_rules = if rep.rep.question_type.is_empty() { "behavioral" } else { rep.rep.question_type.as_str() };
     let mut metrics = measure(storage, &stage, type_for_rules, &rep.rep.story_ids, rep.transcript.clone(), false).map_err(plain)?;
+    let target_id = storage.session(&rep.session_id).ok().flatten().and_then(|s| storage.session_target(&s).ok().flatten());
     let asked = Asked {
         text: rep.rep.question_text.clone(),
         question_type: rep.rep.question_type.clone(),
@@ -486,6 +500,7 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
         is_major_story: rep.rep.is_major_story,
         founder_variant: rep.rep.founder_variant,
         jd_summary: String::new(),
+        target_id,
     };
     match judge(storage, ai, &stage, &rep.rep.story_ids, &asked, &mut metrics) {
         Judged::Scored { .. } => Ok(metrics.checks),
@@ -725,6 +740,8 @@ pub struct RepSummary {
     pub mode: String,
     pub stage: String,
     pub application_id: Option<String>,
+    /// The target the session was for (the first target for sessions from before targets).
+    pub target_id: Option<String>,
     pub started: String,
     pub n: u32,
     pub question_id: String,
@@ -748,13 +765,23 @@ pub fn summaries_with(storage: &Storage) -> StorageResult<Vec<RepSummary>> {
     let mut out = Vec::new();
     let mut sessions = storage.sessions()?.items;
     sessions.sort_by(|a, b| a.started.cmp(&b.started));
+    let targets = storage.targets()?;
+    let first = targets.iter().find(|t| !t.archived).map(|t| t.id.clone());
+    let apps: std::collections::HashMap<String, Option<String>> = storage.load_applications(chrono::Local::now().naive_local())?.items.into_iter().map(|a| (a.id, a.target_id)).collect();
     for s in sessions {
+        let target_id = s
+            .target_id
+            .clone()
+            .filter(|id| targets.iter().any(|t| &t.id == id))
+            .or_else(|| s.application_id.as_ref().and_then(|a| apps.get(a)).and_then(|t| crate::storage::targets::resolve_target(t.as_deref(), &targets, first.as_deref())))
+            .or_else(|| first.clone());
         for r in storage.reps(&s.id)?.items.into_iter().filter(|r| r.rep.question_type != "candidate_questions") {
             out.push(RepSummary {
                 session_id: s.id.clone(),
                 mode: s.mode.clone(),
                 stage: s.stage.clone(),
                 application_id: s.application_id.clone(),
+                target_id: target_id.clone(),
                 started: s.started.clone(),
                 n: r.rep.n,
                 question_id: r.rep.question_id.clone(),
@@ -865,6 +892,7 @@ mod tests {
             headline: "".into(),
             usage: Usage { practiced: 0, fits: 0, said_number: None },
             year: None,
+            angles: vec![],
         }
     }
 
@@ -896,6 +924,7 @@ mod tests {
             attempt,
             story_ids: vec!["st_a".into()],
             audio_path: wav,
+            target_id: None,
         }
     }
 
