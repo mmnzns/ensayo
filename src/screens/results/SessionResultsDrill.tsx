@@ -77,7 +77,8 @@ function DrillResults({ results }: { results: SessionResults }) {
   const mid = d.chartMaxSeconds / 2;
   const best = d.bestAnswer;
   const next = d.nextTime;
-  const cost = engine.kind === "local" ? "" : ` · about ${d.totals.costCents} cents with ${engine.label}`;
+  const cost = engine.kind === "local" || d.totals.costCents < 1 ? "" : ` · about ${d.totals.costCents} cents with ${engine.label}`;
+  const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   const focusLabel = habitLabel(d.focusHabitId);
   const heroLabel = d.focusHabitId === "to_the_point" ? "Time to your point" : d.focusHabitId === "clean_stop" ? "Time after your number" : focusLabel;
   const gotFirst = d.questions.filter((q) => q.firstTry > 0).length;
@@ -114,7 +115,7 @@ function DrillResults({ results }: { results: SessionResults }) {
               {flags ? `${gotFirst} of ${n} → ${gotBest} of ${n}` : `${firstAvg}s → ${bestAvg}s`}
             </span>
             <span className="e-meta">
-              {flags ? `Questions where you had it on the first try, against your best try, across ${n} questions.` : `Average first try against your best try, across ${n} questions.`}
+              {flags ? `Questions where you had it on the first try, against your best try, across ${plural(n, "question")}.` : `Average first try against your best try, across ${plural(n, "question")}.`}
             </span>
           </div>
           {flags ? (
@@ -160,7 +161,9 @@ function DrillResults({ results }: { results: SessionResults }) {
             <span className="e-hand" style={{ fontSize: "39px" }}>
               {d.fixes.stuck} of {d.fixes.of}
             </span>
-            <span className="e-meta">When you tried again, the fix held {d.fixes.stuck === 1 ? "once" : `${word(d.fixes.stuck)} times`} out of {word(d.fixes.of)}.</span>
+            <span className="e-meta">
+              {d.fixes.of === 0 ? "Try an answer again after a note and this shows whether the fix held." : `When you tried again, the fix held ${d.fixes.stuck === 1 ? "once" : `${word(d.fixes.stuck)} times`} out of ${word(d.fixes.of)}.`}
+            </span>
           </section>
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <span className="e-label">Best answer</span>
@@ -179,7 +182,7 @@ function DrillResults({ results }: { results: SessionResults }) {
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
           <p className="e-small" style={{ margin: "0" }}>
-            {n} questions · {d.totals.answers} answers · {d.totals.followUps} follow-ups handled · {streak.daysInARow} days in a row{cost}
+            {plural(n, "question")} · {plural(d.totals.answers, "answer")} · {plural(d.totals.followUps, "follow-up")} handled · {plural(streak.daysInARow, "day")} in a row{cost}
           </p>
           <div style={{ display: "flex", gap: "12px" }}>
             <Link to="2-1-home" className="e-btn e-btn-ghost">Back home</Link>
