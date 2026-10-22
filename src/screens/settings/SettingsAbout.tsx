@@ -3,11 +3,14 @@ import { useStore } from "../../data/store";
 import Link from "../../ui/Link";
 import { setDeveloperTools, useDeveloperTools } from "./devtools";
 import { CheckIcon, SettingsLayout, ToggleRow, useLater } from "./parts";
-import { appVersion } from "./version";
+import { isApp } from "../../data/real";
+import { useAppVersion } from "./version";
 
 export default function SettingsAbout() {
   const { credits } = useStore().screens.settings;
   const developer = useDeveloperTools();
+  const version = useAppVersion();
+  const app = isApp();
   const [checking, setChecking] = useState(false);
   const later = useLater();
 
@@ -27,17 +30,27 @@ export default function SettingsAbout() {
           </div>
           <div className="e-rowline">
             <span style={{ flex: "1" }}>Version</span>
-            <span className="e-meta">{appVersion()}</span>
+            <span className="e-meta">{version}</span>
           </div>
-          <div className="e-rowline">
-            <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-              Updates
-              <span className="e-small" role="status" style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: checking ? "var(--e-muted)" : "var(--e-primary-dark)" }}>
-                {checking ? "Checking…" : (<><CheckIcon size={14} />You're up to date</>)}
+          {app ? (
+            <div className="e-rowline">
+              <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+                Updates
+                <span className="e-small">Ensayo doesn't check for updates by itself. New versions are posted on the releases page.</span>
               </span>
-            </span>
-            <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={checking} onClick={checkForUpdates}>Check for updates</button>
-          </div>
+              <Link to="https://github.com/mmnzns/ensayo/releases" className="e-btn e-btn-line e-btn-sm">See releases</Link>
+            </div>
+          ) : (
+            <div className="e-rowline">
+              <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+                Updates
+                <span className="e-small" role="status" style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: checking ? "var(--e-muted)" : "var(--e-primary-dark)" }}>
+                  {checking ? "Checking…" : (<><CheckIcon size={14} />You're up to date</>)}
+                </span>
+              </span>
+              <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={checking} onClick={checkForUpdates}>Check for updates</button>
+            </div>
+          )}
           <div className="e-rowline">
             <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
               by craft concepts digital<span className="e-small">The studio behind Talaan, Parlato and Ensayo.</span>

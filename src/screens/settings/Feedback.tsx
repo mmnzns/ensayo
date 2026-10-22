@@ -5,7 +5,7 @@ import Link from "../../ui/Link";
 import { useStore } from "../../data/store";
 import { buildFeedbackEmail, describeSystem, FEEDBACK_ADDRESS } from "./feedbackEmail";
 import { useLater } from "./parts";
-import { appVersion } from "./version";
+import { useAppVersion } from "./version";
 
 const payChip = { minHeight: "38px", padding: "6px 14px", fontSize: "14px" } as const;
 const fairChip = { minHeight: "34px", padding: "5px 12px", fontSize: "13px" } as const;
@@ -33,7 +33,8 @@ export default function Feedback() {
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
   const later = useLater();
 
-  const system = `Ensayo ${appVersion()} · ${systemName()}`;
+  const version = useAppVersion();
+  const system = `Ensayo ${version} · ${systemName()}`;
   const mail = buildFeedbackEmail({ topic, message, pay, fair, email, includeSystem, system });
   const asksFair = pay === "Maybe" || pay === "Yes";
 
