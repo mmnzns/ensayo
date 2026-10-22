@@ -69,6 +69,8 @@ fn source(id: PromptId) -> (&'static str, &'static str) {
 
 /// Splits a prompt file into its front matter and its `## ` sections.
 fn parse(file: &str, schema: &str) -> Result<Prompt, String> {
+    // A Windows checkout can turn the files' line feeds into CRLF; the parser reads line feeds only.
+    let file = &file.replace("\r\n", "\n");
     let rest = file.strip_prefix("---\n").ok_or("missing front matter")?;
     let (front, body) = rest.split_once("\n---\n").ok_or("unterminated front matter")?;
     let mut meta: HashMap<&str, &str> = HashMap::new();
@@ -113,7 +115,8 @@ fn parse(file: &str, schema: &str) -> Result<Prompt, String> {
 
 /// The rubric text without its front matter.
 pub fn rubric() -> String {
-    RUBRIC.strip_prefix("---\n").and_then(|r| r.split_once("\n---\n")).map(|(_, b)| b.trim().to_string()).unwrap_or_else(|| RUBRIC.to_string())
+    let text = RUBRIC.replace("\r\n", "\n");
+    text.strip_prefix("---\n").and_then(|r| r.split_once("\n---\n")).map(|(_, b)| b.trim().to_string()).unwrap_or(text)
 }
 
 pub fn get(id: PromptId) -> &'static Prompt {
@@ -151,6 +154,15 @@ impl Prompt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_checkout_with_windows_line_endings_parses_the_same() {
+        let (file, schema) = source(PromptId::Classify);
+        let crlf = file.replace('\n', "\r\n");
+        let a = parse(file, schema).unwrap();
+        let b = parse(&crlf, schema).unwrap();
+        assert_eq!((a.id, a.version, a.system, a.user), (b.id, b.version, b.system, b.user));
+    }
     use crate::scoring::template::placeholders;
 
     #[test]
