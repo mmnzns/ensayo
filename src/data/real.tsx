@@ -48,6 +48,8 @@ import { activeOf, NO_TARGETS, type TargetsState } from "./targetState";
 import { mergedProfile } from "./targets";
 import { AI_CHANGED, type AiView } from "../screens/settings/aiSettings";
 import { habitStats, pickFocusHabits, sessionList, streakOf, type RepSummary } from "../practice/habits";
+import { getLive } from "../practice/live";
+import { liveBlock, previewRestore, previewTrash, type PracticeDeleted, type TrashedSession } from "./trash";
 
 /** True inside the desktop app. In a plain browser (`npm run dev`) the data is the mock, held in memory. */
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -105,6 +107,13 @@ export interface Actions {
   updateApplication(applicationId: string, patch: AppPatch): Promise<AppBundle>;
   /** Its practice stays as "practice without an application" unless `deleteReps`. */
   deleteApplication(applicationId: string, deleteReps: boolean): Promise<DeleteResult>;
+  // ----- history with a way back: a deleted session waits in the trash for seven days -----
+  /** Moves one session and its recordings to the trash. Refuses while that session is being practised. */
+  deleteSession(sessionId: string): Promise<void>;
+  /** Moves every session of the application to the trash. */
+  deleteApplicationPractice(applicationId: string): Promise<PracticeDeleted>;
+  /** Fails with "That session is no longer here" when the other computer purged it. */
+  restoreSession(sessionId: string): Promise<void>;
   /** `needs_confirm` when a removed stage has sessions: ask, then call again with `confirm` true. */
   saveProcess(applicationId: string, stages: StageInput[], confirm?: boolean): Promise<ProcessOutcome>;
   addStage(applicationId: string, stage: StageId, label?: string, at?: string): Promise<AppBundle>;
@@ -161,6 +170,9 @@ const NO_ACTIONS: Actions = {
   createApplication: unavailable,
   updateApplication: unavailable,
   deleteApplication: unavailable,
+  deleteSession: unavailable,
+  deleteApplicationPractice: unavailable,
+  restoreSession: unavailable,
   saveProcess: unavailable,
   addStage: unavailable,
   removeStage: unavailable,
@@ -217,6 +229,10 @@ const DataInfoContext = createContext<{ problems: string[] }>({ problems: [] });
 const RepsContext = createContext<RepSummary[]>([]);
 /** Every saved answer as a compact summary, oldest first by session. Empty in the browser and before anything is practised. */
 export const useRepHistory = (): RepSummary[] => useContext(RepsContext);
+
+export const TrashContext = createContext<TrashedSession[]>([]);
+/** Sessions deleted in the last seven days, most recently deleted first. They are not part of any history. */
+export const useTrashedSessions = (): TrashedSession[] => useContext(TrashContext);
 /** Plain-words lines for data files that could not be read (a damaged file, one from a newer Ensayo). */
 export const useDataProblems = (): string[] => useContext(DataInfoContext).problems;
 
@@ -267,6 +283,11 @@ function Blocked({ status, onRetry, onOpenAnyway }: { status: DataStatus | null;
 const BLANK_DRAFT: NewApplicationDraft = { company: "", role: "", status: "applied", appliedOn: "", source: "", contact: "", resumeFileName: "", resumePages: 0, postingText: "", startup: false, stages: [] };
 
 /** A line in plain words for what the browser preview cannot do. */
+/** Home, Progress, the sessions list and the trash read the saved history again (live.ts announces each saved rep the same way). */
+const announceHistory = () => {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("ensayo:history"));
+};
+
 const needsApp = <T,>(): Promise<T> => Promise.reject(new Error(NEEDS_THE_APP));
 
 const localToday = () => {
@@ -277,7 +298,7 @@ const localToday = () => {
 /** The application commands. In the app each one calls the backend and replaces the application and its extras with
  *  what came back. In the browser preview the simple ones (the tracker, the stages, the questions) change the sample
  *  data in memory and the rest say they need the app. */
-function applicationActions(app: boolean, appsRef: { current: AppsState }, setApps: (f: (s: AppsState) => AppsState) => void): Pick<
+function applicationActions(app: boolean, appsRef: { current: AppsState }, setApps: (f: (s: AppsState) => AppsState) => void, previewPracticeTrashed: (applicationId: string) => void): Pick<
   Actions,
   | "createApplication" | "updateApplication" | "deleteApplication" | "saveProcess" | "addStage" | "removeStage" | "reorderStages" | "renameStage" | "setStageTime" | "setStageDone"
   | "savePosting" | "analyseJd" | "saveAnalysis" | "saveQuestion" | "deleteQuestion" | "editClaim" | "removeClaim" | "addClaim" | "markClaimUpdated" | "markClaimCurrent"
@@ -333,11 +354,16 @@ function applicationActions(app: boolean, appsRef: { current: AppsState }, setAp
     },
     updateApplication: (applicationId, patch) => (app ? bundleCmd("update_application", { applicationId, patch }) : local(applicationId, (b) => patchApplication(b, patch))),
     async deleteApplication(applicationId, deleteReps) {
+      const blocked = deleteReps ? liveBlock(getLive(), { applicationId }) : null;
+      if (blocked) throw new Error(blocked);
       if (app) {
+        // With its practice, the sessions go to the trash (restorable for seven days), the same as deleting them one by one.
         const out = await invoke<DeleteResult>("delete_application", { applicationId, deleteReps });
         setApps((s) => removeApplication(s, applicationId));
+        announceHistory();
         return out;
       }
+      if (deleteReps) previewPracticeTrashed(applicationId);
       setApps((s) => removeApplication(s, applicationId));
       return { kept_sessions: 0, deleted_reps: 0 };
     },
@@ -419,6 +445,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
   const [reps, setReps] = useState<RepSummary[]>([]);
+  const [trashed, setTrashed] = useState<TrashedSession[]>([]);
   const [engine, setEngine] = useState<EngineStatus>(TIMING_ONLY);
 
   // The sidebar's engine line: what the saved AI settings mean right now (a key saved, the local model on this computer).
@@ -451,6 +478,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [app]);
 
+  const readTrash = useCallback(async () => {
+    if (!app) return;
+    try {
+      setTrashed(await invoke<TrashedSession[]>("trashed_sessions"));
+    } catch {
+      // The trash is a convenience: no list is better than a blocked window.
+    }
+  }, [app]);
+
   // Practice counts on the applications (answers per stage, sessions) follow the saved reps.
   const readApps = useCallback(async () => {
     if (!app) return;
@@ -468,10 +504,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const onHistory = () => {
       void readReps();
       void readApps();
+      void readTrash();
     };
     window.addEventListener("ensayo:history", onHistory);
     return () => window.removeEventListener("ensayo:history", onHistory);
-  }, [app, readReps, readApps]);
+  }, [app, readReps, readApps, readTrash]);
 
   const readAll = useCallback(async () => {
     const all = await invoke<LoadAll>("load_all");
@@ -484,7 +521,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setPhase("ready");
     // Housekeeping: remove answer audio older than the retention setting (reps kept for the eval set stay).
     void invoke("sweep_audio").catch(() => {});
-  }, [readReps, readEngine]);
+    // And the trash: sessions deleted more than seven days ago go for good (by their stamp), then the list is read.
+    void invoke("purge_trash").catch(() => {}).then(() => readTrash());
+  }, [readReps, readEngine, readTrash]);
 
   const load = useCallback(async () => {
     if (!app) return;
@@ -610,6 +649,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [app, refreshTargets, readApps],
   );
 
+  /** Browser preview: the sample sessions of one application go to the trash, in memory. */
+  const previewPracticeTrashed = useCallback((applicationId: string) => {
+    const ids = mockStore.sessions.filter((x) => x.applicationId === applicationId).map((x) => x.id);
+    setTrashed((t) => previewTrash(t, mockStore.sessions, ids, new Date()));
+    setApps((s) => ({ ...s, applications: s.applications.map((a) => (a.id === applicationId ? { ...a, process: a.process.map((p) => ({ ...p, sessions: 0, note: undefined })) } : a)) }));
+  }, []);
+
   const actions = useMemo<Actions>(
     () => ({
       async saveStory(story) {
@@ -643,9 +689,43 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, profile }));
       },
       ...targetActions,
-      ...applicationActions(app, appsRef, setApps),
+      async deleteSession(sessionId) {
+        const blocked = liveBlock(getLive(), { sessionId });
+        if (blocked) throw new Error(blocked);
+        if (app) {
+          await invoke("delete_session", { sessionId });
+          announceHistory();
+          return;
+        }
+        setTrashed((t) => previewTrash(t, mockStore.sessions, [sessionId], new Date()));
+      },
+      async deleteApplicationPractice(applicationId) {
+        const blocked = liveBlock(getLive(), { applicationId });
+        if (blocked) throw new Error(blocked);
+        if (app) {
+          const out = await invoke<PracticeDeleted>("delete_application_practice", { applicationId });
+          announceHistory();
+          return out;
+        }
+        const ids = mockStore.sessions.filter((x) => x.applicationId === applicationId).map((x) => x.id);
+        previewPracticeTrashed(applicationId);
+        return { sessions: ids.length, reps: 0 };
+      },
+      async restoreSession(sessionId) {
+        if (app) {
+          try {
+            await invoke("restore_session", { sessionId });
+          } finally {
+            // Whatever happened (restored, or already gone on the other computer), the lists should say so.
+            announceHistory();
+          }
+          return;
+        }
+        setTrashed((t) => previewRestore(t, sessionId));
+      },
+      ...applicationActions(app, appsRef, setApps, previewPracticeTrashed),
     }),
-    [app, targetActions, refreshTargets],
+    [app, targetActions, refreshTargets, previewPracticeTrashed],
   );
 
   const store = useMemo<Store>(() => {
@@ -664,7 +744,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // The sample extras, the sample new-application form and the featured application are for the browser only.
       screens: { ...mockStore.screens, applications: app ? { ...mockStore.screens.applications, featuredId: "", byApp: apps.extras, newApplication: BLANK_DRAFT } : { ...mockStore.screens.applications, byApp: apps.extras } },
     };
-    if (!app) return base;
+    if (!app) return trashed.length ? { ...base, sessions: base.sessions.filter((x) => !trashed.some((t) => t.id === x.id)) } : base;
     const now = new Date();
     const companyOf = (id: string) => apps.applications.find((a) => a.id === id)?.company;
     // "Not sure yet" at setup: after five answers on a habit, Ensayo picks the one that is lowest.
@@ -677,7 +757,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       streak: streakOf(reps, now),
       homeHabitStats: habitStats(mockStore.habits, reps),
     };
-  }, [state, apps, tg, reps, app, engine]);
+  }, [state, apps, tg, reps, app, engine, trashed]);
   const info = useMemo(() => ({ problems }), [problems]);
 
   if (phase === "loading") return <Centered><p className="e-meta" style={{ margin: 0 }}>Opening your data…</p></Centered>;
@@ -695,11 +775,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     <ActionsContext.Provider value={actions}>
       <DataInfoContext.Provider value={info}>
         <RepsContext.Provider value={reps}>
+          <TrashContext.Provider value={trashed}>
           <TargetsNoteContext.Provider value={app && tg.notePending}>
           <SetupContext.Provider value={app && state.profile === null && tg.you === null}>
             <StoreProvider store={store}>{children}</StoreProvider>
           </SetupContext.Provider>
           </TargetsNoteContext.Provider>
+          </TrashContext.Provider>
         </RepsContext.Provider>
       </DataInfoContext.Provider>
     </ActionsContext.Provider>

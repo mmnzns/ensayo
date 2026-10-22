@@ -1,6 +1,12 @@
 // Draft generated from Design/screens/html/7-2-progress-sessions.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
 import { viewSession } from "../../practice/viewing";
 import { useState } from "react";
+import { useActions, useRepHistory, useTrashedSessions } from "../../data/real";
+import { plainError } from "../../data/actions";
+import { answersIn, deleteSessionText, keptUntil, recentlyDeletedLine, restoreHint, TRASH_NOTE, trashedTitle } from "../../data/trash";
+import { whenText } from "../../practice/habits";
+import { forgetSession } from "../../practice/live";
+import { TrashIcon } from "../../ui/Icons";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { useStore } from "../../data/store";
@@ -9,9 +15,63 @@ import { applicationTarget } from "../../data/targets";
 import { TargetMark } from "../applications/TargetMark";
 import { filterSessionsByTarget, progressChoices, sessionTargetId } from "./progressTargets";
 
+const quiet = { background: "none", border: "none", padding: 0, font: "inherit", fontSize: "13px", color: "var(--e-muted)", textDecoration: "underline", cursor: "pointer" } as const;
+
+/** The end of the list while the trash has anything: "Recently deleted (2) · Restore". Restore opens what is there, a row each. */
+function RecentlyDeleted() {
+  const trashed = useTrashedSessions();
+  const { applications } = useStore();
+  const actions = useActions();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  if (trashed.length === 0) return null;
+  const now = new Date();
+  const companyOf = (id: string) => applications.find((a) => a.id === id)?.company;
+  const restore = async (id: string) => {
+    setBusy(id);
+    setError("");
+    try {
+      await actions.restoreSession(id);
+    } catch (e) {
+      setError(plainError(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: "10px" }} aria-label="Recently deleted">
+      <span className="e-meta">
+        {recentlyDeletedLine(trashed.length)} · <button type="button" style={quiet} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Restore"}</button>
+      </span>
+      {error && <span role="alert" className="e-small" style={{ color: "var(--e-danger)" }}>{error}</span>}
+      {open && (
+        <div className="e-card" style={{ padding: "4px 28px" }}>
+          {trashed.map((t, i) => (
+            <div key={t.id} className="e-rowline" style={i === trashed.length - 1 ? { borderBottom: "none" } : undefined}>
+              <span className="e-meta" style={{ width: "120px" }}>{whenText(t.started, now)}</span>
+              <span style={{ flex: "1", display: "flex", flexDirection: "column" }}>
+                {trashedTitle(t, companyOf)}
+                <span className="e-small">{`${t.reps} ${t.reps === 1 ? "answer" : "answers"} · ${keptUntil(t.deleted_at)}`}</span>
+              </span>
+              <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={busy !== null} onClick={() => void restore(t.id)}>Restore</button>
+            </div>
+          ))}
+          <span className="e-small" style={{ display: "block", padding: "8px 0 14px" }}>{TRASH_NOTE}</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** The chips are one row: All clears the filters, Drill and Mock pick a mode, an application narrows to it. They combine. */
 export default function ProgressSessions() {
   const { sessions, applications, targets } = useStore();
+  const actions = useActions();
+  const reps = useRepHistory();
+  const [asking, setAsking] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string>("all");
@@ -27,6 +87,20 @@ export default function ProgressSessions() {
   const groups = shown.map((s) => s.group).filter((g, i, all) => all.indexOf(g) === i);
   const lastId = shown[shown.length - 1]?.id;
   const noFilter = !mode && !appId && chosen === "all";
+
+  const removeSession = async (id: string) => {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await actions.deleteSession(id);
+      forgetSession(id);
+      setAsking(null);
+    } catch (e) {
+      setDeleteError(plainError(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const chip = (on: boolean) => (on ? "e-chip e-chip-on" : "e-chip");
 
@@ -66,12 +140,12 @@ export default function ProgressSessions() {
             {shown
               .filter((s) => s.group === g)
               .map((s) => (
+                <div key={s.id} style={{ display: "flex", flexDirection: "column" }}>
+                <div className="e-rowline" style={{ ...(s.id === lastId && asking !== s.id ? { borderBottom: "none" } : {}), ...(asking === s.id ? { borderBottom: "none", paddingBottom: "4px" } : {}) }}>
                 <Link
-                  key={s.id}
                   to={s.mode === "mock" ? "4-4-session-results-mock-debrief" : "4-3-session-results-drill"}
                   onClick={() => viewSession(s.id)}
-                  className="e-rowline"
-                  style={{ textDecoration: "none", color: "var(--e-ink)", ...(s.id === lastId ? { borderBottom: "none" } : {}) }}
+                  style={{ flex: "1", display: "flex", alignItems: "center", gap: "16px", minWidth: "0", textDecoration: "none", color: "var(--e-ink)" }}
                 >
                   <span className="e-meta" style={{ width: "120px" }}>{s.when}</span>
                   <span className="e-pill" style={s.mode === "mock" ? { background: "var(--e-ink)", color: "var(--e-surface)", width: "52px", justifyContent: "center" } : { background: "var(--e-ground)", width: "52px", justifyContent: "center" }}>
@@ -92,10 +166,27 @@ export default function ProgressSessions() {
                   <span className="e-hand" style={{ fontSize: "17px", ...(s.headline.includes("→") ? { color: "var(--e-win)" } : {}) }}>{s.headline}</span>
                   <span className="e-small" style={{ width: "24px" }}>›</span>
                 </Link>
+                <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ padding: "10px" }} aria-label={`Delete the ${s.title} session`} aria-expanded={asking === s.id} onClick={() => { setAsking(asking === s.id ? null : s.id); setDeleteError(""); }}>
+                  <TrashIcon size={18} />
+                </button>
+                </div>
+                {asking === s.id && (
+                  <div className="e-soft" role="alertdialog" aria-label="Delete this session" style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "4px 0 12px" }}>
+                    <span className="e-meta">{deleteSessionText(answersIn(reps, s.id))}</span>
+                    <span className="e-small">{restoreHint(1)}</span>
+                    {deleteError && <span role="alert" className="e-small" style={{ color: "var(--e-danger)" }}>{deleteError}</span>}
+                    <span style={{ display: "flex", gap: "8px" }}>
+                      <button type="button" className="e-btn e-btn-danger e-btn-sm" disabled={deleting} onClick={() => void removeSession(s.id)}>Delete</button>
+                      <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={deleting} onClick={() => setAsking(null)}>Keep it</button>
+                    </span>
+                  </div>
+                )}
+                </div>
               ))}
           </div>
         ))}
       </section>
+      <RecentlyDeleted />
       <span className="e-small">Recordings are kept for 30 days, then only the text stays. Change this in <Link to="8-6-settings-privacy">Settings, Privacy</Link>.</span>
     </AppShell>
   );
