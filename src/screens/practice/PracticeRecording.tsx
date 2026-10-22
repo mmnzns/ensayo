@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { beginRecording, getLive, HARD_CAP_SECONDS, recordingLevel, restartRecording, stopAndFinish } from "../../practice/live";
+import { useLive, beginRecording, getLive, HARD_CAP_SECONDS, recordingLevel, restartRecording, stopAndFinish } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { THINK } from "./practiceFlow";
@@ -36,6 +36,7 @@ function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
 export default function PracticeRecording() {
   const { timerMaxSeconds, levelBars } = useStore().screens.practice;
   const { live, session, question, targetSeconds, endTo, onEnd } = usePractice();
+  const noClock = useLive().mode === "mock" && live;
   const [seconds, setSeconds] = useState(0);
   const [level, setLevel] = useState(0);
   const max = live ? Math.max(timerMaxSeconds, targetSeconds.to + 30) : timerMaxSeconds;
@@ -92,12 +93,13 @@ export default function PracticeRecording() {
         </div>
         <LevelBars bars={levelBars} level={live ? level : undefined} />
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", width: "100%", maxWidth: "420px" }}>
-          <span style={{ fontSize: "44px", fontWeight: "600", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{clock(seconds)}</span>
-          <div style={{ position: "relative", width: "100%", height: "8px", borderRadius: "999px", background: "var(--e-line)" }} aria-label={`${seconds} seconds, target ${targetSeconds.from} to ${targetSeconds.to}`}>
+          {/* A Mock is like the real call: no clock and no target while you talk (the four minute cap still stops it). */}
+          {!noClock && <span style={{ fontSize: "44px", fontWeight: "600", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{clock(seconds)}</span>}
+          <div style={{ position: "relative", width: "100%", height: "8px", borderRadius: "999px", background: "var(--e-line)", display: noClock ? "none" : undefined }} aria-label={`${seconds} seconds, target ${targetSeconds.from} to ${targetSeconds.to}`}>
             <span style={{ position: "absolute", left: "0", top: "0", height: "8px", width: pct(seconds), borderRadius: "999px", background: "var(--e-primary)" }} />{" "}
             <span style={{ position: "absolute", left: pct(targetSeconds.from), top: "-4px", width: pct(targetSeconds.to - targetSeconds.from), height: "16px", borderRadius: "6px", boxShadow: "inset 0 0 0 2px var(--e-win)" }} />
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+          <div style={{ display: noClock ? "none" : "flex", justifyContent: "space-between", width: "100%" }}>
             <span className="e-small">{clock(0)}</span>
             <span className="e-small">target {clock(targetSeconds.from)} to {clock(targetSeconds.to)}</span>
             <span className="e-small">{clock(max)}</span>

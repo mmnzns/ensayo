@@ -102,6 +102,8 @@ export interface MockDebriefData {
   averageAnswerSeconds: number;
   numbers: { said: number; of: number };
   flags: ConsistencyFlag[];
+  /** False when nothing was checked against earlier answers (no application), so "All matched" would be a lie. Default true. */
+  consistencyChecked?: boolean;
   mustSay: MustSayItem[];
   rows: DebriefRow[];
   nextTime: string;

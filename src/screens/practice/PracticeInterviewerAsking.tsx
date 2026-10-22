@@ -71,7 +71,7 @@ export default function PracticeInterviewerAsking() {
       </div>
       <div className="e-wrap" style={{ width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-          <span className="e-small">Aim for {targetSeconds.from} to {targetSeconds.to} seconds</span>
+          {!(live && state.mode === "mock") && <span className="e-small">Aim for {targetSeconds.from} to {targetSeconds.to} seconds</span>}
           <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={skip}>Skip question</button>
         </div>
       </div>

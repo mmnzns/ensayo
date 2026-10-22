@@ -74,10 +74,12 @@ function Debrief({ d, notice = null }: { d: MockDebriefData; notice?: string | n
                 {d.numbers.said} of {d.numbers.of}
               </div>
             </div>
+            {d.consistencyChecked !== false && (
             <div className="e-soft" style={{ padding: "16px", background: mismatch ? "var(--e-highlight)" : "var(--e-ok-tint)" }}>
               <span className="e-small">To check</span>
               <div className="e-h2">{mismatch === 0 ? "All matched" : mismatch === 1 ? "1 mismatch" : `${mismatch} mismatches`}</div>
             </div>
+            )}
           </div>
         </section>
         {notice && (

@@ -4,14 +4,16 @@ import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import Wordmark from "../../ui/Wordmark";
-import { cancelLive, currentQuestionText, MOCK_DEBRIEF, useLive } from "../../practice/live";
+import { cancelLive, currentQuestionText, liveSession, MOCK_DEBRIEF, useLive } from "../../practice/live";
 import { stageWithKind, useSpaceKey } from "./speak";
 
 export default function MockYourQuestions() {
   const { applications, screens } = useStore();
   const mock = screens.results.mock;
-  const app = applications.find((a) => a.id === mock.applicationId);
-  const stageText = stageWithKind(mock.stageLabel, app?.startup);
+  const liveNow = useLive();
+  const running0 = liveNow.active && liveNow.mode === "mock";
+  const app = applications.find((a) => a.id === (running0 ? liveNow.applicationId : mock.applicationId));
+  const stageText = stageWithKind(running0 ? liveSession().stage : mock.stageLabel, app?.startup);
   const live = useLive();
   const running = live.active && live.mode === "mock";
   const closing = running ? { asker: "Interviewer", text: currentQuestionText() } : mock.questions[mock.questions.length - 1];

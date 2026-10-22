@@ -1,7 +1,7 @@
 // Practice, follow-up. Draft from Design/screens/html/3-6-follow-up.html. Answering goes through thinking and back to the result chain.
 import { useEffect } from "react";
 import { useStore } from "../../data/store";
-import { endFollowUp, resultRoute, retryQuestion, useLive } from "../../practice/live";
+import { askRoute, endFollowUp, nextLiveQuestion, resultRoute, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { HearItAgain, Kbd, MicButton, Presence, SessionHeader } from "./parts";
@@ -27,6 +27,10 @@ export default function FollowUp() {
   };
   const hear = () => speak(followUp.question);
   const skip = () => {
+    if (live && state.mode === "mock") {
+      // A Mock has no result to go back to: the interviewer moves on.
+      return nextLiveQuestion() === "done" ? go(endTo) : go(askRoute());
+    }
     if (live) {
       endFollowUp();
       return go(resultRoute());

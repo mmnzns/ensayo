@@ -85,6 +85,7 @@ export function debriefOfSession(habits: Habit[], detail: SessionDetail, quality
     averageAnswerSeconds: average,
     numbers: { said: proofs.filter((r) => passed(r, "proof")).length, of: proofs.length },
     flags: [],
+    consistencyChecked: false,
     mustSay: mustSay.map((m) => ({ id: m.id, text: m.text, said: quality?.must_say_said.find((f) => f.id === m.id)?.said ?? false })),
     rows,
     nextTime: view ? view.nextTime.advice : "Answer a few more questions and this will say what to carry.",
