@@ -3,5 +3,6 @@
 pub mod coach;
 pub mod criteria;
 pub mod prompts;
+pub mod run;
 pub mod score;
 pub mod template;
