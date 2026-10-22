@@ -2,6 +2,8 @@
 
 pub mod coach;
 pub mod criteria;
+pub mod inputs;
+pub mod pipeline;
 pub mod prompts;
 pub mod run;
 pub mod score;

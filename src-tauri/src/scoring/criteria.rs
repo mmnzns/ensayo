@@ -78,7 +78,7 @@ fn time_to_point(score: &ScoreAnswer, m: &Metrics) -> Option<Check> {
 
 /// Time spoken after the sentence that stated the proof, not counting a closing bridge ("That is the kind of problem
 /// I would want to work on here") or an offer to go deeper, which the model marks as exempt.
-fn tail_ms(score: &ScoreAnswer, m: &Metrics) -> Option<u64> {
+pub(super) fn tail_ms(score: &ScoreAnswer, m: &Metrics) -> Option<u64> {
     let idx = score.proof_landed_sentence?;
     let landed = m.sentences.iter().find(|s| s.index == idx)?;
     let end = m.sentences.last()?.end_ms;
