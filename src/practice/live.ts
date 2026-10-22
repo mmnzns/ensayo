@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { PracticeAttempt, PracticeSession } from "../data/screens/practice";
-import type { Method, Story } from "../data/types";
+import type { Method, Story, Target } from "../data/types";
 import type { QuestionQuality } from "./debrief";
 import { isApp, tauriApi, type RepApi, type SessionDetail } from "./api";
 import { attemptFromOutcome } from "./attempt";
@@ -38,6 +38,8 @@ export interface LiveState {
   mode: "drill" | "mock";
   stage: string;
   applicationId: string | null;
+  /** The target this session is for; null when none was given and the backend uses the active one. */
+  targetId: string | null;
   /** The stage of the application's process being practised; null outside an application. */
   stageId: string | null;
   sessionId: string | null;
@@ -84,6 +86,7 @@ const INITIAL: LiveState = {
   mode: "drill",
   stage: "hiring_manager",
   applicationId: null,
+  targetId: null,
   stageId: null,
   sessionId: null,
   questions: [],
@@ -113,6 +116,7 @@ const INITIAL: LiveState = {
 
 let state: LiveState = INITIAL;
 let stories: Story[] = [];
+let target: Target | undefined;
 let methods: Method[] = [];
 let api: RepApi | null = null;
 const listeners = new Set<() => void>();
@@ -197,6 +201,7 @@ export const liveAvailable = () => isApp() || api !== null;
 export function resetLive() {
   state = INITIAL;
   stories = [];
+  target = undefined;
   methods = [];
   listeners.forEach((l) => l());
 }
@@ -223,20 +228,29 @@ export interface StartOptions {
   seed?: number;
 }
 
-export function startLive(o: StartOptions, ctx: { targetRole: string; stories: Story[]; methods: Method[] }) {
+/** What a session needs from the person: their stories and methods, and the target it is for (the application's, else the active one: `practiceTargetFor`). */
+export interface LiveContext {
+  targetRole: string;
+  stories: Story[];
+  methods: Method[];
+  target?: Target;
+}
+
+export function startLive(o: StartOptions, ctx: LiveContext) {
   stories = ctx.stories;
   methods = ctx.methods;
+  target = ctx.target;
   const story = o.source === "story" ? ctx.stories.find((s) => s.id === o.storyId) : undefined;
   const seed = o.seed ?? Date.now();
-  const bank = banksFor(ctx.targetRole);
+  const bank = banksFor(ctx.target ?? ctx.targetRole);
   const questions =
     o.source === "own" && o.ownQuestion?.trim()
       ? [ownQuestion(o.ownQuestion)]
       : o.source === "application" && o.applicationId
         ? pickApplicationQuestions({ bank, extras: o.extras, stageId: o.stageId, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, seed })
         : pickQuestions({ bank, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed });
-  const closing = o.mode === "mock" ? pickClosing(banksFor(ctx.targetRole), o.stage, seed) : undefined;
-  state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, stageId: o.applicationId ? (o.stageId ?? null) : null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
+  const closing = o.mode === "mock" ? pickClosing(bank, o.stage, seed) : undefined;
+  state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, targetId: ctx.target?.id ?? null, stageId: o.applicationId ? (o.stageId ?? null) : null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
   listeners.forEach((l) => l());
 }
 
@@ -291,7 +305,7 @@ export async function beginRecording() {
 }
 
 function storyIdsFor(q: BankQuestion, source?: Story): string[] {
-  return (source ? [source] : pickStories(q, stories, methods)).map((s) => s.id);
+  return (source ? [source] : pickStories(q, stories, methods, target)).map((s) => s.id);
 }
 
 /** "Start over" while recording: throw this take away and begin again. */
@@ -329,6 +343,7 @@ export async function stopAndFinish() {
       mode: state.mode,
       stage: state.stage,
       application_id: state.applicationId,
+      ...(state.targetId ? { target_id: state.targetId } : {}),
       stage_id: state.applicationId ? state.stageId : null,
       question_id: q.id,
       question_text: currentQuestionText(),

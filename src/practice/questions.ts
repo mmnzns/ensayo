@@ -2,8 +2,8 @@
 // pre-tagged, so no model is needed to classify them.
 
 import general from "../../questions/general.json";
-import lifecycle from "../../questions/pack-lifecycle-marketing-ops.json";
-import type { Story } from "../data/types";
+import { roleFamilyOf } from "../data/targets";
+import type { RoleFamily, Story, Target } from "../data/types";
 
 export interface BankQuestion {
   id: string;
@@ -24,10 +24,26 @@ export interface BankQuestion {
   best_story_id?: string | null;
 }
 
-/** The general set, plus the role pack that fits the target role. */
-export function banksFor(targetRole: string): BankQuestion[] {
-  const packs = /lifecycle|crm|marketing|martech|automation|growth/i.test(targetRole) ? (lifecycle.questions as BankQuestion[]) : [];
-  return [...(general.questions as BankQuestion[]), ...packs];
+// Question packs by kind of role (a target's `roleFamily`). The general set is always asked. A pack is a file in
+// questions/ named below; one that does not exist yet adds nothing. Today only the lifecycle pack exists, so marketing
+// ops, growth, product marketing and other roles get the general set until Opus drafts their packs. Drop the file in
+// questions/ and the pack starts to apply, with no code change.
+const PACK_FILE: Partial<Record<RoleFamily, string>> = {
+  lifecycle: "pack-lifecycle-marketing-ops",
+  marketing_ops: "pack-marketing-ops",
+  growth: "pack-growth",
+  product_marketing: "pack-product-marketing",
+};
+const PACK_FILES = import.meta.glob<{ questions: BankQuestion[] }>("../../questions/pack-*.json", { eager: true, import: "default" });
+const packFor = (family: RoleFamily): BankQuestion[] => {
+  const file = PACK_FILE[family];
+  return (file && PACK_FILES[`../../questions/${file}.json`]?.questions) || [];
+};
+
+/** The general set, plus the pack that fits the target's kind of role. A role in words (the v0 profile) is read for its kind. */
+export function banksFor(target: string | Pick<Target, "roleFamily">): BankQuestion[] {
+  const family = typeof target === "string" ? roleFamilyOf(target) : target.roleFamily;
+  return [...(general.questions as BankQuestion[]), ...packFor(family)];
 }
 
 /** A small seeded generator so a session's order is stable and testable. */
