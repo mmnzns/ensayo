@@ -37,6 +37,8 @@ Speech and audio engine: built on the Talaan engine (Miguel Monzones, MIT), sour
 | sha2 | MIT / Apache-2.0 | https://github.com/RustCrypto/hashes |
 | keyring (Keychain, Credential Manager) | MIT / Apache-2.0 | https://github.com/hwchen/keyring-rs |
 | winreg (Windows registry) | MIT | https://github.com/gentoo90/winreg-rs |
+| pdf-extract (text from a resume PDF, on this computer) | MIT | https://github.com/jrmuizel/pdf-extract |
+| docx-rs (text from a resume Word file, on this computer) | MIT | https://github.com/bokuweb/docx-rs |
 
 ## Models
 

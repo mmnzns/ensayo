@@ -143,6 +143,48 @@ pub fn merge(score: &ScoreAnswer, m: &Metrics, active: &[&str], bank: &[Number])
     out
 }
 
+/// One contradiction prompt 07 found, after code checked it against the claims log.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConflictNote {
+    /// The earlier claim's stage type (`recruiter`, `hiring_manager`...) or `resume`.
+    pub earlier_stage: String,
+    pub earlier_value: String,
+    pub new_value: String,
+    /// 1-based sentence of this answer.
+    pub sentence: usize,
+}
+
+fn stage_words(stage_type: &str) -> String {
+    stage_type.replace('_', " ")
+}
+
+/// `c1_consistent`, built from prompt 07's conflicts (`prompts/rubric-v1.md`): it fails when there is any, with the
+/// conflict's sentence and both values as evidence, naming where the earlier version was said ("In the recruiter stage
+/// you said ..."). With nothing to compare against (an empty log) there is no check at all.
+pub fn c1_check(conflicts: &[ConflictNote], had_log: bool) -> Option<Check> {
+    if conflicts.is_empty() {
+        return had_log.then(|| Check { id: "c1_consistent".into(), passed: Some(true), evidence: "What you said matches what you said before.".into(), sentences: vec![], seconds: None });
+    }
+    let evidence = conflicts
+        .iter()
+        .map(|c| {
+            let before = if c.earlier_stage == "resume" { "Your resume says".to_string() } else { format!("In the {} stage you said", stage_words(&c.earlier_stage)) };
+            format!("{before} \"{}\". Here you said \"{}\".", c.earlier_value, c.new_value)
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut sentences: Vec<usize> = conflicts.iter().map(|c| c.sentence).collect();
+    sentences.sort_unstable();
+    sentences.dedup();
+    Some(Check { id: "c1_consistent".into(), passed: Some(false), evidence, sentences, seconds: None })
+}
+
+/// Puts the consistency check into a rep's checks, replacing an earlier one. `None` removes it.
+pub fn with_c1(checks: &mut Vec<Check>, c1: Option<Check>) {
+    checks.retain(|c| c.id != "c1_consistent");
+    checks.extend(c1);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +363,55 @@ mod tests {
         let s = score(json!({}), &[], json!([]));
         let checks = merge(&s, &m, &[], &bank());
         assert!(get(&checks, "length").is_some() && get(&checks, "fillers").is_some());
+    }
+    // ---------- c1_consistent (inside an application) ----------
+
+    fn note(stage: &str, earlier: &str, new: &str, sentence: usize) -> ConflictNote {
+        ConflictNote { earlier_stage: stage.into(), earlier_value: earlier.into(), new_value: new.into(), sentence }
+    }
+
+    #[test]
+    fn a_conflict_fails_c1_with_the_sentence_and_both_values_and_names_the_stage() {
+        let c = c1_check(&[note("recruiter", "four weeks", "two weeks", 3)], true).unwrap();
+        assert_eq!((c.id.as_str(), c.passed, c.sentences.clone()), ("c1_consistent", Some(false), vec![3]));
+        assert_eq!(c.evidence, "In the recruiter stage you said \"four weeks\". Here you said \"two weeks\".");
+        let h = c1_check(&[note("hiring_manager", "I want to own more", "My manager left", 2)], true).unwrap();
+        assert!(h.evidence.starts_with("In the hiring manager stage you said"), "{}", h.evidence);
+    }
+
+    #[test]
+    fn a_conflict_with_the_resume_says_the_resume() {
+        let c = c1_check(&[note("resume", "31% to 44%", "about 50%", 1)], true).unwrap();
+        assert_eq!(c.evidence, "Your resume says \"31% to 44%\". Here you said \"about 50%\".");
+    }
+
+    #[test]
+    fn several_conflicts_share_one_check_with_each_sentence() {
+        let c = c1_check(&[note("recruiter", "a", "b", 4), note("resume", "c", "d", 2), note("recruiter", "e", "f", 4)], true).unwrap();
+        assert_eq!(c.sentences, vec![2, 4]);
+        assert_eq!(c.evidence.matches("Here you said").count(), 3);
+    }
+
+    #[test]
+    fn nothing_to_compare_with_makes_no_check_and_no_conflict_with_something_to_compare_passes() {
+        assert!(c1_check(&[], false).is_none());
+        let c = c1_check(&[], true).unwrap();
+        assert_eq!(c.passed, Some(true));
+        assert!(!c.evidence.is_empty());
+    }
+
+    #[test]
+    fn c1_replaces_an_earlier_c1_check_and_takes_its_place_in_the_fix_order() {
+        let mut checks = vec![
+            Check { id: "proof".into(), passed: Some(false), evidence: "".into(), sentences: vec![], seconds: None },
+            Check { id: "c1_consistent".into(), passed: Some(true), evidence: "old".into(), sentences: vec![], seconds: None },
+        ];
+        with_c1(&mut checks, c1_check(&[note("recruiter", "a", "b", 1)], true));
+        assert_eq!(checks.iter().filter(|c| c.id == "c1_consistent").count(), 1);
+        assert_eq!(crate::metrics::fix::top_fix(&checks), Some("c1_consistent"), "a conflict outranks the proof fix");
+        checks.push(Check { id: "answer_first".into(), passed: Some(false), evidence: "".into(), sentences: vec![], seconds: None });
+        assert_eq!(crate::metrics::fix::top_fix(&checks), Some("answer_first"), "but not answer first");
+        with_c1(&mut checks, None);
+        assert_eq!(checks.iter().filter(|c| c.id == "c1_consistent").count(), 0, "no check when there was nothing to compare");
     }
 }

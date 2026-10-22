@@ -1,0 +1,19 @@
+Senior Lifecycle Marketing Manager, Kestrel Pay
+
+About the role
+Kestrel Pay is a 40-person, founder-led payments startup. You'll own lifecycle end to end, from first signup to the tenth payment, with no ops team behind you. You'll build the journeys, run the experiments, and report on activation and early retention to the founders every week.
+
+What you'll do
+- Own activation and early retention for new customers, and move the number, not just send messages.
+- Build and run lifecycle programs in Braze, using Segment events and SQL to find where new customers stall.
+- Run the experiments: write the hypothesis, ship the test, read the result.
+- Report on activation and early retention to the founders every week.
+- Set up push notifications at scale, with the product team.
+
+What we're looking for
+- 5+ years in lifecycle or CRM marketing, ideally in fintech or payments.
+- Hands-on SQL for cohort analysis. You can pull your own numbers.
+- Someone who will run it week to week until the number moves.
+
+How we hire
+A call with our recruiter, a call with the hiring manager, a panel with product and engineering, and a conversation with the founders.

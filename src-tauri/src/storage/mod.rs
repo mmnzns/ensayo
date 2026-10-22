@@ -3,6 +3,8 @@
 //! copies shown and never merged, a lock file for "another computer has it open", and a missing folder is an error,
 //! never an empty bank created in its place.
 
+pub mod application_files;
+pub mod applications;
 pub mod bank;
 pub mod conflicts;
 pub mod io;

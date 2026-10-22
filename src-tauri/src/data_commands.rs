@@ -2,6 +2,7 @@
 //! `storage`; these only pick the folder and turn errors into plain strings. Every command is async and does its
 //! file work on a blocking thread (a long synchronous command freezes the window on Windows).
 
+use crate::applications::view::{self, ApplicationView, ExtrasView};
 use crate::paths;
 use crate::storage::conflicts::{Conflict, Keep};
 use crate::storage::lock::{machine_name, LockState};
@@ -11,6 +12,7 @@ use crate::storage::settings;
 use crate::storage::{Result as StorageResult, Storage, StorageError};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 type Cmd<T> = std::result::Result<T, String>;
@@ -67,13 +69,25 @@ pub struct LoadAll {
     pub profile: Option<Profile>,
     pub stories: Vec<Story>,
     pub methods: Vec<Method>,
+    /// Applications in list order (active before closed, then the next interview), in the shape of `Application` in
+    /// `src/data/types.ts`.
+    pub applications: Vec<ApplicationView>,
+    /// What the application screens keep next to each application, by application id.
+    pub application_extras: BTreeMap<String, ExtrasView>,
     /// A plain-words line for each file that could not be read.
     pub problems: Vec<String>,
 }
 
 pub fn load_all_from(storage: &Storage) -> StorageResult<LoadAll> {
+    load_all_at(storage, chrono::Local::now().naive_local())
+}
+
+pub fn load_all_at(storage: &Storage, now: chrono::NaiveDateTime) -> StorageResult<LoadAll> {
     let stories = storage.load_stories()?;
-    Ok(LoadAll { profile: storage.profile()?, stories: stories.items, methods: storage.methods()?, problems: stories.problems })
+    let apps = view::load_all(storage, now)?;
+    let mut problems = stories.problems;
+    problems.extend(apps.problems);
+    Ok(LoadAll { profile: storage.profile()?, stories: stories.items, methods: storage.methods()?, applications: apps.applications, application_extras: apps.extras, problems })
 }
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
@@ -253,5 +267,24 @@ mod tests {
         let p = Profile { name: "D".into(), full_name: "D O".into(), target_role: "".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] };
         storage.save_profile(&p).unwrap();
         assert_eq!(load_all_from(&storage).unwrap().profile, Some(p));
+    }
+
+    #[test]
+    fn load_all_carries_the_applications_in_list_order_with_their_extras_and_reports_a_damaged_one() {
+        use crate::storage::applications::NewApplication;
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        let day = |d| chrono::NaiveDate::from_ymd_opt(2026, 10, d).unwrap();
+        let first = storage.create_application(NewApplication { company: "Older".into(), ..Default::default() }, day(1)).unwrap();
+        let second = storage.create_application(NewApplication { company: "Newer".into(), ..Default::default() }, day(15)).unwrap();
+        std::fs::create_dir_all(storage.root().join("applications/app_bad")).unwrap();
+        std::fs::write(storage.root().join("applications/app_bad/application.json"), "nope").unwrap();
+        let all = load_all_at(&storage, day(21).and_hms_opt(12, 0, 0).unwrap()).unwrap();
+        assert_eq!(all.applications.iter().map(|a| a.company.as_str()).collect::<Vec<_>>(), vec!["Newer", "Older"]);
+        assert!(all.application_extras.contains_key(&first.id) && all.application_extras.contains_key(&second.id));
+        assert_eq!(all.problems.len(), 1);
+        let json = serde_json::to_value(&all).unwrap();
+        assert!(json["applications"].is_array() && json["application_extras"].is_object());
+        assert!(json.get("profile").is_some() && json.get("stories").is_some() && json.get("methods").is_some(), "the existing fields stay");
     }
 }

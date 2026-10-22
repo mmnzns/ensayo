@@ -20,6 +20,10 @@ pub struct Session {
     pub mode: String,
     pub stage: String,
     pub application_id: Option<String>,
+    /// The stage of the application's process this session practiced (a stage may repeat, so the type in `stage` is
+    /// not enough). Stays as it was when the stage is later removed; the session keeps its old `stage` name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage_id: Option<String>,
     /// RFC 3339, UTC.
     pub started: String,
 }
@@ -181,12 +185,17 @@ impl Storage {
         Ok(out)
     }
 
+    /// How many reps (answers) a session has, without reading their transcripts.
+    pub fn rep_count(&self, session: &str) -> usize {
+        checked(session).map(|s| self.rep_numbers(s).len()).unwrap_or(0)
+    }
+
     /// The number the next rep in this session gets: one more than the highest so far.
     pub fn next_rep_number(&self, session: &str) -> Result<u32> {
         Ok(self.rep_numbers(checked(session)?).into_iter().max().unwrap_or(0) + 1)
     }
 
-    fn rep_numbers(&self, session: &str) -> Vec<u32> {
+    pub(crate) fn rep_numbers(&self, session: &str) -> Vec<u32> {
         let Ok(rd) = fs::read_dir(self.session_dir(session).join("reps")) else { return vec![] };
         let mut v: Vec<u32> = rd.flatten().filter_map(|e| e.file_name().to_string_lossy().parse().ok()).collect();
         v.sort_unstable();
@@ -321,7 +330,7 @@ mod tests {
     }
 
     fn session(id: &str, started: &str) -> Session {
-        Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, started: started.into() }
+        Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: started.into() }
     }
 
     fn rep(n: u32) -> FullRep {
