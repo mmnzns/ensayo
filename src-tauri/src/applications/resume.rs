@@ -473,6 +473,17 @@ struct Reply {
     bank_check: Vec<RawCheck>,
     must_say: Vec<RawMustSay>,
     story_suggestions: Vec<RawSuggestion>,
+    /// Prompt 11 v2: which of the target's lead-with points fit this posting. Missing in version 1 readings.
+    #[serde(default)]
+    lead_with_fit: Vec<RawLeadFit>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawLeadFit {
+    id: String,
+    fits: bool,
+    #[serde(default)]
+    why: String,
 }
 
 /// A claim read from the resume, before it has an id in the log.
@@ -490,6 +501,8 @@ struct Validated {
     bank_check: Vec<RawCheck>,
     must_say: Vec<MustSay>,
     suggestions: Vec<StorySuggestion>,
+    /// The target's lead-with points that fit the posting, as must-say items `ms-lw-1`, `ms-lw-2`... after the resume ones.
+    lead: Vec<MustSay>,
 }
 
 fn looks_like_instruction(s: &str) -> bool {
@@ -525,7 +538,32 @@ fn covered_by_a_story(bullet: &str, stories: &[Story]) -> bool {
         })
 }
 
-fn validate(reply: Reply, text: &str, stories: &[Story], has_posting: bool) -> Validated {
+/// The target's lead-with points as prompt 11 reads them, ids `lw-1`, `lw-2`... in list order.
+fn lead_points(points: &[String]) -> Vec<(String, String)> {
+    points.iter().map(|p| p.trim()).filter(|p| !p.is_empty()).take(3).enumerate().map(|(i, p)| (format!("lw-{}", i + 1), p.to_string())).collect()
+}
+
+/// The lead-with points the engine said fit the posting, kept only for ids code sent, as must-say items.
+fn lead_must_say(fit: Vec<RawLeadFit>, points: &[(String, String)], has_posting: bool) -> Vec<MustSay> {
+    if !has_posting {
+        return vec![];
+    }
+    points
+        .iter()
+        .filter(|(id, _)| fit.iter().any(|f| &f.id == id && f.fits))
+        .enumerate()
+        .map(|(i, (id, text))| MustSay {
+            id: format!("ms-lw-{}", i + 1),
+            qualification: text.clone(),
+            resume_quote: String::new(),
+            why: fit.iter().find(|f| &f.id == id).map(|f| plain(&f.why)).unwrap_or_default(),
+            story_id: None,
+            said_in: 0,
+        })
+        .collect()
+}
+
+fn validate(reply: Reply, text: &str, stories: &[Story], has_posting: bool, points: &[(String, String)]) -> Validated {
     let text_norm = norm(text);
     let mut claims: Vec<ResumeClaim> = Vec::new();
     for c in reply.claims {
@@ -576,7 +614,8 @@ fn validate(reply: Reply, text: &str, stories: &[Story], has_posting: bool) -> V
         .take(8)
         .map(|s| StorySuggestion { bullet: s.bullet.trim().to_string(), employer: plain(&s.employer), title: plain(&s.title), headline_result: plain(&s.headline_result) })
         .collect();
-    Validated { claims, bank_check, must_say, suggestions }
+    let lead = lead_must_say(reply.lead_with_fit, points, has_posting);
+    Validated { claims, bank_check, must_say, suggestions, lead }
 }
 
 fn year_token(t: &str) -> Option<&str> {
@@ -675,8 +714,10 @@ fn posting_for_prompt(storage: &Storage, id: &str) -> Option<String> {
     serde_json::to_string_pretty(&slim).ok()
 }
 
-fn ai_read(ai: &mut AiCtx, rec_company: &str, rec_role: &str, text: &str, posting: Option<&str>, stories: &[Story]) -> Result<Reply, CallError> {
+fn ai_read(ai: &mut AiCtx, rec_company: &str, rec_role: &str, text: &str, posting: Option<&str>, stories: &[Story], points: &[(String, String)]) -> Result<Reply, CallError> {
+    let lead_with = if points.is_empty() { String::new() } else { serde_json::to_string(&points.iter().map(|(id, text)| serde_json::json!({"id": id, "text": text})).collect::<Vec<_>>()).unwrap_or_default() };
     let vars = Vars::new()
+        .set("lead_with", escape_data(&lead_with))
         .set("company", escape_data(rec_company))
         .set("role", escape_data(rec_role))
         .set("resume_text", escape_data(text))
@@ -705,9 +746,14 @@ pub fn read_resume(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageRes
     }
     let stories = storage.load_stories()?.items;
     let posting = posting_for_prompt(storage, id);
+    // What the person wants every interviewer to hear for this kind of job (v0.1): merged into the must-say list when it fits the posting.
+    let points = match storage.application_target(&app)? {
+        Some(t) => lead_points(&storage.target(&t).map(|t| t.lead_with).unwrap_or_default()),
+        None => vec![],
+    };
     let had_ai_read = rec.status == "read" && rec.engine.as_deref() == Some("ai");
     let attempt: Result<Reply, String> = match ai {
-        Some(mut ctx) => ai_read(&mut ctx, &app.company, &app.role, &text, posting.as_deref(), &stories).map_err(|e| failure_notice(&e)),
+        Some(mut ctx) => ai_read(&mut ctx, &app.company, &app.role, &text, posting.as_deref(), &stories, &points).map_err(|e| failure_notice(&e)),
         None => Err(NO_ENGINE.to_string()),
     };
     let (validated, source, notice) = match attempt {
@@ -717,7 +763,7 @@ pub fn read_resume(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageRes
                 out.source = "ai".into();
                 return Ok(out);
             }
-            (validate(reply, &text, &stories, posting.is_some()), "ai", None)
+            (validate(reply, &text, &stories, posting.is_some(), &points), "ai", None)
         }
         Err(reason) => {
             if had_ai_read {
@@ -725,7 +771,7 @@ pub fn read_resume(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageRes
                 return Ok(ReadResult { status: "unchanged".into(), source: "ai".into(), notice: Some(format!("{reason} What was read before is unchanged.")), changed: vec![], kept: vec![], claims, must_say_state: rec.must_say_state.clone() });
             }
             let claims = pattern_claims(&text);
-            (Validated { claims, bank_check: vec![], must_say: vec![], suggestions: vec![] }, "patterns", Some(reason))
+            (Validated { claims, bank_check: vec![], must_say: vec![], suggestions: vec![], lead: vec![] }, "patterns", Some(reason))
         }
     };
 
@@ -763,6 +809,7 @@ pub fn read_resume(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageRes
     rec.must_say_state = state.to_string();
     rec.bank_check = validated.bank_check.into_iter().filter_map(|b| mapped.iter().find(|(r, _)| *r == b.claim_id).map(|(_, cid)| BankCheck { claim_id: cid.clone(), result: b.result, story_id: b.story_id, note: b.note })).collect();
     rec.must_say = validated.must_say;
+    rec.must_say.extend(validated.lead);
     for m in rec.must_say.iter_mut() {
         if let Some((_, n)) = old_said.iter().find(|(q, _)| *q == norm(&m.qualification)) {
             m.said_in = *n;
@@ -1196,6 +1243,23 @@ mod tests {
     fn read(s: &Storage, id: &str, llm: &Scripted) -> ReadResult {
         let mut budget = Budget::new(Provider::Claude, 0.0);
         read_resume(s, Some(AiCtx { llm, budget: &mut budget }), id).unwrap()
+    }
+
+    #[test]
+    fn the_targets_lead_with_points_that_fit_the_posting_join_the_must_say_list_after_the_resume_ones() {
+        let (d, s, id) = setup();
+        attached(&d, &s, &id);
+        with_posting_read(&s, &id);
+        let t = crate::storage::targets::Target { name: "B2C lifecycle".into(), role: "Lifecycle Manager".into(), lead_with: vec!["I own lifecycle end to end".into(), "I run the weekly readout".into()], ..Default::default() };
+        s.save_target(&t).unwrap();
+        let llm = Scripted::new(vec![Ok(&reply(|v| v["lead_with_fit"] = json!([{"id": "lw-1", "fits": true, "why": "They want one owner."}, {"id": "lw-2", "fits": false, "why": ""}, {"id": "lw-9", "fits": true, "why": ""}])))]);
+        read(&s, &id, &llm);
+        let ms = resume_rec(&s, &id).must_say;
+        let lead: Vec<(&str, &str)> = ms.iter().filter(|m| m.id.starts_with("ms-lw-")).map(|m| (m.id.as_str(), m.qualification.as_str())).collect();
+        assert_eq!(lead, vec![("ms-lw-1", "I own lifecycle end to end")], "only fitting points it was sent");
+        assert!(ms.iter().position(|m| m.id == "ms-lw-1").unwrap() > ms.iter().position(|m| m.id == "ms-1").unwrap(), "after the resume items");
+        let user = llm.seen.lock().unwrap()[0].user.clone();
+        assert!(user.contains(r#"{"id":"lw-1","text":"I own lifecycle end to end"}"#), "{user}");
     }
 
     #[test]
