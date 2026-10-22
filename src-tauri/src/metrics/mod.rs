@@ -41,6 +41,9 @@ pub struct Check {
     pub passed: Option<bool>,
     /// Plain words saying what was measured.
     pub evidence: String,
+    /// 1-based sentences the check points at (for highlighting). Empty when it is about the answer as a whole.
+    #[serde(default)]
+    pub sentences: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -118,7 +121,7 @@ pub fn compute(input: Inputs) -> Metrics {
         } else {
             "No number or result from your stories came up.".to_string()
         };
-        checks.push(Check { id: "proof".into(), passed: Some(!proof.matched.is_empty()), evidence: proof_evidence });
+        checks.push(Check { id: "proof".into(), passed: Some(!proof.matched.is_empty()), evidence: proof_evidence, sentences: proof.landed_sentence.into_iter().collect() });
         checks.push(Check {
             id: "clean_stop".into(),
             passed: proof.tail_ms.map(|t| t < timing::TAIL_PASS_SECONDS * 1000),
@@ -126,16 +129,19 @@ pub fn compute(input: Inputs) -> Metrics {
                 Some(t) => format!("You kept going for {} seconds after the number.", t / 1000),
                 None => "No number to measure from.".into(),
             },
+            sentences: proof.landed_sentence.into_iter().collect(),
         });
         checks.push(Check {
             id: "length".into(),
             passed: Some(length != Length::Long),
             evidence: format!("{} against a window of {} to {} seconds.", minutes_seconds(speaking_ms), window.min_s, window.max_s),
+            sentences: vec![],
         });
         checks.push(Check {
             id: "fillers".into(),
             passed: Some(filler_rate < timing::FILLERS_PASS_PER_MINUTE),
             evidence: format!("{} filler words, {:.1} a minute.", items.len(), filler_rate),
+            sentences: vec![],
         });
     }
 

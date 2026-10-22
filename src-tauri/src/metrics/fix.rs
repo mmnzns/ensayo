@@ -78,7 +78,7 @@ mod tests {
     use super::*;
 
     fn check(id: &str, passed: Option<bool>) -> Check {
-        Check { id: id.into(), passed, evidence: String::new() }
+        Check { id: id.into(), passed, evidence: String::new(), sentences: vec![] }
     }
 
     #[test]
