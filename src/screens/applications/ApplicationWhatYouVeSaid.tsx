@@ -10,6 +10,7 @@ function Said({ app, now }: Featured) {
   const { busy, error, run, setError } = useRun();
   const [editing, setEditing] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [nowValue, setNowValue] = useState("");
   const [adding, setAdding] = useState<{ kind: string; subject: string; value: string; stage: string } | null>(null);
   const stages = [...app.process].sort((a, b) => a.order - b.order);
 
@@ -68,6 +69,22 @@ function Said({ app, now }: Featured) {
                     </span>
                   );
                 })}
+                {isEditing && live.length > 0 && (
+                  <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", paddingTop: "6px" }}>
+                    <input className="e-input" style={{ flex: "1 1 260px", minHeight: "40px", padding: "8px 10px", fontSize: "15px" }} aria-label={`What ${g.subject.toLowerCase()} is now`} placeholder="What it is now, if it changed" value={nowValue} onChange={(e) => setNowValue(e.target.value)} />
+                    <button
+                      type="button"
+                      className="e-btn e-btn-line e-btn-sm"
+                      disabled={busy || !nowValue.trim()}
+                      onClick={async () => {
+                        const done = await run(() => actions.markClaimUpdated(app.id, live[live.length - 1].id, nowValue));
+                        if (done) setNowValue("");
+                      }}
+                    >
+                      Use this as the current answer
+                    </button>
+                  </span>
+                )}
                 {differs && g.differs?.note && !isEditing && <span className="e-meta" style={{ color: "var(--e-warn-ink)" }}>{g.differs.note}</span>}
               </div>
               {differs && !isEditing && g.differs && (
