@@ -1,15 +1,22 @@
 name: Release
 
-# Push a tag like v0.1.0 (it must match "version" in src-tauri/tauri.conf.json). This makes a draft GitHub Release with
-#   Windows:  Ensayo_<v>_x64-setup.exe
-#   Mac:      Ensayo_<v>_aarch64.dmg (Apple silicon)
-# Publish the draft by hand after trying the installers (docs/RELEASE.md). Nothing here is signed with a paid
-# certificate: testers get one-time steps in INSTALL.md. The automatic updater is not in v0 (it needs a key pair
-# only Miguel can create; docs/RELEASE.md says how to add it).
+# Push a tag like v0.2.0 (it must match "version" in src-tauri/tauri.conf.json). This makes a DRAFT release in the
+# public releases repo (repo variable RELEASE_REPO, default mmnzns/ensayo-releases; the Ensayo repo is private, and
+# the automatic updater can only read public downloads) and uploads to it:
+#   Windows:       Ensayo_<v>_x64-setup.exe and its .sig
+#   Mac (Apple):   Ensayo_<v>_aarch64.dmg, Ensayo_<v>_aarch64.app.tar.gz and its .sig
+#   Mac (Intel):   Ensayo_<v>_x64.dmg, Ensayo_<v>_x64.app.tar.gz and its .sig
+#   latest.json:   built by scripts/latest-json.mjs from every .sig, after all three builds finished
+# Publish the draft by hand, in the public repo, after trying the installers (docs/RELEASE.md). Until it is
+# published the updater doesn't see it (latest/download only serves published releases).
+# Nothing here is signed with a paid certificate: testers get one-time steps in INSTALL.md.
 #
-# Optional secrets (macOS job): APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY.
-# With them the Mac app keeps its microphone permission across updates; without them it is ad-hoc signed and macOS
-# asks for the microphone again after each new version.
+# Secrets:
+#   RELEASES_TOKEN                          fine-grained token with contents:write on RELEASE_REPO only
+#   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD   Ensayo's updater key (~/.tauri/ensayo.key; the password is empty)
+#   APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY   optional, Mac jobs
+# With the Apple secrets the Mac app keeps its microphone permission across updates; without them it is ad-hoc signed
+# and macOS asks for the microphone again after each new version.
 
 on:
   push:
@@ -17,7 +24,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  RELEASE_REPO: ${{ vars.RELEASE_REPO || 'mmnzns/ensayo-releases' }}
 
 jobs:
   draft:
@@ -30,13 +40,13 @@ jobs:
           want="${GITHUB_REF_NAME#v}"
           have=$(node -p "require('./src-tauri/tauri.conf.json').version")
           [ "$want" = "$have" ] || { echo "::error::tag $GITHUB_REF_NAME but tauri.conf.json says $have"; exit 1; }
-      - name: Draft release for this tag (once)
+      - name: Draft release for this tag, in the public repo (once)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Ensayo $GITHUB_REF_NAME" \
-              --notes "First install: see [INSTALL.md](https://github.com/${{ github.repository }}/blob/$GITHUB_REF_NAME/INSTALL.md). Mac: open the .dmg, drag Ensayo to Applications, then right-click and Open once. Windows: run the setup file; if SmartScreen stops it, choose More info then Run anyway."
+          [ -n "$GH_TOKEN" ] || { echo "::error::the RELEASES_TOKEN secret is missing (docs/RELEASE.md, One-time setup)"; exit 1; }
+          gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" --draft --title "Ensayo $GITHUB_REF_NAME" --notes-file scripts/release-notes.md
 
   windows:
     needs: draft
@@ -58,9 +68,13 @@ jobs:
       - run: npm ci
       # The built-in local AI helper must exist before the app builds (tauri.conf.json externalBin).
       - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-llm-helper.ps1
-      # Whisper and llama.cpp must be built for the AVX2 baseline, not this runner's CPU.
+      # Whisper and llama.cpp must be built for the AVX2 baseline, not this runner's CPU. The signing key makes the
+      # installer's .sig (tauri.conf.json: bundle.createUpdaterArtifacts).
       - name: Build the installer
         shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           . ./scripts/cpu-baseline.ps1
           npm run tauri build -- --bundles nsis
@@ -69,15 +83,23 @@ jobs:
       - name: Upload to the draft
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
-          v="${GITHUB_REF_NAME#v}"
-          gh release upload "$GITHUB_REF_NAME" "src-tauri/target/release/bundle/nsis/Ensayo_${v}_x64-setup.exe" --clobber
+          v="${GITHUB_REF_NAME#v}"; out=src-tauri/target/release/bundle/nsis
+          gh release upload "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" "$out/Ensayo_${v}_x64-setup.exe" "$out/Ensayo_${v}_x64-setup.exe.sig" --clobber
 
   macos:
     needs: draft
     if: github.event_name == 'push'
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-latest is Apple silicon. The Intel build runs on an Intel runner (no cross-compiling of
+          # whisper.cpp and llama.cpp); if that label is retired, use another x86_64 macOS label.
+          - { os: macos-latest, target: aarch64-apple-darwin, arch: aarch64 }
+          - { os: macos-15-intel, target: x86_64-apple-darwin, arch: x64 }
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,25 +108,52 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: release-arm64
+          key: release-${{ matrix.arch }}
       - run: npm ci
-      - name: Build the app and upload the .dmg to the draft
-        uses: tauri-apps/tauri-action@v0
+      # Builds ensayo-llm for this runner's own architecture (the helper script uses the host triple).
+      - run: sh scripts/build-llm-helper.sh
+      - name: Build the app, the disk image and the updater package
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles app,dmg
+      - name: Upload to the draft
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"; out="src-tauri/target/${{ matrix.target }}/release/bundle"
+          # The package is Ensayo.app.tar.gz whatever the architecture: name it so the two Macs don't collide.
+          cp "$out/macos/Ensayo.app.tar.gz" "$out/Ensayo_${v}_${{ matrix.arch }}.app.tar.gz"
+          cp "$out/macos/Ensayo.app.tar.gz.sig" "$out/Ensayo_${v}_${{ matrix.arch }}.app.tar.gz.sig"
+          gh release upload "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" \
+            "$out/dmg/Ensayo_${v}_${{ matrix.arch }}.dmg" \
+            "$out/Ensayo_${v}_${{ matrix.arch }}.app.tar.gz" \
+            "$out/Ensayo_${v}_${{ matrix.arch }}.app.tar.gz.sig" --clobber
+
+  # After all three builds: latest.json from every .sig on the draft (what the updater reads once it is published).
+  updater-json:
+    needs: [windows, macos]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseDraft: true
-          args: --target aarch64-apple-darwin --bundles dmg
+          node-version: 22
+      - run: node --test scripts/latest-json.check.mjs
+      - env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: node scripts/latest-json.mjs "$GITHUB_REF_NAME"
 
   # Run by hand (Actions, Release, Run workflow) to check that both installers build, without making a release.
+  # Needs the signing secrets: the build makes updater signatures.
   test-build:
     if: github.event_name == 'workflow_dispatch'
     strategy:
@@ -113,6 +162,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -134,11 +185,16 @@ jobs:
           npm run tauri build -- --bundles nsis
       - name: Mac disk image
         if: runner.os == 'macOS'
-        run: npm run tauri build -- --bundles dmg
+        run: |
+          sh scripts/build-llm-helper.sh
+          npm run tauri build -- --bundles app,dmg
       - uses: actions/upload-artifact@v4
         with:
           name: ensayo-${{ runner.os }}
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.sig
             src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.tar.gz
+            src-tauri/target/release/bundle/macos/*.sig
           if-no-files-found: error

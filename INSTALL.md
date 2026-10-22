@@ -2,9 +2,9 @@
 
 Ensayo is a free practice app for interviews: you answer out loud, it gives you one note, you answer again. It runs on your own computer. Your answers and stories stay there.
 
-## Mac (Apple silicon)
+## Mac
 
-1. Download `Ensayo_<version>_aarch64.dmg` from the release page and open it.
+1. Download the disk image from the release page and open it: `Ensayo_<version>_aarch64.dmg` for Apple silicon, `Ensayo_<version>_x64.dmg` for an Intel Mac.
 2. Drag **Ensayo** to **Applications**.
 3. The first time only: in Applications, **right-click Ensayo, then Open**, then **Open** again. (macOS does this for any app that does not come from the App Store. If you see a message instead, open **System Settings, Privacy & Security** and choose **Open Anyway**.)
 4. When Ensayo asks to use the microphone, choose **OK**. It cannot hear you otherwise.
@@ -14,6 +14,10 @@ Ensayo is a free practice app for interviews: you answer out loud, it gives you 
 1. Download `Ensayo_<version>_x64-setup.exe` and run it.
 2. If Windows says it protected your PC, choose **More info, then Run anyway**. (This appears for any app without a paid certificate.)
 3. Open Ensayo from the Start menu. When Windows asks about the microphone, allow it. If you missed it: **Settings, Privacy & security, Microphone**.
+
+## Updates
+
+New versions arrive by themselves. Ensayo checks in the background; when one is ready a note at the top says so, and **Update now** installs it and restarts. **Later** hides it until the next time you open Ensayo. **Settings, About** shows your version and has **Check for updates**. Ensayo never updates in the middle of a practice answer.
 
 ## First run
 

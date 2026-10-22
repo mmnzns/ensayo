@@ -20,6 +20,7 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npm test
+      - run: node --test scripts/latest-json.check.mjs
       - run: npm run build
       # The app's build needs the helper in src-tauri/binaries (tauri.conf.json externalBin), so it comes first.
       - run: sh scripts/build-llm-helper.sh
