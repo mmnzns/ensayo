@@ -110,6 +110,8 @@ pub fn after_scored(storage: &Storage, ai: &mut AiCtx, app: &AppCtx, heard: &Hea
                     stories: &story_block,
                     method: "",
                     identity_statement: heard.identity_statement,
+                    // A note about saying something differently is about the claim, not the story's way in.
+                    story_angles: "",
                 },
                 ai.budget,
             );

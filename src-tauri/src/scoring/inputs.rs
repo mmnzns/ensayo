@@ -18,6 +18,22 @@ pub fn transcript_text_first(m: &Metrics) -> String {
     transcript_text(m).lines().map(|l| l.replacen('[', "[A ", 1)).collect::<Vec<_>>().join("\n")
 }
 
+/// The way in each story has for this target (prompts 02 and 03, `story_angles`): one block per story that has an
+/// angle for the target, in the order of `stories`, blank line between blocks. Never another target's angle; empty
+/// when no story has one (the prompt then drops the block).
+pub fn story_angles_text(stories: &[Story], target_id: Option<&str>) -> String {
+    let Some(target) = target_id else { return String::new() };
+    stories
+        .iter()
+        .filter_map(|s| {
+            let a = s.angles.iter().find(|a| a.target_id == target && !a.headline.trim().is_empty())?;
+            let emphasis = if a.emphasis.is_empty() { "none".to_string() } else { a.emphasis.join("; ") };
+            Some(format!("story_id: {}\nangle_headline: {}\nangle_emphasis: {}", s.id, a.headline.trim(), emphasis))
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 /// Up to three stories, most relevant first (the caller has already picked them).
 pub fn stories_text(stories: &[Story]) -> String {
     stories
@@ -109,5 +125,23 @@ mod tests {
         let mut s = story();
         s.proof_points.clear();
         assert!(stories_text(&[s]).ends_with("proof_points: none"));
+    }
+
+    #[test]
+    fn angles_go_in_one_block_per_story_for_this_target_only() {
+        use crate::storage::model::StoryAngle;
+        let mut a = story();
+        a.angles = vec![
+            StoryAngle { target_id: "tg_b2b".into(), headline: " Our handoff was broken. ".into(), emphasis: vec!["Funnel data".into(), "Systems".into()], lead_branch: None },
+            StoryAngle { target_id: "tg_b2c".into(), headline: "Activation went up.".into(), emphasis: vec![], lead_branch: None },
+        ];
+        let mut b = story();
+        b.id = "st_other".into();
+        b.angles = vec![StoryAngle { target_id: "tg_b2b".into(), headline: "Win-back worked.".into(), emphasis: vec![], lead_branch: None }];
+        let text = story_angles_text(&[a.clone(), b], Some("tg_b2b"));
+        assert_eq!(text, "story_id: st_onboarding\nangle_headline: Our handoff was broken.\nangle_emphasis: Funnel data; Systems\n\nstory_id: st_other\nangle_headline: Win-back worked.\nangle_emphasis: none");
+        assert!(!text.contains("Activation went up."), "never another target's angle");
+        assert_eq!(story_angles_text(&[a.clone()], None), "");
+        assert_eq!(story_angles_text(&[a], Some("tg_none")), "");
     }
 }

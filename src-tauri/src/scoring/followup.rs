@@ -210,6 +210,8 @@ pub fn score_follow_up(llm: &dyn Llm, i: &FollowScoreInput, budget: &mut Budget)
             stories: &stories,
             method: i.method,
             identity_statement: i.identity_statement,
+            // Angles never reach the follow-up prompts; the coach words the follow-up note without them.
+            story_angles: "",
         },
         budget,
     )?;

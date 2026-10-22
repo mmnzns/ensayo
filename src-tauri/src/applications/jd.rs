@@ -907,7 +907,7 @@ mod tests {
         let out = run(&s, &id, &llm);
         assert_eq!((out.source.as_str(), out.notice.clone()), ("ai", None));
         let file = s.load_application_part::<AnalysisFile>(&id, "analysis.json").unwrap().unwrap();
-        assert_eq!((file.prompt.as_str(), file.engine.as_str()), ("analyse-jd v1", "ai"));
+        assert_eq!((file.prompt.as_str(), file.engine.as_str()), ("analyse-jd v2", "ai"));
         assert_eq!(file.raw.as_ref().unwrap()["summary"], serde_json::from_str::<Value>(REPLY).unwrap()["summary"], "the reply is kept as it was returned");
         let d = file.derived;
         assert_eq!(d.priorities.iter().map(|p| p.title.as_str()).collect::<Vec<_>>(), vec!["Keep customers", "Do more with less", "Win customers"]);

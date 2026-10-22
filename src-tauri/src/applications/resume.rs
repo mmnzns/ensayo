@@ -1213,7 +1213,7 @@ mod tests {
         assert_eq!(all[2].id, "cl_3");
         assert_eq!((all[2].kind.as_str(), all[2].value.as_str()), ("proof_number", "31% to 44%"));
         let rec = resume_rec(&s, &id);
-        assert_eq!((rec.status.as_str(), rec.engine.as_deref(), rec.prompt.as_deref()), ("read", Some("ai"), Some("read-resume v1")));
+        assert_eq!((rec.status.as_str(), rec.engine.as_deref(), rec.prompt.as_deref()), ("read", Some("ai"), Some("read-resume v2")));
         assert!(rec.read_on.is_some());
         assert_eq!(rec.must_say.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["ms-1", "ms-2"], "code assigns the ids");
         assert_eq!(rec.must_say[1].story_id.as_deref(), Some("st_onboarding"));

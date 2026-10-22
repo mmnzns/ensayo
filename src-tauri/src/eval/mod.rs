@@ -327,7 +327,7 @@ mod tests {
         {
             let metrics = compute(Inputs { words: words_of(fixture), stage: "hiring_manager", question_type: "behavioral", bank: bank.clone(), keep_restart: false });
             let llm = Scripted::new(vec![Ok(&reply), Ok(coach)]);
-            let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &bank };
+            let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", target_id: None, jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &bank };
             let scored = score_answer(&llm, &input, &mut Budget::new(Provider::Claude, 0.0)).unwrap();
             let mut rec = record(n as u32 + 1, scored.checks, &labels);
             rec.full.transcript = words_of(fixture);

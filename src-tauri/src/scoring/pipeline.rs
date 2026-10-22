@@ -3,7 +3,7 @@
 
 use super::coach::{self, Coach};
 use super::criteria::{self, Ctx};
-use super::inputs::{stories_text, transcript_text};
+use super::inputs::{stories_text, story_angles_text, transcript_text};
 use super::prompts::{get, PromptId};
 use super::run::{call_json, Budget, CallError};
 use super::score::ScoreAnswer;
@@ -31,7 +31,10 @@ pub struct ScoreInput<'a> {
     pub stage: &'a str,
     pub founder_variant: bool,
     pub seniority: &'a str,
+    /// The pitch of the session's target ("Tell me about yourself" is checked against it).
     pub identity_statement: &'a str,
+    /// The session's target, for the stories' angles (v0.1).
+    pub target_id: Option<&'a str>,
     /// The posting's summary, when an application has one (M8).
     pub jd_summary: &'a str,
     /// Up to three, most relevant first.
@@ -45,7 +48,7 @@ pub struct ScoreInput<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AiScore {
     pub rubric_version: u32,
-    /// "score-answer v1", "coach-note v1": which prompts judged this, so old scores keep their meaning.
+    /// "score-answer v2", "coach-note v2": which prompts judged this, so old scores keep their meaning.
     pub prompts: Vec<String>,
     pub story_id: Option<String>,
     /// The interviewer should answer; this was not an answer to score.
@@ -75,7 +78,10 @@ pub struct CoachInput<'a> {
     pub plain_transcript: &'a str,
     pub stories: &'a str,
     pub method: &'a str,
+    /// The pitch of the session's target.
     pub identity_statement: &'a str,
+    /// The stories' angles for the session's target (`inputs::story_angles_text`); empty when none.
+    pub story_angles: &'a str,
 }
 
 /// Prompt 03 plus what code does to its reply (`coach::finalise`).
@@ -91,7 +97,8 @@ pub fn word_note(llm: &dyn Llm, c: &CoachInput, budget: &mut Budget) -> Result<C
         .set("measurements", c.measurements.clone())
         .set("stories", escape_data(c.stories))
         .set("method", escape_data(c.method))
-        .set("identity_statement", escape_data(c.identity_statement));
+        .set("story_angles", escape_data(c.story_angles))
+        .set("target_pitch", escape_data(c.identity_statement));
     let called = call_json(llm, get(PromptId::Coach), &vars, 700, budget)?;
     let raw: Coach = serde_json::from_value(called.value).map_err(|e| CallError::Invalid(e.to_string()))?;
     Ok(coach::finalise(raw, c.fix, c.plain_transcript, c.stories))
@@ -145,6 +152,7 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
     });
     let transcript = transcript_text(m);
     let stories = stories_text(input.stories);
+    let angles = story_angles_text(input.stories, input.target_id);
 
     let vars = Vars::new()
         .set("question", escape_data(&q.text))
@@ -159,7 +167,9 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
         .set("stories", escape_data(&stories))
         .set("method", escape_data(input.method))
         .set("jd_summary", escape_data(input.jd_summary))
-        .set("identity_statement", escape_data(input.identity_statement));
+        // The pitch only matters to "Tell me about yourself"; other answers are not judged against it.
+        .set("target_pitch", if q.question_type == "tell_me_about_yourself" { escape_data(input.identity_statement) } else { String::new() })
+        .set("story_angles", escape_data(&angles));
     let scored = call_json(llm, get(PromptId::Score), &vars, 3000, budget)?;
     let score: ScoreAnswer = serde_json::from_value(scored.value).map_err(|e| CallError::Invalid(e.to_string()))?;
     let prompts = vec![format!("score-answer v{}", get(PromptId::Score).version), format!("coach-note v{}", get(PromptId::Coach).version)];
@@ -202,6 +212,7 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
             stories: &stories,
             method: input.method,
             identity_statement: input.identity_statement,
+            story_angles: &angles,
         },
         budget,
     )?;
@@ -238,7 +249,7 @@ mod tests {
         let metrics = compute(Inputs { words: words_of(fixture), stage: "hiring_manager", question_type: "behavioral", bank: bank.clone(), keep_restart: false });
         let q = question();
         let stories = if bank_empty { vec![] } else { vec![story()] };
-        let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &bank };
+        let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", target_id: None, jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &bank };
         score_answer(llm, &input, &mut Budget::new(Provider::Claude, 0.0))
     }
 
@@ -257,7 +268,7 @@ mod tests {
         let r = out.rewrite.unwrap();
         assert_eq!(r.position, "open");
         assert!(r.text.contains("44"));
-        assert_eq!(out.prompts, vec!["score-answer v1", "coach-note v1"]);
+        assert_eq!(out.prompts, vec!["score-answer v2", "coach-note v2"]);
         // The coach was told the fix, the evidence and the measurement, in fix mode.
         let seen = llm.seen.lock().unwrap();
         assert_eq!(seen.len(), 2);
@@ -318,7 +329,7 @@ mod tests {
         let q = question();
         let stories = vec![story()];
         let bank = numbers::extract("31% 44%");
-        let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", jd_summary: evil, stories: &stories, method: "", metrics: &metrics, bank: &bank };
+        let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", target_id: None, jd_summary: evil, stories: &stories, method: "", metrics: &metrics, bank: &bank };
         let out = score_answer(&llm, &input, &mut Budget::new(Provider::Claude, 0.0)).unwrap();
         let seen = llm.seen.lock().unwrap();
         let user = &seen[0].user;
@@ -351,6 +362,30 @@ mod tests {
     }
 
     #[test]
+    fn the_pitch_goes_only_to_tell_me_about_yourself_and_angles_follow_the_target() {
+        use crate::storage::model::StoryAngle;
+        let mut st = story();
+        st.angles = vec![StoryAngle { target_id: "tg_b2b".into(), headline: "Our handoff was broken.".into(), emphasis: vec![], lead_branch: None }];
+        let stories = vec![st];
+        let words: Vec<Word> = (0..40).map(|i| Word { text: if i % 10 == 9 { "end." } else { "word" }.into(), start_ms: i * 375, end_ms: i * 375 + 300 }).collect();
+        let metrics = compute(Inputs { words, stage: "hiring_manager", question_type: "behavioral", bank: vec![], keep_restart: false });
+        let run = |q: &QuestionInfo, target: Option<&str>| {
+            let llm = Scripted::new(vec![Err(AiError::Failed("stop".into()))]);
+            let input = ScoreInput { question: q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "I turn a messy stack into a pipeline.", target_id: target, jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &[] };
+            let _ = score_answer(&llm, &input, &mut Budget::new(Provider::Claude, 0.0));
+            let user = llm.seen.lock().unwrap()[0].user.clone();
+            user
+        };
+        let behavioral = question();
+        let user = run(&behavioral, Some("tg_b2b"));
+        assert!(!user.contains("I turn a messy stack"), "the pitch is only for tell me about yourself");
+        assert!(user.contains("angle_headline: Our handoff was broken."), "{user}");
+        assert!(!run(&behavioral, Some("tg_b2c")).contains("angle_headline"));
+        let tmay = QuestionInfo { question_type: "tell_me_about_yourself".into(), ..question() };
+        assert!(run(&tmay, None).contains("I turn a messy stack into a pipeline."));
+    }
+
+    #[test]
     fn the_largest_per_answer_prompt_fits_a_small_local_models_8k_window() {
         // Three long stories and a four-minute transcript (the hard cap) with the rubric: about 4 characters a token.
         let mut big = story();
@@ -362,7 +397,7 @@ mod tests {
         let metrics = compute(Inputs { words, stage: "hiring_manager", question_type: "behavioral", bank: vec![], keep_restart: false });
         let q = question();
         let llm = Scripted::new(vec![Err(AiError::Failed("stop".into()))]);
-        let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "I build lifecycle programs.", jd_summary: "", stories: &stories, method: "I trace it upstream first.", metrics: &metrics, bank: &[] };
+        let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "I build lifecycle programs.", target_id: None, jd_summary: "", stories: &stories, method: "I trace it upstream first.", metrics: &metrics, bank: &[] };
         let _ = score_answer(&llm, &input, &mut Budget::new(Provider::Claude, 0.0));
         let req = llm.seen.lock().unwrap()[0].clone();
         let tokens = (req.system.len() + req.user.len()) / 4;
@@ -387,7 +422,7 @@ mod tests {
             let metrics = compute(Inputs { words: words_of(fixture), stage: "hiring_manager", question_type: "behavioral", bank: bank.clone(), keep_restart: false });
             let q = question();
             let stories = vec![story()];
-            let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &bank };
+            let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", target_id: None, jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &bank };
             let one = score_answer(&llm, &input, &mut Budget::new(provider, 0.0)).unwrap();
             let two = score_answer(&llm, &input, &mut Budget::new(provider, 0.0)).unwrap();
             let summary = |a: &AiScore| a.checks.iter().map(|c| format!("{}={:?}", c.id, c.passed)).collect::<Vec<_>>().join(" ");

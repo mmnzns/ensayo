@@ -197,6 +197,7 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
         founder_variant: asked.founder_variant,
         seniority: profile.as_ref().map(|p| p.seniority.as_str()).unwrap_or("mid"),
         identity_statement: profile.as_ref().map(|p| p.identity_statement.as_str()).unwrap_or(""),
+        target_id: asked.target_id.as_deref(),
         jd_summary: &asked.jd_summary,
         stories: &stories,
         method: &method,
@@ -260,7 +261,7 @@ fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &F
                 fix,
                 note: coach.note,
                 rewrite: coach.rewrite,
-                meta: AiMeta { prompts: vec!["score-follow-up v1".into(), "coach-note v1".into()], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd },
+                meta: AiMeta { prompts: vec!["score-follow-up v1".into(), "coach-note v2".into()], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd },
                 question_type: parent.rep.question_type.clone(),
             }
         }
@@ -1172,7 +1173,7 @@ mod tests {
         assert_eq!(rep.rep.note.as_deref(), Some("You kept going long after the number. Stop once it lands."));
         assert!(rep.metrics.checks.iter().any(|c| c.id == "ownership" && c.passed == Some(false)), "the AI's checks are in the saved metrics");
         assert!(rep.metrics.checks.iter().any(|c| c.id == "time_to_point"));
-        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v1", "coach-note v1"]);
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v2", "coach-note v2"]);
         assert!(out.notice.is_none());
         let saved = storage.rep(&out.session_id, 1).unwrap().unwrap();
         assert_eq!(saved.rep.note, rep.rep.note);
@@ -1414,7 +1415,7 @@ mod tests {
         let rep = out.rep.unwrap();
         assert_eq!(llm.calls(), 3);
         assert!(rep.metrics.checks.iter().all(|c| c.id != "c1_consistent"), "nothing earlier to compare with");
-        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v1", "coach-note v1", "extract-claims v1"]);
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v2", "coach-note v2", "extract-claims v1"]);
         let claims = saved_claims(&storage, &id);
         assert_eq!(claims.len(), 1);
         assert_eq!((claims[0].stage.as_str(), claims[0].stage_ref.as_str(), claims[0].value.as_str()), ("stg_1", "recruiter", "four weeks"));
