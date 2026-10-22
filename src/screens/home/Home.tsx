@@ -83,7 +83,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "8px" }}>
             <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => {
               const ctx = { targetRole: target?.role ?? profile.targetRole, stories: store.stories, methods: store.methods, target };
-              if (next) startApplicationDrill(ctx, next, extras?.questions);
+              if (next) startApplicationDrill(ctx, next, extras?.questions, undefined, extras?.askedFirst);
               else startQuickDrill(ctx);
             }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

@@ -3,7 +3,7 @@
 
 import type { Application, ProcessStage } from "../data/types";
 import { checkAi, liveAvailable, startLive, type LiveContext } from "./live";
-import type { ExtraQuestion } from "./questions";
+import { earlierStages, type ExtraQuestion } from "./questions";
 
 /** A first run asks three questions; Home's usual Drill asks five. */
 export const FIRST_DRILL = 3;
@@ -18,9 +18,9 @@ export function startQuickDrill(ctx: LiveContext, o: { count?: number; storyId?:
 }
 
 /** Starts a Drill inside an application: its next stage's questions, with the application's context behind every answer. True when a real session started. */
-export function startApplicationDrill(ctx: LiveContext, target: { application: Application; stage: ProcessStage }, extras?: ExtraQuestion[], count = HOME_DRILL): boolean {
+export function startApplicationDrill(ctx: LiveContext, target: { application: Application; stage: ProcessStage }, extras?: ExtraQuestion[], count = HOME_DRILL, askedFirst?: boolean): boolean {
   if (!liveAvailable()) return false;
-  startLive({ mode: "drill", stage: target.stage.stage, count, source: "application", applicationId: target.application.id, stageId: target.stage.id, startup: target.application.startup, extras }, ctx);
+  startLive({ mode: "drill", stage: target.stage.stage, count, source: "application", applicationId: target.application.id, stageId: target.stage.id, startup: target.application.startup, extras, earlierStageIds: earlierStages(target.application.process, target.stage.id), askedFirst }, ctx);
   void checkAi();
   return true;
 }

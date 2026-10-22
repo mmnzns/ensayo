@@ -62,6 +62,25 @@ export interface CueSheetData {
   numbers?: { label: string; value: string; resumeSays?: string | null; mismatch: boolean }[];
 }
 
+/** What the person wrote after one interview, as the app sends it (`ExtrasView.interviewNotes`). */
+export interface InterviewNote {
+  /** The ProcessStage id. A note on a stage that was later removed stays. */
+  stageId: string;
+  /** "2026-10-23". */
+  heldOn: string;
+  /** How it went, 1 to 5; null when not said. */
+  rating: number | null;
+  /** The questions they were asked, in the order written. */
+  asked: string[];
+  worked: string;
+  /** What they would change. */
+  differently: string;
+  spokeTo: string;
+  nextStep: string;
+  created: string;
+  edited: string;
+}
+
 export interface ApplicationExtras {
   postingText: string;
   postingPastedOn: string;
@@ -74,6 +93,10 @@ export interface ApplicationExtras {
   lockedByStage?: Record<string, NightBefore>;
   cue?: CueSheetData;
   questions: PrepQuestion[];
+  /** One note per stage, written after the interview. Absent where nothing has been written. */
+  interviewNotes?: InterviewNote[];
+  /** Questions asked at earlier stages come first in a later stage's Drill. On unless this is false. */
+  askedFirst?: boolean;
 }
 
 export interface NewApplicationDraft {

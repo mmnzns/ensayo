@@ -168,3 +168,18 @@ export interface LockInput {
 }
 
 export type CueSheet = Required<Pick<CueSheetData, "openerBeats" | "power" | "said" | "reminders">> & CueSheetData;
+
+/** What the After the interview screen sends (`NoteInput` in src-tauri/src/applications/interviews.rs). */
+export interface InterviewNoteInput {
+  stage_id: string;
+  /** "2026-10-23"; left out means today. */
+  held_on?: string;
+  /** 1 to 5, or left out. */
+  rating?: number | null;
+  /** One question each. */
+  asked: string[];
+  worked: string;
+  differently: string;
+  spoke_to: string;
+  next_step: string;
+}

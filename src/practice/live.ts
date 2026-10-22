@@ -221,6 +221,9 @@ export interface StartOptions {
   stageId?: string | null;
   /** The application's own questions (`ExtrasView.questions`); the questions for `stageId` are asked first. Absent while they have not loaded: the bank is used. */
   extras?: ExtraQuestion[];
+  /** The stages before `stageId`, and the Questions tab switch: in a Drill, up to two questions asked at those stages lead. */
+  earlierStageIds?: string[];
+  askedFirst?: boolean;
   /** Tries per question in a Drill: 2 or 3. */
   tries?: number;
   /** Follow-up questions in a Drill; the default is yes. */
@@ -247,7 +250,7 @@ export function startLive(o: StartOptions, ctx: LiveContext) {
     o.source === "own" && o.ownQuestion?.trim()
       ? [ownQuestion(o.ownQuestion)]
       : o.source === "application" && o.applicationId
-        ? pickApplicationQuestions({ bank, extras: o.extras, stageId: o.stageId, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, seed })
+        ? pickApplicationQuestions({ bank, extras: o.extras, stageId: o.stageId, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, seed, earlierStageIds: o.earlierStageIds, askedFirst: o.askedFirst })
         : pickQuestions({ bank, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed });
   const closing = o.mode === "mock" ? pickClosing(bank, o.stage, seed) : undefined;
   state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, targetId: ctx.target?.id ?? null, stageId: o.applicationId ? (o.stageId ?? null) : null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
