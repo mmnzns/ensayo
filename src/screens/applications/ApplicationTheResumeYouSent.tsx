@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import type { ResumeOutcome } from "../../data/applicationCommands";
-import { useActions } from "../../data/real";
+import { isApp, useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import { MATCH_LABEL, shortDate } from "./format";
 import { bytesOf, isResumeFile, outcomeNotices } from "./forms";
@@ -167,7 +167,7 @@ function ResumeTab({ app, now }: Featured) {
               }}
             >
               <span className="e-h3">{attached ? "Choose the file you sent" : app.no_resume ? "You said you didn't send one" : "No resume attached"}</span>
-              <span className="e-small">Drop a PDF or Word file here, or pick it from your computer.</span>
+              <span className="e-small">{isApp() ? "Pick the PDF or Word file from your computer." : "Drop a PDF or Word file here, or pick it from your computer."}</span>
               <span style={{ display: "flex", gap: "8px" }}>
                 <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => fileInput.current?.click()}>Choose a file</button>
                 {attached && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChooser(false)}>Cancel</button>}

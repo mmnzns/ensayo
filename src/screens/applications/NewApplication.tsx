@@ -4,7 +4,7 @@ import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import { plainError } from "../../data/actions";
 import type { AppBundle, JdOutcome, ResumeOutcome } from "../../data/applicationCommands";
-import { useActions } from "../../data/real";
+import { isApp, useActions } from "../../data/real";
 import { withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
 import type { ApplicationStatus, StageId } from "../../data/types";
@@ -290,8 +290,8 @@ export default function NewApplication() {
                   takeFile(e.dataTransfer.files?.[0]);
                 }}
               >
-                <span className="e-h3">Drop the PDF or Word file here</span>
-                <span className="e-small">Or pick it from your computer.</span>
+                <span className="e-h3">{isApp() ? "Choose the PDF or Word file" : "Drop the PDF or Word file here"}</span>
+                <span className="e-small">{isApp() ? "Pick it from your computer." : "Or pick it from your computer."}</span>
                 <span style={{ display: "flex", gap: "8px" }}>
                   <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => fileInput.current?.click()}>Choose a file</button>
                   {fileName && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChoosing(false)}>Keep {fileName}</button>}

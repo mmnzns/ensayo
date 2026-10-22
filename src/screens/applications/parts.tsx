@@ -105,7 +105,7 @@ export function withFeatured(Inner: ComponentType<Featured>): ComponentType {
     }
     return (
       <SelectedContext.Provider value={app.id}>
-        <Inner app={app} extras={extras} now={now} />
+        <Inner key={app.id} app={app} extras={extras} now={now} />
       </SelectedContext.Provider>
     );
   };
