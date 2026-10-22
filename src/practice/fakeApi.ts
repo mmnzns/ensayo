@@ -52,10 +52,10 @@ function metrics(attempt: number): Metrics {
     unbanked: [],
     restart_at: null,
     checks: [
-      { id: "proof", passed: true, evidence: "You said 31%, 44%." },
-      { id: "clean_stop", passed: tail < 15_000, evidence: "" },
-      { id: "length", passed: true, evidence: "" },
-      { id: "fillers", passed: true, evidence: "" },
+      { id: "proof", passed: true, evidence: "You said 31%, 44%.", sentences: [4], seconds: null },
+      { id: "clean_stop", passed: tail < 15_000, evidence: "", sentences: [4], seconds: tail / 1000 },
+      { id: "length", passed: true, evidence: "", sentences: [], seconds: null },
+      { id: "fillers", passed: true, evidence: "", sentences: [], seconds: null },
     ],
   };
 }
@@ -75,18 +75,26 @@ export function fakeApi(): RepApi {
         n: attempt,
         question_id: args.question_id,
         question_text: args.question_text,
-        question_type: args.question_type,
+        question_type: args.question_type || "behavioral",
+        behavioral_situation: args.behavioral_situation,
+        commitment_check: args.commitment_check,
+        builder_operator_check: args.builder_operator_check,
+        is_major_story: args.is_major_story,
+        founder_variant: args.founder_variant,
         attempt,
         recorded_at: new Date().toISOString(),
         story_ids: args.story_ids,
         fix,
+        note: null,
+        rewrite: null,
+        ai: null,
         feedback: null,
         transcript: m.words,
         metrics: m,
       };
       const delta = attempt > 1 ? { check: "clean_stop", label: "Time after the number", from_seconds: attempt === 2 ? 31 : 12, to_seconds: attempt === 2 ? 12 : 4, from_count: null, to_count: null, improved: true } : null;
       await new Promise((r) => setTimeout(r, 900));
-      return { outcome: "scored", session_id: "ses_fake", rep, delta, restart_offered: false, audio_kept: false };
+      return { outcome: "scored", session_id: "ses_fake", rep, delta, restart_offered: false, audio_kept: false, notice: null };
     },
     rescoreRep: async () => {
       throw new Error("Not in the preview");

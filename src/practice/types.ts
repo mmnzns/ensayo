@@ -29,6 +29,10 @@ export interface Check {
   /** null when the check does not apply to this answer. */
   passed: boolean | null;
   evidence: string;
+  /** 1-based sentences the check points at. */
+  sentences: number[];
+  /** The measurement in seconds when the check is a time. */
+  seconds: number | null;
 }
 
 export interface Filler {
@@ -55,17 +59,32 @@ export interface Metrics {
   checks: Check[];
 }
 
+export interface Rewrite {
+  text: string;
+  position: "open" | "replace";
+  replaces_sentence: number | null;
+}
+
 export interface FullRep {
   session_id: string;
   n: number;
   question_id: string;
   question_text: string;
   question_type: string;
+  behavioral_situation: string | null;
+  commitment_check: boolean;
+  builder_operator_check: boolean;
+  is_major_story: boolean;
+  founder_variant: boolean;
   /** 1, 2 or 3: tries at the same question. */
   attempt: number;
   recorded_at: string;
   story_ids: string[];
   fix: string | null;
+  /** The coach's note and the line to say instead. Null for a rep judged by timing only. */
+  note: string | null;
+  rewrite: Rewrite | null;
+  ai: { prompts: string[]; rubric_version: number; cost_usd: number } | null;
   feedback: { note_was_wrong: boolean; at: string } | null;
   transcript: Word[];
   metrics: Metrics;
@@ -82,12 +101,14 @@ export interface Delta {
 }
 
 export interface RepOutcome {
-  outcome: "scored" | "didnt_catch";
+  outcome: "scored" | "didnt_catch" | "clarifying" | "not_an_answer";
   session_id: string;
   rep: FullRep | null;
   delta: Delta | null;
   restart_offered: boolean;
   audio_kept: boolean;
+  /** Why the AI did not judge this one (no key, over the cap, an unreadable reply). */
+  notice: string | null;
 }
 
 export interface FinishArgs {
@@ -97,7 +118,13 @@ export interface FinishArgs {
   application_id: string | null;
   question_id: string;
   question_text: string;
+  /** "" for a question nobody tagged: the engine classifies it. */
   question_type: string;
+  behavioral_situation: string | null;
+  commitment_check: boolean;
+  builder_operator_check: boolean;
+  is_major_story: boolean;
+  founder_variant: boolean;
   attempt: number;
   story_ids: string[];
   audio_path: string;

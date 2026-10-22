@@ -50,6 +50,11 @@ export default function PracticeInterviewerAsking() {
           <h1 className="e-h1" style={{ fontSize: "34px", fontWeight: "600" }}>{question}</h1>
           <HearItAgain onClick={hear} />
         </div>
+        {live && state.phase === "notice" && state.notice && (
+          <div className="e-soft" role="status" style={{ maxWidth: "560px", textAlign: "center" }}>
+            <span className="e-meta" style={{ color: "var(--e-ink)" }}>{state.notice}</span>
+          </div>
+        )}
         {failed && (
           <div className="e-soft" role="alert" style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "center", maxWidth: "560px" }}>
             <span className="e-meta" style={{ color: "var(--e-warn-ink)" }}>{state.error}</span>

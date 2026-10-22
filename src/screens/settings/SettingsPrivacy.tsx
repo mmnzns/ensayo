@@ -5,6 +5,7 @@ import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import { formatSize } from "./format";
 import { SettingsLayout } from "./parts";
+import { privacySetup, type AiView } from "./aiSettings";
 import { leavesRows, retentionChoice, retentionLabel } from "./privacy";
 
 /** Which delete is asking "are you sure" right now. */
@@ -18,12 +19,18 @@ export default function SettingsPrivacy() {
   const [typed, setTyped] = useState("");
   const [recordingsMb, setRecordingsMb] = useState(privacy.recordingsMb);
   const [allDeleted, setAllDeleted] = useState(false);
-  const rows = leavesRows(privacy.setup);
+  // In the app the list follows the engine really chosen in Settings > AI; in the browser preview it follows the sample setup.
+  const [setup, setSetup] = useState(privacy.setup);
+  const rows = leavesRows(setup);
 
   // In the app the choice is the real one, kept on this computer; in the browser preview it is just local state.
   useEffect(() => {
     if (!isApp()) return;
     void invoke<string>("audio_retention").then((c) => setRetention(retentionLabel(c)), () => {});
+  }, []);
+  useEffect(() => {
+    if (!isApp()) return;
+    void invoke<AiView>("ai_settings").then((v) => setSetup((s) => ({ ...s, ...privacySetup(v) })), () => {});
   }, []);
   const chooseRetention = (label: string) => {
     setRetention(label);

@@ -11,10 +11,18 @@ function rep(attempt: number, fix: string | null = "length"): FullRep {
     question_id: "q",
     question_text: "Q",
     question_type: "behavioral",
+    behavioral_situation: null,
+    commitment_check: false,
+    builder_operator_check: false,
+    is_major_story: true,
+    founder_variant: false,
     attempt,
     recorded_at: "2026-10-21T10:00:00Z",
     story_ids: [],
     fix,
+    note: null,
+    rewrite: null,
+    ai: null,
     feedback: null,
     transcript: [],
     metrics: {
@@ -32,12 +40,12 @@ function rep(attempt: number, fix: string | null = "length"): FullRep {
       proof: { matched: [], landed_sentence: null, tail_ms: null },
       unbanked: [],
       restart_at: null,
-      checks: [{ id: "length", passed: fix === null, evidence: "" }],
+      checks: [{ id: "length", passed: fix === null, evidence: "", sentences: [], seconds: null }],
     },
   };
 }
 
-const scored = (attempt: number, fix: string | null = "length", restart = false): RepOutcome => ({ outcome: "scored", session_id: "ses_a", rep: rep(attempt, fix), delta: null, restart_offered: restart, audio_kept: true });
+const scored = (attempt: number, fix: string | null = "length", restart = false): RepOutcome => ({ outcome: "scored", session_id: "ses_a", rep: rep(attempt, fix), delta: null, restart_offered: restart, audio_kept: true, notice: null });
 
 function fake(outcomes: RepOutcome[]) {
   const calls: string[] = [];
@@ -141,7 +149,7 @@ describe("one rep", () => {
   });
 
   it("something too short to hear is not a result", async () => {
-    const { api } = fake([{ outcome: "didnt_catch", session_id: "ses_a", rep: null, delta: null, restart_offered: false, audio_kept: false }]);
+    const { api } = fake([{ outcome: "didnt_catch", session_id: "ses_a", rep: null, delta: null, restart_offered: false, audio_kept: false, notice: null }]);
     setRepApi(api);
     begin();
     await beginRecording();

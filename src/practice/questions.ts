@@ -89,14 +89,14 @@ export function pickQuestions(o: PickOptions): BankQuestion[] {
   return [...openers.slice(0, 1), ...rest, ...openers.slice(1)].slice(0, o.count);
 }
 
-/** A question the user typed. There is no tag for it, so it is treated as a story question. */
+/** A question the user typed. Nobody tagged it, so its type is empty and the engine classifies it on the first answer. */
 export function ownQuestion(text: string): BankQuestion {
   let h = 0;
   for (const ch of text.trim()) h = (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0;
   return {
     id: `own-${h.toString(36)}`,
     text: text.trim(),
-    type: "behavioral",
+    type: "",
     behavioral_situation: null,
     stages: [],
     modes: ["drill"],

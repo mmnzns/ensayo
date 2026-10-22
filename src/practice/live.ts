@@ -14,7 +14,7 @@ import type { FinishArgs, RepOutcome } from "./types";
 export const HARD_CAP_SECONDS = 240;
 export const MAX_ATTEMPTS = 3;
 
-export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "error";
+export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "notice" | "error";
 
 export interface LiveState {
   active: boolean;
@@ -35,6 +35,10 @@ export interface LiveState {
   restartOffered: boolean;
   noteWrong: boolean;
   error: string | null;
+  /** A plain line on the screen: the AI did not judge this one, or what the interviewer heard. */
+  notice: string | null;
+  /** A startup's leadership round: the founder variant. */
+  founderVariant: boolean;
 }
 
 const INITIAL: LiveState = {
@@ -53,6 +57,8 @@ const INITIAL: LiveState = {
   restartOffered: false,
   noteWrong: false,
   error: null,
+  notice: null,
+  founderVariant: false,
 };
 
 let state: LiveState = INITIAL;
@@ -117,7 +123,7 @@ export function startLive(o: StartOptions, ctx: { targetRole: string; stories: S
     o.source === "own" && o.ownQuestion?.trim()
       ? [ownQuestion(o.ownQuestion)]
       : pickQuestions({ bank: banksFor(ctx.targetRole), stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed: o.seed ?? Date.now() });
-  state = { ...INITIAL, active: true, mode: o.mode, stage: o.stage, applicationId: o.applicationId ?? null, questions, phase: "asking" };
+  state = { ...INITIAL, active: true, mode: o.mode, stage: o.stage, applicationId: o.applicationId ?? null, founderVariant: o.startup === true, questions, phase: "asking" };
   listeners.forEach((l) => l());
 }
 
@@ -198,6 +204,11 @@ export async function stopAndFinish() {
       question_id: q.id,
       question_text: q.text,
       question_type: q.type,
+      behavioral_situation: q.behavioral_situation && q.behavioral_situation !== "other" ? q.behavioral_situation : null,
+      commitment_check: q.commitment_check,
+      builder_operator_check: q.builder_operator_check,
+      is_major_story: !["factual", "gap", "motivation"].includes(q.type),
+      founder_variant: state.founderVariant && state.stage === "leadership",
       attempt: state.attempt,
       story_ids: storyIdsFor(q),
       audio_path: rec.path,
@@ -209,7 +220,16 @@ export async function stopAndFinish() {
   }
 }
 
+const NOTICES: Record<string, string> = {
+  clarifying: "That sounded like a question back to the interviewer, not an answer. Replies to your questions arrive with follow-ups. Answer it directly this time.",
+  not_an_answer: "That didn't sound like an answer to this question. Try again.",
+};
+
 function apply(out: RepOutcome) {
+  if (out.outcome === "clarifying" || out.outcome === "not_an_answer") {
+    set({ phase: "notice", notice: NOTICES[out.outcome], sessionId: out.session_id, recordingPath: null, restartOffered: false });
+    return;
+  }
   if (out.outcome === "didnt_catch" || !out.rep) {
     set({ phase: "didnt_catch", sessionId: out.session_id, recordingPath: null, restartOffered: false });
     return;
@@ -217,7 +237,7 @@ function apply(out: RepOutcome) {
   const i = state.attempt - 1;
   const attempts = [...state.attempts.slice(0, i), attemptFromOutcome(out)];
   const outcomes = [...state.outcomes.slice(0, i), out];
-  set({ phase: "result", sessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null });
+  set({ phase: "result", sessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice });
 }
 
 /** The result screen for what was just measured. */
@@ -229,7 +249,7 @@ export function resultRoute(): string {
 
 /** "Again": one more go at the same question, up to three. */
 export function tryAgain() {
-  set({ attempt: Math.min(MAX_ATTEMPTS, state.attempt + 1), phase: "asking", restartOffered: false, noteWrong: false, error: null });
+  set({ attempt: Math.min(MAX_ATTEMPTS, state.attempt + 1), phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null });
 }
 
 /** Moves to the next question, or says the session is over. */
@@ -238,7 +258,7 @@ export function nextLiveQuestion(): "asking" | "done" {
     set({ phase: "idle" });
     return "done";
   }
-  set({ index: state.index + 1, attempt: 1, attempts: [], outcomes: [], phase: "asking", restartOffered: false, noteWrong: false, error: null });
+  set({ index: state.index + 1, attempt: 1, attempts: [], outcomes: [], phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null });
   return "asking";
 }
 
@@ -308,7 +328,7 @@ export async function retryQuestion() {
       // Already gone.
     }
   }
-  set({ phase: "asking", recordingPath: null, error: null });
+  set({ phase: "asking", recordingPath: null, error: null, notice: null });
 }
 
 let player: HTMLAudioElement | null = null;

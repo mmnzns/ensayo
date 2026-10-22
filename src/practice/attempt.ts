@@ -13,8 +13,13 @@ function lastMatched(m: Metrics): string {
   return said.length > 0 ? said[said.length - 1].raw : "the number";
 }
 
-/** The one sentence the note says, for the check code picked as the fix. */
+/** The note: the coach's own words when a model judged the answer, else the timing-only sentence for the fix. */
 function coachNote(rep: FullRep): string {
+  return rep.note?.trim() || rulesNote(rep);
+}
+
+/** The one sentence the note says, for the check code picked as the fix. */
+function rulesNote(rep: FullRep): string {
   const m = rep.metrics;
   switch (rep.fix) {
     case "proof":
@@ -34,17 +39,41 @@ function coachNote(rep: FullRep): string {
 
 function wins(rep: FullRep): string[] {
   const m = rep.metrics;
+  const passed = (id: string) => checkOf(m, id)?.passed === true;
   const out: string[] = [];
+  const point = checkOf(m, "time_to_point");
+  if (point?.passed === true && point.seconds !== null) out.push(`Point at ${clock(point.seconds)}`);
   if (m.proof.matched.length > 0) out.push(`Said ${m.proof.matched[0].raw}`);
-  if (checkOf(m, "clean_stop")?.passed === true) out.push("Stopped right after it");
-  if (checkOf(m, "length")?.passed === true) out.push(`${clock(seconds(m.speaking_ms))} long`);
-  if (checkOf(m, "fillers")?.passed === true) out.push(m.fillers.count === 0 ? "No filler words" : `${m.fillers.count} filler word${m.fillers.count === 1 ? "" : "s"}`);
-  return out;
+  if (passed("ownership")) out.push("Said what you decided");
+  if (passed("method_first")) out.push("Opened with how you work");
+  if (passed("clean_stop")) out.push("Stopped right after it");
+  if (passed("length")) out.push(`${clock(seconds(m.speaking_ms))} long`);
+  if (passed("fillers")) out.push(m.fillers.count === 0 ? "No filler words" : `${m.fillers.count} filler word${m.fillers.count === 1 ? "" : "s"}`);
+  return out.slice(0, 4);
+}
+
+/** The sentences the note is about: where the point landed, where the number landed, or the evidence for the fix. */
+function highlighted(rep: FullRep): number[] {
+  const m = rep.metrics;
+  switch (rep.fix) {
+    case "answer_first":
+    case "time_to_point":
+      return checkOf(m, "time_to_point")?.sentences ?? [];
+    case "proof":
+    case "clean_stop":
+      return m.proof.landed_sentence ? [m.proof.landed_sentence] : (checkOf(m, rep.fix)?.sentences ?? []);
+    case "length":
+    case "fillers":
+    case null:
+      return [];
+    default:
+      return checkOf(m, rep.fix ?? "")?.sentences ?? [];
+  }
 }
 
 function lines(rep: FullRep): TranscriptLine[] {
   const m = rep.metrics;
-  const highlighted = rep.fix === "proof" || rep.fix === "clean_stop" ? m.proof.landed_sentence : null;
+  const marked = new Set(highlighted(rep));
   const circled = new Set(rep.fix === "fillers" ? m.fillers.items.flatMap((f) => [f.word]) : []);
   return m.sentences.map((s) => {
     const words = m.words.slice(s.first_word, s.first_word + s.word_count);
@@ -52,18 +81,24 @@ function lines(rep: FullRep): TranscriptLine[] {
     const text: string | TranscriptSegment[] = hasCircle
       ? words.map((word, i) => ({ text: i === 0 ? word.text : ` ${word.text}`, circle: circled.has(s.first_word + i) || undefined }))
       : s.text;
-    return { text, tone: s.index === highlighted ? "highlight" : "normal" };
+    return { text, tone: marked.has(s.index) ? "highlight" : "normal" };
   });
 }
 
 function caption(rep: FullRep): string | undefined {
   const m = rep.metrics;
-  if ((rep.fix === "proof" || rep.fix === "clean_stop") && m.proof.landed_sentence) {
-    const s = m.sentences.find((x) => x.index === m.proof.landed_sentence);
+  if (rep.fix === "fillers") return "Circled: the filler words.";
+  const marks = highlighted(rep);
+  if (marks.length === 0) return undefined;
+  if (rep.fix === "answer_first" || rep.fix === "time_to_point") {
+    const t = checkOf(m, "time_to_point")?.seconds;
+    return t !== null && t !== undefined ? `Highlighted: where your point finally landed, at ${clock(t)}.` : undefined;
+  }
+  if (rep.fix === "proof" || rep.fix === "clean_stop") {
+    const s = m.sentences.find((x) => x.index === marks[0]);
     return s ? `Highlighted: where your number landed, by ${clock(seconds(s.end_ms))}.` : undefined;
   }
-  if (rep.fix === "fillers") return "Circled: the filler words.";
-  return undefined;
+  return "Highlighted: what the note is about.";
 }
 
 function deltaChip(d: Delta | null): PracticeAttempt["delta"] {
@@ -73,16 +108,53 @@ function deltaChip(d: Delta | null): PracticeAttempt["delta"] {
   return { label: d.label };
 }
 
+const ROW_LABELS: [string, string][] = [
+  ["answer_first", "Answered the question first"],
+  ["proof", "Said your number"],
+  ["story_fit", "Picked a story that fits"],
+  ["context_short", "Kept the setup short"],
+  ["clean_stop", "Stopped once the number landed"],
+  ["ownership", "Said what you decided"],
+  ["method_first", "Opened with how you work"],
+  ["approach_before_action", "Said what you noticed before what you built"],
+  ["conviction", "Spoke with conviction"],
+  ["no_complaining", "No knocks on past teams"],
+  ["type_fit", "Fit the question"],
+  ["stage_fit", "Fit the stage"],
+  ["jd_fit", "Used the posting's words"],
+  ["commitment", "Led with full-time"],
+  ["builder_operator", "Answered builder or operator"],
+  ["length", "Length"],
+  ["fillers", "Filler words"],
+];
+
+function rowNote(rep: FullRep, c: Check): string {
+  const m = rep.metrics;
+  switch (c.id) {
+    case "answer_first": {
+      const t = checkOf(m, "time_to_point")?.seconds;
+      return t !== null && t !== undefined ? `point at ${clock(t)}` : c.passed ? "" : c.evidence;
+    }
+    case "proof":
+      return m.proof.matched.length > 0 ? m.proof.matched.map((n) => n.raw).join(", ") : m.unbanked.length > 0 ? `${m.unbanked.map((n) => n.raw).join(", ")} is not in your stories` : c.passed ? "" : "none came up";
+    case "clean_stop":
+      return m.proof.tail_ms !== null ? `${seconds(m.proof.tail_ms)} s after` : "";
+    case "length":
+      return `${clock(seconds(m.speaking_ms))} · window ${m.window.min_s} to ${m.window.max_s} s`;
+    case "fillers":
+      return `${m.fillers.per_minute} a minute${m.fillers.items.length > 0 ? ` · ${[...new Set(m.fillers.items.map((f) => f.text))].join(", ")}` : ""}`;
+    default:
+      return c.passed ? "" : c.evidence;
+  }
+}
+
 function rows(rep: FullRep): DetailRow[] {
   const m = rep.metrics;
   const out: DetailRow[] = [];
-  const row = (label: string, c: Check | undefined, note: string) => {
-    if (c && c.passed !== null) out.push({ label, state: c.passed ? "yes" : "notyet", note });
-  };
-  row("Said your number", checkOf(m, "proof"), m.proof.matched.length > 0 ? m.proof.matched.map((n) => n.raw).join(", ") : m.unbanked.length > 0 ? `${m.unbanked.map((n) => n.raw).join(", ")} is not in your stories` : "none came up");
-  row("Stopped once the number landed", checkOf(m, "clean_stop"), m.proof.tail_ms !== null ? `${seconds(m.proof.tail_ms)} s after` : "");
-  row("Length", checkOf(m, "length"), `${clock(seconds(m.speaking_ms))} · window ${m.window.min_s} to ${m.window.max_s} s`);
-  row("Filler words", checkOf(m, "fillers"), `${m.fillers.per_minute} a minute${m.fillers.items.length > 0 ? ` · ${[...new Set(m.fillers.items.map((f) => f.text))].join(", ")}` : ""}`);
+  for (const [id, label] of ROW_LABELS) {
+    const c = checkOf(m, id);
+    if (c && c.passed !== null) out.push({ label, state: c.passed ? "yes" : "notyet", note: rowNote(rep, c) });
+  }
   out.push({ label: "Pace", state: "info", note: `${m.wpm} words a minute · ${clock(seconds(m.speaking_ms))}` });
   if (m.pauses.length > 0) out.push({ label: "Pauses", state: "info", note: `${m.pauses.length} of a second or more, never counted against you` });
   return out;
@@ -95,6 +167,7 @@ export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
   return {
     number: Math.min(3, Math.max(1, rep.attempt)) as 1 | 2 | 3,
     coachNote: coachNote(rep),
+    trySaying: rep.rewrite?.text,
     delta: deltaChip(o.delta),
     wins: worked ? wins(rep) : undefined,
     durationSeconds: seconds(rep.metrics.speaking_ms),
@@ -102,7 +175,7 @@ export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
     highlightCaption: caption(rep),
     details: {
       rows: rows(rep),
-      footnote: "The other checks, like answering first and saying what you decided, turn on once you add an AI key or a local model.",
+      footnote: rep.ai ? "" : "The other checks, like answering first and saying what you decided, turn on once you add an AI key or a local model.",
     },
   };
 }

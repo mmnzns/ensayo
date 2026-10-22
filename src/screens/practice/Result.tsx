@@ -149,6 +149,11 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
     <FocusShell>
       <div className="e-wrap">
         <SessionHeader session={session} endTo={endTo} onEnd={onEnd} />
+        {live && state.notice && (
+          <div className="e-soft" role="status">
+            <span className="e-meta" style={{ color: "var(--e-ink)" }}>{state.notice}</span>
+          </div>
+        )}
         {live && state.restartOffered && (
           <div className="e-soft" role="alert" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
             <span className="e-meta" style={{ flex: "1 1 320px", color: "var(--e-ink)" }}>It sounds like you started again partway through. Start this answer again?</span>

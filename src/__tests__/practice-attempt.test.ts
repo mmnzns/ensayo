@@ -30,7 +30,7 @@ function metrics(over: Partial<Metrics> = {}, checks: Check[] = []): Metrics {
   };
 }
 
-const check = (id: string, passed: boolean | null, evidence = ""): Check => ({ id, passed, evidence });
+const check = (id: string, passed: boolean | null, evidence = "", extra: Partial<Check> = {}): Check => ({ id, passed, evidence, sentences: [], seconds: null, ...extra });
 
 function outcome(fix: string | null, checks: Check[], over: Partial<Metrics> = {}, delta: Delta | null = null, attempt = 1): RepOutcome {
   const m = metrics(over, checks);
@@ -40,15 +40,23 @@ function outcome(fix: string | null, checks: Check[], over: Partial<Metrics> = {
     question_id: "gen-001",
     question_text: "Q",
     question_type: "behavioral",
+    behavioral_situation: null,
+    commitment_check: false,
+    builder_operator_check: false,
+    is_major_story: true,
+    founder_variant: false,
     attempt,
     recorded_at: "2026-10-21T10:00:00Z",
     story_ids: [],
     fix,
+    note: null,
+    rewrite: null,
+    ai: null,
     feedback: null,
     transcript: m.words,
     metrics: m,
   };
-  return { outcome: "scored", session_id: "ses_a", rep, delta, restart_offered: false, audio_kept: true };
+  return { outcome: "scored", session_id: "ses_a", rep, delta, restart_offered: false, audio_kept: true, notice: null };
 }
 
 describe("a rep as the result screen shows it", () => {
@@ -109,5 +117,73 @@ describe("a rep as the result screen shows it", () => {
     const nostop = attemptFromOutcome(outcome("proof", [check("proof", false), check("clean_stop", null)], { pauses: [] }));
     expect(nostop.details.rows.map((r) => r.label)).not.toContain("Stopped once the number landed");
     expect(nostop.details.rows.map((r) => r.label)).not.toContain("Pauses");
+  });
+});
+
+describe("a rep judged by the AI", () => {
+  const checks = [
+    check("answer_first", false, '"We cut churn"', { sentences: [1] }),
+    check("time_to_point", false, "Your point landed at 3 seconds.", { sentences: [2], seconds: 3 }),
+    check("proof", true),
+    check("ownership", false, '"we changed the trigger"', { sentences: [1] }),
+    check("method_first", true),
+    check("clean_stop", true, "", { seconds: 2 }),
+    check("length", true),
+    check("fillers", true),
+  ];
+  const ai = (over: Partial<FullRep> = {}, delta: Delta | null = null) => {
+    const o = outcome("answer_first", checks, {}, delta);
+    Object.assign(o.rep!, { note: "Your result came 3 seconds in, after the backstory. Say it first.", rewrite: { text: "I cut churn from 24 to 18 percent.", position: "open", replaces_sentence: null }, ai: { prompts: ["score-answer v1", "coach-note v1"], rubric_version: 1, cost_usd: 0.002 }, ...over });
+    return o;
+  };
+
+  it("uses the coach's note and puts its rewrite in the try-saying line", () => {
+    const a = attemptFromOutcome(ai());
+    expect(a.coachNote).toBe("Your result came 3 seconds in, after the backstory. Say it first.");
+    expect(a.trySaying).toBe("I cut churn from 24 to 18 percent.");
+  });
+
+  it("highlights where the point finally landed when the fix is answering first", () => {
+    const a = attemptFromOutcome(ai());
+    expect(a.transcript.map((l) => l.tone)).toEqual(["normal", "highlight"]);
+    expect(a.highlightCaption).toBe("Highlighted: where your point finally landed, at 0:03.");
+  });
+
+  it("highlights the evidence sentences for a judgment fix like ownership", () => {
+    const o = ai({ fix: "ownership" });
+    const a = attemptFromOutcome(o);
+    expect(a.transcript.map((l) => l.tone)).toEqual(["highlight", "normal"]);
+  });
+
+  it("lists every applicable check in the details, with the answer-first row carrying the time", () => {
+    const rows = attemptFromOutcome(ai()).details.rows;
+    expect(rows.map((r) => r.label)).toEqual([
+      "Answered the question first",
+      "Said your number",
+      "Stopped once the number landed",
+      "Said what you decided",
+      "Opened with how you work",
+      "Length",
+      "Filler words",
+      "Pace",
+      "Pauses",
+    ]);
+    expect(rows[0]).toMatchObject({ state: "notyet", note: "point at 0:03" });
+    expect(rows.find((r) => r.label === "Said what you decided")).toMatchObject({ state: "notyet", note: '"we changed the trigger"' });
+  });
+
+  it("drops the 'turns on once you add a key' footnote when an AI judged it, and keeps it for a timing-only rep", () => {
+    expect(attemptFromOutcome(ai()).details.footnote).toBe("");
+    expect(attemptFromOutcome(outcome("length", [check("length", false)])).details.footnote).toContain("add an AI key");
+  });
+
+  it("lists what went well when nothing failed", () => {
+    const good = [check("answer_first", true), check("time_to_point", true, "", { sentences: [1], seconds: 6 }), check("proof", true), check("ownership", true), check("clean_stop", true), check("length", true, "", {}), check("fillers", true)];
+    const o = outcome(null, good, { length: "fits", speaking_ms: 50_000, proof: { matched: [{ value: 44, percent: true, raw: "44%", token: 1 }], landed_sentence: 1, tail_ms: 1_000 } });
+    Object.assign(o.rep!, { note: "You led with the 44 percent and stopped right after it.", ai: { prompts: [], rubric_version: 1, cost_usd: 0 } });
+    const a = attemptFromOutcome(o);
+    expect(a.coachNote).toBe("You led with the 44 percent and stopped right after it.");
+    expect(a.wins).toEqual(["Point at 0:06", "Said 44%", "Said what you decided", "Stopped right after it"]);
+    expect(a.trySaying).toBeUndefined();
   });
 });
