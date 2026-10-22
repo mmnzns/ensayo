@@ -153,7 +153,7 @@ function rows(rep: FullRep): DetailRow[] {
   const out: DetailRow[] = [];
   for (const [id, label] of ROW_LABELS) {
     const c = checkOf(m, id);
-    if (c && c.passed !== null) out.push({ label, state: c.passed ? "yes" : "notyet", note: rowNote(rep, c) });
+    if (c && c.passed !== null) out.push({ id, label, state: c.passed ? "yes" : "notyet", note: rowNote(rep, c) });
   }
   out.push({ label: "Pace", state: "info", note: `${m.wpm} words a minute · ${clock(seconds(m.speaking_ms))}` });
   if (m.pauses.length > 0) out.push({ label: "Pauses", state: "info", note: `${m.pauses.length} of a second or more, never counted against you` });

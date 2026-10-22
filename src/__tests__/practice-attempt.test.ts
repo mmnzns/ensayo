@@ -168,7 +168,8 @@ describe("a rep judged by the AI", () => {
       "Pace",
       "Pauses",
     ]);
-    expect(rows[0]).toMatchObject({ state: "notyet", note: "point at 0:03" });
+    expect(rows[0]).toMatchObject({ id: "answer_first", state: "notyet", note: "point at 0:03" });
+    expect(rows.find((r) => r.label === "Pace")?.id).toBeUndefined();
     expect(rows.find((r) => r.label === "Said what you decided")).toMatchObject({ state: "notyet", note: '"we changed the trigger"' });
   });
 

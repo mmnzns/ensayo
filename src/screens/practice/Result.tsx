@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { keepAfterRestart, listenToRep, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
+import { keepAfterRestart, labelCriteria, listenToRep, savedLabels, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { Kbd, SessionHeader } from "./parts";
@@ -38,7 +38,19 @@ function TranscriptLineView({ line, last }: { line: TranscriptLine; last: boolea
   );
 }
 
-function DetailsRowView({ row }: { row: DetailRow }) {
+type Labels = Record<string, "pass" | "fail">;
+
+/** The user's own pass or fail for one row ("Label this rep", for the eval set). */
+function LabelChips({ id, labels, set }: { id: string; labels: Labels; set: (id: string, v: "pass" | "fail" | undefined) => void }) {
+  const chip = (v: "pass" | "fail") => (
+    <button type="button" className={labels[id] === v ? "e-chip e-chip-on" : "e-chip"} aria-pressed={labels[id] === v} style={{ minHeight: "28px", padding: "0 10px", fontSize: "13px" }} onClick={() => set(id, labels[id] === v ? undefined : v)}>
+      {v === "pass" ? "Pass" : "Fail"}
+    </button>
+  );
+  return <span style={{ display: "flex", gap: "6px" }}>{chip("pass")}{chip("fail")}</span>;
+}
+
+function DetailsRowView({ row, label }: { row: DetailRow; label?: { labels: Labels; set: (id: string, v: "pass" | "fail" | undefined) => void } }) {
   const mark =
     row.state === "yes" ? (
       <span style={{ color: "var(--e-primary)", width: "18px", textAlign: "center" }} aria-label="Yes">✓</span>
@@ -52,22 +64,33 @@ function DetailsRowView({ row }: { row: DetailRow }) {
       {mark}
       <span style={{ flex: "1" }}>{row.label}</span>
       <span className="e-small">{row.note}</span>
+      {label && row.id && <LabelChips id={row.id} labels={label.labels} set={label.set} />}
     </div>
   );
 }
 
-function DetailsCard({ details, onHide }: { details: PracticeAttempt["details"]; onHide: () => void }) {
+function DetailsCard({ details, onHide, labeling }: { details: PracticeAttempt["details"]; onHide: () => void; labeling?: { on: boolean; toggle: () => void; labels: Labels; set: (id: string, v: "pass" | "fail" | undefined) => void; save: () => void; saved: boolean } }) {
   return (
     <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", paddingBottom: "8px" }}>
         <span className="e-h3">Details</span>
-        <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-expanded="true" onClick={onHide}>Hide</button>
+        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {labeling && <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-expanded={labeling.on} onClick={labeling.toggle}>{labeling.on ? "Done labelling" : "Label this rep"}</button>}
+          <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-expanded="true" onClick={onHide}>Hide</button>
+        </span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: "40px" }}>
+      {labeling?.on && <p className="e-small" style={{ margin: "0 0 6px" }}>Mark each row the way you would judge it. This is how Ensayo learns how often it agrees with you.</p>}
+      <div style={{ display: "grid", gridTemplateColumns: labeling?.on ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))", columnGap: "40px" }}>
         {details.rows.map((row) => (
-          <DetailsRowView key={row.label} row={row} />
+          <DetailsRowView key={row.label} row={row} label={labeling?.on ? { labels: labeling.labels, set: labeling.set } : undefined} />
         ))}
       </div>
+      {labeling?.on && (
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingTop: "8px" }}>
+          <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={labeling.save}>Save labels</button>
+          {labeling.saved && <span className="e-small" role="status">Saved</span>}
+        </div>
+      )}
       {details.footnote && <p className="e-small" style={{ margin: "8px 0 0" }}>{details.footnote}</p>}
     </section>
   );
@@ -82,6 +105,23 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const [mockWrong, setMockWrong] = useState(false);
   const [noAudio, setNoAudio] = useState(false);
   const wrong = live ? state.noteWrong : mockWrong;
+  const [labelOn, setLabelOn] = useState(false);
+  const [labels, setLabels] = useState<Labels>({});
+  const [labelsSaved, setLabelsSaved] = useState(false);
+  const repKey = live ? `${state.sessionId}/${state.attempt}` : "";
+  useEffect(() => {
+    setLabelOn(false);
+    setLabelsSaved(false);
+    setLabels({});
+    if (live) void savedLabels().then(setLabels);
+  }, [repKey, live]);
+  const setLabel = (id: string, v: "pass" | "fail" | undefined) => {
+    setLabelsSaved(false);
+    setLabels((cur) => {
+      const { [id]: _gone, ...rest } = cur;
+      return v ? { ...rest, [id]: v } : rest;
+    });
+  };
 
   // Keep the chain in step with the screen the user is looking at, so Again always means "one more than this".
   const number = attempt?.number ?? index + 1;
@@ -272,7 +312,13 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
             )}
           </aside>
         </div>
-        {open && <DetailsCard details={attempt.details} onHide={() => setOpen(false)} />}
+        {open && (
+          <DetailsCard
+            details={attempt.details}
+            onHide={() => setOpen(false)}
+            labeling={live ? { on: labelOn, toggle: () => setLabelOn((o) => !o), labels, set: setLabel, save: () => void labelCriteria(labels).then(() => setLabelsSaved(true)), saved: labelsSaved } : undefined}
+          />
+        )}
         {!open && !detailsInAside && (
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>

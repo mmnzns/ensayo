@@ -11,6 +11,8 @@ export interface RepApi {
   deleteRep(sessionId: string, n: number): Promise<void>;
   labelRep(sessionId: string, n: number, wrong: boolean): Promise<void>;
   discardRecording(path: string): Promise<void>;
+  labelCriteria(sessionId: string, n: number, labels: Record<string, "pass" | "fail">): Promise<void>;
+  repLabels(sessionId: string, n: number): Promise<Record<string, "pass" | "fail">>;
   audioAvailable(sessionId: string, n: number): Promise<boolean>;
   readAudio(sessionId: string, n: number): Promise<ArrayBuffer>;
 }
@@ -42,6 +44,8 @@ export async function tauriApi(): Promise<RepApi> {
     deleteRep: (sessionId, n) => invoke("delete_rep", { sessionId, n }),
     labelRep: (sessionId, n, wrong) => invoke("label_rep", { sessionId, n, wrong }),
     discardRecording: (path) => invoke("discard_recording", { path }),
+    labelCriteria: (sessionId, n, labels) => invoke("label_criteria", { sessionId, n, labels }),
+    repLabels: (sessionId, n) => invoke("rep_labels", { sessionId, n }),
     audioAvailable: (sessionId, n) => invoke("rep_audio_available", { sessionId, n }),
     readAudio: (sessionId, n) => invoke("read_rep_audio", { sessionId, n }),
   };

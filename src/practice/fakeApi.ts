@@ -102,6 +102,8 @@ export function fakeApi(): RepApi {
     deleteRep: async () => undefined,
     labelRep: async () => undefined,
     discardRecording: async () => undefined,
+    labelCriteria: async () => undefined,
+    repLabels: async () => ({}),
     audioAvailable: async () => false,
     readAudio: async () => new ArrayBuffer(0),
   };

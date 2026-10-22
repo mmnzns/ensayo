@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { RepApi } from "../practice/api";
-import { cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute } from "../practice/live";
+import { labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute } from "../practice/live";
 import type { FullRep, RepOutcome } from "../practice/types";
 
 function rep(attempt: number, fix: string | null = "length"): FullRep {
@@ -59,6 +59,8 @@ function fake(outcomes: RepOutcome[]) {
     deleteRep: async () => void calls.push("delete"),
     labelRep: async (_s, n, wrong) => void calls.push(`label:${n}:${wrong}`),
     discardRecording: async () => void calls.push("discard"),
+    labelCriteria: async (_s, n, labels) => void calls.push(`labels:${n}:${JSON.stringify(labels)}`),
+    repLabels: async () => ({ proof: "pass" }),
     audioAvailable: async () => true,
     readAudio: async () => new ArrayBuffer(4),
   };
@@ -216,6 +218,17 @@ describe("restart, notes and ending", () => {
     await markWrong(false);
     expect(calls.filter((c) => c.startsWith("label"))).toEqual(["label:1:true", "label:1:false"]);
     expect(getLive().noteWrong).toBe(false);
+  });
+
+  it("labels go to the eval set for the current rep and the saved ones can be read back", async () => {
+    const { api, calls } = fake([scored(1)]);
+    setRepApi(api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    await labelCriteria({ proof: "pass", answer_first: "fail" });
+    expect(calls).toContain('labels:1:{"proof":"pass","answer_first":"fail"}');
+    expect(await savedLabels()).toEqual({ proof: "pass" });
   });
 
   it("cancelling mid-recording discards the file and ends the session", async () => {

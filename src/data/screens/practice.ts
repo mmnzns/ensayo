@@ -32,6 +32,8 @@ export interface TranscriptLine {
 
 /** A row in Details. "yes" is a tick, "notyet" a dot, "info" a quiet middle dot (numbers only). */
 export interface DetailRow {
+  /** The check this row shows, when it is one the user can label (a rep in the app). */
+  id?: string;
   label: string;
   state: "yes" | "notyet" | "info";
   note: string;

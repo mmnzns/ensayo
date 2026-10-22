@@ -299,6 +299,24 @@ export async function markWrong(wrong: boolean) {
   }
 }
 
+/** "Label this rep": the user's own pass or fail per criterion, saved into the eval set. */
+export async function labelCriteria(labels: Record<string, "pass" | "fail">) {
+  const rep = state.outcomes[state.attempt - 1]?.rep;
+  if (!rep) return;
+  await (await repApi()).labelCriteria(rep.session_id, rep.n, labels);
+}
+
+/** The labels already saved for the current rep. */
+export async function savedLabels(): Promise<Record<string, "pass" | "fail">> {
+  const rep = state.outcomes[state.attempt - 1]?.rep;
+  if (!rep) return {};
+  try {
+    return await (await repApi()).repLabels(rep.session_id, rep.n);
+  } catch {
+    return {};
+  }
+}
+
 /** Ends the session. A recording in progress is stopped and thrown away. */
 export async function cancelLive() {
   if (state.phase === "recording") {
