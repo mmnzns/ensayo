@@ -124,6 +124,10 @@ export interface Claim {
   stage_label: string;
   status: ClaimMatch;
   note?: string;
+  /** Beyond the sample data (the app sends these): the user fixed it, a newer answer replaced it, where it came from. */
+  edited?: boolean;
+  superseded?: boolean;
+  source?: string;
 }
 
 export interface ResumeInfo {
@@ -134,7 +138,15 @@ export interface ResumeInfo {
   readOn: string;
   claims: Claim[];
   mustSay: { id: string; text: string; resume: string; said: string }[];
-  suggestions: { text: string; gap: string }[];
+  suggestions: { text: string; gap: string; bullet?: string; employer?: string; title?: string; headline_result?: string }[];
+  /** Beyond the sample data (the app sends these). `attached` waits for the yes to read it, `no_text` needs pasted text. */
+  status?: "attached" | "no_text" | "read";
+  needs_paste?: boolean;
+  kind?: string;
+  text_source?: string;
+  engine?: string | null;
+  /** `ready`, `waiting_for_posting`, `none`, or empty before a read. */
+  must_say_state?: string;
 }
 
 export interface Application {
@@ -165,6 +177,12 @@ export interface Application {
   /** "Waiting to hear · 6 days since you applied"-style note for the list. */
   waiting?: string;
   answersPracticed: number;
+  /** Beyond the sample data (the app sends these). A status the tracker might move to; only a suggestion. */
+  suggested_status?: ApplicationStatus | null;
+  /** The day before the earliest upcoming interview. */
+  night_before?: { date: string; stage_id: string } | null;
+  /** "I didn't send one". */
+  no_resume?: boolean;
 }
 
 export interface SessionSummary {
