@@ -1,8 +1,10 @@
 // Draft generated from Design/screens/html/8-1-settings-profile.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import type { HabitId, SellsTo, Seniority } from "../../data/types";
 import { SettingsLayout } from "./parts";
+import { profileToSave, SAVE_FAILED } from "./profileSave";
 
 const SENIORITY: Seniority[] = ["early", "mid", "senior", "lead", "director"];
 
@@ -17,6 +19,27 @@ export default function SettingsProfile() {
   const [identity, setIdentity] = useState(profile.identityStatement);
   const [focus, setFocus] = useState<HabitId[]>(profile.focusHabits);
 
+  // Changes save on their own a moment after you stop typing, to the data folder in the app.
+  const { saveProfile } = useActions();
+  const [status, setStatus] = useState<"idle" | "saved" | "failed">("idle");
+  const saving = useRef(0);
+  const decision = profileToSave(profile, { name, role, industry, seniority, sellsTo, who: identity, focus });
+  const changed = decision.kind === "save" ? decision.profile : null;
+  // Keyed by content, so a failed save waits for the next change instead of retrying in a loop.
+  const changedKey = changed ? JSON.stringify(changed) : "";
+  useEffect(() => {
+    if (!changed) return;
+    const id = window.setTimeout(() => {
+      const ticket = ++saving.current;
+      saveProfile(changed).then(
+        () => ticket === saving.current && setStatus("saved"),
+        () => ticket === saving.current && setStatus("failed"),
+      );
+    }, 600);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changedKey, saveProfile]);
+
   // Up to two: picking a third lets go of the one picked first.
   const toggleFocus = (id: HabitId) =>
     setFocus((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id].slice(-2)));
@@ -27,6 +50,9 @@ export default function SettingsProfile() {
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           <span className="e-h2">Profile</span>
           <span className="e-meta">Shapes the questions and what Ensayo listens for.</span>
+          <span className="e-small" role="status" aria-live="polite" style={{ minHeight: "1.4em", color: status === "failed" ? "var(--e-warn-ink)" : "var(--e-primary-dark)" }}>
+            {decision.kind === "problem" ? <span style={{ color: "var(--e-ink)" }}>{decision.name ?? decision.role}</span> : status === "failed" ? SAVE_FAILED : status === "saved" ? "Saved" : ""}
+          </span>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
           <div className="e-field">
