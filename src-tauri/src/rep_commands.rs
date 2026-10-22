@@ -22,9 +22,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-type Cmd<T> = std::result::Result<T, String>;
+pub(crate) type Cmd<T> = std::result::Result<T, String>;
 
-fn plain(e: StorageError) -> String {
+pub(crate) fn plain(e: StorageError) -> String {
     e.to_string()
 }
 
@@ -279,6 +279,11 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         let _ = std::fs::remove_file(&args.audio_path);
         return Ok(outcome_without_rep("didnt_catch", session_id));
     }
+    // The candidate's own questions at the end of a Mock are judged together afterwards (prompt 10), never as an answer.
+    let own_questions = args.question_type == "candidate_questions";
+    if own_questions {
+        metrics.checks.clear();
+    }
     if args.follow_up.is_some() {
         // A follow-up answer is judged on F1 to F5, not on the number or the stop; timing alone keeps only the fillers.
         metrics.checks.retain(|c| c.id == "fillers");
@@ -290,7 +295,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
     let mut notice = None;
     let rules_fix = fix::top_fix(&metrics.checks).map(String::from);
     let mut fix_id = rules_fix;
-    if let Some(ctx) = ai.as_mut() {
+    if let Some(ctx) = ai.as_mut().filter(|_| !own_questions) {
         let asked = Asked {
             text: args.question_text.clone(),
             question_type: args.question_type.clone(),
@@ -435,11 +440,11 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
     }
 }
 
-fn open() -> StorageResult<Storage> {
+pub(crate) fn open() -> StorageResult<Storage> {
     crate::data_commands::open_for(&data_folder(), &paths::default_data_dir())
 }
 
-async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
+pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
     tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
@@ -684,7 +689,7 @@ pub fn summaries_with(storage: &Storage) -> StorageResult<Vec<RepSummary>> {
     let mut sessions = storage.sessions()?.items;
     sessions.sort_by(|a, b| a.started.cmp(&b.started));
     for s in sessions {
-        for r in storage.reps(&s.id)?.items {
+        for r in storage.reps(&s.id)?.items.into_iter().filter(|r| r.rep.question_type != "candidate_questions") {
             out.push(RepSummary {
                 session_id: s.id.clone(),
                 mode: s.mode.clone(),

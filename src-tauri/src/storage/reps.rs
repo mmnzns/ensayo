@@ -144,6 +144,15 @@ impl Storage {
         self.root().join("eval").join(format!("{session}-{n}.json"))
     }
 
+    /// The Mock debrief the model wrote for a session (question quality and the must-say check), kept so reopening it costs nothing.
+    pub fn save_debrief(&self, session: &str, debrief: &serde_json::Value) -> Result<()> {
+        save_record(&self.session_dir(checked(session)?).join("debrief.json"), debrief)
+    }
+
+    pub fn debrief(&self, session: &str) -> Result<Option<serde_json::Value>> {
+        load_record(&self.session_dir(checked(session)?).join("debrief.json"), migrate::unchanged)
+    }
+
     pub fn save_session(&self, s: &Session) -> Result<()> {
         save_record(&self.session_dir(checked(&s.id)?).join("session.json"), s)
     }

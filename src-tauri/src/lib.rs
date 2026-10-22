@@ -7,6 +7,7 @@ mod data_commands;
 pub mod eval;
 pub mod keys;
 mod local_ai_commands;
+mod mock_commands;
 pub mod metrics;
 pub mod paths;
 mod platform;
@@ -70,6 +71,8 @@ pub fn run() {
             ai_commands::test_ai,
             ai_commands::session_cost,
             story_commands::parse_story,
+            mock_commands::mock_debrief,
+            mock_commands::load_debrief,
             local_ai_commands::local_ai_status,
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,
