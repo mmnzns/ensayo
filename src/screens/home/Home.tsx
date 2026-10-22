@@ -4,6 +4,9 @@ import Link from "../../ui/Link";
 import { dayAndTime, inDays, longDate, whenPhrase } from "./format";
 import { setSessionPreset } from "./preset";
 import { liveAvailable } from "../../practice/live";
+import { startQuickDrill } from "../../practice/quick";
+import HomeEmpty from "./HomeEmpty";
+import { habitCount, showFirstHome } from "./state";
 import { viewSession } from "../../practice/viewing";
 
 /** Home. `offline` is the same page with no connection and no AI engine (see HomeOffline). */
@@ -69,7 +72,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
           <h2 className="e-h1" style={{ fontSize: "28px" }}>{practiceTitle}</h2>
           <p className="e-meta" style={{ margin: "0" }}>{practiceText}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "8px" }}>
-            <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big">
+            <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => startQuickDrill({ targetRole: profile.targetRole, stories: store.stories, methods: store.methods })}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="9" y="3" width="6" height="11" rx="3" />
                 <path d="M5 11a7 7 0 0 0 14 0" />
@@ -138,9 +141,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
               <div key={stat.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
                   <span className="e-h3">{habits.find((h) => h.id === stat.id)?.label ?? stat.id}</span>
-                  <span className="e-meta">
-                    {got} of your last {of}
-                  </span>
+                  <span className="e-meta">{habitCount(got, of)}</span>
                 </div>
                 <div className="e-bar" aria-label={`${got} of ${of}`}>
                   <span style={{ width: `${pct}%` }} />
@@ -181,5 +182,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
 }
 
 export default function Home() {
-  return <HomeView />;
+  const store = useStore();
+  // In the app, before the first answer, Home is the welcome: nothing to show yet, and a way to start.
+  return showFirstHome(liveAvailable(), store.sessions.length) ? <HomeEmpty /> : <HomeView />;
 }
