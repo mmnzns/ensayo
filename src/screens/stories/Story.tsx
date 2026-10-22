@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from "react";
+import { cardHeadline, proofPointsFromRows } from "../../data/actions";
+import { useActions } from "../../data/real";
 import { storyGaps, useStore } from "../../data/store";
 import type { Branch, Story as StoryType } from "../../data/types";
 import AppShell from "../../ui/AppShell";
@@ -46,7 +48,9 @@ function StoryEditor({ story }: { story: StoryType }) {
   const { screens } = useStore();
   const telling = screens.stories.telling[story.id];
 
+  const { saveStory, deleteStory } = useActions();
   const [saved, setSaved] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [headline, setHeadline] = useState(story.direct_answer);
   const [context, setContext] = useState(story.context);
@@ -71,6 +75,40 @@ function StoryEditor({ story }: { story: StoryType }) {
 
   const branches = [...story.branches, ...added];
   const kinds = [...CORE_BRANCHES, ...branches.map((b) => b.kind).filter((k) => !CORE_BRANCHES.includes(k))].filter((k, i, all) => all.indexOf(k) === i) as Branch["kind"][];
+
+  const saveChanges = async () => {
+    const points = proofPointsFromRows(numbers, story.proof_points);
+    try {
+      await saveStory({
+        ...story,
+        direct_answer: headline.trim(),
+        context: context.trim(),
+        approach: approach.trim(),
+        action: action.trim(),
+        ownership: ownership.trim(),
+        result: result.trim(),
+        scale: scale.trim(),
+        proof_points: points,
+        branches,
+        headline: cardHeadline(points, story.headline),
+      });
+      setFailed(false);
+      setSaved(true);
+    } catch {
+      setSaved(false);
+      setFailed(true);
+    }
+  };
+
+  const remove = async () => {
+    try {
+      await deleteStory(story.id);
+      go("5-1-stories");
+    } catch {
+      setConfirmDelete(false);
+      setFailed(true);
+    }
+  };
 
   const saveBranch = () => {
     if (adding && trigger.trim()) {
@@ -126,7 +164,7 @@ function StoryEditor({ story }: { story: StoryType }) {
             {confirmDelete ? (
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
                 <span className="e-meta" style={{ color: "var(--e-ink)" }}>Delete this story? It can't be undone.</span>
-                <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={() => go("5-1-stories")}>Yes, delete it</button>
+                <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={remove}>Yes, delete it</button>
                 <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setConfirmDelete(false)}>Keep it</button>
               </div>
             ) : (
@@ -134,7 +172,8 @@ function StoryEditor({ story }: { story: StoryType }) {
             )}
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               {saved && <span className="e-small" role="status">Saved</span>}
-              <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={() => setSaved(true)}>Save changes</button>
+              {failed && <span className="e-small" role="alert" style={{ color: "var(--e-warn-ink)" }}>Could not save. Check your data folder and try again.</span>}
+              <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={saveChanges}>Save changes</button>
             </div>
           </div>
         </section>

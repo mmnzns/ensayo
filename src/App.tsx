@@ -1,5 +1,4 @@
-import { mockStore } from "./data/mock";
-import { StoreProvider } from "./data/store";
+import { DataProvider } from "./data/real";
 import M0Check from "./m0/M0Check";
 import NotFound from "./screens/NotFound";
 import { registry } from "./screens/registry";
@@ -16,5 +15,5 @@ export default function App() {
   const route = useRoute();
   const id = route === "" ? HOME : route;
   const Screen = id === "m0" ? M0Check : registry[id];
-  return <StoreProvider store={mockStore}>{Screen ? <Screen /> : <NotFound id={id} />}</StoreProvider>;
+  return <DataProvider>{Screen ? <Screen /> : <NotFound id={id} />}</DataProvider>;
 }

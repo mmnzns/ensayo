@@ -46,7 +46,7 @@ export default function Stories() {
                 </span>
               </div>
               <span className="e-h3">{s.title}</span>
-              <span className="e-pill" style={{ alignSelf: "flex-start", fontWeight: "600", ...(s.headline.includes("→") ? { background: "var(--e-tint)", color: "var(--e-primary-dark)" } : { background: "var(--e-ground)" }) }}>{s.headline}</span>
+              {s.headline && <span className="e-pill" style={{ alignSelf: "flex-start", fontWeight: "600", ...(s.headline.includes("→") ? { background: "var(--e-tint)", color: "var(--e-primary-dark)" } : { background: "var(--e-ground)" }) }}>{s.headline}</span>}
               <span className="e-small" style={{ marginTop: "auto" }}>{usageText(s.usage)}</span>
             </Link>
           );

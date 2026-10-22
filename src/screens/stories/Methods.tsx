@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import type { Method } from "../../data/types";
 import AppShell from "../../ui/AppShell";
@@ -15,6 +16,8 @@ interface Entry {
 
 export default function Methods() {
   const { stories, methods, screens } = useStore();
+  const { saveMethod } = useActions();
+  const [saveFailed, setSaveFailed] = useState(false);
   const { methodPlaceholders } = screens.stories;
   // Set when Escape cancels an edit, so the blur that follows does not commit the text that was just abandoned.
   const skipBlur = useRef(false);
@@ -26,6 +29,11 @@ export default function Methods() {
   const commit = (m: Method) => {
     const text = entry(m).draft.trim();
     patch(m, { saved: text, draft: text, editing: text === "" });
+    if (text === entry(m).saved) return;
+    saveMethod({ ...m, spoken: text }).then(
+      () => setSaveFailed(false),
+      () => setSaveFailed(true),
+    );
   };
   const cancel = (m: Method) => {
     const e = entry(m);
@@ -50,6 +58,7 @@ export default function Methods() {
         <Link to="5-1-stories" role="tab" aria-selected="false" className="e-btn e-btn-sm e-btn-ghost">Stories · {stories.length}</Link>
         <Link to="5-5-methods" role="tab" aria-selected="true" className="e-btn e-btn-sm" style={{ background: "var(--e-tint)", color: "var(--e-ink)" }}>How you work · {filled} of {methods.length}</Link>
       </div>
+      {saveFailed && <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>Ensayo could not save that sentence. Check that your data folder is available, then try again.</span>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
         {methods.map((m) => {
           const e = entry(m);

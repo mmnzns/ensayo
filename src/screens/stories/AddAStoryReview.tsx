@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { cardHeadline, emptyStory, proofPointsFromRows } from "../../data/actions";
+import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { go } from "../../ui/router";
 import Numbers, { type NumberRow } from "./Numbers";
 import { isBlankReview, pasteDraft } from "./selection";
 
@@ -23,6 +26,35 @@ export default function AddAStoryReview() {
   const [goodFor, setGoodFor] = useState<string[]>(blank ? [] : parsed.goodFor);
   const [adding, setAdding] = useState(false);
   const [custom, setCustom] = useState("");
+
+  const { saveStory } = useActions();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const save = async (next: string) => {
+    setSaving(true);
+    setSaveError(false);
+    const points = proofPointsFromRows(numbers.map((n) => ({ ...n, isNew: true })), []);
+    try {
+      await saveStory({
+        ...emptyStory(),
+        title: title.trim() || "Untitled story",
+        employer: company.trim(),
+        direct_answer: headline.trim(),
+        context: context.trim(),
+        approach: approach.trim(),
+        action: action.trim(),
+        ownership: ownership.trim(),
+        result: result.trim(),
+        best_for: goodFor,
+        proof_points: points,
+        headline: cardHeadline(points, ""),
+      });
+      go(next);
+    } catch {
+      setSaveError(true);
+      setSaving(false);
+    }
+  };
 
   const approachMissing = approach.trim() === "";
   const ownershipMissing = ownership.trim() === "";
@@ -46,10 +78,11 @@ export default function AddAStoryReview() {
           </span>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <Link to="5-1-stories" className="e-btn e-btn-soft">Save</Link>
-          <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary">Save and practice</Link>
+          <button type="button" className="e-btn e-btn-soft" disabled={saving} onClick={() => save("5-1-stories")}>Save</button>
+          <button type="button" className="e-btn e-btn-primary" disabled={saving} onClick={() => save("3-1-practice-interviewer-asking")}>Save and practice</button>
         </div>
       </header>
+      {saveError && <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>Ensayo could not save this story. Check that your data folder is available, then try again.</span>}
       <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
           <div className="e-field">
