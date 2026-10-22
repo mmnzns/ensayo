@@ -25,9 +25,18 @@ How it fits together:
 
 The first release with the updater (0.2.0 or later, whatever carries this change) is still installed by hand. From then on, testers on that version get the next one by themselves.
 
-## Mac signing
+## Code signing: deliberately none
 
-Without a certificate the app is ad-hoc signed and macOS asks for the microphone again after every update. To keep the permission, set the secrets `APPLE_CERTIFICATE` (base64 of a `.p12`), `APPLE_CERTIFICATE_PASSWORD` and `APPLE_SIGNING_IDENTITY`; the Mac job passes them to the build.
+Ensayo ships unsigned, like Talaan and Parlato, until an app earns the money for certificates (decided 2026-10-22). What that
+means, and what INSTALL.md already tells testers:
+
+- **Mac:** the app is ad-hoc signed. First open is right-click, Open. Because the signature changes with every build, macOS
+  asks for the microphone again after each update. To stop that later, add the secrets `APPLE_CERTIFICATE` (base64 of a
+  `.p12`), `APPLE_CERTIFICATE_PASSWORD` and `APPLE_SIGNING_IDENTITY`; the Mac job already passes them when present.
+- **Windows:** SmartScreen shows "Windows protected your PC" once; More info, Run anyway. A code-signing certificate removes it.
+
+The updater's own signature (the minisign key above) is separate from both and is always on: it is what stops a tampered
+download from installing.
 
 ## What a tester build must not contain
 
