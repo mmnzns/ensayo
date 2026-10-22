@@ -1,0 +1,314 @@
+// The live rep loop: which question, which attempt, and what the last rep measured. One module-level state with
+// subscribers (like practiceFlow, it survives screen changes). In the app it talks to the Rust rep commands; in the
+// browser the screens keep using the mock data and this stays inactive.
+
+import { useSyncExternalStore } from "react";
+import type { PracticeAttempt, PracticeSession } from "../data/screens/practice";
+import type { Method, Story } from "../data/types";
+import { isApp, tauriApi, type RepApi } from "./api";
+import { attemptFromOutcome } from "./attempt";
+import { banksFor, ownQuestion, pickQuestions, type BankQuestion } from "./questions";
+import { pickStories } from "./stories";
+import type { FinishArgs, RepOutcome } from "./types";
+
+export const HARD_CAP_SECONDS = 240;
+export const MAX_ATTEMPTS = 3;
+
+export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "error";
+
+export interface LiveState {
+  active: boolean;
+  mode: "drill" | "mock";
+  stage: string;
+  applicationId: string | null;
+  sessionId: string | null;
+  questions: BankQuestion[];
+  /** 0-based position of the current question. */
+  index: number;
+  /** 1 to 3: tries at the current question. */
+  attempt: number;
+  phase: Phase;
+  recordingPath: string | null;
+  /** What each attempt at the current question showed, index 0 is attempt 1. */
+  attempts: PracticeAttempt[];
+  outcomes: RepOutcome[];
+  restartOffered: boolean;
+  noteWrong: boolean;
+  error: string | null;
+}
+
+const INITIAL: LiveState = {
+  active: false,
+  mode: "drill",
+  stage: "hiring_manager",
+  applicationId: null,
+  sessionId: null,
+  questions: [],
+  index: 0,
+  attempt: 1,
+  phase: "idle",
+  recordingPath: null,
+  attempts: [],
+  outcomes: [],
+  restartOffered: false,
+  noteWrong: false,
+  error: null,
+};
+
+let state: LiveState = INITIAL;
+let stories: Story[] = [];
+let methods: Method[] = [];
+let api: RepApi | null = null;
+const listeners = new Set<() => void>();
+
+function set(patch: Partial<LiveState>) {
+  state = { ...state, ...patch };
+  listeners.forEach((l) => l());
+}
+
+export const getLive = () => state;
+export const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => void listeners.delete(l);
+};
+export const useLive = () => useSyncExternalStore(subscribe, getLive);
+
+/** True when the practice screens should run the real loop instead of the mock one. */
+export const isLive = () => state.active;
+
+export function setRepApi(next: RepApi | null) {
+  api = next;
+}
+
+async function repApi(): Promise<RepApi> {
+  if (!api) api = await tauriApi();
+  return api;
+}
+
+/** Whether a session started from the Start screen runs the real loop: only inside the app. */
+export const liveAvailable = () => isApp() || api !== null;
+
+export function resetLive() {
+  state = INITIAL;
+  stories = [];
+  methods = [];
+  listeners.forEach((l) => l());
+}
+
+const STAGE_LABELS: Record<string, string> = { recruiter: "Recruiter", hiring_manager: "Hiring manager", leadership: "Leadership", panel: "Panel", technical: "Technical" };
+
+export interface StartOptions {
+  mode: "drill" | "mock";
+  stage: string;
+  count: number;
+  source: "application" | "stage" | "story" | "own";
+  storyId?: string;
+  ownQuestion?: string;
+  startup?: boolean;
+  applicationId?: string | null;
+  seed?: number;
+}
+
+export function startLive(o: StartOptions, ctx: { targetRole: string; stories: Story[]; methods: Method[] }) {
+  stories = ctx.stories;
+  methods = ctx.methods;
+  const story = o.source === "story" ? ctx.stories.find((s) => s.id === o.storyId) : undefined;
+  const questions =
+    o.source === "own" && o.ownQuestion?.trim()
+      ? [ownQuestion(o.ownQuestion)]
+      : pickQuestions({ bank: banksFor(ctx.targetRole), stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed: o.seed ?? Date.now() });
+  state = { ...INITIAL, active: true, mode: o.mode, stage: o.stage, applicationId: o.applicationId ?? null, questions, phase: "asking" };
+  listeners.forEach((l) => l());
+}
+
+export const currentQuestion = (): BankQuestion | undefined => state.questions[state.index];
+
+export function liveSession(): PracticeSession {
+  return {
+    mode: state.mode === "mock" ? "Mock" : "Drill",
+    modeNote: state.mode === "mock" ? "notes at the end" : "note after each answer",
+    stage: STAGE_LABELS[state.stage] ?? state.stage,
+    position: state.index + 1,
+    total: state.questions.length,
+  };
+}
+
+/** The target window for the current question, for the timer. */
+export function liveWindow(): { from: number; to: number } {
+  const last = state.outcomes[state.outcomes.length - 1]?.rep?.metrics.window;
+  if (last) return { from: last.min_s, to: last.max_s };
+  const t = currentQuestion()?.type;
+  if (t === "factual") return { from: 3, to: 20 };
+  if (t === "technical" || state.stage === "technical") return { from: 30, to: 180 };
+  if (state.stage === "recruiter") return { from: 45, to: 60 };
+  if (state.stage === "leadership") return { from: 30, to: 60 };
+  return { from: 60, to: 90 };
+}
+
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+export async function beginRecording() {
+  try {
+    await (await repApi()).startRecording();
+    set({ phase: "recording", error: null });
+  } catch (e) {
+    set({ phase: "error", error: message(e) });
+  }
+}
+
+function storyIdsFor(q: BankQuestion, source?: Story): string[] {
+  return (source ? [source] : pickStories(q, stories, methods)).map((s) => s.id);
+}
+
+export async function stopAndFinish() {
+  const q = currentQuestion();
+  if (!q) return;
+  set({ phase: "thinking" });
+  try {
+    const a = await repApi();
+    const rec = await a.stopRecording();
+    set({ recordingPath: rec.path });
+    const args: FinishArgs = {
+      session_id: state.sessionId,
+      mode: state.mode,
+      stage: state.stage,
+      application_id: state.applicationId,
+      question_id: q.id,
+      question_text: q.text,
+      question_type: q.type,
+      attempt: state.attempt,
+      story_ids: storyIdsFor(q),
+      audio_path: rec.path,
+    };
+    const out = await a.finishRep(args);
+    apply(out);
+  } catch (e) {
+    set({ phase: "error", error: message(e) });
+  }
+}
+
+function apply(out: RepOutcome) {
+  if (out.outcome === "didnt_catch" || !out.rep) {
+    set({ phase: "didnt_catch", sessionId: out.session_id, recordingPath: null, restartOffered: false });
+    return;
+  }
+  const i = state.attempt - 1;
+  const attempts = [...state.attempts.slice(0, i), attemptFromOutcome(out)];
+  const outcomes = [...state.outcomes.slice(0, i), out];
+  set({ phase: "result", sessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null });
+}
+
+/** The result screen for what was just measured. */
+export function resultRoute(): string {
+  const a = state.attempts[state.attempt - 1];
+  if (a?.wins && a.wins.length > 0) return "3-8-result-everything-worked";
+  return state.attempt <= 1 ? "3-4-result-attempt-1-details-open" : "3-5-result-attempt-2";
+}
+
+/** "Again": one more go at the same question, up to three. */
+export function tryAgain() {
+  set({ attempt: Math.min(MAX_ATTEMPTS, state.attempt + 1), phase: "asking", restartOffered: false, noteWrong: false, error: null });
+}
+
+/** Moves to the next question, or says the session is over. */
+export function nextLiveQuestion(): "asking" | "done" {
+  if (state.index + 1 >= state.questions.length) {
+    set({ phase: "idle" });
+    return "done";
+  }
+  set({ index: state.index + 1, attempt: 1, attempts: [], outcomes: [], phase: "asking", restartOffered: false, noteWrong: false, error: null });
+  return "asking";
+}
+
+/** After "Start this rep again?": keep the rep and measure from after the restart. */
+export async function keepAfterRestart() {
+  const rep = state.outcomes[state.attempt - 1]?.rep;
+  if (!rep) return;
+  try {
+    const out = await (await repApi()).rescoreRep(rep.session_id, rep.n, true);
+    apply({ ...out, restart_offered: false });
+  } catch (e) {
+    set({ phase: "error", error: message(e) });
+  }
+}
+
+/** After "Start this rep again?": throw the rep away and record it again. */
+export async function startOverAfterRestart() {
+  const rep = state.outcomes[state.attempt - 1]?.rep;
+  if (!rep) return;
+  try {
+    await (await repApi()).deleteRep(rep.session_id, rep.n);
+    const i = state.attempt - 1;
+    set({ attempts: state.attempts.slice(0, i), outcomes: state.outcomes.slice(0, i), phase: "asking", restartOffered: false, noteWrong: false });
+  } catch (e) {
+    set({ phase: "error", error: message(e) });
+  }
+}
+
+/** "That note was wrong" on the current rep, or taking the tap back. */
+export async function markWrong(wrong: boolean) {
+  const rep = state.outcomes[state.attempt - 1]?.rep;
+  if (!rep) return;
+  try {
+    await (await repApi()).labelRep(rep.session_id, rep.n, wrong);
+    set({ noteWrong: wrong });
+  } catch (e) {
+    set({ error: message(e) });
+  }
+}
+
+/** Ends the session. A recording in progress is stopped and thrown away. */
+export async function cancelLive() {
+  if (state.phase === "recording") {
+    try {
+      const a = await repApi();
+      const rec = await a.stopRecording();
+      await a.discardRecording(rec.path);
+    } catch {
+      // Nothing was being recorded: fine.
+    }
+  } else if (state.recordingPath) {
+    try {
+      await (await repApi()).discardRecording(state.recordingPath);
+    } catch {
+      // The file is already gone.
+    }
+  }
+  set({ active: false, phase: "idle", recordingPath: null });
+}
+
+/** After an error or "didn't catch that": go back to the question for another go. */
+export async function retryQuestion() {
+  if (state.recordingPath) {
+    try {
+      await (await repApi()).discardRecording(state.recordingPath);
+    } catch {
+      // Already gone.
+    }
+  }
+  set({ phase: "asking", recordingPath: null, error: null });
+}
+
+let player: HTMLAudioElement | null = null;
+
+/** Plays the saved audio for the current rep. Returns false when it is no longer on this computer. */
+export async function listenToRep(): Promise<boolean> {
+  const rep = state.outcomes[state.attempt - 1]?.rep;
+  if (!rep) return false;
+  try {
+    const a = await repApi();
+    if (!(await a.audioAvailable(rep.session_id, rep.n))) return false;
+    const bytes = await a.readAudio(rep.session_id, rep.n);
+    player?.pause();
+    player = new Audio(URL.createObjectURL(new Blob([bytes], { type: "audio/wav" })));
+    await player.play();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function stopListening() {
+  player?.pause();
+  player = null;
+}
