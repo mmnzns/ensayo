@@ -20,7 +20,7 @@ How it fits together:
 
 1. Create the public repo `mmnzns/ensayo-releases` (empty except a README, so it has a default branch). To use another name, change the endpoint in `tauri.conf.json`, set the repo variable `RELEASE_REPO` and change `DEFAULT_REPO` in `scripts/latest-json.mjs`.
 2. Make a fine-grained token that can only touch that repo, with **Contents: Read and write**, and add it to the Ensayo repo as the secret `RELEASES_TOKEN`.
-3. Add the secrets `TAURI_SIGNING_PRIVATE_KEY` (the contents of `~/.tauri/ensayo.key`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty: the key has no password, so leave the value blank or set a single space if the form refuses an empty value, and test with a dry run).
+3. Add the secrets `TAURI_SIGNING_PRIVATE_KEY` (the contents of `~/.tauri/ensayo.key`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the key was made with an empty password, and GitHub won't store an empty secret: skip this one, the workflow then passes it unset, which Tauri reads as an empty password; confirm with a dry run).
 4. Keep `~/.tauri/ensayo.key` safe and backed up somewhere private. It is never committed. If it is lost, installed copies can't be updated: they would reject anything signed with a new key, and testers would have to install the next version by hand. The public half is in `tauri.conf.json`.
 
 The first release with the updater (0.2.0 or later, whatever carries this change) is still installed by hand. From then on, testers on that version get the next one by themselves.
