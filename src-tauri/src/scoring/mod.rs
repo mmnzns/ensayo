@@ -2,6 +2,8 @@
 
 pub mod coach;
 pub mod criteria;
+#[cfg(test)]
+pub mod fixtures;
 pub mod inputs;
 pub mod pipeline;
 pub mod prompts;

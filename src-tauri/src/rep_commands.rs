@@ -340,6 +340,28 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
     Ok(RepOutcome { outcome: "scored", session_id: session_id.to_string(), rep: Some(full), delta, restart_offered: false, audio_kept, notice })
 }
 
+/// Scores a saved rep again with the current scorer, for the eval harness: the same measuring and judging as a new
+/// rep, on the saved words. Returns the checks. Nothing is saved.
+pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<crate::metrics::Check>, String> {
+    let stage = storage.session(&rep.session_id).ok().flatten().map(|s| s.stage).unwrap_or_else(|| "hiring_manager".to_string());
+    let type_for_rules = if rep.rep.question_type.is_empty() { "behavioral" } else { rep.rep.question_type.as_str() };
+    let mut metrics = measure(storage, &stage, type_for_rules, &rep.rep.story_ids, rep.transcript.clone(), false).map_err(plain)?;
+    let asked = Asked {
+        text: rep.rep.question_text.clone(),
+        question_type: rep.rep.question_type.clone(),
+        behavioral_situation: rep.rep.behavioral_situation.clone(),
+        commitment_check: rep.rep.commitment_check,
+        builder_operator_check: rep.rep.builder_operator_check,
+        is_major_story: rep.rep.is_major_story,
+        founder_variant: rep.rep.founder_variant,
+    };
+    match judge(storage, ai, &stage, &rep.rep.story_ids, &asked, &mut metrics) {
+        Judged::Scored { .. } => Ok(metrics.checks),
+        Judged::Fallback(n) => Err(n),
+        Judged::Clarifying | Judged::NotAnAnswer => Ok(vec![]),
+    }
+}
+
 fn open() -> StorageResult<Storage> {
     crate::data_commands::open_for(&data_folder(), &paths::default_data_dir())
 }
@@ -426,6 +448,23 @@ pub async fn label_rep(session_id: String, n: u32, wrong: bool) -> Cmd<()> {
     blocking(move || open().and_then(|s| s.label_rep(&session_id, n, wrong, &stamp(Utc::now()))).map_err(plain)).await
 }
 
+/// "Label this rep": the user's own pass or fail per criterion, saved into the eval set. An empty set clears them.
+#[tauri::command]
+pub async fn label_criteria(session_id: String, n: u32, labels: std::collections::BTreeMap<String, String>) -> Cmd<()> {
+    blocking(move || open().and_then(|s| s.save_labels(&session_id, n, labels, &stamp(Utc::now()))).map_err(plain)).await
+}
+
+/// The labels already saved for a rep, so the screen can show them again.
+#[tauri::command]
+pub async fn rep_labels(session_id: String, n: u32) -> Cmd<std::collections::BTreeMap<String, String>> {
+    blocking(move || {
+        let storage = open().map_err(plain)?;
+        let found = storage.eval_reps().map_err(plain)?.items.into_iter().find(|r| r.full.session_id == session_id && r.full.rep.n == n);
+        Ok(found.map(|r| r.labels).unwrap_or_default())
+    })
+    .await
+}
+
 /// A recording the user abandoned before it became a rep.
 #[tauri::command]
 pub async fn discard_recording(path: PathBuf) -> Cmd<()> {
@@ -484,7 +523,7 @@ pub async fn list_sessions() -> Cmd<Vec<Session>> {
 pub async fn sweep_audio() -> Cmd<usize> {
     blocking(|| {
         let Some(days) = settings::retention_days(&settings::load(&paths::settings_file())) else { return Ok(0) };
-        let keep: HashSet<String> = open().and_then(|s| s.eval_reps()).map(|l| l.items.into_iter().map(|r| format!("{}/{}", r.session_id, r.rep.n)).collect()).unwrap_or_default();
+        let keep: HashSet<String> = open().and_then(|s| s.eval_reps()).map(|l| l.items.into_iter().map(|r| format!("{}/{}", r.full.session_id, r.full.rep.n)).collect()).unwrap_or_default();
         Ok(audio_retention::sweep(&paths::audio_dir(), days, &keep, std::time::SystemTime::now()))
     })
     .await

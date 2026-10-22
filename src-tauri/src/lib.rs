@@ -1,19 +1,18 @@
-// Provider table and key store are wired into the UI in M4; they are tested now.
-#[allow(dead_code)]
-mod ai;
-mod ai_commands;
+// The modules the `ensayo-eval` command line tool also uses are public.
+pub mod ai;
+pub mod ai_commands;
 mod audio_retention;
 mod commands;
 mod data_commands;
-#[allow(dead_code)]
-mod keys;
-mod metrics;
-mod paths;
+pub mod eval;
+pub mod keys;
+pub mod metrics;
+pub mod paths;
 mod platform;
-mod rep_commands;
-mod storage;
+pub mod rep_commands;
+pub mod storage;
 mod recorder;
-mod scoring;
+pub mod scoring;
 mod speech;
 
 pub fn run() {
@@ -48,6 +47,8 @@ pub fn run() {
             rep_commands::rescore_rep,
             rep_commands::delete_rep,
             rep_commands::label_rep,
+            rep_commands::label_criteria,
+            rep_commands::rep_labels,
             rep_commands::discard_recording,
             rep_commands::rep_audio_available,
             rep_commands::read_rep_audio,

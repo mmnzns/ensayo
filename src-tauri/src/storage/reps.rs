@@ -89,6 +89,18 @@ pub struct FullRep {
     pub metrics: Metrics,
 }
 
+/// A rep in the eval set (`eval/<session>-<n>.json`): the rep as it was scored, plus the user's own judgement per
+/// criterion ("pass" or "fail"). A rep tapped "That note was wrong" is in the set with no labels yet.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvalRecord {
+    #[serde(flatten)]
+    pub full: FullRep,
+    #[serde(default)]
+    pub labels: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    pub labelled_at: Option<String>,
+}
+
 /// The transcript file: a record is always a JSON object, so the words sit under a key.
 #[derive(Serialize, Deserialize)]
 struct TranscriptFile {
@@ -187,30 +199,55 @@ impl Storage {
         Ok(out)
     }
 
+    fn eval_record(&self, session: &str, n: u32) -> Result<Option<EvalRecord>> {
+        load_record::<EvalRecord>(&self.eval_path(session, n), migrate::unchanged)
+    }
+
     /// "That note was wrong": records it on the rep and copies the rep into `eval/`. Tapping again with `false`
-    /// removes the label and the copy.
+    /// removes the tap, and the copy too unless it has the user's own labels.
     pub fn label_rep(&self, session: &str, n: u32, wrong: bool, at: &str) -> Result<()> {
         let mut full = self.rep(session, n)?.ok_or_else(|| StorageError::NotFound(format!("rep {n} of {session}")))?;
         let eval = self.eval_path(session, n);
+        let existing = self.eval_record(session, n)?;
         if wrong {
             full.rep.feedback = Some(Feedback { note_was_wrong: true, at: at.to_string() });
             save_record(&self.rep_dir(session, n).join("rep.json"), &full.rep)?;
-            save_record(&eval, &full)
+            let (labels, labelled_at) = existing.map(|e| (e.labels, e.labelled_at)).unwrap_or_default();
+            save_record(&eval, &EvalRecord { full, labels, labelled_at })
         } else {
             full.rep.feedback = None;
             save_record(&self.rep_dir(session, n).join("rep.json"), &full.rep)?;
-            if eval.exists() {
-                fs::remove_file(&eval).map_err(|e| StorageError::Io(eval, e.to_string()))?;
+            match existing {
+                Some(e) if !e.labels.is_empty() => save_record(&eval, &EvalRecord { full, labels: e.labels, labelled_at: e.labelled_at }),
+                Some(_) => fs::remove_file(&eval).map_err(|e| StorageError::Io(eval, e.to_string())),
+                None => Ok(()),
             }
-            Ok(())
         }
     }
 
-    /// Reps copied into the eval set, oldest name first.
-    pub fn eval_reps(&self) -> Result<Loaded<FullRep>> {
-        let mut out = Loaded::<FullRep>::default();
+    /// The user's own pass or fail per criterion for a rep ("Label this rep"). Replaces any earlier labels; an empty set
+    /// removes the record unless the rep is also tapped "That note was wrong".
+    pub fn save_labels(&self, session: &str, n: u32, labels: std::collections::BTreeMap<String, String>, at: &str) -> Result<()> {
+        if let Some((id, v)) = labels.iter().find(|(_, v)| !matches!(v.as_str(), "pass" | "fail")) {
+            return Err(StorageError::Invalid(format!("label for {id} must be pass or fail, not {v}")));
+        }
+        let full = self.rep(session, n)?.ok_or_else(|| StorageError::NotFound(format!("rep {n} of {session}")))?;
+        let eval = self.eval_path(session, n);
+        if labels.is_empty() && full.rep.feedback.is_none() {
+            if eval.exists() {
+                fs::remove_file(&eval).map_err(|e| StorageError::Io(eval, e.to_string()))?;
+            }
+            return Ok(());
+        }
+        let labelled_at = (!labels.is_empty()).then(|| at.to_string());
+        save_record(&eval, &EvalRecord { full, labels, labelled_at })
+    }
+
+    /// The reps in the eval set, oldest name first.
+    pub fn eval_reps(&self) -> Result<Loaded<EvalRecord>> {
+        let mut out = Loaded::<EvalRecord>::default();
         for path in list_json(&self.root().join("eval"))? {
-            match load_record::<FullRep>(&path, migrate::unchanged) {
+            match load_record::<EvalRecord>(&path, migrate::unchanged) {
                 Ok(Some(r)) => out.items.push(r),
                 Ok(None) => {}
                 Err(e) => out.problems.push(format!("{}: {e}", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())),
@@ -323,6 +360,54 @@ mod tests {
         s.label_rep("ses_a", 1, false, "2026-10-21T10:06:00Z").unwrap();
         assert!(!s.root().join("eval/ses_a-1.json").exists());
         assert!(s.rep("ses_a", 1).unwrap().unwrap().rep.feedback.is_none());
+    }
+
+    #[test]
+    fn per_criterion_labels_are_saved_with_the_rep_and_can_be_replaced_or_cleared() {
+        let (_d, s) = storage();
+        s.save_session(&session("ses_a", "2026-10-21T09:00:00Z")).unwrap();
+        s.save_rep("ses_a", &rep(1)).unwrap();
+        let labels: std::collections::BTreeMap<String, String> = [("answer_first".to_string(), "fail".to_string()), ("proof".to_string(), "pass".to_string())].into();
+        s.save_labels("ses_a", 1, labels.clone(), "2026-10-21T11:00:00Z").unwrap();
+        let rec = &s.eval_reps().unwrap().items[0];
+        assert_eq!(rec.labels, labels);
+        assert_eq!(rec.labelled_at.as_deref(), Some("2026-10-21T11:00:00Z"));
+        assert_eq!(rec.full.rep.n, 1);
+        s.save_labels("ses_a", 1, std::collections::BTreeMap::new(), "x").unwrap();
+        assert!(s.eval_reps().unwrap().items.is_empty(), "no labels and no note-was-wrong tap: out of the set");
+    }
+
+    #[test]
+    fn labels_must_be_pass_or_fail() {
+        let (_d, s) = storage();
+        s.save_session(&session("ses_a", "2026-10-21T09:00:00Z")).unwrap();
+        s.save_rep("ses_a", &rep(1)).unwrap();
+        let bad: std::collections::BTreeMap<String, String> = [("proof".to_string(), "maybe".to_string())].into();
+        assert!(matches!(s.save_labels("ses_a", 1, bad, "x"), Err(StorageError::Invalid(_))));
+    }
+
+    #[test]
+    fn taking_back_that_note_was_wrong_keeps_a_rep_that_has_labels() {
+        let (_d, s) = storage();
+        s.save_session(&session("ses_a", "2026-10-21T09:00:00Z")).unwrap();
+        s.save_rep("ses_a", &rep(1)).unwrap();
+        s.label_rep("ses_a", 1, true, "x").unwrap();
+        s.save_labels("ses_a", 1, [("proof".to_string(), "pass".to_string())].into(), "y").unwrap();
+        s.label_rep("ses_a", 1, false, "z").unwrap();
+        let rec = &s.eval_reps().unwrap().items[0];
+        assert_eq!(rec.labels.len(), 1);
+        assert!(rec.full.rep.feedback.is_none());
+    }
+
+    #[test]
+    fn an_old_eval_file_with_no_labels_still_loads() {
+        let (_d, s) = storage();
+        s.save_session(&session("ses_a", "2026-10-21T09:00:00Z")).unwrap();
+        s.save_rep("ses_a", &rep(1)).unwrap();
+        // Written the M3 way: a plain rep copy.
+        save_record(&s.root().join("eval/ses_a-1.json"), &rep(1)).unwrap();
+        let rec = &s.eval_reps().unwrap().items[0];
+        assert!(rec.labels.is_empty());
     }
 
     #[test]
