@@ -8,6 +8,7 @@ import type { MockDebriefData } from "../../data/screens/results";
 import { useDebrief } from "./useDebrief";
 import { claimToUpdate } from "../../practice/applied";
 import { useClaimUpdater } from "../../practice/extras";
+import DeleteSession from "./DeleteSession";
 
 export default function SessionResultsMockDebrief() {
   const state = useDebrief();
@@ -185,6 +186,7 @@ export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefDat
             <Link to="2-3-start-a-session" className="e-btn e-btn-primary e-btn-big">Run it again</Link>
           </div>
         </div>
+        <DeleteSession />
       </div>
     </FocusShell>
   );

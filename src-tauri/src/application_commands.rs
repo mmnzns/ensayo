@@ -117,11 +117,11 @@ pub struct DeleteResult {
 }
 
 /// Deletes an application. Its reps stay as practice without an application unless `delete_reps` says to delete them
-/// too; then their audio goes as well.
-pub fn delete_with(storage: &Storage, audio_root: &Path, id: &str, delete_reps: bool) -> StorageResult<DeleteResult> {
+/// too; then the sessions go to the trash (restorable for seven days), and their audio to the audio trash.
+pub fn delete_with(storage: &Storage, audio_root: &Path, trash_audio: &Path, id: &str, delete_reps: bool) -> StorageResult<DeleteResult> {
     let out = storage.delete_application(id, delete_reps)?;
-    for (session, n) in &out.deleted_reps {
-        let _ = std::fs::remove_file(audio_path(audio_root, session, *n));
+    for session in &out.trashed_sessions {
+        let _ = crate::audio_retention::move_to_trash(audio_root, trash_audio, session);
     }
     Ok(DeleteResult { kept_sessions: out.kept_sessions, deleted_reps: out.deleted_reps.len() })
 }
@@ -285,7 +285,7 @@ pub async fn update_application(application_id: String, patch: AppPatch) -> Cmd<
 /// Deletes an application. Its reps stay as practice without an application unless `delete_reps` is true.
 #[tauri::command]
 pub async fn delete_application(application_id: String, delete_reps: bool) -> Cmd<DeleteResult> {
-    blocking(move || open().and_then(|s| delete_with(&s, &paths::audio_dir(), &application_id, delete_reps)).map_err(plain)).await
+    blocking(move || open().and_then(|s| delete_with(&s, &paths::audio_dir(), &paths::audio_trash_dir(), &application_id, delete_reps)).map_err(plain)).await
 }
 
 /// The whole stage list as Edit details has it: rows in order, new rows without an id, rows left out are removed.
@@ -849,7 +849,7 @@ mod tests {
     }
 
     #[test]
-    fn deleting_an_application_removes_the_audio_of_the_reps_it_deletes_and_nothing_else() {
+    fn deleting_an_application_with_its_practice_moves_the_sessions_and_their_audio_to_the_trash_and_nothing_else() {
         let (d, s) = setup();
         let id = make(&s);
         let audio = d.path().join("audio");
@@ -861,14 +861,18 @@ mod tests {
         };
         mk("ses_mine", Some(&id));
         mk("ses_free", None);
-        let kept = delete_with(&s, &audio, &id, false).unwrap();
+        let trash_audio = d.path().join("trash/audio");
+        let kept = delete_with(&s, &audio, &trash_audio, &id, false).unwrap();
         assert_eq!((kept.kept_sessions, kept.deleted_reps), (1, 0));
         assert!(audio_path(&audio, "ses_mine", 1).exists(), "kept reps keep their audio");
         let id2 = make(&s);
         mk("ses_two", Some(&id2));
-        let gone = delete_with(&s, &audio, &id2, true).unwrap();
+        let gone = delete_with(&s, &audio, &trash_audio, &id2, true).unwrap();
         assert_eq!((gone.kept_sessions, gone.deleted_reps), (0, 1));
         assert!(!audio_path(&audio, "ses_two", 1).exists());
+        assert!(audio_path(&trash_audio, "ses_two", 1).exists(), "the audio waits in the audio trash");
+        assert!(s.root().join("trash/sessions/ses_two/session.json").is_file());
+        assert!(s.session("ses_two").unwrap().is_none());
         assert!(audio_path(&audio, "ses_free", 1).exists());
         assert!(audio_path(&audio, "ses_mine", 1).exists());
     }

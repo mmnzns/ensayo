@@ -136,6 +136,11 @@ export const useLive = () => useSyncExternalStore(subscribe, getLive, getLive);
 /** True when the practice screens should run the real loop instead of the mock one. */
 export const isLive = () => state.active;
 
+/** A session was deleted: the results screens must not offer it again as "the one just practised". */
+export function forgetSession(sessionId: string) {
+  if (state.lastSessionId === sessionId) set({ lastSessionId: null });
+}
+
 export function setRepApi(next: RepApi | null) {
   api = next;
 }

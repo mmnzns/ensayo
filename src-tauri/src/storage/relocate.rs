@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 /// What Ensayo keeps in a data folder, minus the lock file, which belongs to whoever has the folder open.
-const DATA: [&str; 8] = ["profile.json", "profile.v0.json", "you.json", "targets", "bank", "applications", "sessions", "eval"];
+const DATA: [&str; 9] = ["profile.json", "profile.v0.json", "you.json", "targets", "bank", "applications", "sessions", "eval", "trash"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Moved {

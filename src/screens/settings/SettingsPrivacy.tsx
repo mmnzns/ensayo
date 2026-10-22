@@ -185,7 +185,7 @@ export default function SettingsPrivacy() {
           </div>
           <div className="e-rowline" style={{ borderBottom: "none", flexWrap: "wrap" }}>
             <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-              Delete everything<span className="e-small">Stories, applications, sessions, recordings, speech models, settings and saved keys. You'll type DELETE to confirm.</span>
+              Delete everything<span className="e-small">Stories, applications, sessions (the recently deleted ones too), recordings, speech models, settings and saved keys. You'll type DELETE to confirm.</span>
             </span>
             {asking !== "all" && !allDeleted && (
               <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={() => { setAsking("all"); setTyped(""); }}>Delete all Ensayo data</button>

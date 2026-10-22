@@ -841,7 +841,12 @@ pub async fn audio_usage_mb() -> Cmd<u64> {
 /// Delete every recording now. The transcripts and notes stay.
 #[tauri::command]
 pub async fn delete_all_audio() -> Cmd<usize> {
-    blocking(|| audio_retention::remove_all(&paths::audio_dir())).await
+    blocking(|| {
+        // Recordings waiting in the trash are recordings too: the person asked for all of them to go.
+        let _ = std::fs::remove_dir_all(paths::audio_trash_dir());
+        audio_retention::remove_all(&paths::audio_dir())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1037,6 +1042,49 @@ mod tests {
         let two = finish_with(&storage, &audio, &args(&tmp, 2, Some(&one.session_id)), words(40), true, now(), None).unwrap();
         assert_eq!(one.session_id, two.session_id);
         assert_eq!(storage.reps(&one.session_id).unwrap().items.len(), 2);
+    }
+
+    #[test]
+    fn a_deleted_session_leaves_every_summary_and_comes_back_with_its_audio() {
+        use crate::trash_commands::{delete_session_with, restore_with};
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let (audio, trash_audio) = (tmp.join("audio"), tmp.join("trash/audio"));
+        let one = finish_with(&storage, &audio, &args(&tmp, 1, None), words(40), true, now(), None).unwrap();
+        finish_with(&storage, &audio, &args(&tmp, 2, Some(&one.session_id)), words(40), true, now(), None).unwrap();
+        let keep = finish_with(&storage, &audio, &args(&tmp, 1, None), words(40), true, now() + chrono::Duration::days(1), None).unwrap();
+        storage.label_rep(&one.session_id, 1, true, "x").unwrap();
+        assert_eq!(summaries_with(&storage).unwrap().len(), 3);
+
+        delete_session_with(&storage, &audio, &trash_audio, &one.session_id, Utc::now()).unwrap();
+        let after = summaries_with(&storage).unwrap();
+        assert_eq!(after.iter().map(|r| r.session_id.as_str()).collect::<Vec<_>>(), vec![keep.session_id.as_str()], "the trash is not history");
+        assert_eq!(storage.sessions().unwrap().items.len(), 1);
+        assert!(!audio_path(&audio, &one.session_id, 1).exists() && audio_path(&trash_audio, &one.session_id, 2).is_file(), "recordings wait in the audio trash");
+        assert!(audio_path(&audio, &keep.session_id, 1).is_file(), "other sessions keep theirs");
+        assert!(storage.root().join(format!("eval/{}-1.json", one.session_id)).is_file(), "the eval copy stays in the eval folder");
+        assert_eq!(storage.eval_reps().unwrap().items.len(), 1);
+        assert_eq!(storage.trashed_sessions().unwrap()[0].reps, 2);
+
+        restore_with(&storage, &audio, &trash_audio, &one.session_id).unwrap();
+        assert_eq!(summaries_with(&storage).unwrap().len(), 3);
+        assert!(audio_path(&audio, &one.session_id, 1).is_file() && audio_path(&audio, &one.session_id, 2).is_file());
+        assert!(!trash_audio.join(&one.session_id).exists());
+        assert_eq!(storage.reps(&one.session_id).unwrap().items.len(), 2);
+    }
+
+    #[test]
+    fn restoring_after_the_audio_is_gone_still_restores_the_session() {
+        use crate::trash_commands::{delete_session_with, restore_with};
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let (audio, trash_audio) = (tmp.join("audio"), tmp.join("trash/audio"));
+        let one = finish_with(&storage, &audio, &args(&tmp, 1, None), words(40), true, now(), None).unwrap();
+        delete_session_with(&storage, &audio, &trash_audio, &one.session_id, Utc::now()).unwrap();
+        fs::remove_dir_all(&trash_audio).unwrap(); // a different computer: the recordings were never here
+        restore_with(&storage, &audio, &trash_audio, &one.session_id).unwrap();
+        assert!(storage.session(&one.session_id).unwrap().is_some());
+        assert!(!audio_path(&audio, &one.session_id, 1).exists());
     }
 
     #[test]

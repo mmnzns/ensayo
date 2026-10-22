@@ -207,7 +207,7 @@ pub async fn delete_all_data() -> Cmd<()> {
             storage.delete_all().map_err(plain)?;
         }
         crate::keys::clear_all();
-        for dir in [paths::audio_dir(), paths::models_dir()] {
+        for dir in [paths::audio_dir(), paths::trash_dir(), paths::models_dir()] {
             match std::fs::remove_dir_all(&dir) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

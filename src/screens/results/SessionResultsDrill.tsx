@@ -7,6 +7,7 @@ import type { SessionResults } from "../../practice/results";
 import { clock, ListenButton, speak, stopSpeaking } from "./speak";
 import { useResults } from "./useResults";
 import { useEffect, useState } from "react";
+import DeleteSession from "./DeleteSession";
 
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const word = (n: number) => WORDS[n] ?? String(n);
@@ -189,6 +190,7 @@ function DrillResults({ results }: { results: SessionResults }) {
             <Link to="2-3-start-a-session" className="e-btn e-btn-primary e-btn-big">Practice again</Link>
           </div>
         </div>
+        <DeleteSession />
       </div>
     </FocusShell>
   );

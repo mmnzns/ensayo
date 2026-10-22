@@ -1,3 +1,4 @@
+import { KEEP_DAYS } from "../../data/trash";
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -302,6 +303,7 @@ function EditDetails({ app, extras }: Featured) {
               <input type="checkbox" className="e-check" checked={alsoPractice} onChange={(e) => setAlsoPractice(e.target.checked)} />
               <span className="e-small">{practice > 0 ? `Delete its ${practice} practice ${practice === 1 ? "session" : "sessions"} too` : "Delete its practice too"}</span>
             </label>
+            {alsoPractice && practice > 0 && <span className="e-small">{`${KEEP_DAYS} days to restore ${practice === 1 ? "it" : "them"} from Progress, Sessions.`}</span>}
             <button type="button" className="e-btn e-btn-danger e-btn-sm" disabled={busy} onClick={() => void remove()}>{alsoPractice ? "Yes, delete it and its practice" : "Yes, delete it"}</button>
             <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => { setConfirmDelete(false); setError(""); }}>Keep it</button>
           </span>

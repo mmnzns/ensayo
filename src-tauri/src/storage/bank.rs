@@ -11,7 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 
 /// What Ensayo writes inside a data folder. `delete_all` removes exactly these and nothing else.
-const OWNED: [&str; 9] = ["profile.json", "profile.v0.json", "you.json", "targets", "bank", "applications", "sessions", "eval", "lock.json"];
+const OWNED: [&str; 10] = ["profile.json", "profile.v0.json", "you.json", "targets", "bank", "applications", "sessions", "eval", "trash", "lock.json"];
 
 fn checked_id(id: &str) -> Result<&str> {
     if is_safe_id(id) {

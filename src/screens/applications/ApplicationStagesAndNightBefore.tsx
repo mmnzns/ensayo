@@ -2,7 +2,8 @@ import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import type { NightBefore } from "../../data/screens/applications";
-import { useActions } from "../../data/real";
+import { useActions, useRepHistory } from "../../data/real";
+import { answersIn, deletePracticeText, restoreHint } from "../../data/trash";
 import { useStore } from "../../data/store";
 import type { ProcessStage, StageId } from "../../data/types";
 import { STAGE_LABEL, nextStage, shortDate, whenText } from "./format";
@@ -171,6 +172,47 @@ function NightBeforeCard({ app, stage, stages, lock, onPick }: { app: Featured["
         <ErrorLine error={error} />
       </div>
     </>
+  );
+}
+
+/** "Delete this application's practice": every session practised for it goes to the trash, with a way back for a week. */
+function DeletePractice({ app }: { app: Featured["app"] }) {
+  const store = useStore();
+  const actions = useActions();
+  const reps = useRepHistory();
+  const { busy, error, run } = useRun();
+  const [asking, setAsking] = useState(false);
+  const [done, setDone] = useState<number | null>(null);
+  const sessions = store.sessions.filter((s) => s.applicationId === app.id);
+  const answers = sessions.reduce((n, s) => n + answersIn(reps, s.id), 0);
+  const count = sessions.length;
+  if (count === 0 && done === null) return null;
+  if (done !== null && count === 0) return <span className="e-small" role="status">{`Deleted ${done} ${done === 1 ? "session" : "sessions"}. ${restoreHint(done)}`}</span>;
+  const remove = async () => {
+    const out = await run(() => actions.deleteApplicationPractice(app.id));
+    if (out) {
+      setAsking(false);
+      setDone(out.sessions);
+    }
+  };
+  if (!asking) {
+    return (
+      <div>
+        <button type="button" style={linkBtn} onClick={() => setAsking(true)}>{`Delete this application's practice (${count} ${count === 1 ? "session" : "sessions"})`}</button>
+        <ErrorLine error={error} />
+      </div>
+    );
+  }
+  return (
+    <div className="e-soft" role="alertdialog" aria-label="Delete this application's practice" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <span className="e-meta">{deletePracticeText(app.company, count, answers)}</span>
+      <span className="e-small">{restoreHint(count)}</span>
+      <ErrorLine error={error} />
+      <span style={{ display: "flex", gap: "8px" }}>
+        <button type="button" className="e-btn e-btn-danger e-btn-sm" disabled={busy} onClick={() => void remove()}>Delete its practice</button>
+        <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={busy} onClick={() => setAsking(false)}>Keep it</button>
+      </span>
+    </div>
   );
 }
 
@@ -358,6 +400,7 @@ function StagesTab({ app, extras, now }: Featured) {
           <NightBeforeCard key={`${nbStage?.id ?? "none"}|${lock ? "locked" : "open"}`} app={app} stage={nbStage} stages={open} lock={lock} onPick={setNbPick} />
         </section>
       </div>
+      <DeletePractice app={app} />
     </AppShell>
   );
 }
