@@ -53,11 +53,31 @@ fn lifecycle_pack() -> &'static Vec<BankQuestion> {
     P.get_or_init(|| load(include_str!("../../../questions/pack-lifecycle-marketing-ops.json")))
 }
 
-/// The general set, plus the role pack that fits the target role (the same rule as `banksFor` in the frontend).
+fn growth_pack() -> &'static Vec<BankQuestion> {
+    static P: OnceLock<Vec<BankQuestion>> = OnceLock::new();
+    P.get_or_init(|| load(include_str!("../../../questions/pack-growth.json")))
+}
+
+fn product_marketing_pack() -> &'static Vec<BankQuestion> {
+    static P: OnceLock<Vec<BankQuestion>> = OnceLock::new();
+    P.get_or_init(|| load(include_str!("../../../questions/pack-product-marketing.json")))
+}
+
+/// The general set, plus the pack for a kind of role (the same table as `PACKS` in src/practice/questions.ts): lifecycle and
+/// marketing ops share one pack; "other" gets the general set only.
+pub fn banks_for_family(family: &str) -> Vec<&'static BankQuestion> {
+    let pack: &[BankQuestion] = match family {
+        "lifecycle" | "marketing_ops" => lifecycle_pack(),
+        "growth" => growth_pack(),
+        "product_marketing" => product_marketing_pack(),
+        _ => &[],
+    };
+    general().iter().chain(pack.iter()).collect()
+}
+
+/// The general set plus the pack the role's words point to (`role_family_of`, the same rule as `banksFor` in the frontend).
 pub fn banks_for(target_role: &str) -> Vec<&'static BankQuestion> {
-    let role = target_role.to_lowercase();
-    let pack = ["lifecycle", "crm", "marketing", "martech", "automation", "growth"].iter().any(|k| role.contains(k));
-    general().iter().chain(if pack { lifecycle_pack().iter() } else { [].iter() }).collect()
+    banks_for_family(crate::storage::targets::role_family_of(target_role))
 }
 
 fn words(s: &str) -> Vec<String> {
@@ -134,6 +154,15 @@ mod tests {
         assert!(lifecycle.len() > general.len());
         assert!(general.iter().all(|q| !q.id.starts_with("lmo-")));
         assert!(lifecycle.iter().any(|q| q.id.starts_with("lmo-")));
+    }
+
+    #[test]
+    fn each_kind_of_role_gets_its_own_pack_and_marketing_ops_shares_the_lifecycle_one() {
+        let has = |role: &str, prefix: &str| pool(role).iter().any(|q| q.id.starts_with(prefix));
+        assert!(has("Marketing Operations Manager", "lmo-"));
+        assert!(has("Head of Growth", "gro-") && !has("Head of Growth", "lmo-"));
+        assert!(has("Senior Product Marketing Manager", "pmm-") && !has("Senior Product Marketing Manager", "gro-"));
+        assert_eq!(banks_for_family("other").len(), pool("Product designer").len());
     }
 
     #[test]
