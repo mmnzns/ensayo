@@ -13,6 +13,8 @@ export interface LockedSet {
 export interface PracticeExtras {
   questions: ExtraQuestion[];
   lockedByStage?: Record<string, LockedSet | undefined>;
+  /** The Questions tab switch for asked questions leading a later stage's Drill: on unless false. */
+  askedFirst?: boolean;
 }
 
 /** The application's question set and locked stages, or undefined when no application is chosen. */

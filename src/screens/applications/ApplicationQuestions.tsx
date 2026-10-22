@@ -2,6 +2,7 @@ import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { useActions } from "../../data/real";
+import { useHashParam } from "../../data/selection";
 import { useStore } from "../../data/store";
 import type { QuestionType } from "../../data/screens/applications";
 import { STAGE_LABEL, nextStage } from "./format";
@@ -13,14 +14,21 @@ function Questions({ app, extras, now }: Featured) {
   const link = useAppLink();
   const { busy, error, run, setError } = useRun();
   const stages = [...app.process].sort((a, b) => a.order - b.order);
-  const [stageId, setStageId] = useState<string>(nextStage(app)?.id ?? stages[0]?.id ?? "");
+  const named = useHashParam("stage");
+  const [stageId, setStageId] = useState<string>((stages.some((s) => s.id === named) ? named : undefined) ?? nextStage(app)?.id ?? stages[0]?.id ?? "");
   const questions = extras.questions;
   const [editing, setEditing] = useState<{ id: string; text: string; type: QuestionType } | null>(null);
   const [draft, setDraft] = useState("");
   const [draftType, setDraftType] = useState<QuestionType>(questionTypes[0]?.id ?? "behavioral");
 
   const stage = stages.find((s) => s.id === stageId);
-  const list = questions.filter((q) => q.stageId === stageId);
+  const inStage = questions.filter((q) => q.stageId === stageId);
+  // What they asked comes first, then the prepared ones, each in the order they are kept.
+  const list = [...inStage.filter((q) => q.source === "asked"), ...inStage.filter((q) => q.source !== "asked")];
+  const askedCount = inStage.filter((q) => q.source === "asked").length;
+  const stageName = stage ? (stage.label || STAGE_LABEL[stage.stage]).toLowerCase() : "";
+  const askedFirst = extras.askedFirst !== false;
+  const hasAsked = questions.some((q) => q.source === "asked");
   const typeLabel = (t: QuestionType) => questionTypes.find((x) => x.id === t)?.label ?? t;
   const add = async () => {
     const text = draft.trim();
@@ -38,6 +46,12 @@ function Questions({ app, extras, now }: Featured) {
     <AppShell nav="applications">
       <AppHeader app={app} now={now} />
       <AppTabs current="questions" />
+      {hasAsked && (
+        <label className="e-rowline" style={{ gap: "10px", alignItems: "center", cursor: "pointer" }}>
+          <input type="checkbox" className="e-check" checked={askedFirst} disabled={busy} onChange={(e) => void run(() => actions.setAskedQuestionsFirst(app.id, e.target.checked))} />
+          <span className="e-meta">Start a later stage's Drill with up to two questions they asked at earlier stages</span>
+        </label>
+      )}
       <p className="e-meta" style={{ margin: "0" }}>{`The questions Ensayo will ask for each ${app.company} stage, made from the posting and your resume. Change any of them, add your own, or take out the ones that won't come up.`}</p>
       {stages.length === 0 ? (
         <section className="e-card">
@@ -68,7 +82,10 @@ function Questions({ app, extras, now }: Featured) {
             {list.map((q, i) => {
               const isEditing = editing?.id === q.id;
               return (
-                <div key={q.id} className="e-rowline" style={{ padding: "16px 0", alignItems: "flex-start" }}>
+                <div key={q.id} style={{ display: "contents" }}>
+                {i === 0 && askedCount > 0 && <span className="e-label" style={{ paddingTop: "8px" }}>{`Asked at the ${stageName} stage`}</span>}
+                {i === askedCount && askedCount > 0 && list.length > askedCount && <span className="e-label" style={{ paddingTop: "14px" }}>Prepared</span>}
+                <div className="e-rowline" style={{ padding: "16px 0", alignItems: "flex-start" }}>
                   <span className="e-h3" style={{ width: "28px", color: "var(--e-muted)" }}>{i + 1}</span>
                   <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "8px", minWidth: "0" }}>
                     {isEditing ? (
@@ -85,7 +102,8 @@ function Questions({ app, extras, now }: Featured) {
                         <span style={{ fontSize: "16px", lineHeight: 1.5 }}>{q.text}</span>
                         <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
                           <span className="e-pill" style={{ background: "var(--e-ground)" }} title={questionTypes.find((t) => t.id === q.type)?.hint}>{typeLabel(q.type)}</span>
-                          {q.editedByUser && <span className="e-small" style={{ color: "var(--e-primary-dark)" }}>Edited by you</span>}
+                          {q.source === "asked" && <span className="e-pill" style={{ background: "var(--e-tint)" }}>They asked this</span>}
+                          {q.editedByUser && q.source !== "asked" && <span className="e-small" style={{ color: "var(--e-primary-dark)" }}>Edited by you</span>}
                         </span>
                         {q.why && <span className="e-small">{q.why}</span>}
                       </>
@@ -100,6 +118,7 @@ function Questions({ app, extras, now }: Featured) {
                     <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setEditing({ id: q.id, text: q.text, type: q.type })}>Edit</button>
                   )}
                   <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={busy} aria-label={`Remove question ${i + 1}`} onClick={() => void run(() => actions.deleteQuestion(app.id, q.id))}>Remove</button>
+                </div>
                 </div>
               );
             })}

@@ -4,6 +4,7 @@
 pub mod claims;
 pub mod cue;
 pub mod hook;
+pub mod interviews;
 pub mod inputs;
 pub mod jd;
 pub mod question_bank;

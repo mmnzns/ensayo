@@ -290,3 +290,56 @@ pub struct ResumeRec {
     #[serde(default)]
     pub story_suggestions: Vec<StorySuggestion>,
 }
+
+// ---------- interviews.json ----------
+
+/// What the person wrote down after one interview. One note per stage; saving again replaces it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InterviewNote {
+    /// The process stage id (`stg_2`). A note on a stage that is later removed stays in the file.
+    pub stage_id: String,
+    /// The local date the interview was held ("2026-10-23").
+    #[serde(default)]
+    pub held_on: String,
+    /// How it went, 1 (badly) to 5 (very well); none when the person did not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rating: Option<u8>,
+    /// The questions they were asked, in the order written.
+    #[serde(default)]
+    pub asked: Vec<String>,
+    /// What the person said that worked.
+    #[serde(default)]
+    pub worked: String,
+    /// What they would change.
+    #[serde(default)]
+    pub differently: String,
+    /// Who they spoke to, in their own words.
+    #[serde(default)]
+    pub spoke_to: String,
+    /// What happens next, in their own words.
+    #[serde(default)]
+    pub next_step: String,
+    #[serde(default)]
+    pub created: String,
+    #[serde(default)]
+    pub edited: String,
+}
+
+fn yes() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InterviewsFile {
+    /// Questions asked at earlier stages come first in a later stage's Drill. The person can turn it off per application.
+    #[serde(default = "yes")]
+    pub asked_first: bool,
+    #[serde(default)]
+    pub notes: Vec<InterviewNote>,
+}
+
+impl Default for InterviewsFile {
+    fn default() -> Self {
+        InterviewsFile { asked_first: true, notes: vec![] }
+    }
+}

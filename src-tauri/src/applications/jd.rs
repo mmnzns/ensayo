@@ -840,14 +840,19 @@ pub fn save_question(storage: &Storage, id: &str, input: QuestionInput) -> Stora
 
 pub fn delete_question(storage: &Storage, id: &str, question_id: &str) -> StorageResult<()> {
     let mut file = storage.load_application_part::<QuestionsFile>(id, "questions.json")?.ok_or_else(|| StorageError::NotFound(format!("question {question_id}")))?;
-    let Some(gone) = file.questions.iter().find(|q| q.id == question_id).map(|q| crate::storage::application_files::question_key(&q.text)) else {
+    let Some(rec) = file.questions.iter().find(|q| q.id == question_id).cloned() else {
         return Err(StorageError::NotFound(format!("question {question_id}")));
     };
+    let gone = crate::storage::application_files::question_key(&rec.text);
     file.questions.retain(|q| q.id != question_id);
     if !file.deleted.contains(&gone) {
         file.deleted.push(gone);
     }
-    storage.save_application_part(id, "questions.json", &file)
+    storage.save_application_part(id, "questions.json", &file)?;
+    if rec.source == "asked" {
+        crate::applications::interviews::forget_asked(storage, id, &rec.stage_id, &rec.text)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

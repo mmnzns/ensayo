@@ -3,6 +3,7 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import type { Analysis, JdOutcome } from "../../data/applicationCommands";
 import { useActions } from "../../data/real";
+import { askedLine } from "../../data/interviews";
 import { useStore } from "../../data/store";
 import { STAGE_LABEL, STATUS_LABEL, nextStage, shortDate, whenText } from "./format";
 import { keptWords } from "./forms";
@@ -55,6 +56,10 @@ function Overview({ app, extras, now }: Featured) {
   const suggested = app.suggested_status && app.suggested_status !== app.status ? app.suggested_status : null;
   const kept = lastRead ? keptWords(lastRead.result.kept) : [];
   const fits = fitRows(app.targetFit, store.targets);
+  const asked = (extras.interviewNotes ?? []).filter((n) => n.asked.length > 0).flatMap((note) => {
+    const stage = app.process.find((p) => p.id === note.stageId);
+    return stage ? [{ note, stage }] : [];
+  });
 
   return (
     <AppShell nav="applications">
@@ -83,6 +88,12 @@ function Overview({ app, extras, now }: Featured) {
           </div>
         </section>
       )}
+      {asked.map(({ note, stage }) => (
+        <span key={note.stageId} className="e-meta">
+          {`${askedLine(note, stage.label || STAGE_LABEL[stage.stage])} · `}
+          <Link to={link("applications-questions", { stage: stage.id })}>see them</Link>
+        </span>
+      ))}
       {!analysis && (
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
           <span className="e-h2">Nothing read from the posting yet</span>

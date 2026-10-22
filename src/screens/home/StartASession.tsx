@@ -3,6 +3,7 @@ import { daysUntil, useStore } from "../../data/store";
 import type { Mode, StageId } from "../../data/types";
 import { practiceTarget } from "../../practice/applied";
 import { useApplicationExtras } from "../../practice/extras";
+import { earlierStages } from "../../practice/questions";
 import { checkAi, liveAvailable, startLive } from "../../practice/live";
 import { practiceTargetFor } from "../../practice/sessionTarget";
 import FocusShell from "../../ui/FocusShell";
@@ -93,6 +94,8 @@ export default function StartASession() {
         applicationId: app?.application.id ?? null,
         stageId: app?.stage.id ?? null,
         extras: app ? extras?.questions : undefined,
+        earlierStageIds: app ? earlierStages(app.application.process, app.stage.id) : undefined,
+        askedFirst: extras?.askedFirst,
         tries: saved.tries,
         followUps,
       },

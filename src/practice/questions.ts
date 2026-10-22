@@ -150,7 +150,12 @@ export interface ExtraQuestion {
   behavioralSituation?: string | null;
   commitmentCheck?: boolean;
   builderOperatorCheck?: boolean;
+  /** Where it came from: `jd`, `keywords`, `gap`, `user`, or `asked` (written down after an interview). */
+  source?: string;
 }
+
+/** How many questions asked at earlier stages lead a later stage's Drill. */
+export const ASKED_FIRST_MAX = 2;
 
 const ENGINE_TYPE: Record<string, string> = { about_you: "tell_me_about_yourself", future: "future_looking" };
 
@@ -173,7 +178,8 @@ export function bankQuestionFromExtra(e: ExtraQuestion, stageType: string): Bank
   };
 }
 
-const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const normal = (s: string) => s.split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+const sameText = (a: string, b: string) => normal(a) === normal(b);
 
 export interface ApplicationPickOptions {
   bank: BankQuestion[];
@@ -186,13 +192,41 @@ export interface ApplicationPickOptions {
   count: number;
   startup?: boolean;
   seed?: number;
+  /** The ids of the stages before this one, in process order. Without them no asked question leads. */
+  earlierStageIds?: string[];
+  /** The Questions tab switch; on unless it is false. */
+  askedFirst?: boolean;
 }
 
-/** The questions for a session inside an application: that stage's own questions first, in the order they are kept, then the bank to make up the count. */
+/** The stages before `stageId`, in process order: those with a lower `order`. Empty when the stage is unknown. */
+export function earlierStages(process: { id: string; order: number }[], stageId: string | null | undefined): string[] {
+  const at = process.find((p) => p.id === stageId);
+  if (!at) return [];
+  return [...process].sort((a, b) => a.order - b.order).filter((p) => p.order < at.order).map((p) => p.id);
+}
+
+/** Up to two questions the person was asked at earlier stages (`source: "asked"`), nearest stage first, each once. Pure. */
+export function askedFromEarlier(extras: ExtraQuestion[] | undefined, earlierStageIds: string[] | undefined, max = ASKED_FIRST_MAX): ExtraQuestion[] {
+  if (!extras || !earlierStageIds?.length) return [];
+  const out: ExtraQuestion[] = [];
+  for (const stageId of [...earlierStageIds].reverse()) {
+    for (const e of extras) {
+      if (out.length >= max) return out;
+      if (e.source !== "asked" || e.stageId !== stageId || e.text.trim() === "") continue;
+      if (out.some((x) => sameText(x.text, e.text))) continue;
+      out.push(e);
+    }
+  }
+  return out;
+}
+
+/** The questions for a session inside an application: in a Drill for a later stage, up to two asked at earlier stages (unless
+ *  switched off); then that stage's own questions, in the order they are kept; then the bank to make up the count. A Mock keeps its stage set. */
 export function pickApplicationQuestions(o: ApplicationPickOptions): BankQuestion[] {
-  const own = (o.extras ?? [])
-    .filter((e) => e.stageId === o.stageId && e.text.trim() !== "")
+  const lead = o.mode === "drill" && o.askedFirst !== false ? askedFromEarlier(o.extras, o.earlierStageIds).filter((e) => e.stageId !== o.stageId) : [];
+  const own = [...lead, ...(o.extras ?? []).filter((e) => e.stageId === o.stageId && e.text.trim() !== "" && !lead.some((l) => sameText(l.text, e.text)))]
     .map((e) => bankQuestionFromExtra(e, o.stage))
+    .filter((q, i, all) => all.findIndex((x) => sameText(x.text, q.text)) === i)
     .slice(0, o.count);
   if (own.length >= o.count) return own;
   const fill = pickQuestions({ bank: o.bank, stage: o.stage, mode: o.mode, count: o.count + own.length, startup: o.startup, seed: o.seed ?? 1 }).filter((q) => !own.some((x) => sameText(x.text, q.text)));

@@ -7,6 +7,8 @@ import { answersIn, deletePracticeText, restoreHint } from "../../data/trash";
 import { useStore } from "../../data/store";
 import type { ProcessStage, StageId } from "../../data/types";
 import { STAGE_LABEL, nextStage, shortDate, whenText } from "./format";
+import { askedLine, noteFor } from "../../data/interviews";
+import { interviewHappened } from "./afterInterview";
 import { joinAt, lockQuestions, splitAt } from "./forms";
 import { AppHeader, AppTabs, ErrorLine, useAppLink, useRun, withFeatured, type Featured } from "./parts";
 
@@ -218,6 +220,7 @@ function DeletePractice({ app }: { app: Featured["app"] }) {
 
 function StagesTab({ app, extras, now }: Featured) {
   const actions = useActions();
+  const link = useAppLink();
   const { busy, error, run, setError } = useRun();
   const stages = [...app.process].sort((a, b) => a.order - b.order);
   const current = nextStage(app);
@@ -266,6 +269,21 @@ function StagesTab({ app, extras, now }: Featured) {
     if (!renaming) return;
     const done = await run(() => actions.renameStage(app.id, renaming.id, renaming.label));
     if (done) setRenaming(null);
+  };
+
+  /** After the interview: a way to write it down once the stage is done or its date has passed, and the note once it is written. */
+  const after = (s: ProcessStage) => {
+    const note = noteFor(extras.interviewNotes, s.id);
+    if (!note && !interviewHappened(s, now)) return null;
+    const to = link("6-11-after-the-interview", { stage: s.id });
+    return note ? (
+      <span className="e-small" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
+        <span>{note.asked.length > 0 ? askedLine(note, s.label || STAGE_LABEL[s.stage]) : "You wrote this one down"}</span>
+        <Link to={to} className="e-btn e-btn-ghost e-btn-sm">Edit</Link>
+      </span>
+    ) : (
+      <span><Link to={to} className="e-btn e-btn-line e-btn-sm">After the interview</Link></span>
+    );
   };
 
   /** What can be done to one stage while editing the list. */
@@ -328,6 +346,7 @@ function StagesTab({ app, extras, now }: Featured) {
                     {name ?? <span className="e-h3">{label}</span>}
                     <span className="e-small">{s.decides}</span>
                     <span className="e-meta">{`${when ? `${shortDate(when)} · ` : ""}done · ${practiceText(s)}`}</span>
+                    {after(s)}
                     {controls(s, i)}
                   </div>
                 </div>
@@ -351,6 +370,7 @@ function StagesTab({ app, extras, now }: Featured) {
                     <span className="e-small">{s.decides}</span>
                     <span className="e-meta">{practiceText(s)}</span>
                     <DrillMock id={s.id} stageId={s.id} />
+                    {after(s)}
                     {controls(s, i)}
                   </div>
                 </div>
@@ -381,6 +401,7 @@ function StagesTab({ app, extras, now }: Featured) {
                       <DrillMock id={s.id} stageId={s.id} />
                     </div>
                   )}
+                  {after(s)}
                   {controls(s, i)}
                 </div>
                 <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-expanded={practiceOpen === s.id} onClick={() => setPracticeOpen(practiceOpen === s.id ? null : s.id)}>Practice</button>

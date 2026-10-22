@@ -8,6 +8,7 @@
 use crate::ai::llm::Llm;
 use crate::applications::claims::{self, ClaimEdit, ClaimInput};
 use crate::applications::cue::{self, CueSheet, LockInput};
+use crate::applications::interviews::{self, NoteInput, NoteView};
 use crate::applications::jd::{self, JdResult, QuestionInput};
 use crate::applications::resume::{self, AttachResult, NoFallback, ReadResult};
 use crate::applications::view::{self, ApplicationView, ExtrasView};
@@ -408,6 +409,49 @@ pub async fn delete_question(application_id: String, question_id: String) -> Cmd
     blocking(move || {
         let s = open().map_err(plain)?;
         jd::delete_question(&s, &application_id, &question_id).map_err(plain)?;
+        bundle(&s, &application_id, now()).map_err(plain)
+    })
+    .await
+}
+
+/// Saves what the person wrote after an interview (replacing the note for that stage), marks the stage done and adds the
+/// questions they were asked to the application's question set. No model is involved.
+#[tauri::command]
+pub async fn save_interview_note(application_id: String, note: NoteInput) -> Cmd<AppBundle> {
+    blocking(move || {
+        let s = open().map_err(plain)?;
+        interviews::save_note(&s, &application_id, note, interviews::today()).map_err(plain)?;
+        bundle(&s, &application_id, now()).map_err(plain)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_interview_note(application_id: String, stage_id: String) -> Cmd<AppBundle> {
+    blocking(move || {
+        let s = open().map_err(plain)?;
+        interviews::delete_note(&s, &application_id, &stage_id).map_err(plain)?;
+        bundle(&s, &application_id, now()).map_err(plain)
+    })
+    .await
+}
+
+/// The notes of one application, as the screens read them.
+#[tauri::command]
+pub async fn load_interview_notes(application_id: String) -> Cmd<Vec<NoteView>> {
+    blocking(move || {
+        let s = open().map_err(plain)?;
+        Ok(interviews::load_notes(&s, &application_id).map_err(plain)?.into_iter().map(Into::into).collect())
+    })
+    .await
+}
+
+/// The switch on the Questions tab: questions asked at earlier stages come first in a later stage's Drill.
+#[tauri::command]
+pub async fn set_asked_questions_first(application_id: String, on: bool) -> Cmd<AppBundle> {
+    blocking(move || {
+        let s = open().map_err(plain)?;
+        interviews::set_asked_first(&s, &application_id, on).map_err(plain)?;
         bundle(&s, &application_id, now()).map_err(plain)
     })
     .await

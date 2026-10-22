@@ -29,6 +29,7 @@ import type {
   ClaimInput,
   CueSheet,
   DeleteResult,
+  InterviewNoteInput,
   JdOutcome,
   LockInput,
   NewApplicationInput,
@@ -38,7 +39,8 @@ import type {
   ResumeOutcome,
   StageInput,
 } from "./applicationCommands";
-import type { ApplicationExtras, NewApplicationDraft } from "./screens/applications";
+import type { ApplicationExtras, InterviewNote, NewApplicationDraft } from "./screens/applications";
+import { mockDeleteInterviewNote, mockForgetAsked, mockSaveInterviewNote, mockSetAskedFirst } from "./interviews";
 import { TIMING_ONLY, engineStatusOf } from "./engine";
 import { mockStore } from "./mock";
 import { StoreProvider, useStore, type Store } from "./store";
@@ -149,6 +151,12 @@ export interface Actions {
   /** Null when nothing is locked for the stage. */
   cueSheet(applicationId: string, stageId: string): Promise<CueSheet | null>;
   cueSheetMarkdown(applicationId: string, stageId: string): Promise<string>;
+  /** After the interview: saves the note for a stage (replacing it), marks the stage done and adds the questions they were asked to the question set. */
+  saveInterviewNote(applicationId: string, note: InterviewNoteInput): Promise<AppBundle>;
+  deleteInterviewNote(applicationId: string, stageId: string): Promise<AppBundle>;
+  loadInterviewNotes(applicationId: string): Promise<InterviewNote[]>;
+  /** The Questions tab switch: questions asked at earlier stages come first in a later stage's Drill. */
+  setAskedQuestionsFirst(applicationId: string, on: boolean): Promise<AppBundle>;
 }
 
 const unavailable = () => Promise.reject(new Error("The data store is not ready"));
@@ -203,6 +211,10 @@ const NO_ACTIONS: Actions = {
   clearLocked: unavailable,
   cueSheet: unavailable,
   cueSheetMarkdown: unavailable,
+  saveInterviewNote: unavailable,
+  deleteInterviewNote: unavailable,
+  loadInterviewNotes: unavailable,
+  setAskedQuestionsFirst: unavailable,
 };
 
 const ActionsContext = createContext<Actions>(NO_ACTIONS);
@@ -304,6 +316,7 @@ function applicationActions(app: boolean, appsRef: { current: AppsState }, setAp
   | "savePosting" | "analyseJd" | "saveAnalysis" | "saveQuestion" | "deleteQuestion" | "editClaim" | "removeClaim" | "addClaim" | "markClaimUpdated" | "markClaimCurrent"
   | "attachResume" | "attachResumeBytes" | "useResumeFrom" | "setNoResume" | "pasteResumeText" | "readResume" | "openResume" | "recordMustSay" | "dropStorySuggestion"
   | "saveLocked" | "clearLocked" | "cueSheet" | "cueSheetMarkdown"
+  | "saveInterviewNote" | "deleteInterviewNote" | "loadInterviewNotes" | "setAskedQuestionsFirst"
 > {
   const keep = (b: AppBundle): AppBundle => {
     setApps((s) => applyBundle(s, b));
@@ -401,7 +414,7 @@ function applicationActions(app: boolean, appsRef: { current: AppsState }, setAp
     },
     saveAnalysis: (applicationId, analysis) => (app ? bundleCmd("save_analysis", { applicationId, analysis }) : needsApp()),
     saveQuestion: (applicationId, question) => (app ? bundleCmd("save_question", { applicationId, question }) : local(applicationId, (b) => mockSaveQuestion(b, question))),
-    deleteQuestion: (applicationId, questionId) => (app ? bundleCmd("delete_question", { applicationId, questionId }) : local(applicationId, (b) => mockDeleteQuestion(b, questionId))),
+    deleteQuestion: (applicationId, questionId) => (app ? bundleCmd("delete_question", { applicationId, questionId }) : local(applicationId, (b) => mockDeleteQuestion(mockForgetAsked(b, questionId), questionId))),
     editClaim: (applicationId, claimId, edit) => (app ? bundleCmd("edit_claim", { applicationId, claimId, edit }) : needsApp()),
     removeClaim: (applicationId, claimId) => (app ? bundleCmd("remove_claim", { applicationId, claimId }) : needsApp()),
     addClaim: (applicationId, claim) => (app ? bundleCmd("add_claim", { applicationId, claim }) : needsApp()),
@@ -425,6 +438,10 @@ function applicationActions(app: boolean, appsRef: { current: AppsState }, setAp
     clearLocked: (applicationId, stageId) => (app ? bundleCmd("clear_locked", { applicationId, stageId }) : needsApp()),
     cueSheet: (applicationId, stageId) => (app ? invoke<CueSheet | null>("cue_sheet", { applicationId, stageId }) : needsApp()),
     cueSheetMarkdown: (applicationId, stageId) => (app ? invoke<string>("cue_sheet_markdown", { applicationId, stageId }) : needsApp()),
+    saveInterviewNote: (applicationId, note) => (app ? bundleCmd("save_interview_note", { applicationId, note }) : local(applicationId, (b) => mockSaveInterviewNote(b, note, new Date()))),
+    deleteInterviewNote: (applicationId, stageId) => (app ? bundleCmd("delete_interview_note", { applicationId, stageId }) : local(applicationId, (b) => mockDeleteInterviewNote(b, stageId))),
+    loadInterviewNotes: (applicationId) => (app ? invoke<InterviewNote[]>("load_interview_notes", { applicationId }) : Promise.resolve(appsRef.current.extras[applicationId]?.interviewNotes ?? [])),
+    setAskedQuestionsFirst: (applicationId, on) => (app ? bundleCmd("set_asked_questions_first", { applicationId, on }) : local(applicationId, (b) => mockSetAskedFirst(b, on))),
   };
 }
 
