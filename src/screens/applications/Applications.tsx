@@ -3,7 +3,11 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { withParams } from "../../data/selection";
 import { applicationsByTab, nextInterview, useStore } from "../../data/store";
+import { applicationTarget, fitBanner } from "../../data/targets";
 import type { Application } from "../../data/types";
+import { filterByTarget, filterChoices } from "./targetPick";
+import { TargetLabel } from "./TargetMark";
+import { isKept } from "./fitKept";
 import { CLOSED_LABEL, STAGE_LABEL, STATUS_LABEL, answersText, inDays, isThisWeek, rowWhen, shortDate, shortFileName, statusStyle, whenText, nextStage } from "./format";
 
 const FILE_ICON = (
@@ -32,10 +36,14 @@ function nextColumn(a: Application): { title: string; sub: string } {
 export default function Applications() {
   const store = useStore();
   const now = store.now();
-  const { active, closed } = applicationsByTab(store.applications);
+  const [targetId, setTargetId] = useState<string>("all");
+  const choices = filterChoices(store.applications, store.targets);
+  const shown = filterByTarget(store.applications, store.targets, choices.some((t) => t.id === targetId) ? targetId : "all");
+  const withMarker = store.targets.filter((t) => !t.archived).length > 1;
+  const { active, closed } = applicationsByTab(shown);
   const [tab, setTab] = useState<"active" | "closed">("active");
   const rows = tab === "active" ? active : closed;
-  const upNext = nextInterview(store.applications, now);
+  const upNext = nextInterview(shown, now);
   const waiting = active.filter((a) => a.status === "applied" && !a.process.some((s) => s.at && !s.done)).length;
   const thisWeek = active.reduce((n, a) => n + a.process.filter((s) => !s.done && isThisWeek(s.at, now)).length, 0);
   const summary =
@@ -73,7 +81,17 @@ export default function Applications() {
                 {`Closed · ${closed.length}`}
               </button>
             </nav>
-            <span className="e-small">{summary}</span>
+            <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
+              {choices.length > 1 && (
+                <select className="e-input" style={{ width: "200px", minHeight: "44px" }} aria-label="Target" value={choices.some((t) => t.id === targetId) ? targetId : "all"} onChange={(e) => setTargetId(e.target.value)}>
+                  <option value="all">All targets</option>
+                  {choices.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              )}
+              <span className="e-small">{summary}</span>
+            </span>
           </div>
           {tab === "active" && upNext && (
             <div className="e-card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "20px", color: "var(--e-ink)", boxShadow: "inset 0 0 0 2px var(--e-primary)" }}>
@@ -96,11 +114,13 @@ export default function Applications() {
             </div>
             {rows.length === 0 && (
               <div style={{ padding: "28px 0" }}>
-                <span className="e-meta">{tab === "active" ? "Nothing open right now. Add an application when you apply." : "Nothing closed yet."}</span>
+                <span className="e-meta">{shown.length < store.applications.length ? `No ${tab === "active" ? "open" : "closed"} applications under this target.` : tab === "active" ? "Nothing open right now. Add an application when you apply." : "Nothing closed yet."}</span>
               </div>
             )}
             {rows.map((a, i) => {
               const nx = nextColumn(a);
+              const filed = applicationTarget(a, store.targets);
+              const check = a.status !== "closed" && fitBanner(a, store.targets) !== null && !isKept(a.id, filed?.id);
               return (
                 <Link key={a.id} to={withParams("6-3-application-overview", { app: a.id })} className="e-rowline" style={{ padding: "18px 0", textDecoration: "none", color: "var(--e-ink)", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
                   <span style={{ flex: "2 1 0", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -112,8 +132,17 @@ export default function Applications() {
                           <span className="e-pill" style={{ background: "var(--e-ground)", padding: "3px 10px", fontSize: "12px" }}>Startup</span>
                         </>
                       )}
+                      {check && (
+                        <>
+                          {" "}
+                          <span className="e-badge" style={{ marginLeft: "4px" }}>Check the target</span>
+                        </>
+                      )}
                     </span>
-                    <span className="e-small">{a.role}</span>
+                    <span className="e-small" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px" }}>
+                      {a.role}
+                      {withMarker && filed && <TargetLabel target={filed} />}
+                    </span>
                   </span>
                   <span style={{ flex: "1 1 0" }}>
                     <span className="e-pill" style={{ fontWeight: "600", ...statusStyle(a.status) }}>{STATUS_LABEL[a.status]}</span>

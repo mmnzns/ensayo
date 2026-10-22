@@ -8,6 +8,10 @@ import type { ApplicationStatus, ClosedReason, Contact, StageId } from "../../da
 import { CLOSED_LABEL, STAGE_LABEL, STATUSES, STATUS_LABEL, shortDate } from "./format";
 import { filledContacts, isoDay, moveItem, splitAt, stageInputs, type StageDraft } from "./forms";
 import { ErrorLine, useRun, withFeatured, type Featured } from "./parts";
+import { useStore } from "../../data/store";
+import { applicationTarget } from "../../data/targets";
+import TargetPicker from "./TargetPicker";
+import { asksToRebuild } from "./targetPick";
 
 interface StageRow extends StageDraft {
   movedFrom?: string;
@@ -30,7 +34,11 @@ function EditedNote({ app, field, was }: { app: Featured["app"]; field: string; 
 
 function EditDetails({ app, extras }: Featured) {
   const actions = useActions();
+  const store = useStore();
   const { busy, error, run, setError } = useRun();
+  const filedId = applicationTarget(app, store.targets)?.id ?? "";
+  const [targetId, setTargetId] = useState(filedId);
+  const [rebuild, setRebuild] = useState(true);
   const [company, setCompany] = useState(app.company);
   const [role, setRole] = useState(app.role);
   const [status, setStatus] = useState<ApplicationStatus>(app.status);
@@ -72,6 +80,9 @@ function EditDetails({ app, extras }: Featured) {
   const hasPosting = posting.trim().length > 0 || !!app.analysis;
   const practice = app.process.reduce((n, s) => n + s.sessions, 0);
   const overview = withParams("6-3-application-overview", { app: app.id });
+  const targetChanged = targetId !== filedId;
+  const askRebuild = asksToRebuild(app, extras.questions.length, targetId, store.targets);
+  const nextTarget = store.targets.find((t) => t.id === targetId);
 
   // The stage list goes last: asking about a stage that has sessions stops here, and the answer saves just the list.
   const saveStages = async (confirm: boolean) => {
@@ -95,6 +106,7 @@ function EditDetails({ app, extras }: Featured) {
         contacts: filledContacts(contacts),
         notes,
         startup,
+        ...(targetChanged ? { targetId, rebuildQuestions: askRebuild && rebuild } : {}),
       });
       if (postingChanged) {
         const saved = await actions.savePosting(app.id, posting);
@@ -133,6 +145,16 @@ function EditDetails({ app, extras }: Featured) {
                 <label htmlFor="ro">Role</label>
                 <input id="ro" className="e-input" value={role} onChange={(e) => setRole(e.target.value)} />
                 <EditedNote app={app} field="role" was={extras.wasValues.role} />
+              </div>
+              <div className="e-field" style={{ gridColumn: "1 / -1" }}>
+                <span style={{ fontSize: "14px", fontWeight: "600" }}>Target</span>
+                <TargetPicker targets={store.targets} activeId={store.activeTarget?.id} value={targetId} onChange={setTargetId} keep={filedId} />
+                {askRebuild && (
+                  <label className="e-soft" style={{ display: "flex", alignItems: "flex-start", gap: "12px", cursor: "pointer", padding: "14px 18px" }}>
+                    <input type="checkbox" className="e-check" checked={rebuild} onChange={(e) => setRebuild(e.target.checked)} style={{ marginTop: "2px" }} />
+                    <span className="e-meta" style={{ color: "var(--e-ink)" }}>{`Make the question set again for ${nextTarget?.name ?? "this target"}. Questions you wrote or edited stay. Stages, dates, the resume you sent and everything you've said stay as they are.`}</span>
+                  </label>
+                )}
               </div>
               <div className="e-field">
                 <label htmlFor="st">Where it stands</label>

@@ -112,3 +112,26 @@ describe("changing an application's target", () => {
     expect(asksToRebuild(app({ analysis: null }), 0, "tg_b2b", targets)).toBe(false);
   });
 });
+
+import { isKept, keepTarget } from "../screens/applications/fitKept";
+
+describe("Keep the target", () => {
+  const memory = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+  };
+  it("remembers the choice per application and target", () => {
+    const s = memory();
+    expect(isKept("a1", "tg_b2c", s)).toBe(false);
+    keepTarget("a1", "tg_b2c", s);
+    keepTarget("a1", "tg_b2c", s);
+    expect(isKept("a1", "tg_b2c", s)).toBe(true);
+    expect(isKept("a1", "tg_b2b", s)).toBe(false);
+    expect(isKept("a2", "tg_b2c", s)).toBe(false);
+  });
+  it("copes with no storage and with junk in it", () => {
+    expect(isKept("a1", "t", undefined)).toBe(false);
+    expect(() => keepTarget("a1", "t", undefined)).not.toThrow();
+    expect(isKept("a1", "t", { getItem: () => "not json" })).toBe(false);
+  });
+});
