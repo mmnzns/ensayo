@@ -97,7 +97,7 @@ describe("voice", () => {
   it("lists English voices first by name, then the rest, with the language in the label", () => {
     const list = voiceChoices(voices);
     expect(list.map((v) => v.value)).toEqual(["net.cloud", "com.apple.voice.Karen", "com.apple.voice.Samantha", "com.apple.voice.Amelie"]);
-    expect(list[0].label).toMatch(/\(/);
+    expect(list[0].label).toBe("Cloud Voice · British English");
   });
 
   it("finds the saved voice, and gives nothing for automatic or a voice that went away", () => {
