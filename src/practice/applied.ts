@@ -2,7 +2,6 @@
 // consistency check says in plain words, the flags a Mock shows, and what the debrief is told about the posting. The
 // screens and live.ts only call these.
 
-import { nextInterview } from "../data/store";
 import type { ConsistencyFlag } from "../data/screens/results";
 import type { Application, ProcessStage } from "../data/types";
 import type { MustSayItem } from "./debrief";
@@ -14,9 +13,35 @@ export function nextOpenStage(app: Application): ProcessStage | undefined {
   return open.find((s) => s.id === app.current_stage_id) ?? open[0];
 }
 
+/** A stage's date as the backend keeps it: "2026-10-23T14:00" (seconds allowed), or just "2026-10-23" while no time is set. Read as local time either way. */
+export function stageWhen(at: string | undefined): { date: Date; hasTime: boolean } | null {
+  const m = at ? /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(at.trim()) : null;
+  if (!m) return null;
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), m[4] ? Number(m[4]) : 0, m[5] ? Number(m[5]) : 0, m[6] ? Number(m[6]) : 0);
+  return Number.isNaN(date.getTime()) ? null : { date, hasTime: m[4] !== undefined };
+}
+
 export interface PracticeTarget {
   application: Application;
   stage: ProcessStage;
+  /** When that stage is, when it has a date. */
+  when: { date: Date; hasTime: boolean } | null;
+}
+
+/** The earliest upcoming stage with a date across open applications. A stage with a date and no time stays upcoming through that day. */
+export function nextDated(apps: Application[], now: Date): (PracticeTarget & { when: { date: Date; hasTime: boolean } }) | undefined {
+  let best: (PracticeTarget & { when: { date: Date; hasTime: boolean } }) | undefined;
+  for (const application of apps) {
+    if (application.status === "closed") continue;
+    for (const stage of application.process) {
+      const when = stageWhen(stage.at);
+      if (stage.done || !when) continue;
+      const over = when.hasTime ? when.date : new Date(when.date.getFullYear(), when.date.getMonth(), when.date.getDate() + 1);
+      if (over < now) continue;
+      if (!best || when.date < best.when.date) best = { application, stage, when };
+    }
+  }
+  return best;
 }
 
 /** What a session "from an application" practises: what a button asked for (an application, and a stage when it names one), else the nearest interview, else the open application added most recently. */
@@ -24,14 +49,14 @@ export function practiceTarget(apps: Application[], now: Date, want: { applicati
   const asked = want.applicationId ? apps.find((a) => a.id === want.applicationId) : undefined;
   if (asked) {
     const stage = (want.stageId ? asked.process.find((s) => s.id === want.stageId) : undefined) ?? nextOpenStage(asked);
-    if (stage) return { application: asked, stage };
+    if (stage) return { application: asked, stage, when: stageWhen(stage.at) };
   }
-  const soonest = nextInterview(apps, now);
+  const soonest = nextDated(apps, now);
   if (soonest) return soonest;
   const open = apps.filter((a) => a.status !== "closed" && nextOpenStage(a)).sort((a, b) => b.applied_on.localeCompare(a.applied_on));
   const application = open[0];
   const stage = application && nextOpenStage(application);
-  return application && stage ? { application, stage } : undefined;
+  return application && stage ? { application, stage, when: stageWhen(stage.at) } : undefined;
 }
 
 // ---------- the consistency check ----------

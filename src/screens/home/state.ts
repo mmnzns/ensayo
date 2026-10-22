@@ -2,8 +2,8 @@
 
 import type { EngineStatus } from "../../data/types";
 
-/** In the app, until the first answer is saved, Home is the welcome with a way to start. The browser preview keeps the full sample Home. */
-export const showFirstHome = (real: boolean, sessions: number): boolean => real && sessions === 0;
+/** In the app, until the first answer is saved, Home is the welcome with a way to start. The browser preview keeps the full sample Home. With an interview coming up, Home shows it, so the welcome steps aside. */
+export const showFirstHome = (real: boolean, sessions: number, hasInterview = false): boolean => real && sessions === 0 && !hasInterview;
 
 /** The "add an engine" nudge: always in the browser preview (as designed), and in the app only while feedback is timing only. */
 export const showEngineNudge = (real: boolean, engine: EngineStatus): boolean => !real || engine.kind === "timing";

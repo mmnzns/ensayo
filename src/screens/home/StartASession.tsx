@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { daysUntil, nextInterview, useStore } from "../../data/store";
+import { daysUntil, useStore } from "../../data/store";
 import type { Mode, StageId } from "../../data/types";
+import { practiceTarget } from "../../practice/applied";
+import { useApplicationExtras } from "../../practice/extras";
 import { checkAi, liveAvailable, startLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { readPrefs } from "../settings/prefs";
 import { dayBadge, lowerFirst } from "./format";
-import { clearSessionPreset, peekSessionPreset, type SessionSource } from "./preset";
+import { clearSessionPreset, peekSessionPreset, rememberBlocked, type SessionSource } from "./preset";
 
 const LENGTHS = [3, 5, 10];
 
@@ -18,10 +20,12 @@ export default function StartASession() {
   const { habits, profile, stories, applications } = store;
   const blurbs = store.screens.home.stageBlurbs;
   const now = store.now();
-  const next = nextInterview(applications, now);
-  const nextAt = next ? new Date(next.stage.at as string) : null;
-
   const [preset] = useState(peekSessionPreset);
+  // The application to practise: the one a button named, else the nearest interview, else the open application with a stage left.
+  const next = practiceTarget(applications, now, preset);
+  const nextAt = next?.when?.date ?? null;
+  const extras = useApplicationExtras(next?.application.id);
+  const stageQuestions = next && extras ? extras.questions.filter((q) => q.stageId === next.stage.id && q.text.trim() !== "") : [];
   // What Settings, Practice says to start from: the stage, how many questions, tries and follow-ups.
   const [saved] = useState(() => readPrefs().practice);
   useEffect(() => clearSessionPreset, []);
@@ -51,7 +55,7 @@ export default function StartASession() {
   const blurb = blurbs.find((b) => b.stage === shownStage);
 
   const focusHabit = habits.find((h) => h.id === profile.focusHabits[0]);
-  const noPosting = source === "application" && !!next && next.application.analysis === null;
+  const noPosting = source === "application" && !!next && next.application.analysis === null && stageQuestions.length === 0;
   const needsText = source === "own" && question.trim() === "";
   // In the app a Mock runs on the practice screens too (no note after an answer); the browser preview keeps the Mock demo.
   const startTo = noPosting ? "home-session-no-questions" : mock && !liveAvailable() ? "4-1-mock-in-progress" : "3-1-practice-interviewer-asking";
@@ -70,6 +74,8 @@ export default function StartASession() {
         ownQuestion: question,
         startup: app?.application.startup ?? false,
         applicationId: app?.application.id ?? null,
+        stageId: app?.stage.id ?? null,
+        extras: app ? extras?.questions : undefined,
         tries: saved.tries,
         followUps,
       },
@@ -128,13 +134,13 @@ export default function StartASession() {
         </div>
         <div role="radiogroup" aria-labelledby="ss-from" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <span id="ss-from" style={{ fontSize: "14px", fontWeight: "600" }}>Questions from</span>
-          {next && nextAt && (
+          {next && (
             <label className="e-rowline" style={{ padding: "12px 0", cursor: "pointer" }}>
               <input type="radio" name="src" className="e-check" checked={source === "application"} onChange={() => setSource("application")} />
               <span style={{ flex: "1" }}>
                 <span className="e-h3" style={{ fontSize: "16px" }}>{next.application.company}</span>{" "}<span className="e-meta">· {next.stage.label} stage</span>
               </span>
-              <span className="e-badge">{dayBadge(nextAt, daysUntil(nextAt, now))}</span>
+              {nextAt && <span className="e-badge">{dayBadge(nextAt, daysUntil(nextAt, now))}</span>}
             </label>
           )}
           <label className="e-rowline" style={{ padding: "12px 0", cursor: "pointer" }}>
@@ -233,7 +239,7 @@ export default function StartASession() {
               Start
             </button>
           ) : (
-            <Link to={startTo} onClick={beginLive} className="e-btn e-btn-primary e-btn-big">Start</Link>
+            <Link to={startTo} onClick={() => (noPosting && next ? rememberBlocked(next.application.id, next.stage.id) : beginLive())} className="e-btn e-btn-primary e-btn-big">Start</Link>
           )}
         </div>
       </div>

@@ -1,8 +1,9 @@
 // One tap to a real Drill, for the places that only say "Practice": Home, its empty state and the end of setup.
 // In the browser preview (no real loop) this does nothing and the screen keeps its sample walk-through.
 
-import type { Method, Story } from "../data/types";
+import type { Application, Method, ProcessStage, Story } from "../data/types";
 import { checkAi, liveAvailable, startLive } from "./live";
+import type { ExtraQuestion } from "./questions";
 
 /** A first run asks three questions; Home's usual Drill asks five. */
 export const FIRST_DRILL = 3;
@@ -12,6 +13,14 @@ export const HOME_DRILL = 5;
 export function startQuickDrill(ctx: { targetRole: string; stories: Story[]; methods: Method[] }, o: { count?: number; storyId?: string } = {}): boolean {
   if (!liveAvailable()) return false;
   startLive({ mode: "drill", stage: "hiring_manager", count: o.count ?? HOME_DRILL, source: o.storyId ? "story" : "stage", storyId: o.storyId }, ctx);
+  void checkAi();
+  return true;
+}
+
+/** Starts a Drill inside an application: its next stage's questions, with the application's context behind every answer. True when a real session started. */
+export function startApplicationDrill(ctx: { targetRole: string; stories: Story[]; methods: Method[] }, target: { application: Application; stage: ProcessStage }, extras?: ExtraQuestion[], count = HOME_DRILL): boolean {
+  if (!liveAvailable()) return false;
+  startLive({ mode: "drill", stage: target.stage.stage, count, source: "application", applicationId: target.application.id, stageId: target.stage.id, startup: target.application.startup, extras }, ctx);
   void checkAi();
   return true;
 }

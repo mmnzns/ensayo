@@ -1,10 +1,12 @@
-import { daysUntil, greeting, nextInterview, useStore } from "../../data/store";
+import { daysUntil, greeting, useStore } from "../../data/store";
+import { nextDated } from "../../practice/applied";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
-import { dayAndTime, inDays, longDate, whenPhrase } from "./format";
+import { dayAndTime, inDays, longDate, weekdayName, whenPhrase } from "./format";
 import { setSessionPreset } from "./preset";
 import { liveAvailable } from "../../practice/live";
-import { startQuickDrill } from "../../practice/quick";
+import { startApplicationDrill, startQuickDrill } from "../../practice/quick";
+import { useApplicationExtras } from "../../practice/extras";
 import HomeEmpty from "./HomeEmpty";
 import { habitCount, showFirstHome } from "./state";
 import { viewSession } from "../../practice/viewing";
@@ -15,9 +17,10 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
   const { profile, habits, homeHabitStats, applications } = store;
   const home = store.screens.home;
   const now = store.now();
-  const next = nextInterview(applications, now);
-  const nextAt = next ? new Date(next.stage.at as string) : null;
+  const next = nextDated(applications, now);
+  const nextAt = next?.when.date ?? null;
   const days = next && nextAt ? daysUntil(nextAt, now) : null;
+  const extras = useApplicationExtras(next?.application.id);
 
   const focusId = profile.focusHabits[0];
   const practiceTitle = focusId ? home.practiceTitles[focusId] : "Practice a few general questions";
@@ -72,7 +75,11 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
           <h2 className="e-h1" style={{ fontSize: "28px" }}>{practiceTitle}</h2>
           <p className="e-meta" style={{ margin: "0" }}>{practiceText}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "8px" }}>
-            <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => startQuickDrill({ targetRole: profile.targetRole, stories: store.stories, methods: store.methods })}>
+            <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => {
+              const ctx = { targetRole: profile.targetRole, stories: store.stories, methods: store.methods };
+              if (next) startApplicationDrill(ctx, next, extras?.questions);
+              else startQuickDrill(ctx);
+            }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="9" y="3" width="6" height="11" rx="3" />
                 <path d="M5 11a7 7 0 0 0 14 0" />
@@ -100,7 +107,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
               <span className="e-h2">{next.application.company}</span>
               <span className="e-meta">
-                {next.stage.label} · {dayAndTime(nextAt)}
+                {next.stage.label} · {next.when.hasTime ? dayAndTime(nextAt) : weekdayName(nextAt)}
               </span>
             </div>
             <span className="e-badge" style={{ alignSelf: "flex-start" }}>{inDays(days)}</span>
@@ -112,7 +119,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
                   : "Your cue sheet has your beats and numbers, never a script."}
             </p>
             {days >= 2 ? (
-              <Link to="2-3-start-a-session" className="e-btn e-btn-line e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "auto" }} onClick={() => setSessionPreset({ source: "application" })}>
+              <Link to="2-3-start-a-session" className="e-btn e-btn-line e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "auto" }} onClick={() => setSessionPreset({ source: "application", applicationId: next.application.id, stageId: next.stage.id })}>
                 Practice this stage
               </Link>
             ) : days === 1 ? (
@@ -184,5 +191,5 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
 export default function Home() {
   const store = useStore();
   // In the app, before the first answer, Home is the welcome: nothing to show yet, and a way to start.
-  return showFirstHome(liveAvailable(), store.sessions.length) ? <HomeEmpty /> : <HomeView />;
+  return showFirstHome(liveAvailable(), store.sessions.length, nextDated(store.applications, store.now()) !== undefined) ? <HomeEmpty /> : <HomeView />;
 }

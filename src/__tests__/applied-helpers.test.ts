@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { Application, ProcessStage } from "../data/types";
-import { consistencyNotes, consistencySentences, debriefContext, flagsOfReps, nextOpenStage, practiceTarget, unknownCheckLabel } from "../practice/applied";
+import { nextDated, stageWhen, consistencyNotes, consistencySentences, debriefContext, flagsOfReps, nextOpenStage, practiceTarget, unknownCheckLabel } from "../practice/applied";
 import type { Check, FullRep } from "../practice/types";
 
 const stage = (id: string, kind: ProcessStage["stage"], order: number, over: Partial<ProcessStage> = {}): ProcessStage => ({ id, stage: kind, label: kind, order, done: false, decides: "", sessions: 0, ...over });
@@ -127,5 +127,42 @@ describe("what the Mock debrief is told about the application", () => {
   it("is empty where the application has no posting or no resume", () => {
     const a = { ...mockStore.applications[0], analysis: null, resume: null };
     expect(debriefContext(a)).toMatchObject({ jdSummary: "", priorities: "", mustSay: [] });
+  });
+});
+
+describe("a stage's date as the backend keeps it", () => {
+  it("reads a date and time, with or without seconds, as local time", () => {
+    expect(stageWhen("2026-10-23T14:00")).toEqual({ date: new Date(2026, 9, 23, 14, 0), hasTime: true });
+    expect(stageWhen("2026-10-23T14:30:15")?.date).toEqual(new Date(2026, 9, 23, 14, 30, 15));
+  });
+
+  it("reads a date with no time as that local day", () => {
+    expect(stageWhen("2026-10-23")).toEqual({ date: new Date(2026, 9, 23), hasTime: false });
+  });
+
+  it("is nothing for no date or one it cannot read", () => {
+    expect(stageWhen(undefined)).toBeNull();
+    expect(stageWhen("")).toBeNull();
+    expect(stageWhen("next Friday")).toBeNull();
+  });
+});
+
+describe("the next dated interview", () => {
+  const now = new Date("2026-10-22T09:00:00");
+  it("keeps a stage with only a date upcoming through that day, and drops it after", () => {
+    const a = app("a", [stage("s1", "recruiter", 1, { at: "2026-10-22" })]);
+    expect(nextDated([a], now)?.stage.id).toBe("s1");
+    expect(nextDated([a], new Date("2026-10-22T23:00:00"))?.stage.id).toBe("s1");
+    expect(nextDated([a], new Date("2026-10-23T00:30:00"))).toBeUndefined();
+  });
+
+  it("drops a past time, a done stage and a closed application, and picks the earliest", () => {
+    const past = app("p", [stage("p1", "recruiter", 1, { at: "2026-10-22T08:00" })]);
+    const done = app("d", [stage("d1", "recruiter", 1, { at: "2026-10-22T12:00", done: true })]);
+    const shut = app("c", [stage("c1", "recruiter", 1, { at: "2026-10-22T12:00" })], { status: "closed" });
+    const a = app("a", [stage("a1", "recruiter", 1, { at: "2026-10-27T10:00" })]);
+    const b = app("b", [stage("b1", "recruiter", 1, { at: "2026-10-24T10:00" })]);
+    expect(nextDated([past, done, shut, a, b], now)?.application.id).toBe("b");
+    expect(nextDated([past, done, shut], now)).toBeUndefined();
   });
 });

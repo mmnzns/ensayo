@@ -1,11 +1,13 @@
-import { nextInterview, useStore } from "../../data/store";
+import { useStore } from "../../data/store";
+import { practiceTarget } from "../../practice/applied";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
+import { peekBlocked } from "./preset";
 
 /** The session sheet when the chosen source has nothing to ask yet: an application with no job posting pasted. */
 export default function StartSessionNoQuestions() {
   const store = useStore();
-  const next = nextInterview(store.applications, store.now());
+  const next = practiceTarget(store.applications, store.now(), peekBlocked() ?? {});
   const company = next?.application.company ?? "This application";
   return (
     <FocusShell style={{ background: "rgba(43,39,34,0.32)", alignItems: "center", justifyContent: "center", padding: "40px 16px" }}>
