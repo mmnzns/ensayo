@@ -2,11 +2,12 @@
 import { useState } from "react";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
+import { isApp, useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import type { HabitId } from "../../data/types";
 import StepHeader from "./StepHeader";
-
-const MAX_PICKS = 2;
+import { MAX_PICKS, withHabits } from "./setup";
+import { useStepSave } from "./useStepSave";
 
 const cardStyle = { display: "flex", gap: "14px", alignItems: "flex-start", padding: "20px", cursor: "pointer" } as const;
 const onStyle = { boxShadow: "inset 0 0 0 2px var(--e-primary)", background: "var(--e-tint)" } as const;
@@ -19,6 +20,13 @@ export default function WhatToWorkOn() {
   const [notSure, setNotSure] = useState(false);
   // Said under the counter when a third pick pushed the oldest one out.
   const [dropped, setDropped] = useState<string | null>(null);
+
+  // Continue saves the picks on the profile ("Not sure yet" saves none); the browser preview just moves on.
+  const { saveProfile } = useActions();
+  const { saving, problem, onContinue } = useStepSave("1-4-microphone");
+  const save = onContinue(async () => {
+    if (isApp()) await saveProfile(withHabits(profile, picked, notSure));
+  });
 
   const toggle = (id: HabitId) => {
     setNotSure(false);
@@ -77,8 +85,9 @@ export default function WhatToWorkOn() {
               <span className="e-meta">{picked.length} of {MAX_PICKS} picked</span>
               {dropped ? <span className="e-small">Two is the limit, so "{dropped}" was unpicked.</span> : null}
             </span>
-            <Link to="1-4-microphone" className="e-btn e-btn-primary">Continue</Link>
+            <Link to="1-4-microphone" className="e-btn e-btn-primary" onClick={save} aria-disabled={saving || undefined}>Continue</Link>
           </div>
+          {problem ? <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{problem}</span> : null}
         </div>
       </div>
     </FocusShell>
