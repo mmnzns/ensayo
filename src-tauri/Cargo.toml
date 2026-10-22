@@ -10,6 +10,11 @@ default-run = "ensayo"
 name = "ensayo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# The built-in local AI runs in its own helper process (llm/, protocol in llm-protocol/): llama.cpp and whisper.cpp each
+# bundle ggml and must never share a process. `cargo test` at this folder tests every member.
+[workspace]
+members = [".", "llm", "llm-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -35,6 +40,7 @@ sha2 = "0.10.9"
 tokio = { version = "1", features = ["rt", "time", "macros"] }
 keyring = "3.6.3"
 jsonschema = { version = "0.30", default-features = false }
+ensayo-llm-protocol = { path = "llm-protocol" }
 
 [dev-dependencies]
 tempfile = "3.27.0"

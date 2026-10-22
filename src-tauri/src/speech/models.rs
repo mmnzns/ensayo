@@ -12,6 +12,8 @@ pub enum EngineKind {
     /// Nemotron ASR (multilingual).
     Nemotron,
     Whisper,
+    /// A language model for the built-in local AI (GGUF, run by the `ensayo-llm` helper): never a speech model.
+    Llm,
 }
 
 impl EngineKind {

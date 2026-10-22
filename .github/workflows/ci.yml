@@ -21,7 +21,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      # The app's build needs the helper in src-tauri/binaries (tauri.conf.json externalBin), so it comes first.
+      - run: sh scripts/build-llm-helper.sh
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
 
   windows:
     runs-on: windows-latest
@@ -40,10 +42,12 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Whisper must be built for the AVX2 baseline, not this runner's CPU
+      # The app's build needs the helper in src-tauri/binaries (tauri.conf.json externalBin), so it comes first.
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-llm-helper.ps1
+      - name: Whisper and llama.cpp must be built for the AVX2 baseline, not this runner's CPU
         shell: pwsh
         run: |
           . ./scripts/cpu-baseline.ps1
-          cargo test --release --manifest-path src-tauri/Cargo.toml
+          cargo test --release --manifest-path src-tauri/Cargo.toml --workspace
           $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
-          if ($bad.Count -gt 0) { Write-Error "whisper.cpp was not built for the baseline: $bad"; exit 1 }
+          if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }

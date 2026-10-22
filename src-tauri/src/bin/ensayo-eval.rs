@@ -7,7 +7,7 @@
 //! `ENSAYO_AI_KEY`, `ENSAYO_AI_MODEL`). `--gate` exits with 1 when the gate (80% agreement, no false pass on
 //! answer_first, at least 30 labelled reps) is not met.
 
-use ensayo_lib::ai_commands::{resolve, resolved_from_disk, Resolved};
+use ensayo_lib::ai_commands::{resolve, resolved_from_disk, Engine};
 use ensayo_lib::eval::{compare, suggest_thresholds, MIN_AGREEMENT, MIN_REPS};
 use ensayo_lib::metrics::Check;
 use ensayo_lib::rep_commands::{rejudge, AiCtx};
@@ -56,11 +56,11 @@ fn parse() -> Result<Args, String> {
     Ok(a)
 }
 
-fn engine() -> Result<Resolved, String> {
+fn engine() -> Result<Engine, String> {
     if let Ok(provider) = std::env::var("ENSAYO_AI_PROVIDER") {
         let settings = AiSettings { provider, fast_model: std::env::var("ENSAYO_AI_MODEL").unwrap_or_default(), strong_model: std::env::var("ENSAYO_AI_STRONG").unwrap_or_default(), base_url: std::env::var("ENSAYO_AI_URL").unwrap_or_default(), cost_cap_usd: 0.0 };
         let key = std::env::var("ENSAYO_AI_KEY").ok();
-        return resolve(&settings, |_| key.clone())?.ok_or_else(|| "no feedback engine chosen".to_string());
+        return resolve(&settings, |_| key.clone())?.map(Engine::Cloud).ok_or_else(|| "no feedback engine chosen".to_string());
     }
     resolved_from_disk()?.ok_or_else(|| "No feedback engine is set up. Choose one in Settings, or set ENSAYO_AI_PROVIDER and ENSAYO_AI_KEY.".to_string())
 }
@@ -77,11 +77,12 @@ fn run() -> Result<bool, String> {
     if args.rescore {
         let engine = engine()?;
         let llm = engine.client();
-        let mut budget = Budget::new(engine.provider, 0.0);
+        let (provider, _) = engine.budget_basis();
+        let mut budget = Budget::new(provider, 0.0);
         let labelled: Vec<&EvalRecord> = records.iter().filter(|r| !r.labels.is_empty()).collect();
         for (i, rec) in labelled.iter().enumerate() {
             eprintln!("scoring {}/{}: {}-{}", i + 1, labelled.len(), rec.full.session_id, rec.full.rep.n);
-            let mut ctx = AiCtx { llm: &llm, budget: &mut budget };
+            let mut ctx = AiCtx { llm: llm.as_ref(), budget: &mut budget };
             match rejudge(&storage, &mut ctx, &rec.full) {
                 Ok(checks) => {
                     fresh.insert((rec.full.session_id.clone(), rec.full.rep.n), checks);

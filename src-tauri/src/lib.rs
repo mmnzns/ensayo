@@ -6,6 +6,7 @@ mod commands;
 mod data_commands;
 pub mod eval;
 pub mod keys;
+mod local_ai_commands;
 pub mod metrics;
 pub mod paths;
 mod platform;
@@ -66,7 +67,17 @@ pub fn run() {
             ai_commands::clear_api_key,
             ai_commands::test_ai,
             ai_commands::session_cost,
+            local_ai_commands::local_ai_status,
+            local_ai_commands::download_local_ai,
+            local_ai_commands::cancel_local_ai_download,
+            local_ai_commands::stop_local_ai,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Ensayo");
+        .build(tauri::generate_context!())
+        .expect("error while building Ensayo")
+        .run(|_app, event| {
+            // The helper also exits by itself when Ensayo's end of its pipe closes; this just makes it immediate.
+            if let tauri::RunEvent::Exit = event {
+                ai::local::stop_shared();
+            }
+        });
 }
