@@ -8,3 +8,4 @@ pub mod inputs;
 pub mod jd;
 pub mod question_bank;
 pub mod resume;
+pub mod view;
