@@ -16,8 +16,8 @@ export interface HabitProgress {
 
 export interface FocusProgress {
   id: HabitId;
-  /** Local date "2026-10-21". */
-  since: string;
+  /** Local date "2026-10-21". Left out when it is not known. */
+  since?: string;
   /** The end of the line under the bar; when missing, the retry numbers are used. */
   detail?: string;
 }
@@ -27,8 +27,8 @@ export interface ProgressData {
   focus: FocusProgress[];
   /** "Based on your last N answers." */
   basedOnLast: number;
-  /** When the way answers are judged last changed ("2026-10-18"). */
-  judgedUpdatedOn: string;
+  /** When the way answers are judged last changed ("2026-10-18"). Null when it never has. */
+  judgedUpdatedOn: string | null;
 }
 
 // ---------- Settings ----------

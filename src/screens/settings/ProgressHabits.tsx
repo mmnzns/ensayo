@@ -5,6 +5,9 @@ import { habitStatus, useStore } from "../../data/store";
 import type { Habit, Streak } from "../../data/types";
 import type { HabitProgress } from "../../data/screens/settings";
 import { passRate, shortDate, youLabel } from "./format";
+import { useRepHistory } from "../../data/real";
+import { liveAvailable } from "../../practice/live";
+import { progressData } from "../../practice/habits";
 
 const TOTALS: { label: string; key: keyof Streak; color?: string }[] = [
   { label: "Days in a row", key: "daysInARow", color: "var(--e-win)" },
@@ -32,7 +35,9 @@ const retryText = (r?: [number, number]) => (r ? `${r[0]} of ${r[1]}` : "n/a");
 export default function ProgressHabits() {
   const store = useStore();
   const { streak, habits } = store;
-  const data = store.screens.settings.progress;
+  const history = useRepHistory();
+  // In the app the numbers come from what was practised; the browser preview keeps the sample data.
+  const data = liveAvailable() ? progressData(habits, history, store.profile.focusHabits) : store.screens.settings.progress;
   const habitOf = (id: string): Habit | undefined => habits.find((h) => h.id === id);
   const progressOf = (id: string): HabitProgress | undefined => data.habits.find((p) => p.id === id);
   const rows = habits.map((h) => ({ habit: h, progress: progressOf(h.id) }));
@@ -64,7 +69,7 @@ export default function ProgressHabits() {
               <section key={f.id} className="e-card" style={{ display: "flex", flexDirection: "column", gap: "14px", boxShadow: "inset 0 0 0 2px var(--e-primary)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                   <span className="e-label" style={{ color: "var(--e-primary-dark)" }}>Focus</span>
-                  <span className="e-small">since {shortDate(f.since)}</span>
+                  {f.since && <span className="e-small">since {shortDate(f.since)}</span>}
                 </div>
                 <span className="e-h2">{youLabel(habit!.label)}</span>
                 <LastTen results={progress!.results} />
@@ -101,7 +106,10 @@ export default function ProgressHabits() {
           );
         })}
       </section>
-      <span className="e-small">Based on your last {data.basedOnLast} answers. How answers are judged was updated on {shortDate(data.judgedUpdatedOn)}; older results keep their original marks.</span>
+      <span className="e-small">
+        Based on your last {data.basedOnLast} answers.
+        {data.judgedUpdatedOn ? ` How answers are judged was updated on ${shortDate(data.judgedUpdatedOn)}; older results keep their original marks.` : ""}
+      </span>
     </AppShell>
   );
 }

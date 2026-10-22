@@ -2,6 +2,7 @@
 // when a habit has graduated, the streak, and what a finished session says. Pure functions over the compact rep
 // summaries the backend lists; every score keeps the rubric version it was made under, so history is never rewritten.
 
+import type { ProgressData } from "../data/screens/settings";
 import type { Habit, HabitId, HabitStat, SessionSummary, Streak } from "../data/types";
 
 export interface CheckSummary {
@@ -354,4 +355,29 @@ export function nextHabitChoices(habits: Habit[], reps: RepSummary[], justGradua
   });
   const choices = ranked.slice(0, 4).map((h) => h.id);
   return { choices, suggested: choices[0] ?? justGraduated };
+}
+
+// ---------- the Progress screen ----------
+
+/** Filler words per minute of speech over the last twenty first attempts, as "3.1 a minute". */
+function fillerNote(reps: RepSummary[]): string | undefined {
+  const last = firstTries(reps).slice(-WINDOW);
+  const minutes = last.reduce((sum, r) => sum + r.speaking_ms, 0) / 60_000;
+  if (last.length === 0 || minutes <= 0) return undefined;
+  return `${(Math.round((last.reduce((sum, r) => sum + r.fillers, 0) / minutes) * 10) / 10).toFixed(1)} a minute`;
+}
+
+/** Everything the Progress screen shows, from the saved answers. `focusHabits` are the habits the user chose to work on. */
+export function progressData(habits: Habit[], reps: RepSummary[], focusHabits: HabitId[]): ProgressData {
+  const rows = habits.map((h) => {
+    const retry = retryStat(h, reps);
+    return { id: h.id, results: applicable(h, reps).slice(-WINDOW).map((x) => x.pass), ...(retry[1] > 0 ? { retry } : {}), ...(h.id === "fillers" && fillerNote(reps) ? { note: fillerNote(reps) } : {}) };
+  });
+  const changes = rubricChanges(reps);
+  return {
+    habits: rows,
+    focus: focusHabits.map((id) => ({ id })),
+    basedOnLast: WINDOW,
+    judgedUpdatedOn: changes.length ? changes[changes.length - 1].slice(0, 10) : null,
+  };
 }

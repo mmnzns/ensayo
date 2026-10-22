@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { habits } from "../data/mock/habits";
-import { firstTries, fixesStuck, graduated, habitResult, habitStats, pickFocusHabits, retryStat, rubricChanges, sessionList, streakOf, trendReady, whenText, type CheckSummary, type RepSummary } from "../practice/habits";
+import { progressData, firstTries, fixesStuck, graduated, habitResult, habitStats, pickFocusHabits, retryStat, rubricChanges, sessionList, streakOf, trendReady, whenText, type CheckSummary, type RepSummary } from "../practice/habits";
 
 const chk = (id: string, passed: boolean | null, seconds: number | null = null): CheckSummary => ({ id, passed, evidence: "", sentences: [], seconds });
 const H = (id: string) => habits.find((h) => h.id === id)!;
@@ -213,5 +213,33 @@ describe("what a finished drill says", () => {
     expect(choices).not.toContain("ownership");
     expect(suggested).toBe("numbers");
     expect(lastTenResults(H("numbers"), reps)).toEqual([true, true, true, false, false, false, false, false, false, false]);
+  });
+});
+
+describe("the Progress screen", () => {
+  it("lists every habit with its last twenty first tries and how often the fix stuck", () => {
+    const reps = [
+      rep({ question_id: "a", fix: "ownership", checks: [chk("ownership", false)] }),
+      rep({ question_id: "a", attempt: 2, checks: [chk("ownership", true)] }),
+      rep({ question_id: "b", checks: [chk("ownership", true)] }),
+    ];
+    const p = progressData(habits, reps, ["ownership"]);
+    expect(p.habits).toHaveLength(habits.length);
+    const own = p.habits.find((h) => h.id === "ownership")!;
+    expect(own.results).toEqual([false, true]);
+    expect(own.retry).toEqual([1, 1]);
+    expect(p.habits.find((h) => h.id === "numbers")!.results).toEqual([]);
+    expect(p.focus).toEqual([{ id: "ownership" }]);
+    expect(p.judgedUpdatedOn).toBeNull();
+  });
+
+  it("marks the day the judging changed and reads filler words as a rate", () => {
+    const reps = [
+      rep({ rubric_version: 1, fillers: 3, speaking_ms: 60_000, checks: [chk("fillers", false)] }),
+      rep({ rubric_version: 2, fillers: 1, speaking_ms: 60_000, checks: [chk("fillers", true)] }),
+    ];
+    const p = progressData(habits, reps, []);
+    expect(p.judgedUpdatedOn).toMatch(/^2026-10-20$/);
+    expect(p.habits.find((h) => h.id === "fillers")!.note).toBe("2.0 a minute");
   });
 });
