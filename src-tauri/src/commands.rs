@@ -183,6 +183,7 @@ pub async fn stop_recording(state: State<'_, RecorderState>) -> Result<StoppedRe
 #[tauri::command]
 pub async fn transcribe_recording(path: PathBuf, model_id: String) -> Result<transcribe::Transcript, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let _t = crate::logging::Timer::new("transcribe_recording");
         let m = models::find(&model_id).ok_or("Unknown model")?;
         let store = models::ModelStore::new(paths::models_dir(), true);
         let dir = store.locate(m).dir().ok_or("That speech model isn't downloaded yet")?.to_path_buf();

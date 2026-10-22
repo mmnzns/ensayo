@@ -184,6 +184,7 @@ pub async fn set_data_folder(folder: PathBuf) -> Cmd<()> {
 #[tauri::command]
 pub async fn move_data_folder(folder: PathBuf) -> Cmd<&'static str> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("move_data_folder");
         let from = data_folder();
         let moved = relocate::prepare_move(&from, &folder).map_err(plain)?;
         // Let go of the old folder's "open here" note before switching, or it would read as another computer's.
@@ -207,6 +208,8 @@ pub async fn delete_all_data() -> Cmd<()> {
             storage.delete_all().map_err(plain)?;
         }
         crate::keys::clear_all();
+        // The log folder goes too, and nothing writes it again until Ensayo restarts.
+        crate::logging::remove_all_in(&paths::logs_dir())?;
         for dir in [paths::audio_dir(), paths::models_dir()] {
             match std::fs::remove_dir_all(&dir) {
                 Ok(()) => {}

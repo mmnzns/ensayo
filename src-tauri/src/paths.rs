@@ -26,3 +26,8 @@ pub fn default_data_dir() -> PathBuf {
 pub fn settings_file() -> PathBuf {
     app_local().join("settings.json")
 }
+
+/// Ensayo's log files (`ensayo.log` and its older copies). Machine-local; "Delete all Ensayo data" removes it.
+pub fn logs_dir() -> PathBuf {
+    app_local().join("logs")
+}

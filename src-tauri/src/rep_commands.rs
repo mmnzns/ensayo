@@ -546,6 +546,7 @@ pub(crate) fn with_ai<T>(session_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -
 #[tauri::command]
 pub async fn finish_rep(mut args: FinishArgs, model_id: String) -> Cmd<RepOutcome> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("finish_rep");
         let storage = open().map_err(plain)?;
         let settings = settings::load(&paths::settings_file());
         let keep_audio = settings::retention_days(&settings) != Some(0);
@@ -602,6 +603,7 @@ const NO_ENGINE: &str = "A follow-up needs a feedback engine. Choose one in Sett
 #[tauri::command]
 pub async fn next_follow_up(session_id: String, parent_n: u32) -> Cmd<FollowUpQuestion> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("next_follow_up");
         let storage = open().map_err(plain)?;
         let (out, unavailable) = with_ai(&session_id, |ai| match ai {
             Some(mut ctx) => next_follow_up_with(&storage, &mut ctx, &session_id, parent_n),
@@ -616,6 +618,7 @@ pub async fn next_follow_up(session_id: String, parent_n: u32) -> Cmd<FollowUpQu
 #[tauri::command]
 pub async fn clarify_reply(session_id: String, question: String, clarification: String, stage: String) -> Cmd<String> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("clarify_reply");
         let (out, unavailable) = with_ai(&session_id, |ai| match ai {
             Some(ctx) => followup::clarification_reply(ctx.llm, &question, &clarification, &stage, "", ctx.budget).map_err(|e| e.notice()),
             None => Err(NO_ENGINE.to_string()),
@@ -635,6 +638,7 @@ pub fn ai_ready() -> bool {
 #[tauri::command]
 pub async fn rescore_rep(session_id: String, n: u32, keep_restart: bool) -> Cmd<RepOutcome> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("rescore_rep");
         let storage = open().map_err(plain)?;
         let (out, unavailable) = with_ai(&session_id, |ai| rescore_with(&storage, &paths::audio_dir(), &session_id, n, keep_restart, ai));
         let mut out = out.map_err(plain)?;

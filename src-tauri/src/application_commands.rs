@@ -370,6 +370,7 @@ pub async fn save_posting(application_id: String, text: String) -> Cmd<PostingOu
 #[tauri::command]
 pub async fn analyse_jd(application_id: String, text: Option<String>) -> Cmd<JdOutcome> {
     blocking(move || {
+        let _t = crate::logging::Timer::new("analyse_jd");
         let s = open().map_err(plain)?;
         let (out, unavailable) = with_engine(&application_id, |ai| analyse_with(&s, ai, None, &application_id, text.as_deref(), now()));
         let mut out = out.map_err(plain)?;

@@ -6,12 +6,16 @@ pub mod applications;
 mod audio_retention;
 mod commands;
 mod data_commands;
+mod diag_commands;
+mod diagnostics;
 pub mod eval;
 pub mod keys;
 mod local_ai_commands;
 mod mock_commands;
 pub mod metrics;
 pub mod paths;
+pub mod logging;
+pub mod redact;
 mod platform;
 pub mod rep_commands;
 pub mod storage;
@@ -30,6 +34,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::RecorderState::default())
         .setup(|app| {
+            logging::init();
+            log::info!("Ensayo {} started on {} {} ({})", env!("CARGO_PKG_VERSION"), diagnostics::os_name(), diagnostics::os_version(), std::env::consts::ARCH);
             update_commands::setup(app.handle());
             update_commands::check_at_launch(app.handle());
             Ok(())
@@ -141,6 +147,10 @@ pub fn run() {
             update_commands::updates_check,
             update_commands::updates_pending,
             update_commands::updates_install,
+            diag_commands::diagnostics,
+            diag_commands::recent_log,
+            diag_commands::log_frontend,
+            diag_commands::reveal_logs,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Ensayo")
