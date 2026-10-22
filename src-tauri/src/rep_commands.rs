@@ -890,7 +890,7 @@ mod tests {
             branches: vec![],
             verified: true,
             headline: "".into(),
-            usage: Usage { practiced: 0, fits: 0, said_number: None },
+            usage: Usage { practiced: 0, fits: 0, said_number: None, by_target: Default::default() },
             year: None,
             angles: vec![],
         }
@@ -1081,6 +1081,84 @@ mod tests {
     fn ai_run(llm: &Scripted, args: &FinishArgs, storage: &Storage, audio: &Path, words: Vec<Word>) -> RepOutcome {
         let mut budget = Budget::new(Provider::Claude, 0.0);
         finish_with(storage, audio, args, words, true, now(), Some(AiCtx { llm, budget: &mut budget })).unwrap()
+    }
+
+    // ---------- which target a session is for ----------
+
+    fn two_targets(storage: &Storage) -> (crate::storage::targets::Target, crate::storage::targets::Target) {
+        use crate::storage::targets::Target;
+        storage.save_profile(&crate::storage::model::Profile { name: "Dana".into(), full_name: "".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "I fix activation.".into(), focus_habits: vec![] }).unwrap();
+        let first = storage.targets().unwrap().remove(0);
+        let ops = storage.save_target(&Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), pitch: "I run the stack.".into(), ..Default::default() }).unwrap();
+        (first, ops)
+    }
+
+    #[test]
+    fn a_session_is_for_the_target_asked_for_else_the_applications_else_the_active_one() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let (first, ops) = two_targets(&storage);
+        let finish = |a: &FinishArgs| finish_with(&storage, &tmp.join("audio"), a, words(40), true, now(), None).unwrap().session_id;
+        // Nothing said: the active target.
+        let plain = finish(&args(&tmp, 1, None));
+        assert_eq!(storage.session(&plain).unwrap().unwrap().target_id.as_deref(), Some(first.id.as_str()));
+        // Asked for.
+        let mut a = args(&tmp, 2, None);
+        a.target_id = Some(ops.id.clone());
+        let asked = finish(&a);
+        assert_eq!(storage.session(&asked).unwrap().unwrap().target_id.as_deref(), Some(ops.id.as_str()));
+        // Inside an application filed under the second target.
+        let app = storage.create_application(crate::storage::applications::NewApplication { company: "Northpine".into(), target_id: Some(ops.id.clone()), ..Default::default() }, chrono::NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
+        let mut a = args(&tmp, 3, None);
+        in_app(&mut a, &app.id, "recruiter");
+        let in_application = finish(&a);
+        assert_eq!(storage.session(&in_application).unwrap().unwrap().target_id.as_deref(), Some(ops.id.as_str()));
+        // A target that does not exist is not stored.
+        let mut a = args(&tmp, 4, None);
+        a.target_id = Some("tg_nope".into());
+        assert_eq!(storage.session(&finish(&a)).unwrap().unwrap().target_id.as_deref(), Some(first.id.as_str()));
+        // The next answer of the same session keeps the session's target, whatever is active now.
+        storage.set_active_target(&first.id).unwrap();
+        let mut again = args(&tmp, 5, Some(&asked));
+        again.target_id = None;
+        finish(&again);
+        assert_eq!(storage.session(&asked).unwrap().unwrap().target_id.as_deref(), Some(ops.id.as_str()));
+    }
+
+    #[test]
+    fn rep_summaries_carry_the_sessions_target_and_old_sessions_resolve_to_the_first_target() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let (first, ops) = two_targets(&storage);
+        let mut a = args(&tmp, 1, None);
+        a.target_id = Some(ops.id.clone());
+        let new = finish_with(&storage, &tmp.join("audio"), &a, words(40), true, now(), None).unwrap().session_id;
+        let old = finish_with(&storage, &tmp.join("audio"), &args(&tmp, 2, None), words(40), true, now(), None).unwrap().session_id;
+        // The old one was saved before targets: no target on the file.
+        let mut sess = storage.session(&old).unwrap().unwrap();
+        sess.target_id = None;
+        storage.save_session(&sess).unwrap();
+        let summaries = summaries_with(&storage).unwrap();
+        let of = |id: &str| summaries.iter().find(|r| r.session_id == id).unwrap().target_id.clone();
+        assert_eq!(of(&new).as_deref(), Some(ops.id.as_str()));
+        assert_eq!(of(&old).as_deref(), Some(first.id.as_str()));
+        assert_eq!(serde_json::to_value(&summaries[0]).unwrap()["target_id"].is_string(), true);
+    }
+
+    #[test]
+    fn the_answer_is_judged_against_the_sessions_target_not_the_active_one() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let (_first, ops) = two_targets(&storage);
+        // The active target is the first one ("I fix activation."); the session is for the second.
+        let mut a = args(&tmp, 1, None);
+        a.target_id = Some(ops.id.clone());
+        a.question_type = "tell_me_about_yourself".into();
+        a.story_ids = vec![];
+        let llm = Scripted::new(vec![Ok(&score_json(1, 1, &[("answer_first", "pass")], false)), Ok(COACH)]);
+        ai_run(&llm, &a, &storage, &tmp.join("audio"), words(40));
+        let seen = llm.seen.lock().unwrap();
+        assert!(seen[0].user.contains("I run the stack.") && !seen[0].user.contains("I fix activation."), "{}", seen[0].user);
     }
 
     #[test]

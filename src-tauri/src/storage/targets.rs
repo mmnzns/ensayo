@@ -1247,3 +1247,10 @@ mod tests {
         assert_eq!(s.methods().unwrap().len(), 1);
     }
 }
+
+/// A bare story for tests in other modules.
+#[cfg(test)]
+pub fn story_for_tests(id: &str) -> Story {
+    use super::model::Usage;
+    Story { id: id.into(), title: id.into(), employer: "".into(), best_for: vec![], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec![], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None, angles: vec![] }
+}

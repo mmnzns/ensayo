@@ -11,6 +11,7 @@ use crate::scoring::template::{escape_data, Vars};
 use crate::storage::application_files::{AnalysisFile, Belief, DerivedAnalysis, Priority, QuestionRec, QuestionsFile};
 use crate::storage::applications::{stamp, AppRecord};
 use crate::storage::model::Story;
+use crate::storage::targets::TargetFit;
 use crate::storage::{Result as StorageResult, Storage, StorageError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -94,6 +95,9 @@ pub struct JdResult {
     pub kept: Vec<String>,
     pub startup_turned_on: bool,
     pub question_count: usize,
+    /// How the posting reads against the targets, as saved on the application (the command returns it as `targetFit`).
+    #[serde(skip)]
+    pub target_fit: Option<TargetFit>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -677,7 +681,7 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
         Err(reason) => {
             if old.as_ref().is_some_and(|o| o.engine == "ai") {
                 let questions = storage.load_application_part::<QuestionsFile>(id, "questions.json")?.map(|q| q.questions.len()).unwrap_or(0);
-                return Ok(JdResult { source: "unchanged".into(), notice: Some(format!("{reason} What was read before is unchanged.")), changed: vec![], kept: vec![], startup_turned_on: false, question_count: questions });
+                return Ok(JdResult { source: "unchanged".into(), notice: Some(format!("{reason} What was read before is unchanged.")), changed: vec![], kept: vec![], startup_turned_on: false, question_count: questions, target_fit: rec.target_fit.clone() });
             }
             (keyword_reading(&rec, &jd, &stories, profile.as_ref().map(|p| p.target_role.as_str()).unwrap_or("")), Some(reason))
         }
@@ -703,7 +707,47 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
     }
     storage.save_application_part(id, "analysis.json", &file)?;
     storage.save_application_part(id, "questions.json", &qfile)?;
-    Ok(JdResult { source: reading.engine.to_string(), notice, changed, kept, startup_turned_on: turn_on, question_count: qfile.questions.len() })
+    let target_fit = fit_of(storage, &rec, &jd)?;
+    storage.change(id, |a| {
+        a.target_fit = target_fit.clone();
+        Ok(())
+    })?;
+    Ok(JdResult { source: reading.engine.to_string(), notice, changed, kept, startup_turned_on: turn_on, question_count: qfile.questions.len(), target_fit })
+}
+
+/// How the posting fits the targets: by keywords for now (the engine's own reading of the fit is added where the reply of
+/// prompt 09 is read). `None` when there is no target to compare with.
+fn fit_of(storage: &Storage, rec: &AppRecord, jd: &str) -> StorageResult<Option<TargetFit>> {
+    let targets = storage.targets()?;
+    let filed = storage.application_target(rec)?;
+    Ok(super::target_fit::keyword_fit(rec, jd, &targets, filed.as_deref()))
+}
+
+/// Makes the prepared questions again after the application moved to another target, the way reading the posting again
+/// does: the questions the user wrote or changed stay, the rest are replaced. With the engine the posting is read again
+/// (the new target's role is what it is told); without one the general questions for the new target's role come back and
+/// the reading of the posting is left alone. `None` when there is no posting to work from; else how many questions there are.
+pub fn rebuild_questions(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<Option<usize>> {
+    let rec = storage.application(id)?;
+    let Some(jd) = storage.application_text(id, "jd.txt")?.filter(|t| !t.trim().is_empty()) else { return Ok(None) };
+    if ai.is_some() {
+        let out = analyse(storage, ai, id)?;
+        if out.source != "unchanged" {
+            return Ok(Some(out.question_count));
+        }
+    }
+    let stories = storage.load_stories()?.items;
+    let profile = storage.profile_for(storage.application_target(&rec)?.as_deref())?;
+    let reading = keyword_reading(&rec, &jd, &stories, profile.as_ref().map(|p| p.target_role.as_str()).unwrap_or(""));
+    let old = storage.load_application_part::<QuestionsFile>(id, "questions.json")?;
+    let (qfile, _kept) = merge_questions(&rec, old, reading.questions, &reading.prompt, reading.engine);
+    storage.save_application_part(id, "questions.json", &qfile)?;
+    let target_fit = fit_of(storage, &rec, &jd)?;
+    storage.change(id, |a| {
+        a.target_fit = target_fit;
+        Ok(())
+    })?;
+    Ok(Some(qfile.questions.len()))
 }
 
 // ---------- the user's own questions ----------
@@ -1021,6 +1065,102 @@ mod tests {
         assert_eq!(on("Why a 40-person startup"), "stg_1", "no leadership stage: the first stage");
         let process: Vec<String> = s.application(&id).unwrap().process.iter().map(|p| p.id.clone()).collect();
         assert!(q.iter().all(|x| process.contains(&x.stage_id)));
+    }
+
+    // ---------- how the posting fits the targets ----------
+
+    fn second_target(s: &Storage) -> crate::storage::targets::Target {
+        s.save_target(&crate::storage::targets::Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), ..Default::default() }).unwrap()
+    }
+
+    #[test]
+    fn reading_the_posting_saves_how_it_fits_each_target_on_the_application_and_returns_it() {
+        let (_d, s, id) = setup();
+        let ops = second_target(&s);
+        let first = s.targets().unwrap().remove(0);
+        let out = analyse(&s, None, &id).unwrap();
+        let fit = out.target_fit.clone().expect("a fit");
+        assert_eq!(fit.per_target.len(), 2);
+        assert_eq!(fit.role_family, "lifecycle");
+        assert_eq!(fit.best_target_id.as_deref(), Some(first.id.as_str()), "a lifecycle title fits the lifecycle target better than {}", ops.id);
+        assert_eq!(s.application(&id).unwrap().target_fit, Some(fit), "saved on the application as target_fit");
+    }
+
+    #[test]
+    fn the_fit_is_also_saved_when_the_engine_read_the_posting_and_when_there_are_no_targets_there_is_none() {
+        let (_d, s, id) = setup();
+        let llm = Scripted::new(vec![Ok(REPLY)]);
+        let out = run(&s, &id, &llm);
+        assert!(out.target_fit.is_some());
+        let dir = tempfile::tempdir().unwrap();
+        let bare = Storage::init(dir.path().join("data")).unwrap();
+        let app = bare.create_application(NewApplication { company: "K".into(), role: "Growth Manager".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
+        bare.save_application_text(&app.id, "jd.txt", KESTREL).unwrap();
+        let out = analyse(&bare, None, &app.id).unwrap();
+        assert_eq!(out.target_fit, None);
+        assert_eq!(bare.application(&app.id).unwrap().target_fit, None);
+    }
+
+    #[test]
+    fn a_reading_that_failed_after_an_engine_reading_keeps_the_saved_fit() {
+        let (_d, s, id) = setup();
+        let ok = Scripted::new(vec![Ok(REPLY)]);
+        let first = run(&s, &id, &ok).target_fit;
+        let down = Scripted::new(vec![Err(AiError::Unavailable("down".into()))]);
+        let out = run(&s, &id, &down);
+        assert_eq!(out.source, "unchanged");
+        assert_eq!(out.target_fit, first);
+    }
+
+    #[test]
+    fn the_reading_uses_the_role_of_the_applications_target_not_the_active_one() {
+        let (_d, s, id) = setup();
+        let ops = second_target(&s);
+        s.set_active_target(&ops.id).unwrap();
+        // The application is filed under the lifecycle target (target one) while the active one is marketing ops.
+        let llm = Scripted::new(vec![Ok(REPLY)]);
+        run(&s, &id, &llm);
+        let seen = llm.seen.lock().unwrap();
+        assert!(seen[0].user.contains("Senior Lifecycle Marketing Manager") && !seen[0].user.contains("Marketing Operations Manager"), "{}", seen[0].user);
+    }
+
+    // ---------- another target, other questions ----------
+
+    #[test]
+    fn making_the_questions_again_for_another_target_keeps_the_ones_the_user_wrote_or_changed() {
+        let (_d, s, id) = setup();
+        analyse(&s, None, &id).unwrap();
+        let mine = save_question(&s, &id, QuestionInput { id: None, stage_id: "stg_1".into(), kind: "behavioral".into(), text: "My own question about Kestrel?".into() }).unwrap();
+        let ops = second_target(&s);
+        s.update_application(&id, AppPatch { target_id: Some(ops.id.clone()), ..Default::default() }).unwrap();
+        let analysis_before = s.load_application_part::<AnalysisFile>(&id, "analysis.json").unwrap().unwrap();
+        let n = rebuild_questions(&s, None, &id).unwrap().unwrap();
+        let q = questions(&s, &id);
+        assert_eq!(n, q.len());
+        assert!(q.iter().any(|x| x.id == mine.id && x.edited_by_user && x.text == "My own question about Kestrel?"), "the user's question stays");
+        assert!(q.iter().filter(|x| !x.edited_by_user).all(|x| x.source == "bank"));
+        assert_eq!(s.load_application_part::<AnalysisFile>(&id, "analysis.json").unwrap().unwrap(), analysis_before, "the reading of the posting is not touched without an engine");
+    }
+
+    #[test]
+    fn making_the_questions_again_with_the_engine_reads_the_posting_again_for_the_new_target() {
+        let (_d, s, id) = setup();
+        let ops = second_target(&s);
+        s.update_application(&id, AppPatch { target_id: Some(ops.id.clone()), ..Default::default() }).unwrap();
+        let llm = Scripted::new(vec![Ok(REPLY)]);
+        let mut budget = Budget::new(Provider::Claude, 0.0);
+        let n = rebuild_questions(&s, Some(AiCtx { llm: &llm, budget: &mut budget }), &id).unwrap().unwrap();
+        assert_eq!(n, 12);
+        assert!(llm.seen.lock().unwrap()[0].user.contains("Marketing Operations Manager"), "the new target's role is what the reading is told");
+        assert!(questions(&s, &id).iter().all(|q| q.source != "bank"));
+    }
+
+    #[test]
+    fn with_no_posting_there_is_nothing_to_make_questions_from() {
+        let (_d, s, id) = setup();
+        s.remove_application_file(&id, "jd.txt").unwrap();
+        assert_eq!(rebuild_questions(&s, None, &id).unwrap(), None);
+        assert!(s.load_application_part::<QuestionsFile>(&id, "questions.json").unwrap().is_none());
     }
 
     // ---------- no engine, or an engine that fails ----------

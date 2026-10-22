@@ -64,6 +64,7 @@ impl Storage {
         }
         self.check_angles(story)?;
         let mut saved = story.clone();
+        saved.usage.by_target.clear();
         saved.verified = all_verified(&saved);
         save_record(&self.story_path(&saved.id), &saved)?;
         Ok(saved)
@@ -87,6 +88,15 @@ impl Storage {
             }
         }
         Ok(())
+    }
+
+    /// Fills in `usage.by_target` from the reps: how many answers were practiced with each story, per target.
+    pub fn with_practice_by_target(&self, mut stories: Vec<Story>) -> Result<Vec<Story>> {
+        let practiced = self.story_practice_by_target()?;
+        for s in &mut stories {
+            s.usage.by_target = practiced.get(&s.id).cloned().unwrap_or_default();
+        }
+        Ok(stories)
     }
 
     /// Deletes a story and takes it out of every method that listed it.

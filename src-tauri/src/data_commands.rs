@@ -94,7 +94,8 @@ pub fn load_all_at(storage: &Storage, now: chrono::NaiveDateTime) -> StorageResu
     // Targets first: reading them moves a v0 profile over, which the other reads depend on.
     let you = storage.you()?;
     let targets = storage.load_targets()?;
-    let stories = storage.load_stories()?;
+    let mut stories = storage.load_stories()?;
+    stories.items = storage.with_practice_by_target(stories.items)?;
     let apps = view::load_all(storage, now)?;
     let mut problems = stories.problems;
     problems.extend(targets.problems);
@@ -138,9 +139,14 @@ pub async fn save_profile(profile: Profile) -> Cmd<()> {
     blocking(move || open_storage().and_then(|s| s.save_profile(&profile)).map_err(plain)).await
 }
 
+/// The story as the screens read it: with how many answers were practiced with it per target.
+fn with_practice(storage: &Storage, story: Story) -> StorageResult<Story> {
+    Ok(storage.with_practice_by_target(vec![story])?.remove(0))
+}
+
 #[tauri::command]
 pub async fn save_story(story: Story) -> Cmd<Story> {
-    blocking(move || open_storage().and_then(|s| s.save_story(&story)).map_err(plain)).await
+    blocking(move || open_storage().and_then(|s| with_practice(&s, s.save_story(&story)?)).map_err(plain)).await
 }
 
 #[tauri::command]
@@ -150,7 +156,7 @@ pub async fn delete_story(id: String) -> Cmd<()> {
 
 #[tauri::command]
 pub async fn set_proof_verified(story_id: String, label: String, verified: bool) -> Cmd<Story> {
-    blocking(move || open_storage().and_then(|s| s.set_proof_verified(&story_id, &label, verified)).map_err(plain)).await
+    blocking(move || open_storage().and_then(|s| with_practice(&s, s.set_proof_verified(&story_id, &label, verified)?)).map_err(plain)).await
 }
 
 #[tauri::command]
@@ -301,6 +307,29 @@ mod tests {
         storage.set_active_target(&second.id).unwrap();
         assert_eq!(serde_json::to_value(load_all_from(&storage).unwrap()).unwrap()["profile"]["identityStatement"], "I run the stack.");
         assert_eq!(load_all_from(&storage).unwrap().targets_note_pending, false);
+    }
+
+    #[test]
+    fn load_all_tells_each_story_how_often_it_was_practiced_per_target_and_saving_never_keeps_it() {
+        use crate::storage::reps::{Rep, Session};
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        storage.save_profile(&Profile { name: "D".into(), full_name: "".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] }).unwrap();
+        let target = storage.targets().unwrap().remove(0);
+        storage.save_story(&story("st_a")).unwrap();
+        storage.save_session(&Session { id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: Some(target.id.clone()) }).unwrap();
+        let words: Vec<crate::speech::words::Word> = (0..12).map(|i| crate::speech::words::Word { text: "word".into(), start_ms: i * 500, end_ms: i * 500 + 400 }).collect();
+        let metrics = crate::metrics::compute(crate::metrics::Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: vec![], keep_restart: false });
+        let rep = Rep { n: 1, question_id: "q".into(), question_text: "?".into(), question_type: "behavioral".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-20T10:00:00Z".into(), story_ids: vec!["st_a".into()], fix: None, note: None, rewrite: None, ai: None, follow_up: None, feedback: None };
+        storage.save_rep("ses_1", &crate::storage::reps::FullRep { session_id: "ses_1".into(), rep, transcript: words, metrics }).unwrap();
+        let all = load_all_from(&storage).unwrap();
+        assert_eq!(all.stories[0].usage.by_target.get(&target.id), Some(&1));
+        assert_eq!(serde_json::to_value(&all).unwrap()["stories"][0]["usage"]["byTarget"][target.id.as_str()], 1);
+        // The screens send the story back as they read it: the count is not saved with it.
+        let saved = storage.save_story(&all.stories[0]).unwrap();
+        assert!(saved.usage.by_target.is_empty());
+        assert!(!std::fs::read_to_string(storage.root().join("bank/stories/st_a.json")).unwrap().contains("byTarget"));
+        assert!(with_practice(&storage, saved).unwrap().usage.by_target.contains_key(&target.id));
     }
 
     #[test]

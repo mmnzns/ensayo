@@ -49,6 +49,10 @@ pub struct Usage {
     pub fits: u32,
     #[serde(default, rename = "saidNumber", skip_serializing_if = "Option::is_none")]
     pub said_number: Option<u32>,
+    /// Answers practiced with this story, per target. Worked out from the reps whenever the stories are read and never
+    /// saved with the story.
+    #[serde(default, rename = "byTarget", skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub by_target: std::collections::BTreeMap<String, u32>,
 }
 
 /// One story, in the Build Plan's shape (Context, Approach, Action, Result; the format is never named in the UI).

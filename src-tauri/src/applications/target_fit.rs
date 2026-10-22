@@ -10,9 +10,9 @@ use serde::Serialize;
 /// What the posting words say the job is.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Guess {
-    pub sells_to: &'static str,
-    pub role_family: &'static str,
-    pub seniority: &'static str,
+    pub sells_to: String,
+    pub role_family: String,
+    pub seniority: String,
 }
 
 const B2B_WORDS: [&str; 12] = ["b2b", "saas", "enterprise", "businesses", "account-based", "abm", "pipeline", "mql", "sales team", "sales and marketing", "buyers", "demand gen"];
@@ -63,7 +63,7 @@ pub fn guess(role: &str, jd: &str) -> Guess {
         "other" => role_family_of(&head(jd, 200)),
         known => known,
     };
-    Guess { sells_to, role_family: family, seniority: level_of(&title) }
+    Guess { sells_to: sells_to.into(), role_family: family.into(), seniority: level_of(&title).into() }
 }
 
 fn family_words(family: &str) -> &'static str {
@@ -103,7 +103,7 @@ fn rate(g: &Guess, t: &Target) -> Rated {
         (0, "a different kind of role")
     };
     let (sells, sells_text) = if g.sells_to == t.sells_to || g.sells_to == "both" || t.sells_to == "both" { (1, "customers that fit") } else { (0, "different customers") };
-    let gap = (level_index(g.seniority) - level_index(&t.seniority)).abs();
+    let gap = (level_index(&g.seniority) - level_index(&t.seniority)).abs();
     let (level, level_text) = match gap {
         0 => (1, "the same level"),
         1 => (1, "a level one step away"),
@@ -119,34 +119,76 @@ fn rate(g: &Guess, t: &Target) -> Rated {
 /// The posting against every target that is not archived. `None` when there is no such target. `filed` is the target the
 /// application is filed under: it wins a tie and gets the notes on where it does not match.
 pub fn keyword_fit(rec: &AppRecord, jd: &str, targets: &[Target], filed: Option<&str>) -> Option<TargetFit> {
+    fit_against(&guess(&rec.role, jd), targets, filed)
+}
+
+/// What a posting is read as (by the engine or by keywords) against every target that is not archived.
+pub fn fit_against(g: &Guess, targets: &[Target], filed: Option<&str>) -> Option<TargetFit> {
     let live: Vec<&Target> = targets.iter().filter(|t| !t.archived).collect();
     if live.is_empty() {
         return None;
     }
-    let g = guess(&rec.role, jd);
-    let rated: Vec<(&Target, Rated)> = live.iter().map(|t| (*t, rate(&g, t))).collect();
+    let rated: Vec<(&Target, Rated)> = live.iter().map(|t| (*t, rate(g, t))).collect();
     let top = rated.iter().map(|(_, r)| r.score).max().unwrap_or(0);
     let best = rated.iter().filter(|(_, r)| r.score == top && r.fit != "weak").map(|(t, _)| *t).find(|t| Some(t.id.as_str()) == filed).or_else(|| rated.iter().find(|(_, r)| r.score == top && r.fit != "weak").map(|(t, _)| *t));
     let mut notes = vec![];
     if let Some(f) = filed.and_then(|id| live.iter().find(|t| t.id == id)) {
         if g.role_family != "other" && f.role_family != "other" && g.role_family != f.role_family {
-            notes.push(format!("The role reads as {}; {} is set up for {}.", family_words(g.role_family), f.name, family_words(&f.role_family)));
+            notes.push(format!("The role reads as {}; {} is set up for {}.", family_words(&g.role_family), f.name, family_words(&f.role_family)));
         }
         if g.sells_to != "both" && f.sells_to != "both" && g.sells_to != f.sells_to {
-            notes.push(format!("The posting sells to {}; {} is set up for {}.", customers_words(g.sells_to), f.name, customers_words(&f.sells_to)));
+            notes.push(format!("The posting sells to {}; {} is set up for {}.", customers_words(&g.sells_to), f.name, customers_words(&f.sells_to)));
         }
-        if (level_index(g.seniority) - level_index(&f.seniority)).abs() > 1 {
+        if (level_index(&g.seniority) - level_index(&f.seniority)).abs() > 1 {
             notes.push(format!("The level reads as {}; {} is set up for {}.", g.seniority, f.name, f.seniority));
         }
     }
     Some(TargetFit {
-        sells_to: g.sells_to.into(),
-        role_family: g.role_family.into(),
-        seniority: g.seniority.into(),
+        sells_to: g.sells_to.clone(),
+        role_family: g.role_family.clone(),
+        seniority: g.seniority.clone(),
         best_target_id: best.map(|t| t.id.clone()),
         mismatch_notes: notes,
         per_target: rated.into_iter().map(|(t, r)| FitRow { target_id: t.id.clone(), fit: r.fit.into(), why: r.why }).collect(),
     })
+}
+
+/// The fit again after the targets or the application's target changed. What the posting reads as (who it sells to, the
+/// kind of role, the level) is kept from the saved reading, the engine's when it made one, and each target is compared
+/// with it by keywords: no new model call. With no saved reading it is guessed from the saved posting. `None` when there
+/// is nothing to compare (no posting and no reading, or no target in use).
+pub fn refit(storage: &Storage, rec: &AppRecord) -> StorageResult<Option<TargetFit>> {
+    let g = match &rec.target_fit {
+        Some(f) => Guess { sells_to: f.sells_to.clone(), role_family: f.role_family.clone(), seniority: f.seniority.clone() },
+        None => match storage.application_text(&rec.id, "jd.txt")?.filter(|t| !t.trim().is_empty()) {
+            Some(jd) => guess(&rec.role, &jd),
+            None => return Ok(None),
+        },
+    };
+    let targets = storage.targets()?;
+    let filed = storage.application_target(rec)?;
+    Ok(fit_against(&g, &targets, filed.as_deref()))
+}
+
+/// Refits the application with this id and saves the result on it.
+pub fn refit_application(storage: &Storage, id: &str) -> StorageResult<()> {
+    let rec = storage.application(id)?;
+    let fit = refit(storage, &rec)?;
+    if fit != rec.target_fit {
+        storage.change(id, |a| {
+            a.target_fit = fit.clone();
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+/// Refits every application that has a posting or a reading, after a target was made, changed, archived or restored.
+pub fn refit_all(storage: &Storage) -> StorageResult<()> {
+    for rec in storage.load_applications(chrono::Local::now().naive_local())?.items {
+        refit_application(storage, &rec.id)?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -186,7 +228,7 @@ pub fn target_from_posting(storage: &Storage, application_id: &str) -> StorageRe
     let g = guess(&rec.role, &jd);
     let (sells_to, family, seniority) = match &fit {
         Some(f) => (f.sells_to.clone(), f.role_family.clone(), f.seniority.clone()),
-        None => (g.sells_to.to_string(), g.role_family.to_string(), g.seniority.to_string()),
+        None => (g.sells_to, g.role_family, g.seniority),
     };
     let role = if rec.role.trim().is_empty() { closest.map(|t| t.role.clone()).unwrap_or_default() } else { rec.role.trim().to_string() };
     let base = Target::default();
@@ -232,9 +274,9 @@ mod tests {
     #[test]
     fn the_posting_words_say_who_the_job_sells_to_what_kind_of_role_it_is_and_the_level() {
         let g = guess("Senior Marketing Operations Manager", B2B_OPS);
-        assert_eq!(g, Guess { sells_to: "b2b", role_family: "marketing_ops", seniority: "senior" });
+        assert_eq!(g, Guess { sells_to: "b2b".into(), role_family: "marketing_ops".into(), seniority: "senior".into() });
         let g = guess("Lifecycle Marketing Manager", B2C_LIFECYCLE);
-        assert_eq!(g, Guess { sells_to: "b2c", role_family: "lifecycle", seniority: "mid" });
+        assert_eq!(g, Guess { sells_to: "b2c".into(), role_family: "lifecycle".into(), seniority: "mid".into() });
     }
 
     #[test]
@@ -326,6 +368,53 @@ mod tests {
         assert!(fit.mismatch_notes.iter().all(|n| !n.contains('\u{2014}')));
         let ops = target("tg_ops", "Marketing Operations Manager", "marketing_ops", "b2b", "senior");
         assert!(keyword_fit(&rec("Senior Marketing Operations Manager"), B2B_OPS, &[ops], Some("tg_ops")).unwrap().mismatch_notes.is_empty());
+    }
+
+    // ---------- the fit again ----------
+
+    #[test]
+    fn a_target_made_after_the_posting_was_read_becomes_the_best_one_without_a_new_reading() {
+        let (_d, s, first, app) = setup();
+        let rec = s.application(&app).unwrap();
+        // The engine read it earlier: b2b marketing ops at senior level.
+        s.change(&app, |a| {
+            a.target_fit = Some(TargetFit { sells_to: "b2b".into(), role_family: "marketing_ops".into(), seniority: "senior".into(), best_target_id: None, mismatch_notes: vec!["old".into()], per_target: vec![FitRow { target_id: first.id.clone(), fit: "weak".into(), why: "model said so".into() }] });
+            Ok(())
+        })
+        .unwrap();
+        let ops = s.save_target(&Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), seniority: "senior".into(), ..Target::default() }).unwrap();
+        refit_application(&s, &app).unwrap();
+        let fit = s.application(&app).unwrap().target_fit.unwrap();
+        assert_eq!(fit.best_target_id.as_deref(), Some(ops.id.as_str()));
+        assert_eq!(fit.per_target.len(), 2, "the new target is in the list");
+        assert_eq!((fit.sells_to.as_str(), fit.role_family.as_str(), fit.seniority.as_str()), ("b2b", "marketing_ops", "senior"), "what the model read is kept");
+        let _ = rec;
+    }
+
+    #[test]
+    fn moving_the_application_changes_which_target_the_notes_are_about() {
+        let (_d, s, first, app) = setup();
+        let ops = s.save_target(&Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), ..Target::default() }).unwrap();
+        refit_application(&s, &app).unwrap();
+        assert!(!s.application(&app).unwrap().target_fit.unwrap().mismatch_notes.is_empty(), "filed under the lifecycle target");
+        s.update_application(&app, crate::storage::applications::AppPatch { target_id: Some(ops.id.clone()), ..Default::default() }).unwrap();
+        refit_application(&s, &app).unwrap();
+        assert!(s.application(&app).unwrap().target_fit.unwrap().mismatch_notes.is_empty(), "filed under the marketing ops one");
+        let _ = first;
+    }
+
+    #[test]
+    fn refitting_all_covers_every_application_with_a_posting_and_leaves_the_rest_alone() {
+        let (_d, s, _first, app) = setup();
+        let bare = s.create_application(NewApplication { company: "No posting".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
+        refit_all(&s).unwrap();
+        assert!(s.application(&app).unwrap().target_fit.is_some());
+        assert!(s.application(&bare.id).unwrap().target_fit.is_none(), "no posting and no reading: nothing to compare");
+        s.archive_target(&s.targets().unwrap()[0].id.clone(), None).unwrap_err(); // the only one in use stays
+        let extra = s.save_target(&Target::default()).unwrap();
+        s.archive_target(&extra.id, None).unwrap();
+        refit_all(&s).unwrap();
+        assert_eq!(s.application(&app).unwrap().target_fit.unwrap().per_target.len(), 1, "an archived target is left out");
     }
 
     // ---------- a new target from a posting ----------

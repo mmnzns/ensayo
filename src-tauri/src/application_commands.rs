@@ -17,6 +17,7 @@ use crate::paths;
 use crate::rep_commands::AiCtx;
 use crate::storage::application_files::DerivedAnalysis;
 use crate::storage::applications::{AppPatch, NewApplication, RemoveStage, SaveProcess, StageInput};
+use crate::storage::targets::TargetFit;
 use crate::storage::{Result as StorageResult, Storage, StorageError};
 use chrono::{Local, NaiveDateTime};
 use serde::Serialize;
@@ -125,6 +126,22 @@ pub fn delete_with(storage: &Storage, audio_root: &Path, id: &str, delete_reps: 
     Ok(DeleteResult { kept_sessions: out.kept_sessions, deleted_reps: out.deleted_reps.len() })
 }
 
+/// Changes the core fields. When the application moves to another target and `rebuild_questions` is set, the prepared
+/// questions are made again for the new target (the ones the user edited stay).
+pub fn update_with(storage: &Storage, ai: Option<AiCtx>, id: &str, patch: AppPatch, at: NaiveDateTime) -> StorageResult<AppBundle> {
+    let rebuild = patch.rebuild_questions;
+    let before = storage.application_target(&storage.application(id)?)?;
+    let rec = storage.update_application(id, patch)?;
+    if storage.application_target(&rec)? != before {
+        if rebuild {
+            jd::rebuild_questions(storage, ai, id)?;
+        }
+        // The notes on where the posting does not fit are about the target it is filed under.
+        crate::applications::target_fit::refit_application(storage, id)?;
+    }
+    bundle(storage, id, at)
+}
+
 // ---------- the process ----------
 
 /// Asking before a stage that has sessions is removed: `needs_confirm`, then call again with the yes.
@@ -165,6 +182,9 @@ pub struct PostingOutcome {
 #[derive(Debug, Serialize)]
 pub struct JdOutcome {
     pub result: JdResult,
+    /// How the posting reads against the targets (the same as `bundle.application.targetFit`); null with no target to compare.
+    #[serde(rename = "targetFit")]
+    pub target_fit: Option<TargetFit>,
     /// The resume was read again with the new reading of the posting (the "say these out loud" list).
     pub resume: Option<ReadResult>,
     pub bundle: AppBundle,
@@ -187,7 +207,7 @@ pub fn analyse_with(storage: &Storage, mut ai: Option<AiCtx>, unavailable: Optio
             resume = Some(resume::read_resume(storage, reborrow(&mut ai), id)?);
         }
     }
-    Ok(JdOutcome { result, resume, bundle: bundle(storage, id, at)? })
+    Ok(JdOutcome { target_fit: result.target_fit.clone(), result, resume, bundle: bundle(storage, id, at)? })
 }
 
 // ---------- the resume ----------
@@ -249,14 +269,15 @@ pub async fn create_application(new: NewApplication, posting: Option<String>) ->
     .await
 }
 
-/// Changes core fields (company, role, status, closed reason, date applied, source, contacts, notes, startup). Each
-/// field that differs is saved and listed in `edited_by_user`. Closing needs a reason.
+/// Changes core fields (company, role, status, closed reason, date applied, source, contacts, notes, startup, target).
+/// Each field that differs is saved and listed in `edited_by_user`. Closing needs a reason. With `targetId` the
+/// application moves to that target; with `rebuildQuestions` as well, its prepared questions are made again for it.
 #[tauri::command]
 pub async fn update_application(application_id: String, patch: AppPatch) -> Cmd<AppBundle> {
     blocking(move || {
         let s = open().map_err(plain)?;
-        s.update_application(&application_id, patch).map_err(plain)?;
-        bundle(&s, &application_id, now()).map_err(plain)
+        let (out, _unavailable) = with_engine(&application_id, |ai| update_with(&s, ai, &application_id, patch, now()));
+        out.map_err(plain)
     })
     .await
 }
@@ -680,6 +701,121 @@ mod tests {
             "story_suggestions": []
         })
         .to_string()
+    }
+
+    // ---------- targets ----------
+
+    fn with_two_targets(s: &Storage) -> (crate::storage::targets::Target, crate::storage::targets::Target) {
+        use crate::storage::targets::Target;
+        s.save_profile(&crate::storage::model::Profile { name: "Dana".into(), full_name: "".into(), target_role: "Senior Lifecycle Marketing Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix activation.".into(), focus_habits: vec![] }).unwrap();
+        let first = s.targets().unwrap().remove(0);
+        let ops = s.save_target(&Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), ..Default::default() }).unwrap();
+        (first, ops)
+    }
+
+    #[test]
+    fn an_application_is_created_under_the_target_asked_for_else_the_active_one_and_the_view_says_so() {
+        let (_d, s) = setup();
+        let (first, ops) = with_two_targets(&s);
+        let day = NaiveDate::from_ymd_opt(2026, 10, 15).unwrap();
+        let default = create_with(&s, new_app(false), None, day, at()).unwrap();
+        assert_eq!(default.application.target_id.as_deref(), Some(first.id.as_str()));
+        let asked: NewApplication = serde_json::from_value(json!({ "company": "Northpine", "targetId": ops.id })).unwrap();
+        let named = create_with(&s, asked, None, day, at()).unwrap();
+        assert_eq!(named.application.target_id.as_deref(), Some(ops.id.as_str()));
+        let snake: NewApplication = serde_json::from_value(json!({ "company": "Northpine", "target_id": ops.id })).unwrap();
+        assert_eq!(snake.target_id.as_deref(), Some(ops.id.as_str()));
+        let json = serde_json::to_value(&named.application).unwrap();
+        assert_eq!(json["targetId"], ops.id.as_str());
+        assert!(json.get("targetFit").is_some_and(|v| v.is_null()), "no fit until a posting is read");
+    }
+
+    #[test]
+    fn reading_the_posting_returns_the_fit_as_target_fit_and_the_view_carries_it() {
+        let (_d, s) = setup();
+        let (first, ops) = with_two_targets(&s);
+        let id = make(&s);
+        let out = analyse_with(&s, None, None, &id, None, at()).unwrap();
+        let json = serde_json::to_value(&out).unwrap();
+        assert_eq!(json["targetFit"]["bestTargetId"], first.id.as_str());
+        assert_eq!(json["targetFit"]["perTarget"].as_array().unwrap().len(), 2);
+        assert!(json["targetFit"]["perTarget"][0]["targetId"].is_string() && json["targetFit"]["mismatchNotes"].is_array());
+        assert_eq!(json["bundle"]["application"]["targetFit"], json["targetFit"], "the application carries the same fit");
+        let _ = ops;
+    }
+
+    fn patch(target: Option<&str>, rebuild: bool) -> AppPatch {
+        serde_json::from_value(json!({ "targetId": target, "rebuildQuestions": rebuild })).unwrap()
+    }
+
+    #[test]
+    fn moving_an_application_to_another_target_can_make_its_questions_again_and_keeps_the_ones_the_user_edited() {
+        let (_d, s) = setup();
+        let (first, ops) = with_two_targets(&s);
+        let id = make(&s);
+        analyse_with(&s, None, None, &id, None, at()).unwrap();
+        jd::save_question(&s, &id, QuestionInput { id: None, stage_id: "stg_1".into(), kind: "behavioral".into(), text: "My own question?".into() }).unwrap();
+        let before: Vec<String> = view::build_extras(&s, &s.application(&id).unwrap(), &view::Ctx { now: at(), stories: &[], sessions: &[], targets: &[] }).unwrap().questions.into_iter().map(|q| q.id).collect();
+        // Only filing: the questions are not touched.
+        let b = update_with(&s, None, &id, patch(Some(&ops.id), false), at()).unwrap();
+        assert_eq!(b.application.target_id.as_deref(), Some(ops.id.as_str()));
+        let same: Vec<String> = b.extras.questions.iter().map(|q| q.id.clone()).collect();
+        assert_eq!(same, before, "no rebuild asked for");
+        // Back to the first target, with a rebuild: new questions, the user's own stays.
+        let b = update_with(&s, None, &id, patch(Some(&first.id), true), at()).unwrap();
+        assert_eq!(b.application.target_id.as_deref(), Some(first.id.as_str()));
+        assert!(b.extras.questions.iter().any(|q| q.text == "My own question?" && q.edited_by_user));
+        assert_ne!(b.extras.questions.iter().map(|q| q.id.clone()).collect::<Vec<_>>(), before, "the set was made again (new question ids)");
+    }
+
+    #[test]
+    fn moving_an_application_works_out_the_fit_again_for_its_new_target_without_a_new_reading() {
+        let (_d, s) = setup();
+        let (first, ops) = with_two_targets(&s);
+        let id = make(&s);
+        let read = analyse_with(&s, None, None, &id, None, at()).unwrap().target_fit.unwrap();
+        assert!(read.mismatch_notes.is_empty(), "a lifecycle posting filed under the lifecycle target");
+        let b = update_with(&s, None, &id, patch(Some(&ops.id), false), at()).unwrap();
+        let fit = b.application.target_fit.unwrap();
+        assert!(!fit.mismatch_notes.is_empty(), "now it is filed under marketing ops: {:?}", fit.mismatch_notes);
+        assert_eq!(fit.best_target_id.as_deref(), Some(first.id.as_str()));
+        assert_eq!((fit.sells_to, fit.role_family), (read.sells_to, read.role_family), "what the posting reads as is kept");
+    }
+
+    #[test]
+    fn asking_for_a_rebuild_without_changing_the_target_does_nothing_to_the_questions() {
+        let (_d, s) = setup();
+        let (first, _ops) = with_two_targets(&s);
+        let id = make(&s);
+        analyse_with(&s, None, None, &id, None, at()).unwrap();
+        let before = bundle(&s, &id, at()).unwrap().extras.questions.iter().map(|q| q.id.clone()).collect::<Vec<_>>();
+        let b = update_with(&s, None, &id, patch(Some(&first.id), true), at()).unwrap();
+        assert_eq!(b.extras.questions.iter().map(|q| q.id.clone()).collect::<Vec<_>>(), before);
+        let b = update_with(&s, None, &id, patch(None, true), at()).unwrap();
+        assert_eq!(b.extras.questions.iter().map(|q| q.id.clone()).collect::<Vec<_>>(), before);
+    }
+
+    #[test]
+    fn an_unknown_or_archived_target_is_refused_and_the_application_stays_where_it_was() {
+        let (_d, s) = setup();
+        let (first, ops) = with_two_targets(&s);
+        let id = make(&s);
+        assert!(update_with(&s, None, &id, patch(Some("tg_nope"), false), at()).is_err());
+        s.archive_target(&ops.id, None).unwrap();
+        let err = update_with(&s, None, &id, patch(Some(&ops.id), false), at()).unwrap_err().to_string();
+        assert!(err.contains("archived"), "{err}");
+        assert_eq!(bundle(&s, &id, at()).unwrap().application.target_id.as_deref(), Some(first.id.as_str()));
+    }
+
+    #[test]
+    fn rebuilding_with_the_engine_reads_the_posting_again() {
+        let (_d, s) = setup();
+        let (_first, ops) = with_two_targets(&s);
+        let id = make(&s);
+        let llm = Scripted::new(vec![Ok(JD_REPLY)]);
+        let b = run_ai(&llm, |ai| update_with(&s, ai, &id, patch(Some(&ops.id), true), at())).unwrap();
+        assert_eq!(b.extras.questions.len(), 12);
+        assert!(llm.seen.lock().unwrap()[0].user.contains("Marketing Operations Manager"));
     }
 
     #[test]

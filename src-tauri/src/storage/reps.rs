@@ -206,6 +206,30 @@ impl Storage {
         v
     }
 
+    /// Only the `rep.json` files of a session, without the words and measurements.
+    pub(crate) fn rep_records(&self, session: &str) -> Vec<Rep> {
+        let Ok(session) = checked(session) else { return vec![] };
+        self.rep_numbers(session).into_iter().filter_map(|n| load_record::<Rep>(&self.rep_dir(session, n).join("rep.json"), migrate::unchanged).ok().flatten()).collect()
+    }
+
+    /// Answers practiced per story and target: `story id -> target id -> answers`. A follow-up and the candidate's own
+    /// questions are not answers with a story. A session counts for its target (see `session_target`).
+    pub fn story_practice_by_target(&self) -> Result<std::collections::BTreeMap<String, std::collections::BTreeMap<String, u32>>> {
+        let mut out: std::collections::BTreeMap<String, std::collections::BTreeMap<String, u32>> = Default::default();
+        for session in self.sessions()?.items {
+            let Some(target) = self.session_target(&session)? else { continue };
+            for rep in self.rep_records(&session.id) {
+                if rep.follow_up.is_some() || rep.question_type == "candidate_questions" {
+                    continue;
+                }
+                for story in &rep.story_ids {
+                    *out.entry(story.clone()).or_default().entry(target.clone()).or_default() += 1;
+                }
+            }
+        }
+        Ok(out)
+    }
+
     pub fn save_rep(&self, session: &str, full: &FullRep) -> Result<()> {
         let full = &FullRep { session_id: session.to_string(), ..full.clone() };
         let dir = self.rep_dir(checked(session)?, full.rep.n);
@@ -346,6 +370,40 @@ mod tests {
             transcript: words,
             metrics,
         }
+    }
+
+    #[test]
+    fn answers_practiced_with_a_story_are_counted_per_target_of_their_session() {
+        use crate::storage::targets::Target;
+        let (_d, s) = storage();
+        let a = s.save_target(&Target::default()).unwrap();
+        let b = s.save_target(&Target::default()).unwrap();
+        let sess = |id: &str, target: Option<&str>| Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-21T09:00:00Z".into(), target_id: target.map(String::from) };
+        s.save_session(&sess("ses_a", Some(&a.id))).unwrap();
+        s.save_session(&sess("ses_b", Some(&b.id))).unwrap();
+        s.save_session(&sess("ses_old", None)).unwrap();
+        let with = |n: u32, stories: &[&str], follow_up: bool| {
+            let mut r = rep(n);
+            r.rep.story_ids = stories.iter().map(|x| x.to_string()).collect();
+            if follow_up {
+                r.rep.follow_up = Some(FollowUpMeta { parent_n: 1, kind: "ownership_probe".into(), question: "?".into(), number: 1 });
+            }
+            r
+        };
+        s.save_rep("ses_a", &with(1, &["st_x"], false)).unwrap();
+        s.save_rep("ses_a", &with(2, &["st_x", "st_y"], false)).unwrap();
+        s.save_rep("ses_a", &with(3, &["st_x"], true)).unwrap();
+        s.save_rep("ses_b", &with(1, &["st_x"], false)).unwrap();
+        s.save_rep("ses_old", &with(1, &["st_y"], false)).unwrap();
+        let by = s.story_practice_by_target().unwrap();
+        assert_eq!(by["st_x"], [(a.id.clone(), 2), (b.id.clone(), 1)].into_iter().collect(), "a follow-up is not counted");
+        assert_eq!(by["st_y"], [(a.id.clone(), 2)].into_iter().collect(), "a session with no target is the first target's");
+        let stories = s.with_practice_by_target(vec![crate::storage::model::Story { id: "st_x".into(), ..crate::storage::targets::story_for_tests("st_x") }, crate::storage::targets::story_for_tests("st_none")]).unwrap();
+        assert_eq!(stories[0].usage.by_target.get(&a.id), Some(&2));
+        assert!(stories[1].usage.by_target.is_empty());
+        let json = serde_json::to_value(&stories[0].usage).unwrap();
+        assert_eq!(json["byTarget"][a.id.as_str()], 2);
+        assert!(serde_json::to_value(&stories[1].usage).unwrap().get("byTarget").is_none());
     }
 
     #[test]
