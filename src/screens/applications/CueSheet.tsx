@@ -133,6 +133,19 @@ function Cue({ app, extras }: Featured) {
       setExportError(plainError(e));
     }
   };
+  /** The system print dialog on the print layout, where "Save as PDF" is one of the choices. Tauri's webview prints with
+   *  window.print (on the Mac it routes to the native print call, allowed in the capabilities). If printing fails, the
+   *  Markdown file is saved instead and the line says so. */
+  const printPdf = async () => {
+    setExportError("");
+    try {
+      await Promise.resolve(window.print());
+      setStatus("");
+    } catch {
+      await save();
+      setStatus("Ensayo couldn't open the print window, so it saved a Markdown file instead.");
+    }
+  };
   const save = async () => {
     setExportError("");
     try {
@@ -160,7 +173,7 @@ function Cue({ app, extras }: Featured) {
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button type="button" className="e-btn e-btn-white e-btn-sm" disabled={!cue} onClick={() => void copy()}>Copy Markdown</button>
             <button type="button" className="e-btn e-btn-white e-btn-sm" disabled={!cue} onClick={() => void save()}>Download .md</button>
-            <button type="button" className="e-btn e-btn-primary e-btn-sm" disabled={!cue} onClick={() => window.print()}>Save as PDF</button>
+            <button type="button" className="e-btn e-btn-primary e-btn-sm" disabled={!cue} onClick={() => void printPdf()}>Save as PDF</button>
           </div>
         </header>
         {(status || exportError) && (

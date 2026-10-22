@@ -5,6 +5,8 @@ import type { ResumeOutcome } from "../../data/applicationCommands";
 import { isApp, useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import { MATCH_LABEL, shortDate } from "./format";
+import { pickResumePath } from "../../ui/pickFile";
+import { fileNameOf } from "../settings/targetForms";
 import { bytesOf, isResumeFile, outcomeNotices } from "./forms";
 import { AppHeader, AppTabs, ErrorLine, MatchChip, Notice, useRun, withFeatured, type Featured } from "./parts";
 
@@ -79,6 +81,19 @@ function ResumeTab({ app, now }: Featured) {
     const bytes = await bytesOf(f);
     await attempt((yes) => actions.attachResumeBytes(app.id, f.name, bytes, yes, false), {
       text: `${app.company} already has a resume attached. Replace it with ${f.name}? The lines read from the old one are replaced. Lines you fixed yourself stay.`,
+      yes: "Replace it",
+    });
+  };
+  /** In the app the system picker gives a path, and the backend reads the file itself. */
+  const chooseFile = async () => {
+    if (!isApp()) return fileInput.current?.click();
+    const path = await pickResumePath();
+    if (!path) return;
+    const name = fileNameOf(path);
+    if (!isResumeFile(name)) return setFileError("Ensayo reads PDF and Word files. Choose one of those.");
+    setFileError("");
+    await attempt((yes) => actions.attachResume(app.id, path, yes, false), {
+      text: `${app.company} already has a resume attached. Replace it with ${name}? The lines read from the old one are replaced. Lines you fixed yourself stay.`,
       yes: "Replace it",
     });
   };
@@ -167,9 +182,9 @@ function ResumeTab({ app, now }: Featured) {
               }}
             >
               <span className="e-h3">{attached ? "Choose the file you sent" : app.no_resume ? "You said you didn't send one" : "No resume attached"}</span>
-              <span className="e-small">{isApp() ? "Pick the PDF or Word file from your computer." : "Drop a PDF or Word file here, or pick it from your computer."}</span>
+              <span className="e-small">Drop a PDF or Word file here, or pick it from your computer.</span>
               <span style={{ display: "flex", gap: "8px" }}>
-                <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => fileInput.current?.click()}>Choose a file</button>
+                <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => void chooseFile()}>Choose a file</button>
                 {attached && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChooser(false)}>Cancel</button>}
               </span>
             </div>

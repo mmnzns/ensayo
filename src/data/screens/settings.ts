@@ -127,6 +127,8 @@ export interface SetupCheck {
   fixLabel?: string;
   /** What the button shows when pressed. */
   fixHelp?: string;
+  /** A screen the row links to for the fix, by id. */
+  fixTo?: string;
 }
 
 export interface FeedbackDefaults {

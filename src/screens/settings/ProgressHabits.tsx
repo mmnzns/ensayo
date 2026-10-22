@@ -13,7 +13,8 @@ import { go } from "../../ui/router";
 import { plainError } from "../../data/actions";
 import { setSessionPreset } from "../home/preset";
 import { TargetMark } from "../applications/TargetMark";
-import { filterRepsByTarget, presetFor, progressChoices, repTargetId, targetReadiness, totalsFor, type TargetedRep } from "./progressTargets";
+import { presetFor, repTargetId, targetReadiness } from "../../data/readiness";
+import { filterRepsByTarget, progressChoices, totalsFor, type TargetedRep } from "./progressTargets";
 
 const TOTALS: { label: string; key: keyof Streak; color?: string }[] = [
   { label: "Days in a row", key: "daysInARow", color: "var(--e-win)" },
@@ -109,7 +110,7 @@ export default function ProgressHabits() {
                     {active && <span className="e-badge" style={{ background: "var(--e-tint)", color: "var(--e-primary-dark)" }}>Practicing now</span>}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", borderTop: "1px solid var(--e-line)", paddingTop: "4px" }}>
-                    {c.rows.map((r) => (
+                    {c.lines.map((r) => (
                       <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "8px 0" }}>
                         <span style={{ color: r.ok ? "var(--e-ok)" : "var(--e-muted)", paddingTop: "2px" }} aria-label={r.ok ? "Done" : "Not yet"}>{r.ok ? "✓" : "○"}</span>
                         <span style={{ display: "flex", flexDirection: "column", gap: "1px" }}>

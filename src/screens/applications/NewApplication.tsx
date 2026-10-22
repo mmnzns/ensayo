@@ -9,6 +9,8 @@ import { withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
 import type { ApplicationStatus, StageId } from "../../data/types";
 import { STAGE_LABEL, STATUSES, STATUS_LABEL } from "./format";
+import { pickResumePath } from "../../ui/pickFile";
+import { fileNameOf } from "../settings/targetForms";
 import { bytesOf, contactFromText, isResumeFile, joinAt, moveItem, splitAt } from "./forms";
 import { ErrorLine, Notice, useRun } from "./parts";
 import FitBanner from "./FitBanner";
@@ -56,6 +58,8 @@ export default function NewApplication() {
   const [startup, setStartup] = useState(draft.startup);
   const [choice, setChoice] = useState<ResumeChoice>("attach");
   const [file, setFile] = useState<File | null>(null);
+  /** In the app the system picker gives a path instead of a File, and the backend reads the file itself. */
+  const [filePath, setFilePath] = useState<string | null>(null);
   const [fileName, setFileName] = useState(draft.resumeFileName);
   const [filePages, setFilePages] = useState<number | null>(draft.resumePages || null);
   const [choosing, setChoosing] = useState(!draft.resumeFileName);
@@ -103,7 +107,23 @@ export default function NewApplication() {
     }
     setFileError("");
     setFile(f);
+    setFilePath(null);
     setFileName(f.name);
+    setFilePages(null);
+    setChoosing(false);
+    setChoice("attach");
+  };
+
+  const chooseFile = async () => {
+    if (!isApp()) return fileInput.current?.click();
+    const path = await pickResumePath();
+    if (!path) return;
+    const name = fileNameOf(path);
+    if (!isResumeFile(name)) return setFileError("Ensayo reads PDF and Word files. Choose one of those, or paste the text of your resume after you save.");
+    setFileError("");
+    setFile(null);
+    setFilePath(path);
+    setFileName(name);
     setFilePages(null);
     setChoosing(false);
     setChoice("attach");
@@ -153,7 +173,8 @@ export default function NewApplication() {
         }
       }
       try {
-        if (choice === "attach" && file) result.resume = await actions.attachResumeBytes(id, file.name, await bytesOf(file), false, true);
+        if (choice === "attach" && filePath) result.resume = await actions.attachResume(id, filePath, false, true);
+        else if (choice === "attach" && file) result.resume = await actions.attachResumeBytes(id, file.name, await bytesOf(file), false, true);
         else if (choice === "other" && otherId) result.resume = await actions.useResumeFrom(id, otherId, false, true);
         else if (choice === "none") result.resume = await actions.setNoResume(id, false);
       } catch (e) {
@@ -339,10 +360,10 @@ export default function NewApplication() {
                   takeFile(e.dataTransfer.files?.[0]);
                 }}
               >
-                <span className="e-h3">{isApp() ? "Choose the PDF or Word file" : "Drop the PDF or Word file here"}</span>
-                <span className="e-small">{isApp() ? "Pick it from your computer." : "Or pick it from your computer."}</span>
+                <span className="e-h3">Drop the PDF or Word file here</span>
+                <span className="e-small">Or pick it from your computer.</span>
                 <span style={{ display: "flex", gap: "8px" }}>
-                  <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => fileInput.current?.click()}>Choose a file</button>
+                  <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => void chooseFile()}>Choose a file</button>
                   {fileName && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChoosing(false)}>Keep {fileName}</button>}
                 </span>
               </div>

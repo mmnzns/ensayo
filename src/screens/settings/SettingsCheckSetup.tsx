@@ -1,22 +1,59 @@
 // Draft generated from Design/screens/html/8-7-settings-check-setup.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { isApp } from "../../data/real";
+import type { SetupCheck } from "../../data/screens/settings";
 import { useStore } from "../../data/store";
+import Link from "../../ui/Link";
+import { osOf } from "../first-run/setup";
 import { CheckIcon, SettingsLayout, useLater } from "./parts";
+import { readPrefs } from "./prefs";
+import { checkers, summaryLine } from "./setupChecks";
 
 /** While "Run again" works down the list, each row is waiting, then checking, then settled on its real state. */
 type Phase = "waiting" | "checking" | "done";
 
 export default function SettingsCheckSetup() {
-  const { checkSetup } = useStore().screens.settings;
-  const [phases, setPhases] = useState<Record<string, Phase>>({});
+  const sample = useStore().screens.settings.checkSetup;
+  const app = isApp();
+  // In the app the rows are the real checks, run one after another; in the browser preview they stay the sample.
+  const plan = useRef(app ? checkers(invoke, osOf(typeof navigator === "undefined" ? "" : navigator.userAgent), readPrefs().speech.model) : []);
+  const [live, setLive] = useState<SetupCheck[]>([]);
+  const checkSetup: SetupCheck[] = app ? plan.current.map((c) => live.find((r) => r.id === c.id) ?? { id: c.id, label: c.label, detail: "", state: "ready" }) : sample;
+  const [phases, setPhases] = useState<Record<string, Phase>>(app ? Object.fromEntries(plan.current.map((c) => [c.id, "waiting" as Phase])) : {});
+  const alive = useRef(true);
   const [running, setRunning] = useState(false);
   const [help, setHelp] = useState<string | null>(null);
   const later = useLater();
 
   const phaseOf = (id: string): Phase => phases[id] ?? "done";
 
+  const runLive = async () => {
+    setRunning(true);
+    setHelp(null);
+    setPhases(Object.fromEntries(plan.current.map((c) => [c.id, "waiting" as Phase])));
+    for (const c of plan.current) {
+      if (!alive.current) return;
+      setPhases((p) => ({ ...p, [c.id]: "checking" }));
+      const result = await c.run();
+      if (!alive.current) return;
+      setLive((l) => [...l.filter((r) => r.id !== c.id), result]);
+      setPhases((p) => ({ ...p, [c.id]: "done" }));
+    }
+    setRunning(false);
+  };
+  useEffect(() => {
+    alive.current = true;
+    if (app) void runLive();
+    return () => {
+      alive.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const runAgain = () => {
     if (running) return;
+    if (app) return void runLive();
     setRunning(true);
     setHelp(null);
     setPhases(Object.fromEntries(checkSetup.map((c) => [c.id, "waiting" as Phase])));
@@ -29,11 +66,7 @@ export default function SettingsCheckSetup() {
 
   const settled = checkSetup.filter((c) => phaseOf(c.id) === "done");
   const ready = settled.filter((c) => c.state === "ready").length;
-  const summary = running
-    ? "Checking…"
-    : ready === checkSetup.length
-      ? `${ready} of ${checkSetup.length} ready`
-      : `${ready} of ${checkSetup.length} ready · you can still practice`;
+  const summary = running ? "Checking…" : summaryLine(ready, checkSetup.length);
 
   return (
     <SettingsLayout active="8-7-settings-check-setup">
@@ -71,11 +104,12 @@ export default function SettingsCheckSetup() {
                   )}
                   {phase === "checking" && <span className="e-meta" role="status">Checking…</span>}
                   {phase === "waiting" && <span className="e-small">Waiting</span>}
-                  {fix && (
+                  {fix && c.fixTo && <Link to={c.fixTo} className="e-btn e-btn-soft e-btn-sm">{c.fixLabel ?? "How to fix"}</Link>}
+                  {fix && !c.fixTo && (
                     <button type="button" className="e-btn e-btn-soft e-btn-sm" aria-expanded={help === c.id} onClick={() => setHelp(help === c.id ? null : c.id)}>{c.fixLabel ?? "How to fix"}</button>
                   )}
                 </div>
-                {fix && help === c.id && (
+                {fix && !c.fixTo && help === c.id && (
                   <p className="e-meta" style={{ margin: "0", padding: "0 0 14px 26px" }}>{c.fixHelp}</p>
                 )}
               </div>
