@@ -392,4 +392,36 @@ mod tests {
         let tokens = (req.system.len() + req.user.len()) / 4;
         assert!(tokens < 8000, "{tokens} tokens");
     }
+
+    /// Run-to-run consistency against a real provider, on the example answers (`prompts/examples/README.md`): score each
+    /// twice; every criterion must agree and the typical answer's fix must be answer_first.
+    /// `ENSAYO_AI_PROVIDER=claude ENSAYO_AI_KEY=... cargo test live_consistency -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn live_consistency() {
+        use crate::ai::chat::ProviderLlm;
+        use crate::ai::providers::{default_base, Provider};
+        let provider = Provider::parse(&std::env::var("ENSAYO_AI_PROVIDER").expect("set ENSAYO_AI_PROVIDER")).expect("known provider");
+        let key = std::env::var("ENSAYO_AI_KEY").unwrap_or_default();
+        let (fast, strong) = crate::ai_commands::default_models(provider);
+        let fast = std::env::var("ENSAYO_AI_MODEL").unwrap_or_else(|_| fast.to_string());
+        let llm = ProviderLlm::new(provider, default_base(provider), key, fast.clone(), std::env::var("ENSAYO_AI_STRONG").unwrap_or_else(|_| strong.to_string()));
+        for (name, fixture) in [("typical", TYPICAL), ("good", GOOD)] {
+            let bank = numbers::extract("31% 44%");
+            let metrics = compute(Inputs { words: words_of(fixture), stage: "hiring_manager", question_type: "behavioral", bank: bank.clone(), keep_restart: false });
+            let q = question();
+            let stories = vec![story()];
+            let input = ScoreInput { question: &q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "", jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &bank };
+            let one = score_answer(&llm, &input, &mut Budget::new(provider, 0.0)).unwrap();
+            let two = score_answer(&llm, &input, &mut Budget::new(provider, 0.0)).unwrap();
+            let summary = |a: &AiScore| a.checks.iter().map(|c| format!("{}={:?}", c.id, c.passed)).collect::<Vec<_>>().join(" ");
+            eprintln!("{name} run 1: {}\n{name} run 2: {}\n{name} fix: {:?} / {:?}\n{name} note: {}", summary(&one), summary(&two), one.fix, two.fix, one.note);
+            assert_eq!(summary(&one), summary(&two), "{name}: the same transcript scored twice must agree");
+            if name == "typical" {
+                assert_eq!(one.fix.as_deref(), Some("answer_first"));
+            } else {
+                assert_eq!(one.fix, None, "an excellent answer gets no invented fix");
+            }
+        }
+    }
 }
