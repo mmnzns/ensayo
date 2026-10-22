@@ -48,6 +48,7 @@ function outcome(fix: string | null, checks: Check[], over: Partial<Metrics> = {
     attempt,
     recorded_at: "2026-10-21T10:00:00Z",
     story_ids: [],
+    follow_up: null,
     fix,
     note: null,
     rewrite: null,
@@ -56,7 +57,7 @@ function outcome(fix: string | null, checks: Check[], over: Partial<Metrics> = {
     transcript: m.words,
     metrics: m,
   };
-  return { outcome: "scored", session_id: "ses_a", rep, delta, restart_offered: false, audio_kept: true, notice: null };
+  return { outcome: "scored", session_id: "ses_a", rep, delta, restart_offered: false, audio_kept: true, notice: null, transcript_text: null };
 }
 
 describe("a rep as the result screen shows it", () => {
@@ -186,5 +187,29 @@ describe("a rep judged by the AI", () => {
     expect(a.coachNote).toBe("You led with the 44 percent and stopped right after it.");
     expect(a.wins).toEqual(["Point at 0:06", "Said 44%", "Said what you decided", "Stopped right after it"]);
     expect(a.trySaying).toBeUndefined();
+  });
+});
+
+describe("an answer to a follow-up", () => {
+  const f = [check("f1_answer_push", true), check("f2_new_specific", true), check("f3_consistent", true), check("f4_short", false, "30 seconds against 50 for the first answer."), check("f5_held_position", false, '"I guess it might have"', { sentences: [1] }), check("fillers", true)];
+
+  it("lists the follow-up criteria in plain words", () => {
+    const o = outcome("f5_held_position", f);
+    Object.assign(o.rep!, { follow_up: { parent_n: 1, kind: "skeptic_push", question: "Wouldn't that have happened anyway?", number: 1 }, note: "You backed off. Hold the claim and say why." });
+    const a = attemptFromOutcome(o);
+    expect(a.details.rows.map((r) => r.label).slice(0, 5)).toEqual(["Answered the push first", "Added something new", "Matched your first answer", "Kept it short", "Held your position"]);
+    expect(a.details.rows.find((r) => r.label === "Held your position")).toMatchObject({ state: "notyet", note: '"I guess it might have"' });
+    expect(a.coachNote).toBe("You backed off. Hold the claim and say why.");
+  });
+
+  it("says what went well when the follow-up held up", () => {
+    const good = [check("f1_answer_push", true), check("f2_new_specific", true), check("f3_consistent", true), check("f4_short", true), check("f5_held_position", true), check("fillers", true)];
+    const o = outcome(null, good);
+    Object.assign(o.rep!, { follow_up: { parent_n: 1, kind: "skeptic_push", question: "q", number: 1 }, note: "You held your ground and added the detail." });
+    expect(attemptFromOutcome(o).wins).toEqual(["Answered it first", "Added something new", "Matched your first answer", "Kept it short"]);
+  });
+
+  it("falls back to a plain line for the short-answer rule when there is no coach note", () => {
+    expect(attemptFromOutcome(outcome("f4_short", [check("f4_short", false)])).coachNote).toContain("under half the time");
   });
 });

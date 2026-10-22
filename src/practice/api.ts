@@ -1,6 +1,6 @@
 // The Rust rep commands as one object, so the live practice flow can be driven by a fake in tests and in the browser.
 
-import type { FinishArgs, RepOutcome } from "./types";
+import type { FinishArgs, FollowUpQuestion, RepOutcome } from "./types";
 
 export interface RepApi {
   startRecording(): Promise<void>;
@@ -10,6 +10,9 @@ export interface RepApi {
   rescoreRep(sessionId: string, n: number, keepRestart: boolean): Promise<RepOutcome>;
   deleteRep(sessionId: string, n: number): Promise<void>;
   labelRep(sessionId: string, n: number, wrong: boolean): Promise<void>;
+  nextFollowUp(sessionId: string, parentN: number): Promise<FollowUpQuestion>;
+  clarifyReply(sessionId: string, question: string, clarification: string, stage: string): Promise<string>;
+  aiReady(): Promise<boolean>;
   discardRecording(path: string): Promise<void>;
   labelCriteria(sessionId: string, n: number, labels: Record<string, "pass" | "fail">): Promise<void>;
   repLabels(sessionId: string, n: number): Promise<Record<string, "pass" | "fail">>;
@@ -43,6 +46,9 @@ export async function tauriApi(): Promise<RepApi> {
     rescoreRep: (sessionId, n, keepRestart) => invoke("rescore_rep", { sessionId, n, keepRestart }),
     deleteRep: (sessionId, n) => invoke("delete_rep", { sessionId, n }),
     labelRep: (sessionId, n, wrong) => invoke("label_rep", { sessionId, n, wrong }),
+    nextFollowUp: (sessionId, parentN) => invoke("next_follow_up", { sessionId, parentN }),
+    clarifyReply: (sessionId, question, clarification, stage) => invoke("clarify_reply", { sessionId, question, clarification, stage }),
+    aiReady: () => invoke("ai_ready"),
     discardRecording: (path) => invoke("discard_recording", { path }),
     labelCriteria: (sessionId, n, labels) => invoke("label_criteria", { sessionId, n, labels }),
     repLabels: (sessionId, n) => invoke("rep_labels", { sessionId, n }),

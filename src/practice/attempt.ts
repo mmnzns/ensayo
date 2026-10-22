@@ -32,6 +32,10 @@ function rulesNote(rep: FullRep): string {
       return `That ran ${clock(seconds(m.speaking_ms))}. This stage wants ${m.window.min_s} to ${m.window.max_s} seconds. Cut the setup.`;
     case "fillers":
       return `${m.fillers.count} filler words, about ${m.fillers.per_minute} a minute. Pause instead of filling.`;
+    case "f4_short":
+      return `A follow-up answer should take under half the time of the first. This one ran ${clock(seconds(m.speaking_ms))}.`;
+    case undefined:
+    case null:
     default:
       return "The parts that can be measured are clean: the number, the stop, the length and the fillers.";
   }
@@ -41,6 +45,14 @@ function wins(rep: FullRep): string[] {
   const m = rep.metrics;
   const passed = (id: string) => checkOf(m, id)?.passed === true;
   const out: string[] = [];
+  if (rep.follow_up) {
+    if (passed("f1_answer_push")) out.push("Answered it first");
+    if (passed("f2_new_specific")) out.push("Added something new");
+    if (passed("f3_consistent")) out.push("Matched your first answer");
+    if (passed("f4_short")) out.push("Kept it short");
+    if (passed("f5_held_position")) out.push("Held your position");
+    return out.slice(0, 4);
+  }
   const point = checkOf(m, "time_to_point");
   if (point?.passed === true && point.seconds !== null) out.push(`Point at ${clock(point.seconds)}`);
   if (m.proof.matched.length > 0) out.push(`Said ${m.proof.matched[0].raw}`);
@@ -109,6 +121,11 @@ function deltaChip(d: Delta | null): PracticeAttempt["delta"] {
 }
 
 const ROW_LABELS: [string, string][] = [
+  ["f1_answer_push", "Answered the push first"],
+  ["f2_new_specific", "Added something new"],
+  ["f3_consistent", "Matched your first answer"],
+  ["f4_short", "Kept it short"],
+  ["f5_held_position", "Held your position"],
   ["answer_first", "Answered the question first"],
   ["proof", "Said your number"],
   ["story_fit", "Picked a story that fits"],

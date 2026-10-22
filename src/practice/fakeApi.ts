@@ -84,6 +84,7 @@ export function fakeApi(): RepApi {
         attempt,
         recorded_at: new Date().toISOString(),
         story_ids: args.story_ids,
+        follow_up: args.follow_up ? { ...args.follow_up, question: args.question_text } : null,
         fix,
         note: null,
         rewrite: null,
@@ -94,13 +95,16 @@ export function fakeApi(): RepApi {
       };
       const delta = attempt > 1 ? { check: "clean_stop", label: "Time after the number", from_seconds: attempt === 2 ? 31 : 12, to_seconds: attempt === 2 ? 12 : 4, from_count: null, to_count: null, improved: true } : null;
       await new Promise((r) => setTimeout(r, 900));
-      return { outcome: "scored", session_id: "ses_fake", rep, delta, restart_offered: false, audio_kept: false, notice: null };
+      return { outcome: "scored", session_id: "ses_fake", rep, delta, restart_offered: false, audio_kept: false, notice: null, transcript_text: null };
     },
     rescoreRep: async () => {
       throw new Error("Not in the preview");
     },
     deleteRep: async () => undefined,
     labelRep: async () => undefined,
+    nextFollowUp: async (_s, parentN) => ({ kind: "ownership_probe", question: "What was your part in that, specifically?", targets: "ownership", number: parentN, of: 2 }),
+    clarifyReply: async () => "Mostly the rollout. That is where our team keeps getting stuck.",
+    aiReady: async () => true,
     discardRecording: async () => undefined,
     labelCriteria: async () => undefined,
     repLabels: async () => ({}),

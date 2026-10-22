@@ -65,6 +65,21 @@ export interface Rewrite {
   replaces_sentence: number | null;
 }
 
+export interface FollowUpMeta {
+  parent_n: number;
+  kind: string;
+  question: string;
+  number: number;
+}
+
+export interface FollowUpQuestion {
+  kind: string;
+  question: string;
+  targets: string;
+  number: number;
+  of: number;
+}
+
 export interface FullRep {
   session_id: string;
   n: number;
@@ -80,6 +95,7 @@ export interface FullRep {
   attempt: number;
   recorded_at: string;
   story_ids: string[];
+  follow_up: FollowUpMeta | null;
   fix: string | null;
   /** The coach's note and the line to say instead. Null for a rep judged by timing only. */
   note: string | null;
@@ -109,6 +125,8 @@ export interface RepOutcome {
   audio_kept: boolean;
   /** Why the AI did not judge this one (no key, over the cap, an unreadable reply). */
   notice: string | null;
+  /** What was said, for a clarifying question. */
+  transcript_text: string | null;
 }
 
 export interface FinishArgs {
@@ -125,6 +143,8 @@ export interface FinishArgs {
   builder_operator_check: boolean;
   is_major_story: boolean;
   founder_variant: boolean;
+  /** Set when this recording answers a follow-up question. */
+  follow_up: { parent_n: number; kind: string; number: number } | null;
   attempt: number;
   story_ids: string[];
   audio_path: string;

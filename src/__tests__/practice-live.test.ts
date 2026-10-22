@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { RepApi } from "../practice/api";
-import { labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute } from "../practice/live";
-import type { FullRep, RepOutcome } from "../practice/types";
+import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute } from "../practice/live";
+import type { FinishArgs, FullRep, RepOutcome } from "../practice/types";
 
 function rep(attempt: number, fix: string | null = "length"): FullRep {
   return {
@@ -19,6 +19,7 @@ function rep(attempt: number, fix: string | null = "length"): FullRep {
     attempt,
     recorded_at: "2026-10-21T10:00:00Z",
     story_ids: [],
+    follow_up: null,
     fix,
     note: null,
     rewrite: null,
@@ -45,7 +46,12 @@ function rep(attempt: number, fix: string | null = "length"): FullRep {
   };
 }
 
-const scored = (attempt: number, fix: string | null = "length", restart = false): RepOutcome => ({ outcome: "scored", session_id: "ses_a", rep: rep(attempt, fix), delta: null, restart_offered: restart, audio_kept: true, notice: null });
+const scored = (attempt: number, fix: string | null = "length", restart = false): RepOutcome => ({ outcome: "scored", session_id: "ses_a", rep: rep(attempt, fix), delta: null, restart_offered: restart, audio_kept: true, notice: null, transcript_text: null });
+
+let followUpsAsked = 0;
+let followUpError: unknown = null;
+let clarifyError: unknown = null;
+let ready = true;
 
 function fake(outcomes: RepOutcome[]) {
   const calls: string[] = [];
@@ -58,6 +64,13 @@ function fake(outcomes: RepOutcome[]) {
     rescoreRep: async (_s, _n, keep) => (calls.push(`rescore:${keep}`), scored(1, null)),
     deleteRep: async () => void calls.push("delete"),
     labelRep: async (_s, n, wrong) => void calls.push(`label:${n}:${wrong}`),
+    nextFollowUp: async (_s, parentN) => {
+      calls.push(`followup:${parentN}`);
+      if (followUpError) throw followUpError;
+      return { kind: "ownership_probe", question: "What was your part in that, specifically?", targets: "ownership", number: followUpsAsked++ + 1, of: 2 };
+    },
+    clarifyReply: async (_s, q, c) => (calls.push(`clarify:${q}|${c}`), clarifyError ? Promise.reject(clarifyError) : "Mostly the rollout."),
+    aiReady: async () => ready,
     discardRecording: async () => void calls.push("discard"),
     labelCriteria: async (_s, n, labels) => void calls.push(`labels:${n}:${JSON.stringify(labels)}`),
     repLabels: async () => ({ proof: "pass" }),
@@ -73,7 +86,13 @@ const begin = (over = {}) =>
     { targetRole: "Senior Lifecycle Marketing Manager", stories: mockStore.stories, methods: mockStore.methods },
   );
 
-beforeEach(() => resetLive());
+beforeEach(() => {
+  resetLive();
+  followUpsAsked = 0;
+  followUpError = null;
+  clarifyError = null;
+  ready = true;
+});
 
 describe("starting a live session", () => {
   it("picks the questions and waits on the first one", () => {
@@ -151,7 +170,7 @@ describe("one rep", () => {
   });
 
   it("something too short to hear is not a result", async () => {
-    const { api } = fake([{ outcome: "didnt_catch", session_id: "ses_a", rep: null, delta: null, restart_offered: false, audio_kept: false, notice: null }]);
+    const { api } = fake([{ outcome: "didnt_catch", session_id: "ses_a", rep: null, delta: null, restart_offered: false, audio_kept: false, notice: null, transcript_text: null }]);
     setRepApi(api);
     begin();
     await beginRecording();
@@ -243,5 +262,127 @@ describe("restart, notes and ending", () => {
 
   it("the hard cap is four minutes", () => {
     expect(HARD_CAP_SECONDS).toBe(240);
+  });
+});
+
+describe("follow-ups", () => {
+  const followScored = (n: number, fix: string | null = "f5_held_position"): RepOutcome => {
+    const o = scored(1, fix);
+    o.rep = { ...o.rep!, n, attempt: 1, follow_up: { parent_n: 1, kind: "ownership_probe", question: "What was your part in that, specifically?", number: 1 } };
+    return o;
+  };
+
+  async function firstAnswer(extra: RepOutcome[] = []) {
+    const f = fake([scored(1), ...extra]);
+    setRepApi(f.api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    return f;
+  }
+
+  it("asking for one fetches the question for the kept answer and moves to the follow-up screen", async () => {
+    const { calls } = await firstAnswer();
+    expect(await requestFollowUp()).toBe("3-6-follow-up");
+    expect(calls).toContain("followup:1");
+    const s = getLive();
+    expect(s.view).toBe("followup");
+    expect(s.followUp).toMatchObject({ question: "What was your part in that, specifically?", number: 1, of: 2, parentN: 1 });
+    expect(s.phase).toBe("asking");
+  });
+
+  it("answering it sends the follow-up details and keeps the first answer's result untouched", async () => {
+    const { api } = await firstAnswer([followScored(2)]);
+    let sent: FinishArgs | undefined;
+    const original = api.finishRep;
+    api.finishRep = async (a) => ((sent = a), original(a));
+    await requestFollowUp();
+    await beginRecording();
+    await stopAndFinish();
+    expect(sent).toMatchObject({ question_text: "What was your part in that, specifically?", attempt: 1, follow_up: { parent_n: 1, kind: "ownership_probe", number: 1 } });
+    const s = getLive();
+    expect(s.phase).toBe("result");
+    expect(s.attempts).toHaveLength(1);
+    expect(s.followUpAttempt).not.toBeNull();
+    expect(resultRoute()).toBe("3-5-result-attempt-2");
+  });
+
+  it("a second follow-up comes from the same kept answer, and ending them goes back to the first result", async () => {
+    await firstAnswer([followScored(2)]);
+    await requestFollowUp();
+    await beginRecording();
+    await stopAndFinish();
+    expect(await anotherFollowUp()).toBe("3-6-follow-up");
+    expect(getLive().followUp?.number).toBe(2);
+    endFollowUp();
+    expect(getLive()).toMatchObject({ view: "attempt", followUp: null, phase: "result" });
+    expect(getLive().attempts).toHaveLength(1);
+  });
+
+  it("the next question clears the follow-up", async () => {
+    await firstAnswer([followScored(2)]);
+    await requestFollowUp();
+    nextLiveQuestion();
+    expect(getLive()).toMatchObject({ view: "attempt", followUp: null, followUpAttempt: null });
+  });
+
+  it("no follow-up means the plain reason shows on the result and nothing changes", async () => {
+    await firstAnswer();
+    followUpError = "A follow-up needs a feedback engine. Choose one in Settings › AI.";
+    expect(await requestFollowUp()).toBeNull();
+    expect(getLive()).toMatchObject({ view: "attempt", phase: "result", notice: "A follow-up needs a feedback engine. Choose one in Settings › AI." });
+  });
+
+  it("labels and the wrong-note tap go to the follow-up rep while its result is showing", async () => {
+    const { calls } = await firstAnswer([followScored(2)]);
+    await requestFollowUp();
+    await beginRecording();
+    await stopAndFinish();
+    await markWrong(true);
+    expect(calls).toContain("label:2:true");
+  });
+
+  it("knows whether a feedback engine is ready, so the follow-up buttons can hide when it is not", async () => {
+    setRepApi(fake([]).api);
+    begin();
+    ready = false;
+    await checkAi();
+    expect(getLive().aiReady).toBe(false);
+    ready = true;
+    await checkAi();
+    expect(getLive().aiReady).toBe(true);
+  });
+});
+
+describe("a clarifying question back to the interviewer", () => {
+  const clarifying = (): RepOutcome => ({ outcome: "clarifying", session_id: "ses_a", rep: null, delta: null, restart_offered: false, audio_kept: false, notice: null, transcript_text: "Do you mean the strategy or the rollout?" });
+
+  it("gets the interviewer's reply and then waits for the real answer", async () => {
+    const { api, calls } = fake([clarifying(), scored(1)]);
+    setRepApi(api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    const s = getLive();
+    expect(s.phase).toBe("clarify");
+    expect(s.clarify?.map((m) => m.from)).toEqual(["interviewer", "you", "interviewer"]);
+    expect(s.clarify?.[1].text).toBe("Do you mean the strategy or the rollout?");
+    expect(s.clarify?.[2].text).toBe("Mostly the rollout.");
+    expect(calls.some((c) => c.startsWith("clarify:"))).toBe(true);
+    await beginRecording();
+    await stopAndFinish();
+    expect(getLive().phase).toBe("result");
+    expect(getLive().clarify).toBeNull();
+  });
+
+  it("without a reply (no engine) it says so and lets you answer", async () => {
+    clarifyError = "A follow-up needs a feedback engine. Choose one in Settings › AI.";
+    const { api } = fake([clarifying()]);
+    setRepApi(api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    expect(getLive().phase).toBe("notice");
+    expect(getLive().notice).toContain("question back to the interviewer");
   });
 });

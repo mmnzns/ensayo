@@ -9,12 +9,27 @@ import { isApp, tauriApi, type RepApi } from "./api";
 import { attemptFromOutcome } from "./attempt";
 import { banksFor, ownQuestion, pickQuestions, type BankQuestion } from "./questions";
 import { pickStories } from "./stories";
-import type { FinishArgs, RepOutcome } from "./types";
+import type { FinishArgs, FullRep, RepOutcome } from "./types";
 
 export const HARD_CAP_SECONDS = 240;
 export const MAX_ATTEMPTS = 3;
 
-export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "notice" | "error";
+export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "notice" | "clarify" | "error";
+
+export interface LiveFollowUp {
+  question: string;
+  kind: string;
+  /** 1 or 2: which follow-up of this question, and how many the stage allows. */
+  number: number;
+  of: number;
+  /** The rep this probes. */
+  parentN: number;
+}
+
+export interface ChatLine {
+  from: "interviewer" | "you";
+  text: string;
+}
 
 export interface LiveState {
   active: boolean;
@@ -39,6 +54,15 @@ export interface LiveState {
   notice: string | null;
   /** A startup's leadership round: the founder variant. */
   founderVariant: boolean;
+  /** Which answer is on screen: the one to the question, or the one to a follow-up. */
+  view: "attempt" | "followup";
+  followUp: LiveFollowUp | null;
+  followUpOutcome: RepOutcome | null;
+  followUpAttempt: PracticeAttempt | null;
+  /** The interviewer's reply to a clarifying question, as a short conversation. */
+  clarify: ChatLine[] | null;
+  /** A feedback engine is set up, so follow-ups can be offered. */
+  aiReady: boolean;
 }
 
 const INITIAL: LiveState = {
@@ -59,6 +83,12 @@ const INITIAL: LiveState = {
   error: null,
   notice: null,
   founderVariant: false,
+  view: "attempt",
+  followUp: null,
+  followUpOutcome: null,
+  followUpAttempt: null,
+  clarify: null,
+  aiReady: false,
 };
 
 let state: LiveState = INITIAL;
@@ -151,6 +181,15 @@ export function liveWindow(): { from: number; to: number } {
   return { from: 60, to: 90 };
 }
 
+/** The rep whose result is on screen: the follow-up's while one is showing, else the current attempt's. */
+export function currentRep(): FullRep | null {
+  if (state.view === "followup") return state.followUpOutcome?.rep ?? null;
+  return state.outcomes[state.attempt - 1]?.rep ?? null;
+}
+
+/** The question text on screen: the follow-up's while one is asked. */
+export const currentQuestionText = (): string => (state.view === "followup" && state.followUp ? state.followUp.question : (currentQuestion()?.text ?? ""));
+
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export async function beginRecording() {
@@ -202,54 +241,80 @@ export async function stopAndFinish() {
       stage: state.stage,
       application_id: state.applicationId,
       question_id: q.id,
-      question_text: q.text,
+      question_text: currentQuestionText(),
       question_type: q.type,
       behavioral_situation: q.behavioral_situation && q.behavioral_situation !== "other" ? q.behavioral_situation : null,
       commitment_check: q.commitment_check,
       builder_operator_check: q.builder_operator_check,
       is_major_story: !["factual", "gap", "motivation"].includes(q.type),
       founder_variant: state.founderVariant && state.stage === "leadership",
-      attempt: state.attempt,
+      follow_up: state.view === "followup" && state.followUp ? { parent_n: state.followUp.parentN, kind: state.followUp.kind, number: state.followUp.number } : null,
+      attempt: state.view === "followup" ? 1 : state.attempt,
       story_ids: storyIdsFor(q),
       audio_path: rec.path,
     };
     const out = await a.finishRep(args);
-    apply(out);
+    await apply(out);
   } catch (e) {
     set({ phase: "error", error: message(e) });
   }
 }
 
 const NOTICES: Record<string, string> = {
-  clarifying: "That sounded like a question back to the interviewer, not an answer. Replies to your questions arrive with follow-ups. Answer it directly this time.",
+  clarifying: "That sounded like a question back to the interviewer, not an answer. Answer it directly this time.",
   not_an_answer: "That didn't sound like an answer to this question. Try again.",
 };
 
-function apply(out: RepOutcome) {
-  if (out.outcome === "clarifying" || out.outcome === "not_an_answer") {
-    set({ phase: "notice", notice: NOTICES[out.outcome], sessionId: out.session_id, recordingPath: null, restartOffered: false });
+async function apply(out: RepOutcome) {
+  if (out.outcome === "clarifying") {
+    // Asking to clarify is a valid move: the interviewer answers, then the real answer is recorded. It is not scored.
+    const question = currentQuestionText();
+    try {
+      const reply = await (await repApi()).clarifyReply(out.session_id, question, out.transcript_text ?? "", state.stage);
+      set({
+        phase: "clarify",
+        clarify: [
+          { from: "interviewer", text: question },
+          { from: "you", text: out.transcript_text ?? "" },
+          { from: "interviewer", text: reply },
+        ],
+        sessionId: out.session_id,
+        recordingPath: null,
+        restartOffered: false,
+      });
+    } catch {
+      set({ phase: "notice", notice: NOTICES.clarifying, sessionId: out.session_id, recordingPath: null, restartOffered: false });
+    }
+    return;
+  }
+  if (out.outcome === "not_an_answer") {
+    set({ phase: "notice", notice: NOTICES.not_an_answer, sessionId: out.session_id, recordingPath: null, restartOffered: false });
     return;
   }
   if (out.outcome === "didnt_catch" || !out.rep) {
     set({ phase: "didnt_catch", sessionId: out.session_id, recordingPath: null, restartOffered: false });
     return;
   }
+  if (state.view === "followup") {
+    set({ phase: "result", sessionId: out.session_id, followUpOutcome: out, followUpAttempt: attemptFromOutcome(out), restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
+    return;
+  }
   const i = state.attempt - 1;
   const attempts = [...state.attempts.slice(0, i), attemptFromOutcome(out)];
   const outcomes = [...state.outcomes.slice(0, i), out];
-  set({ phase: "result", sessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice });
+  set({ phase: "result", sessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
 }
 
 /** The result screen for what was just measured. */
 export function resultRoute(): string {
-  const a = state.attempts[state.attempt - 1];
+  const a = state.view === "followup" ? state.followUpAttempt : state.attempts[state.attempt - 1];
   if (a?.wins && a.wins.length > 0) return "3-8-result-everything-worked";
-  return state.attempt <= 1 ? "3-4-result-attempt-1-details-open" : "3-5-result-attempt-2";
+  return state.view === "followup" || state.attempt > 1 ? "3-5-result-attempt-2" : "3-4-result-attempt-1-details-open";
 }
 
 /** "Again": one more go at the same question, up to three. */
 export function tryAgain() {
-  set({ attempt: Math.min(MAX_ATTEMPTS, state.attempt + 1), phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null });
+  set({ attempt: Math.min(MAX_ATTEMPTS, state.attempt + 1), phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null, clarify: null });
 }
 
 /** Moves to the next question, or says the session is over. */
@@ -258,17 +323,17 @@ export function nextLiveQuestion(): "asking" | "done" {
     set({ phase: "idle" });
     return "done";
   }
-  set({ index: state.index + 1, attempt: 1, attempts: [], outcomes: [], phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null });
+  set({ index: state.index + 1, attempt: 1, attempts: [], outcomes: [], phase: "asking", restartOffered: false, noteWrong: false, error: null, notice: null, clarify: null, view: "attempt", followUp: null, followUpOutcome: null, followUpAttempt: null });
   return "asking";
 }
 
 /** After "Start this rep again?": keep the rep and measure from after the restart. */
 export async function keepAfterRestart() {
-  const rep = state.outcomes[state.attempt - 1]?.rep;
+  const rep = currentRep();
   if (!rep) return;
   try {
     const out = await (await repApi()).rescoreRep(rep.session_id, rep.n, true);
-    apply({ ...out, restart_offered: false });
+    await apply({ ...out, restart_offered: false });
   } catch (e) {
     set({ phase: "error", error: message(e) });
   }
@@ -276,10 +341,14 @@ export async function keepAfterRestart() {
 
 /** After "Start this rep again?": throw the rep away and record it again. */
 export async function startOverAfterRestart() {
-  const rep = state.outcomes[state.attempt - 1]?.rep;
+  const rep = currentRep();
   if (!rep) return;
   try {
     await (await repApi()).deleteRep(rep.session_id, rep.n);
+    if (state.view === "followup") {
+      set({ followUpOutcome: null, followUpAttempt: null, phase: "asking", restartOffered: false, noteWrong: false });
+      return;
+    }
     const i = state.attempt - 1;
     set({ attempts: state.attempts.slice(0, i), outcomes: state.outcomes.slice(0, i), phase: "asking", restartOffered: false, noteWrong: false });
   } catch (e) {
@@ -289,7 +358,7 @@ export async function startOverAfterRestart() {
 
 /** "That note was wrong" on the current rep, or taking the tap back. */
 export async function markWrong(wrong: boolean) {
-  const rep = state.outcomes[state.attempt - 1]?.rep;
+  const rep = currentRep();
   if (!rep) return;
   try {
     await (await repApi()).labelRep(rep.session_id, rep.n, wrong);
@@ -299,16 +368,53 @@ export async function markWrong(wrong: boolean) {
   }
 }
 
+/** Whether a feedback engine is set up, so the follow-up buttons can show. */
+export async function checkAi() {
+  try {
+    set({ aiReady: await (await repApi()).aiReady() });
+  } catch {
+    set({ aiReady: false });
+  }
+}
+
+async function askFollowUp(parent: FullRep): Promise<string | null> {
+  try {
+    const f = await (await repApi()).nextFollowUp(parent.session_id, parent.n);
+    set({ view: "followup", followUp: { question: f.question, kind: f.kind, number: f.number, of: f.of, parentN: parent.n }, followUpOutcome: null, followUpAttempt: null, phase: "asking", notice: null, noteWrong: false, restartOffered: false, clarify: null });
+    return "3-6-follow-up";
+  } catch (e) {
+    set({ notice: message(e) });
+    return null;
+  }
+}
+
+/** "They have a follow-up": the interviewer's next question, aimed at the weak spot of the answer on screen. */
+export async function requestFollowUp(): Promise<string | null> {
+  const parent = state.outcomes[state.attempt - 1]?.rep;
+  return parent ? askFollowUp(parent) : null;
+}
+
+/** After answering a follow-up: another one, from the same kept answer, while the stage allows. */
+export async function anotherFollowUp(): Promise<string | null> {
+  const parent = state.outcomes[state.attempt - 1]?.rep;
+  return parent ? askFollowUp(parent) : null;
+}
+
+/** Back to the result of the answer the follow-ups were about. */
+export function endFollowUp() {
+  set({ view: "attempt", followUp: null, followUpOutcome: null, followUpAttempt: null, phase: "result", noteWrong: false, restartOffered: false, clarify: null });
+}
+
 /** "Label this rep": the user's own pass or fail per criterion, saved into the eval set. */
 export async function labelCriteria(labels: Record<string, "pass" | "fail">) {
-  const rep = state.outcomes[state.attempt - 1]?.rep;
+  const rep = currentRep();
   if (!rep) return;
   await (await repApi()).labelCriteria(rep.session_id, rep.n, labels);
 }
 
 /** The labels already saved for the current rep. */
 export async function savedLabels(): Promise<Record<string, "pass" | "fail">> {
-  const rep = state.outcomes[state.attempt - 1]?.rep;
+  const rep = currentRep();
   if (!rep) return {};
   try {
     return await (await repApi()).repLabels(rep.session_id, rep.n);
@@ -353,7 +459,7 @@ let player: HTMLAudioElement | null = null;
 
 /** Plays the saved audio for the current rep. Returns false when it is no longer on this computer. */
 export async function listenToRep(): Promise<boolean> {
-  const rep = state.outcomes[state.attempt - 1]?.rep;
+  const rep = currentRep();
   if (!rep) return false;
   try {
     const a = await repApi();
