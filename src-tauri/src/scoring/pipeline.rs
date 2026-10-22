@@ -60,6 +60,38 @@ pub struct AiScore {
     pub offer_follow_up: bool,
 }
 
+/// What prompt 01 returns for a question the bank did not tag (a typed question, or one from a pasted posting).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Classification {
+    #[serde(rename = "type")]
+    pub question_type: String,
+    pub behavioral_situation: Option<String>,
+    pub commitment_check: bool,
+    pub builder_operator_check: bool,
+    pub is_major_story: bool,
+    #[serde(default)]
+    pub competencies: Vec<String>,
+}
+
+pub fn classify(llm: &dyn Llm, question: &str, target_role: &str, industry: &str, budget: &mut Budget) -> Result<Classification, CallError> {
+    let vars = Vars::new().set("question", escape_data(question)).set("target_role", escape_data(target_role)).set("industry", escape_data(industry));
+    let called = call_json(llm, get(PromptId::Classify), &vars, 400, budget)?;
+    serde_json::from_value(called.value).map_err(|e| CallError::Invalid(e.to_string()))
+}
+
+impl Classification {
+    pub fn into_question(self, text: &str) -> QuestionInfo {
+        QuestionInfo {
+            text: text.to_string(),
+            question_type: self.question_type,
+            behavioral_situation: self.behavioral_situation,
+            commitment_check: self.commitment_check,
+            builder_operator_check: self.builder_operator_check,
+            is_major_story: self.is_major_story,
+        }
+    }
+}
+
 /// How the pipeline reports a score: the AI's checks replace the rules-only ones for this rep.
 pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> Result<AiScore, CallError> {
     let q = input.question;
@@ -320,6 +352,18 @@ mod tests {
         // And the scoring still came from the model's own verdicts, not from the posting.
         assert_eq!(out.fix.as_deref(), Some("answer_first"));
         assert!(user.contains("job_description_summary"));
+    }
+
+    #[test]
+    fn a_typed_question_is_classified_and_the_behavioral_implementation_trap_is_in_the_prompt() {
+        let reply = r#"{"type":"technical","behavioral_situation":null,"commitment_check":false,"builder_operator_check":false,"is_major_story":true,"competencies":["technical depth"]}"#;
+        let llm = Scripted::new(vec![Ok(reply)]);
+        let c = classify(&llm, "Have you done a behavioral implementation in Braze before?", "Lifecycle Manager", "Fintech", &mut Budget::new(Provider::Claude, 0.0)).unwrap();
+        assert_eq!(c.question_type, "technical");
+        assert!(c.clone().into_question("q").is_major_story);
+        let seen = llm.seen.lock().unwrap();
+        assert!(seen[0].system.contains("is `technical`, not `behavioral`"), "the trap rule is in the system prompt");
+        assert!(seen[0].user.contains("Braze"));
     }
 
     #[test]

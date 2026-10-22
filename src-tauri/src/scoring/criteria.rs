@@ -57,7 +57,7 @@ fn to_check(id: &str, v: &Verdict) -> Option<Check> {
         _ => return None,
     };
     let evidence = if !v.quote.trim().is_empty() { format!("\"{}\"", v.quote.trim()) } else { String::new() };
-    Some(Check { id: id.to_string(), passed, evidence, sentences: v.sentences.clone() })
+    Some(Check { id: id.to_string(), passed, evidence, sentences: v.sentences.clone(), seconds: None })
 }
 
 fn secs(ms: u64) -> f64 {
@@ -73,7 +73,7 @@ fn time_to_point(score: &ScoreAnswer, m: &Metrics) -> Option<Check> {
     let idx = score.first_answer_sentence?;
     let s = m.sentences.iter().find(|s| s.index == idx)?;
     let t = s.end_ms.saturating_sub(answer_start(m));
-    Some(Check { id: "time_to_point".into(), passed: Some(t < 10_000), evidence: format!("Your point landed at {:.0} seconds.", secs(t)), sentences: vec![idx] })
+    Some(Check { id: "time_to_point".into(), passed: Some(t < 10_000), evidence: format!("Your point landed at {:.0} seconds.", secs(t)), sentences: vec![idx], seconds: Some(t / 1000) })
 }
 
 /// Time spoken after the sentence that stated the proof, not counting a closing bridge ("That is the kind of problem
@@ -95,12 +95,12 @@ fn proof(score: &ScoreAnswer, m: &Metrics, bank: &[Number]) -> Option<Check> {
     if !bank.is_empty() {
         if let Some(n) = score.numbers_said.iter().find(|n| n.conflicts_with_bank.is_some()) {
             let bank_value = ScoreAnswer::bank_value(n.conflicts_with_bank.as_deref().unwrap_or_default());
-            return Some(Check { id: "proof".into(), passed: Some(false), evidence: format!("You said {}, but your story says {}.", n.text, bank_value), sentences: vec![n.sentence] });
+            return Some(Check { id: "proof".into(), passed: Some(false), evidence: format!("You said {}, but your story says {}.", n.text, bank_value), sentences: vec![n.sentence], seconds: None });
         }
     }
     if !m.proof.matched.is_empty() || score.numbers_said.iter().any(|n| n.matches_bank.is_some()) {
         let said = if m.proof.matched.is_empty() { score.numbers_said.iter().filter(|n| n.matches_bank.is_some()).map(|n| n.text.clone()).collect::<Vec<_>>() } else { m.proof.matched.iter().map(|n| n.raw.clone()).collect() };
-        return Some(Check { id: "proof".into(), passed: Some(true), evidence: format!("You said {}.", said.join(", ")), sentences: landed });
+        return Some(Check { id: "proof".into(), passed: Some(true), evidence: format!("You said {}.", said.join(", ")), sentences: landed, seconds: None });
     }
     let passed = verdict.result == "pass" && (bank.is_empty() || score.numbers_said.iter().any(|n| !n.not_in_bank));
     let evidence = match score.numbers_said.iter().find(|n| n.not_in_bank && !bank.is_empty()) {
@@ -108,7 +108,7 @@ fn proof(score: &ScoreAnswer, m: &Metrics, bank: &[Number]) -> Option<Check> {
         _ if passed => "A result came up.".to_string(),
         _ => "No number or result from your stories came up.".to_string(),
     };
-    Some(Check { id: "proof".into(), passed: Some(passed), evidence, sentences: landed })
+    Some(Check { id: "proof".into(), passed: Some(passed), evidence, sentences: landed, seconds: None })
 }
 
 /// The one list of checks for a rep: the rules' measurements (length, fillers), the model's verdicts for the judgment
@@ -130,6 +130,7 @@ pub fn merge(score: &ScoreAnswer, m: &Metrics, active: &[&str], bank: &[Number])
             passed: t.map(|t| t < timing::TAIL_PASS_SECONDS * 1000),
             evidence: t.map(|t| format!("You kept going for {:.0} seconds after the number.", secs(t))).unwrap_or_else(|| "No number to measure from.".into()),
             sentences: score.proof_landed_sentence.into_iter().collect(),
+            seconds: t.map(|t| t / 1000),
         });
     }
     // The rules' own checks: length and fillers are measured, never judged by the model.

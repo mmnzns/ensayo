@@ -58,6 +58,26 @@ pub struct Delta {
     pub improved: bool,
 }
 
+/// What a fixed criterion is called on the result screen, in plain words.
+pub fn fixed_label(id: &str) -> &'static str {
+    match id {
+        "answer_first" => "Answered up front",
+        "ownership" => "Said what you decided",
+        "method_first" => "Opened with how you work",
+        "context_short" => "Kept the setup short",
+        "conviction" => "Spoke with conviction",
+        "no_complaining" => "No knocks on past teams",
+        "approach_before_action" => "Said what you decided before what you built",
+        "story_fit" => "Picked a story that fits",
+        "type_fit" => "Fit the question",
+        "stage_fit" => "Fit the stage",
+        "jd_fit" => "Used the posting's words",
+        "commitment" => "Led with full-time",
+        "builder_operator" => "Answered builder or operator",
+        _ => "Fixed",
+    }
+}
+
 fn status(m: &Metrics, id: &str) -> Option<bool> {
     m.checks.iter().find(|c| c.id == id).and_then(|c| c.passed)
 }
@@ -84,6 +104,14 @@ pub fn delta(prev: &Metrics, cur: &Metrics, check: &str) -> Option<Delta> {
         }),
         "fillers" => Some(Delta { label: "Filler words".into(), from_count: Some(prev.fillers.count), to_count: Some(cur.fillers.count), ..blank }),
         "proof" => Some(Delta { label: if improved { "Said the number this time".into() } else { "Still no number".into() }, ..blank }),
+        "time_to_point" => {
+            let seconds = |m: &Metrics| m.checks.iter().find(|c| c.id == "time_to_point").and_then(|c| c.seconds);
+            match (seconds(prev), seconds(cur)) {
+                (Some(from), Some(to)) => Some(Delta { label: "Point landed".into(), from_seconds: Some(from), to_seconds: Some(to), improved: to < from, ..blank }),
+                _ => None,
+            }
+        }
+        other if status(cur, other) == Some(true) => Some(Delta { label: fixed_label(other).into(), improved: true, ..blank }),
         _ => None,
     }
 }
@@ -93,7 +121,7 @@ mod tests {
     use super::*;
 
     fn check(id: &str, passed: Option<bool>) -> Check {
-        Check { id: id.into(), passed, evidence: String::new(), sentences: vec![] }
+        Check { id: id.into(), passed, evidence: String::new(), sentences: vec![], seconds: None }
     }
 
     #[test]
@@ -102,6 +130,22 @@ mod tests {
         assert_eq!(top_fix(&checks), Some("clean_stop"));
         let checks = vec![check("fillers", Some(false)), check("proof", Some(false))];
         assert_eq!(top_fix(&checks), Some("proof"));
+    }
+
+    #[test]
+    fn a_fixed_judgment_check_and_the_point_time_are_reported() {
+        use crate::metrics::{compute, Inputs};
+        use crate::speech::words::Word;
+        let words: Vec<Word> = (0..12).map(|i| Word { text: if i == 11 { "it." } else { "word" }.into(), start_ms: i * 500, end_ms: i * 500 + 400 }).collect();
+        let base = compute(Inputs { words, stage: "recruiter", question_type: "behavioral", bank: vec![], keep_restart: false });
+        let with = |checks: Vec<Check>| Metrics { checks, ..base.clone() };
+        let c = |id: &str, passed: bool, seconds: Option<u64>| Check { id: id.into(), passed: Some(passed), evidence: String::new(), sentences: vec![], seconds };
+        let prev = with(vec![c("time_to_point", false, Some(41)), c("ownership", false, None)]);
+        let cur = with(vec![c("time_to_point", true, Some(6)), c("ownership", true, None)]);
+        let d = delta(&prev, &cur, "time_to_point").unwrap();
+        assert_eq!((d.from_seconds, d.to_seconds, d.improved), (Some(41), Some(6), true));
+        assert_eq!(delta(&prev, &cur, "ownership").unwrap().label, "Said what you decided");
+        assert!(delta(&cur, &prev, "ownership").is_none(), "no 'fixed' when it did not pass");
     }
 
     #[test]

@@ -1,6 +1,7 @@
 // Provider table and key store are wired into the UI in M4; they are tested now.
 #[allow(dead_code)]
 mod ai;
+mod ai_commands;
 mod audio_retention;
 mod commands;
 mod data_commands;
@@ -55,6 +56,12 @@ pub fn run() {
             rep_commands::sweep_audio,
             rep_commands::audio_retention,
             rep_commands::set_audio_retention,
+            ai_commands::ai_settings,
+            ai_commands::save_ai_settings,
+            ai_commands::save_api_key,
+            ai_commands::clear_api_key,
+            ai_commands::test_ai,
+            ai_commands::session_cost,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ensayo");

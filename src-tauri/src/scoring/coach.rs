@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn evidence_names_the_check_and_its_sentences() {
-        let c = Check { id: "ownership".into(), passed: Some(false), evidence: "\"we changed the trigger\"".into(), sentences: vec![5] };
+        let c = Check { id: "ownership".into(), passed: Some(false), evidence: "\"we changed the trigger\"".into(), sentences: vec![5], seconds: None };
         assert_eq!(evidence(&c), "ownership: \"we changed the trigger\" (sentences 5)");
     }
 }
