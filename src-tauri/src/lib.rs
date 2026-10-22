@@ -12,6 +12,7 @@ mod platform;
 mod rep_commands;
 mod storage;
 mod recorder;
+mod scoring;
 mod speech;
 
 pub fn run() {
