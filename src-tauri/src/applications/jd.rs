@@ -1162,4 +1162,17 @@ mod tests {
         assert!(none.tools.is_empty() && none.phrases.is_empty() && !none.startup);
         assert!(none.priorities.is_empty());
     }
+
+    #[test]
+    fn reading_the_posting_never_touches_a_core_field_the_user_edited() {
+        let (_d, s, id) = setup();
+        s.update_application(&id, AppPatch { company: Some("Kestrel Pay Ltd".into()), role: Some("Lifecycle Lead".into()), notes: Some("Marco is the hiring manager".into()), ..Default::default() }).unwrap();
+        let before = s.application(&id).unwrap();
+        run(&s, &id, &Scripted::new(vec![Ok(REPLY)]));
+        run(&s, &id, &Scripted::new(vec![Ok(&reply(|v| v["summary"] = json!("Again.")))]));
+        let after = s.application(&id).unwrap();
+        assert_eq!((after.company.as_str(), after.role.as_str(), after.notes.as_str()), ("Kestrel Pay Ltd", "Lifecycle Lead", "Marco is the hiring manager"));
+        assert_eq!(after.edited_by_user, before.edited_by_user, "reading adds nothing to what the user edited");
+        assert_eq!(after.process, before.process);
+    }
 }

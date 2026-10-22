@@ -182,8 +182,12 @@ pub struct ExtrasView {
     /// Answers practiced per stage, by stage id.
     #[serde(rename = "practicedByStage")]
     pub practiced_by_stage: BTreeMap<String, u32>,
+    /// The lock for the stage the night-before suggestion is about (else the current stage), when there is one.
     #[serde(rename = "nightBefore", skip_serializing_if = "Option::is_none")]
     pub night_before: Option<NightBeforeView>,
+    /// Every stage that has a lock, by stage id.
+    #[serde(rename = "lockedByStage")]
+    pub locked_by_stage: BTreeMap<String, NightBeforeView>,
     pub questions: Vec<PrepQuestionView>,
 }
 
@@ -498,12 +502,21 @@ pub fn build_extras(storage: &Storage, app: &AppRecord, ctx: &Ctx) -> StorageRes
         Some(id) => night_before_view(storage, &app.id, &id)?,
         None => None,
     };
+    let mut locked_by_stage = BTreeMap::new();
+    if let Some(file) = storage.load_application_part::<crate::storage::application_files::LockedFile>(&app.id, "locked.json")? {
+        for stage_id in file.by_stage.keys().filter(|k| app.process.iter().any(|p| &p.id == *k)) {
+            if let Some(v) = night_before_view(storage, &app.id, stage_id)? {
+                locked_by_stage.insert(stage_id.clone(), v);
+            }
+        }
+    }
     Ok(ExtrasView {
         posting_pasted_on: if posting.is_empty() { String::new() } else { pasted_on(storage, &app.id) },
         posting_text: posting,
         was_values: app.was_values.clone(),
         practiced_by_stage: practiced,
         night_before,
+        locked_by_stage,
         questions,
     })
 }
@@ -878,6 +891,8 @@ mod tests {
         assert_eq!(v["postingPastedOn"].as_str().unwrap().len(), 10, "a date");
         assert_eq!(v["wasValues"]["role"], "Senior Lifecycle Marketing Manager");
         assert_eq!(v["nightBefore"]["stageId"], "stg_2");
+        assert_eq!(v["lockedByStage"]["stg_2"]["powerStoryId"], "st_onboarding");
+        assert!(v["lockedByStage"].get("stg_3").is_none());
         assert_eq!(v["questions"][0], json!({"id": "q_1", "stageId": "stg_1", "type": "about_you", "text": "Give me the short version.", "bestStoryId": "st_onboarding", "why": "tests a belief", "editedByUser": false, "source": "jd", "behavioralSituation": null, "commitmentCheck": false, "builderOperatorCheck": false}));
         assert_eq!(v["questions"][1]["type"], "future");
         assert_eq!(v["questions"][1]["editedByUser"], true);
@@ -890,6 +905,7 @@ mod tests {
         let v = json_of(&extras(&s, &app.id));
         assert_eq!((v["postingText"].as_str(), v["postingPastedOn"].as_str(), v["questions"].clone()), (Some(""), Some(""), json!([])));
         assert!(v.get("nightBefore").is_none(), "no lock yet: the screen says nothing to lock");
+        assert_eq!(v["lockedByStage"], json!({}));
     }
 
     // ---------- everything ----------

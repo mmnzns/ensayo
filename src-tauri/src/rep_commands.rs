@@ -1369,4 +1369,46 @@ mod tests {
         let claims = saved_claims(&storage, &id);
         assert_eq!(claims.iter().map(|c| c.value.as_str()).collect::<Vec<_>>(), vec!["five weeks"]);
     }
+
+    #[test]
+    fn a_rep_inside_an_application_is_timed_by_its_stage_type_even_when_the_stage_is_renamed_or_repeated() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        storage.rename_stage(&id, "stg_4", "Founder call").unwrap();
+        storage.add_stage(&id, "hiring_manager", Some("Second call with Marco"), None).unwrap();
+        let mut lead = args(&tmp, 1, None);
+        in_app(&mut lead, &id, "leadership");
+        let out = finish_with(&storage, &tmp.join("audio"), &lead, words(40), true, now(), None).unwrap();
+        assert_eq!(out.rep.unwrap().metrics.window, crate::metrics::timing::window("leadership", "behavioral"), "the existing windows by stage type, not a copy of them");
+        let mut second = args(&tmp, 2, None);
+        in_app(&mut second, &id, "hiring_manager");
+        second.stage_id = Some("stg_5".into());
+        let out = finish_with(&storage, &tmp.join("audio"), &second, words(40), true, now(), None).unwrap();
+        assert_eq!(out.rep.unwrap().metrics.window, crate::metrics::timing::window("hiring_manager", "behavioral"));
+        let session = storage.session(&out.session_id).unwrap().unwrap();
+        assert_eq!(session.stage_id.as_deref(), Some("stg_5"), "the second hiring manager call, not the first");
+        assert_eq!(storage.application(&id).unwrap().sessions_on_stage(&storage.application(&id).unwrap().process[4], &storage.sessions().unwrap().items), 1);
+    }
+
+    #[test]
+    fn a_number_that_differs_from_the_resume_in_the_recruiter_stage_fails_the_consistency_check() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut file = ClaimsFile::default();
+        file.claims.push(crate::storage::application_files::ClaimRec { id: "cl_1".into(), kind: "proof_number".into(), subject: "7-day activation".into(), value: "31% to 44%".into(), quote: "Lifted 7-day activation from 31% to 44%".into(), stage: "resume".into(), stage_ref: "resume".into(), rep: None, updated: "x".into(), superseded_by: None, edited_by_user: vec![], source: "resume".into(), conflict: None });
+        file.next_n = 1;
+        storage.save_application_part(&id, "claims.json", &file).unwrap();
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &id, "recruiter");
+        let said = json!([{"type": "proof_number", "subject": "7-day activation", "value": "24% to 18%", "quote": "We cut churn from 24% to 18%", "sentence": 1}]);
+        let conflict = json!([{"type": "proof_number", "subject": "7-day activation", "earlier_claim_id": "cl_1", "earlier_stage": "resume", "earlier_value": "31% to 44%", "new_value": "24% to 18%", "sentence": 1}]);
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(said, conflict)), Ok(r#"{"note":"Your resume says 31 to 44.","rewrite":null,"offer_follow_up":true}"#)]);
+        let rep = ai_run(&llm, &a, &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        let c1 = rep.metrics.checks.iter().find(|c| c.id == "c1_consistent").unwrap();
+        assert_eq!(c1.passed, Some(false));
+        assert!(c1.evidence.starts_with("Your resume says \"31% to 44%\""), "{}", c1.evidence);
+        assert_eq!(rep.rep.fix.as_deref(), Some("c1_consistent"));
+    }
 }

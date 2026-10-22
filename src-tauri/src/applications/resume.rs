@@ -816,7 +816,7 @@ mod tests {
     use crate::scoring::run::testing::Scripted;
     use crate::scoring::run::Budget;
     use crate::storage::application_files::{AnalysisFile, ClaimRec, DerivedAnalysis};
-    use crate::storage::applications::NewApplication;
+    use crate::storage::applications::{AppPatch, NewApplication};
     use crate::storage::model::{ProofPoint, Usage};
     use chrono::NaiveDate;
     use serde_json::{json, Value};
@@ -1426,5 +1426,17 @@ mod tests {
         drop_story_suggestion(&s, &id, "Win-back series brought back 18% of lapsed customers").unwrap();
         assert_eq!(resume_rec(&s, &id).story_suggestions.len(), 1);
         assert!(drop_story_suggestion(&s, &id, "Win-back series brought back 18% of lapsed customers").is_err());
+    }
+
+    #[test]
+    fn reading_the_resume_never_touches_a_core_field_the_user_edited() {
+        let (d, s, id) = setup();
+        s.update_application(&id, AppPatch { role: Some("Lifecycle Lead".into()), source: Some("Referral from Sam".into()), ..Default::default() }).unwrap();
+        let before = s.application(&id).unwrap();
+        attached(&d, &s, &id);
+        read(&s, &id, &Scripted::new(vec![Ok(&reply(|_| {}))]));
+        let after = s.application(&id).unwrap();
+        assert_eq!((after.role.as_str(), after.source.as_str()), ("Lifecycle Lead", "Referral from Sam"));
+        assert_eq!(after.edited_by_user, before.edited_by_user);
     }
 }
