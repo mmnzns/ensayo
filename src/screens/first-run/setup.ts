@@ -1,7 +1,7 @@
 // The setup steps in the app: plain functions between what the backend reports and what the screens say.
 // Nothing here talks to the backend; the screens do, and these decide what to show.
 
-import type { HabitId, Profile, SellsTo, Seniority } from "../../data/types";
+import type { HabitId, Profile, SellsTo, Seniority, Story } from "../../data/types";
 
 // ---------- About you ----------
 
@@ -146,4 +146,41 @@ export function downloadErrorLine(e: unknown): string {
     return "Ensayo couldn't reach the internet to download the speech model. Check your connection and try again, or press Skip and finish it later. Home reminds you until it is done. Nothing is lost; a download picks up where it stopped.";
   }
   return text;
+}
+
+// ---------- Your first story ----------
+
+export interface FoundSummary {
+  headline: string;
+  /** The card headline with the number, or "" when the text had none. */
+  proof: string;
+  employer: string;
+  gap: string;
+  footnote: string;
+}
+
+const GAP_LINES: Record<string, string> = {
+  approach: "Missing: what you noticed and why you chose that fix.",
+  ownership: "Missing: what was yours, and who else helped.",
+  proof_points: "Missing: a number that shows the change.",
+  result: "Missing: what changed in the end.",
+  scale: "Missing: how big it was, in people, money or time.",
+};
+
+/** What "What Ensayo found" shows for a draft the engine made from pasted text. */
+export function foundSummary(draft: { story: Story; missing: string[]; dropped: string[] }): FoundSummary {
+  const first = draft.missing.find((m) => GAP_LINES[m]);
+  return {
+    headline: draft.story.direct_answer.trim(),
+    proof: draft.story.headline.trim(),
+    employer: draft.story.employer.trim(),
+    gap: first ? GAP_LINES[first] : "Nothing is missing. Every part is filled in.",
+    footnote: draft.dropped.length > 0 ? "Some details were left out because they are not in your text. You will see which on the next screen." : "Nothing was added that isn't in your text.",
+  };
+}
+
+/** The backend rejects with a plain sentence (no engine set up, offline, an answer it could not use); never show an empty one. */
+export function parseProblemLine(e: unknown): string {
+  const text = message(e).trim();
+  return text || "Ensayo couldn't read that one. You can fill the story in yourself, or skip this and add one later.";
 }

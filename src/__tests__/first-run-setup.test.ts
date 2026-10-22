@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BLANK_PROFILE } from "../data/real";
+import { emptyStory } from "../data/actions";
 import type { Profile } from "../data/types";
 import {
   MAX_PICKS,
@@ -7,11 +8,13 @@ import {
   ROLE_PROBLEM,
   aboutProblems,
   downloadErrorLine,
+  foundSummary,
   habitsToSave,
   levelVerdict,
   micFix,
   micView,
   osOf,
+  parseProblemLine,
   profileFromAbout,
   pushLevel,
   speechPlan,
@@ -174,5 +177,48 @@ describe("Speech", () => {
     expect(downloadErrorLine("Couldn't save the model: disk full")).toBe("Couldn't save the model: disk full");
     expect(downloadErrorLine("")).toMatch(/try again/i);
     expect(downloadErrorLine(new Error("The network sent a web page instead"))).toContain("web page");
+  });
+});
+
+describe("Your first story", () => {
+  const draft = (over: Partial<ReturnType<typeof emptyStory>> = {}, missing: string[] = [], dropped: string[] = []) => ({
+    story: { ...emptyStory(), direct_answer: " I moved activation from 31 to 44 percent. ", headline: "7-day activation 31% → 44%", employer: "Fernhill", ...over },
+    missing,
+    dropped,
+  });
+
+  it("summarises what was found, from the draft and nothing else", () => {
+    expect(foundSummary(draft())).toEqual({
+      headline: "I moved activation from 31 to 44 percent.",
+      proof: "7-day activation 31% → 44%",
+      employer: "Fernhill",
+      gap: "Nothing is missing. Every part is filled in.",
+      footnote: "Nothing was added that isn't in your text.",
+    });
+  });
+
+  it("names the first missing part in plain words", () => {
+    expect(foundSummary(draft({}, ["approach", "ownership"])).gap).toMatch(/what you noticed/);
+    expect(foundSummary(draft({}, ["scale", "result"])).gap).toMatch(/what changed|how big/);
+    expect(foundSummary(draft({}, ["something_new"])).gap).toMatch(/Nothing is missing/);
+  });
+
+  it("says when details were left out", () => {
+    expect(foundSummary(draft({}, [], ["a number"])).footnote).toMatch(/left out/);
+  });
+
+  it("uses no exclamation, em dash or scoring words in its lines", () => {
+    const lines = ["approach", "ownership", "proof_points", "result", "scale"].map((m) => foundSummary(draft({}, [m])).gap);
+    for (const l of [...lines, parseProblemLine("")]) {
+      expect(l).not.toContain("!");
+      expect(l).not.toContain("—");
+      expect(l.toLowerCase()).not.toMatch(/star|caar|rubric|criterion|score|fail/);
+    }
+  });
+
+  it("shows the backend's own sentence when a read fails, and a plain one when it gave none", () => {
+    expect(parseProblemLine("Reading pasted text needs a feedback engine. Choose one in Settings › AI, or fill the story in yourself.")).toContain("needs a feedback engine");
+    expect(parseProblemLine(new Error("Offline"))).toBe("Offline");
+    expect(parseProblemLine("  ")).toMatch(/fill the story in yourself/);
   });
 });

@@ -1,18 +1,22 @@
 import { useState } from "react";
 import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
+import { startQuickDrill } from "../../practice/quick";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import Numbers, { type NumberRow } from "./Numbers";
 import { draftToReview, storyFromReview } from "./parseDraft";
-import { getParsedDraft, isBlankReview, pasteDraft, setParsedDraft } from "./selection";
+import { getParsedDraft, isBlankReview, isFromSetup, pasteDraft, setFromSetup, setParsedDraft } from "./selection";
 
 const WORDS = ["No", "One", "Two"];
 
 export default function AddAStoryReview() {
-  const { parsed, missingNotes, goodForOptions } = useStore().screens.stories;
+  const store = useStore();
+  const { parsed, missingNotes, goodForOptions } = store.screens.stories;
   const blank = isBlankReview();
+  // In setup the same screen is the last part of "Add one story": back goes to the setup step, saving goes on to the loop card.
+  const setup = isFromSetup();
   // In the app the engine's reading of the pasted text; in the browser preview the sample parse.
   const draft = blank ? null : getParsedDraft();
   const review = draft ? draftToReview(draft.story, draft.missing, draft.dropped) : null;
@@ -38,8 +42,11 @@ export default function AddAStoryReview() {
     setSaving(true);
     setSaveError(false);
     try {
-      await saveStory(storyFromReview(draft?.story ?? null, { title, company, headline, context, approach, action, ownership, result, goodFor }, numbers));
+      const saved = await saveStory(storyFromReview(draft?.story ?? null, { title, company, headline, context, approach, action, ownership, result, goodFor }, numbers));
       setParsedDraft(null);
+      if (setup) setFromSetup(false);
+      // "Save and practice" starts a real Drill on this story (a no-op in the browser preview).
+      if (next === "3-1-practice-interviewer-asking") startQuickDrill({ targetRole: store.profile.targetRole, stories: [...store.stories.filter((x) => x.id !== saved.id), saved], methods: store.methods }, { storyId: saved.id });
       go(next);
     } catch {
       setSaveError(true);
@@ -60,7 +67,7 @@ export default function AddAStoryReview() {
     <AppShell nav="stories">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to="5-2-add-a-story-paste" className="e-small" style={{ textDecoration: "none" }}>‹ Back to your text</Link>
+          <Link to={setup ? "1-7-your-first-story" : "5-2-add-a-story-paste"} className="e-small" style={{ textDecoration: "none" }}>‹ Back to your text</Link>
           <h1 className="e-h1">{blank ? "Write your story" : "Check what Ensayo found"}</h1>
           <span className="e-meta">
             {missing === 0
@@ -69,8 +76,14 @@ export default function AddAStoryReview() {
           </span>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button type="button" className="e-btn e-btn-soft" disabled={saving} onClick={() => save("5-1-stories")}>Save</button>
-          <button type="button" className="e-btn e-btn-primary" disabled={saving} onClick={() => save("3-1-practice-interviewer-asking")}>Save and practice</button>
+          {setup ? (
+            <button type="button" className="e-btn e-btn-primary" disabled={saving} onClick={() => save("first-run-loop")}>Save and continue</button>
+          ) : (
+            <>
+              <button type="button" className="e-btn e-btn-soft" disabled={saving} onClick={() => save("5-1-stories")}>Save</button>
+              <button type="button" className="e-btn e-btn-primary" disabled={saving} onClick={() => save("3-1-practice-interviewer-asking")}>Save and practice</button>
+            </>
+          )}
         </div>
       </header>
       {review && review.dropped.length > 0 && (
