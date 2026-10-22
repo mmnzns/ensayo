@@ -3,6 +3,7 @@
 //! copies shown and never merged, a lock file for "another computer has it open", and a missing folder is an error,
 //! never an empty bank created in its place.
 
+pub mod bank;
 pub mod io;
 pub mod migrate;
 pub mod model;
@@ -29,3 +30,48 @@ pub enum StorageError {
 }
 
 pub type Result<T> = std::result::Result<T, StorageError>;
+
+use std::path::Path;
+
+/// A handle on one data folder.
+#[derive(Debug, Clone)]
+pub struct Storage {
+    root: PathBuf,
+}
+
+/// Records read from a folder, plus a plain-words line for each file that could not be read (so one bad or newer
+/// file never hides the rest).
+#[derive(Debug)]
+pub struct Loaded<T> {
+    pub items: Vec<T>,
+    pub problems: Vec<String>,
+}
+
+impl<T> Default for Loaded<T> {
+    fn default() -> Self {
+        Loaded { items: vec![], problems: vec![] }
+    }
+}
+
+impl Storage {
+    /// Creates the data folder (and the bank folders in it) if needed. Only for a folder the user chose to start.
+    pub fn init(root: PathBuf) -> Result<Storage> {
+        for sub in ["bank/stories", "bank/methods"] {
+            std::fs::create_dir_all(root.join(sub)).map_err(|e| StorageError::Io(root.clone(), e.to_string()))?;
+        }
+        Ok(Storage { root })
+    }
+
+    /// Opens an existing data folder. A folder that is not there is `Unavailable`; it is never created here, so an
+    /// unmounted drive can never turn into an empty bank.
+    pub fn open(root: PathBuf) -> Result<Storage> {
+        if !root.is_dir() {
+            return Err(StorageError::Unavailable(root));
+        }
+        Ok(Storage { root })
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+}
