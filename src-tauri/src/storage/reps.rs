@@ -7,6 +7,7 @@ use super::migrate;
 use super::versioned::{load_record, save_record};
 use super::{Loaded, Result, Storage, StorageError};
 use crate::metrics::Metrics;
+use crate::scoring::coach::Rewrite;
 use crate::speech::words::Word;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -37,6 +38,17 @@ pub struct Rep {
     pub question_id: String,
     pub question_text: String,
     pub question_type: String,
+    /// How the question was tagged, kept so a rep can be measured again (a kept restart) the same way.
+    #[serde(default)]
+    pub behavioral_situation: Option<String>,
+    #[serde(default)]
+    pub commitment_check: bool,
+    #[serde(default)]
+    pub builder_operator_check: bool,
+    #[serde(default = "yes")]
+    pub is_major_story: bool,
+    #[serde(default)]
+    pub founder_variant: bool,
     /// 1, 2 or 3: tries at the same question.
     pub attempt: u32,
     pub recorded_at: String,
@@ -45,7 +57,24 @@ pub struct Rep {
     pub story_ids: Vec<String>,
     /// The check the note was about, picked by code.
     pub fix: Option<String>,
+    /// The coach's note and the one line to say instead. None when the rep was measured by rules only.
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub rewrite: Option<Rewrite>,
+    /// How the AI judged it, for the score log. None for a rules-only rep.
+    #[serde(default)]
+    pub ai: Option<AiMeta>,
     pub feedback: Option<Feedback>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiMeta {
+    /// "score-answer v1", "coach-note v1": versions kept so old scores keep their meaning.
+    pub prompts: Vec<String>,
+    pub rubric_version: u32,
+    /// Estimated cost of the AI calls for this rep so far, in US dollars.
+    pub cost_usd: f64,
 }
 
 /// A rep with its words and measurements, as the screens read it.
@@ -64,6 +93,10 @@ pub struct FullRep {
 #[derive(Serialize, Deserialize)]
 struct TranscriptFile {
     words: Vec<Word>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn checked(id: &str) -> Result<&str> {
@@ -236,7 +269,7 @@ mod tests {
         let metrics = compute(Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: numbers::extract("24%"), keep_restart: false });
         FullRep {
             session_id: "ses_a".into(),
-            rep: Rep { n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), feedback: None },
+            rep: Rep { n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), note: None, rewrite: None, ai: None, feedback: None },
             transcript: words,
             metrics,
         }
