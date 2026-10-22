@@ -1,0 +1,16 @@
+[package]
+name = "ensayo-llm"
+version = "0.0.1"
+description = "Ensayo's built-in local AI helper: runs llama.cpp in its own process"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+ensayo-llm-protocol = { path = "../llm-protocol" }
+serde_json = "1"
+llama-cpp-2 = { version = "=0.1.159", default-features = false, features = ["common"] }
+
+# The Mac build runs the model on the Apple GPU (Metal). Windows is the processor build only in v0.
+[target.'cfg(target_os = "macos")'.dependencies]
+llama-cpp-2 = { version = "=0.1.159", default-features = false, features = ["metal", "common"] }
