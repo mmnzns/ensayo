@@ -2,6 +2,7 @@ import { useState } from "react";
 import { storyGaps, useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { priorityFor } from "./angles";
 import { filterStories, firstUncovered, usageText } from "./helpers";
 import { chooseStory } from "./selection";
 
@@ -37,11 +38,14 @@ export default function Stories() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px" }}>
         {shown.map((s) => {
           const gaps = storyGaps(s);
+          const here = priorityFor(store.activeTarget, s.id);
           return (
-            <Link key={s.id} to="5-4-story" onClick={() => chooseStory(s.id)} className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", textDecoration: "none", color: "var(--e-ink)" }}>
+            <Link key={s.id} to="5-4-story" onClick={() => chooseStory(s.id)} className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", textDecoration: "none", color: "var(--e-ink)", ...(here === "hide" ? { opacity: 0.65 } : {}) }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                 <span className="e-small">{s.employer}</span>
                 <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: "6px" }}>
+                  {here === "pin" && <span className="e-badge" title={`Pinned for ${store.activeTarget?.name}`} style={{ background: "var(--e-tint)", color: "var(--e-primary-dark)" }}>Pinned</span>}
+                  {here === "hide" && <span className="e-badge" title={`Hidden for ${store.activeTarget?.name}`}>Hidden</span>}
                   {gaps.length > 0 ? gaps.map((g) => <span key={g} className="e-badge">{g}</span>) : s.verified ? <span className="e-badge e-badge-ok">Verified</span> : null}
                 </span>
               </div>
