@@ -17,6 +17,11 @@ export interface PrepQuestion {
   stageId: string;
   type: QuestionType;
   text: string;
+  /** Beyond the sample data (the app sends these): the user wrote or changed it, where it came from, why it was asked. */
+  editedByUser?: boolean;
+  source?: string;
+  why?: string;
+  bestStoryId?: string | null;
 }
 
 export interface NightBefore {
@@ -47,6 +52,14 @@ export interface CueSheetData {
   };
   said: { label: string; text: string }[];
   reminders: string[];
+  /** Beyond the sample data (the app sends these). */
+  company?: string;
+  /** "Hiring manager · Friday, October 23 · 2:00 PM". */
+  stageLine?: string;
+  openerPrompt?: string;
+  powerStoryTitle?: string;
+  questions?: string[];
+  numbers?: { label: string; value: string; resumeSays?: string | null; mismatch: boolean }[];
 }
 
 export interface ApplicationExtras {
@@ -57,6 +70,8 @@ export interface ApplicationExtras {
   /** Answers practiced per stage, by ProcessStage id. */
   practicedByStage: Record<string, number>;
   nightBefore?: NightBefore;
+  /** Every stage that has a lock, by ProcessStage id. */
+  lockedByStage?: Record<string, NightBefore>;
   cue?: CueSheetData;
   questions: PrepQuestion[];
 }
@@ -111,7 +126,7 @@ export const applicationsData: ApplicationsData = {
     company: "Kestrel Pay",
     role: "Senior Lifecycle Marketing Manager",
     status: "interviewing",
-    appliedOn: "Oct 6",
+    appliedOn: "2026-10-06",
     source: "Company site",
     contact: "Priya, recruiter",
     resumeFileName: "Dana Ortiz, Resume, Kestrel.pdf",
@@ -119,8 +134,8 @@ export const applicationsData: ApplicationsData = {
     postingText: POSTING,
     startup: true,
     stages: [
-      { stage: "recruiter", at: "Oct 14" },
-      { stage: "hiring_manager", at: "Oct 23, 2 PM" },
+      { stage: "recruiter", at: "2026-10-14" },
+      { stage: "hiring_manager", at: "2026-10-23T14:00" },
       { stage: "panel", at: "" },
       { stage: "leadership", at: "" },
     ],
