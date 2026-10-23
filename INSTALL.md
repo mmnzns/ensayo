@@ -4,7 +4,7 @@ Ensayo is a free practice app for interviews: you answer out loud, it gives you 
 
 ## Mac
 
-1. Download the disk image from the release page and open it: `Ensayo_<version>_aarch64.dmg` for Apple silicon, `Ensayo_<version>_x64.dmg` for an Intel Mac.
+1. Download `Ensayo_<version>_aarch64.dmg` from the release page and open it. Ensayo needs a Mac with Apple silicon (M1 or newer); there is no Intel version.
 2. Drag **Ensayo** to **Applications**.
 3. The first time only: in Applications, **right-click Ensayo, then Open**, then **Open** again. (macOS does this for any app that does not come from the App Store. If you see a message instead, open **System Settings, Privacy & Security** and choose **Open Anyway**.)
 4. When Ensayo asks to use the microphone, choose **OK**. It cannot hear you otherwise.

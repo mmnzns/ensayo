@@ -1,7 +1,7 @@
 # Cutting a tester release
 
 1. Update `version` in `src-tauri/tauri.conf.json` (and `package.json`, `src-tauri/Cargo.toml`) to the same number.
-2. `git tag v0.2.0 && git push origin v0.2.0`. The **Release** workflow makes a draft release in this repo, then builds the Windows installer and both Mac disk images (Apple silicon and Intel), signs the updater packages, and uploads everything. When the three builds are done it adds `latest.json`.
+2. `git tag v0.2.0 && git push origin v0.2.0`. The **Release** workflow makes a draft release in this repo, then builds the Windows installer and the Apple silicon Mac disk image (no Intel build: ONNX Runtime has no Intel Mac binaries), signs the updater packages, and uploads everything. When both builds are done it adds `latest.json`.
 3. Open the draft on the repo's Releases page, install the files on a clean user account, run through `INSTALL.md`, then publish by hand. Publishing is what makes the update visible to installed copies.
 4. A dry run without a tag: Actions, **Release**, **Run workflow** (builds the installers and keeps them as artifacts; needs the signing secrets).
 

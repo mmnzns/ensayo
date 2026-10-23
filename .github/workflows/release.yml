@@ -4,8 +4,9 @@ name: Release
 # repo (the Ensayo repo is public, and the automatic updater can only read public downloads) and uploads to it:
 #   Windows:       Ensayo_<v>_x64-setup.exe and its .sig
 #   Mac (Apple):   Ensayo_<v>_aarch64.dmg, Ensayo_<v>_aarch64.app.tar.gz and its .sig
-#   Mac (Intel):   Ensayo_<v>_x64.dmg, Ensayo_<v>_x64.app.tar.gz and its .sig
-#   latest.json:   built by scripts/latest-json.mjs from every .sig, after all three builds finished
+#   latest.json:   built by scripts/latest-json.mjs from every .sig, after both builds finished
+# No Intel Mac build: ONNX Runtime (ort, used for voice detection and Parakeet) has no prebuilt x86_64-apple-darwin
+# binaries, so it fails to build there (v0.1.0). Talaan is Apple silicon only for the same reason.
 # Publish the draft by hand, on this repo's Releases page, after trying the installers (docs/RELEASE.md). Until it is
 # published the updater doesn't see it (latest/download only serves published releases).
 # Nothing here uses a paid certificate: the Mac is signed with the free self-signed one, Windows is unsigned, and
@@ -99,10 +100,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macos-latest is Apple silicon. The Intel build runs on an Intel runner (no cross-compiling of
-          # whisper.cpp and llama.cpp); if that label is retired, use another x86_64 macOS label.
+          # macos-latest is Apple silicon. No Intel entry: see the note at the top.
           - { os: macos-latest, target: aarch64-apple-darwin, arch: aarch64 }
-          - { os: macos-15-intel, target: x86_64-apple-darwin, arch: x64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -151,7 +150,7 @@ jobs:
             "$out/Ensayo_${v}_${{ matrix.arch }}.app.tar.gz" \
             "$out/Ensayo_${v}_${{ matrix.arch }}.app.tar.gz.sig" --clobber
 
-  # After all three builds: latest.json from every .sig on the draft (what the updater reads once it is published).
+  # After both builds: latest.json from every .sig on the draft (what the updater reads once it is published).
   updater-json:
     needs: [windows, macos]
     if: github.event_name == 'push'
