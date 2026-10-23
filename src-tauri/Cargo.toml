@@ -1,6 +1,6 @@
 [package]
 name = "ensayo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Interview rehearsal app"
 authors = ["Miguel Monzones"]
 edition = "2024"
