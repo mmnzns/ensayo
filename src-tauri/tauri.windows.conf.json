@@ -2,5 +2,20 @@
   "build": {
     "beforeDevCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-llm-helper.ps1 && npm run dev",
     "beforeBuildCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-llm-helper.ps1 && npm run build"
+  },
+  "bundle": {
+    "targets": ["nsis"],
+    "publisher": "Craft Concepts Digital",
+    "homepage": "https://github.com/mmnzns/ensayo",
+    "shortDescription": "Interview practice that stays on your computer",
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper", "silent": true },
+      "bundleVCRuntime": true,
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/hooks.nsh"
+      }
+    }
   }
 }

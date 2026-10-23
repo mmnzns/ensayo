@@ -7,6 +7,16 @@
 ;
 ; The account names are the list in src-tauri/src/keys.rs (ACCOUNTS). Windows stores each one as "<account>.<service>".
 
+; The ensayo-llm helper can outlive Ensayo for a few seconds (an update closes the app without stopping it); close it
+; so its exe isn't locked when the installer replaces or removes it.
+!macro NSIS_HOOK_PREINSTALL
+  !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-llm.exe" "${PRODUCTNAME}"
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+  !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-llm.exe" "${PRODUCTNAME}"
+!macroend
+
 !macro NSIS_HOOK_POSTUNINSTALL
   ${If} $DeleteAppDataCheckboxState = 1
     nsExec::Exec 'cmdkey /delete:claude.Ensayo'

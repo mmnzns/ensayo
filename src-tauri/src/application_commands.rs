@@ -613,7 +613,9 @@ fn open_with_system(path: &Path) -> Cmd<()> {
     #[cfg(target_os = "macos")]
     let spawned = std::process::Command::new("open").arg(path).spawn();
     #[cfg(target_os = "windows")]
-    let spawned = std::process::Command::new("cmd").args(["/C", "start", ""]).arg(path).spawn();
+    // explorer opens the file in its default app with no console window, and never parses the path the way
+    // `cmd /C start` would (a data folder like "Projects & Work" holds an &). explorer only takes backslashes.
+    let spawned = std::process::Command::new("explorer").arg(path.to_string_lossy().replace('/', "\\")).spawn();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let spawned = std::process::Command::new("xdg-open").arg(path).spawn();
     spawned.map(|_| ()).map_err(|_| "Ensayo couldn't open the resume in your viewer.".to_string())
