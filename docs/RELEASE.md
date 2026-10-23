@@ -1,8 +1,8 @@
 # Cutting a tester release
 
 1. Update `version` in `src-tauri/tauri.conf.json` (and `package.json`, `src-tauri/Cargo.toml`) to the same number.
-2. `git tag v0.2.0 && git push origin v0.2.0`. The **Release** workflow makes a draft release in the public releases repo, then builds the Windows installer and both Mac disk images (Apple silicon and Intel), signs the updater packages, and uploads everything. When the three builds are done it adds `latest.json`.
-3. Open the draft in the public releases repo, install the files on a clean user account, run through `INSTALL.md`, then publish by hand. Publishing is what makes the update visible to installed copies.
+2. `git tag v0.2.0 && git push origin v0.2.0`. The **Release** workflow makes a draft release in this repo, then builds the Windows installer and both Mac disk images (Apple silicon and Intel), signs the updater packages, and uploads everything. When the three builds are done it adds `latest.json`.
+3. Open the draft on the repo's Releases page, install the files on a clean user account, run through `INSTALL.md`, then publish by hand. Publishing is what makes the update visible to installed copies.
 4. A dry run without a tag: Actions, **Release**, **Run workflow** (builds the installers and keeps them as artifacts; needs the signing secrets).
 
 ## The automatic updater
@@ -11,15 +11,15 @@ Installed copies of Ensayo look for a newer version 20 seconds after they start 
 
 How it fits together:
 
-- The app asks `https://github.com/mmnzns/ensayo-releases/releases/latest/download/latest.json` (`plugins.updater.endpoints` in `src-tauri/tauri.conf.json`, the only place it is set). The Ensayo repo is private and GitHub downloads from a private repo need a login, so the installers, `.sig` files and `latest.json` are published in a separate public repo that holds releases only.
+- The app asks `https://github.com/mmnzns/ensayo/releases/latest/download/latest.json` (`plugins.updater.endpoints` in `src-tauri/tauri.conf.json`, the only place it is set). The Ensayo repo is public, so the installers, `.sig` files and `latest.json` are published on its own Releases page: GitHub serves `latest/download` without a login only for a public repo, and only for a published release. That address is built into every installed copy, so do not move it once testers have installed. Releases used to live in a separate repo, `mmnzns/ensayo-releases`; it was merged into this one before the first release (2026-10-22) and can be archived.
 - `scripts/latest-json.mjs` builds `latest.json` from every `.sig` on the release. Test it with `node --test scripts/latest-json.check.mjs`.
 - Debug builds (`npm run tauri dev`) never check.
 - Local release builds need the signing key too, because `bundle.createUpdaterArtifacts` is on: `TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/ensayo.key)" npm run tauri build`.
 
 ### One-time setup
 
-1. Create the public repo `mmnzns/ensayo-releases` (empty except a README, so it has a default branch). To use another name, change the endpoint in `tauri.conf.json`, set the repo variable `RELEASE_REPO` and change `DEFAULT_REPO` in `scripts/latest-json.mjs`.
-2. Make a fine-grained token that can only touch that repo, with **Contents: Read and write**, and add it to the Ensayo repo as the secret `RELEASES_TOKEN`.
+1. The repo must stay public. If it is ever made private, the updater stops working for installed copies.
+2. No release token is needed: the workflow publishes with GitHub's own token (the jobs that upload have `contents: write`). Under Settings, Actions, General, Workflow permissions, leave the default; the jobs ask for what they need.
 3. Add the secrets `TAURI_SIGNING_PRIVATE_KEY` (the contents of `~/.tauri/ensayo.key`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the key was made with an empty password, and GitHub won't store an empty secret: skip this one, the workflow then passes it unset, which Tauri reads as an empty password; confirm with a dry run).
 4. Keep `~/.tauri/ensayo.key` safe and backed up somewhere private. It is never committed. If it is lost, installed copies can't be updated: they would reject anything signed with a new key, and testers would have to install the next version by hand. The public half is in `tauri.conf.json`.
 

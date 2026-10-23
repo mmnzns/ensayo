@@ -1,9 +1,9 @@
 // Rebuilds latest.json (what Ensayo's updater reads) from every updater signature on a GitHub release, then
-// uploads it. The release lives in the PUBLIC releases repo (RELEASE_REPO, default mmnzns/ensayo-releases) because
-// the Ensayo repo is private and the updater can't read its downloads. The release workflow runs this once, after
+// uploads it. The release lives in the Ensayo repo itself (RELEASE_REPO, default mmnzns/ensayo; the repo is public,
+// so the updater can read its downloads). The release workflow runs this once, after
 // the Windows and both Mac builds have uploaded their files; it reads latest.json and the .sig list back and, if a
 // signature is missing from the file, rebuilds and uploads again (up to 3 tries, 5 s apart). Needs the gh CLI with
-// GH_TOKEN able to write to that repo.
+// GH_TOKEN able to write releases in that repo (the workflow's own token does).
 //   node scripts/latest-json.mjs v0.2.0            uses the draft or published release for that tag (gh CLI)
 //   node scripts/latest-json.mjs v0.2.0 --dir DIR  prints the file built from DIR/*.sig, uploads nothing
 import { execFileSync } from "node:child_process";
@@ -39,7 +39,7 @@ export function missingPlatforms(latest, sigs) {
   return missing.sort();
 }
 
-export const DEFAULT_REPO = "mmnzns/ensayo-releases";
+export const DEFAULT_REPO = "mmnzns/ensayo";
 const gh = (...args) => execFileSync("gh", args, { encoding: "utf8" });
 const TRIES = 3;
 const WAIT_MS = 5000;

@@ -1,19 +1,17 @@
 name: Release
 
-# Push a tag like v0.2.0 (it must match "version" in src-tauri/tauri.conf.json). This makes a DRAFT release in the
-# public releases repo (repo variable RELEASE_REPO, default mmnzns/ensayo-releases; the Ensayo repo is private, and
-# the automatic updater can only read public downloads) and uploads to it:
+# Push a tag like v0.2.0 (it must match "version" in src-tauri/tauri.conf.json). This makes a DRAFT release in this
+# repo (the Ensayo repo is public, and the automatic updater can only read public downloads) and uploads to it:
 #   Windows:       Ensayo_<v>_x64-setup.exe and its .sig
 #   Mac (Apple):   Ensayo_<v>_aarch64.dmg, Ensayo_<v>_aarch64.app.tar.gz and its .sig
 #   Mac (Intel):   Ensayo_<v>_x64.dmg, Ensayo_<v>_x64.app.tar.gz and its .sig
 #   latest.json:   built by scripts/latest-json.mjs from every .sig, after all three builds finished
-# Publish the draft by hand, in the public repo, after trying the installers (docs/RELEASE.md). Until it is
+# Publish the draft by hand, on this repo's Releases page, after trying the installers (docs/RELEASE.md). Until it is
 # published the updater doesn't see it (latest/download only serves published releases).
 # Nothing here uses a paid certificate: the Mac is signed with the free self-signed one, Windows is unsigned, and
 # testers get one-time steps in INSTALL.md.
 #
 # Secrets:
-#   RELEASES_TOKEN                          fine-grained token with contents:write on RELEASE_REPO only
 #   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD   Ensayo's updater key (~/.tauri/ensayo.key; the password is empty)
 #   APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY   optional, Mac jobs
 # With the Apple secrets the Mac app keeps its microphone permission across updates; without them it is ad-hoc signed
@@ -28,11 +26,13 @@ permissions:
   contents: read
 
 env:
-  RELEASE_REPO: ${{ vars.RELEASE_REPO || 'mmnzns/ensayo-releases' }}
+  RELEASE_REPO: ${{ github.repository }}
 
 jobs:
   draft:
     if: github.event_name == 'push'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,15 +43,16 @@ jobs:
           [ "$want" = "$have" ] || { echo "::error::tag $GITHUB_REF_NAME but tauri.conf.json says $have"; exit 1; }
       - name: Draft release for this tag, in the public repo (once)
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          [ -n "$GH_TOKEN" ] || { echo "::error::the RELEASES_TOKEN secret is missing (docs/RELEASE.md, One-time setup)"; exit 1; }
           gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" --draft --title "Ensayo $GITHUB_REF_NAME" --notes-file scripts/release-notes.md
 
   windows:
     needs: draft
     if: github.event_name == 'push'
+    permissions:
+      contents: write
     runs-on: windows-latest
     env:
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
@@ -84,7 +85,7 @@ jobs:
       - name: Upload to the draft
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           v="${GITHUB_REF_NAME#v}"; out=src-tauri/target/release/bundle/nsis
           gh release upload "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" "$out/Ensayo_${v}_x64-setup.exe" "$out/Ensayo_${v}_x64-setup.exe.sig" --clobber
@@ -92,6 +93,8 @@ jobs:
   macos:
     needs: draft
     if: github.event_name == 'push'
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -137,7 +140,7 @@ jobs:
         run: sh scripts/check-mac-signature.sh "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Ensayo.app"
       - name: Upload to the draft
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           v="${GITHUB_REF_NAME#v}"; out="src-tauri/target/${{ matrix.target }}/release/bundle"
           # The package is Ensayo.app.tar.gz whatever the architecture: name it so the two Macs don't collide.
@@ -152,6 +155,8 @@ jobs:
   updater-json:
     needs: [windows, macos]
     if: github.event_name == 'push'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -160,7 +165,7 @@ jobs:
           node-version: 22
       - run: node --test scripts/latest-json.check.mjs
       - env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/latest-json.mjs "$GITHUB_REF_NAME"
 
   # Run by hand (Actions, Release, Run workflow) to check that both installers build, without making a release.

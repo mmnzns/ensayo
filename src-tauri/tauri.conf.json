@@ -27,7 +27,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJEQTdCQTJFNzQ5MDM1NDIKUldSQ05aQjBMcnFudlF0NVJWVDMwN1dVUDJ3SVVpMnkrK3hBRXByYWlBWk5rOGxRWWtzdlZaNDkK",
-      "endpoints": ["https://github.com/mmnzns/ensayo-releases/releases/latest/download/latest.json"]
+      "endpoints": ["https://github.com/mmnzns/ensayo/releases/latest/download/latest.json"]
     }
   }
 }

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { DEFAULT_REPO, buildLatest, missingPlatforms, platformsFor } from "./latest-json.mjs";
 
-const base = { repo: "mmnzns/ensayo-releases", tag: "v0.2.0", notes: "n", pubDate: "2026-10-20T00:00:00.000Z" };
+const base = { repo: "mmnzns/ensayo", tag: "v0.2.0", notes: "n", pubDate: "2026-10-20T00:00:00.000Z" };
 const WIN = { name: "Ensayo_0.2.0_x64-setup.exe.sig", signature: "WIN" };
 const ARM = { name: "Ensayo_0.2.0_aarch64.app.tar.gz.sig", signature: "ARM\n" };
 const INTEL = { name: "Ensayo_0.2.0_x64.app.tar.gz.sig", signature: "INTEL" };
@@ -24,9 +24,9 @@ describe("latest.json", () => {
     assert.deepEqual(a, buildLatest({ ...base, sigs: [...sigs].reverse() }));
     assert.equal(a.version, "0.2.0");
     assert.deepEqual(Object.keys(a.platforms).sort(), ["darwin-aarch64", "darwin-aarch64-app", "darwin-x86_64", "darwin-x86_64-app", "windows-x86_64", "windows-x86_64-nsis"]);
-    assert.deepEqual(a.platforms["windows-x86_64"], { signature: "WIN", url: "https://github.com/mmnzns/ensayo-releases/releases/download/v0.2.0/Ensayo_0.2.0_x64-setup.exe" });
+    assert.deepEqual(a.platforms["windows-x86_64"], { signature: "WIN", url: "https://github.com/mmnzns/ensayo/releases/download/v0.2.0/Ensayo_0.2.0_x64-setup.exe" });
     assert.equal(a.platforms["darwin-aarch64"].signature, "ARM");
-    assert.equal(a.platforms["darwin-x86_64"].url, "https://github.com/mmnzns/ensayo-releases/releases/download/v0.2.0/Ensayo_0.2.0_x64.app.tar.gz");
+    assert.equal(a.platforms["darwin-x86_64"].url, "https://github.com/mmnzns/ensayo/releases/download/v0.2.0/Ensayo_0.2.0_x64.app.tar.gz");
   });
 
   it("finds signatures the uploaded file lacks, so a racing upload gets rebuilt", () => {
@@ -42,7 +42,7 @@ describe("latest.json", () => {
     assert.throws(() => buildLatest({ ...base, sigs: [] }), /no updater signatures/);
   });
 
-  it("points at the public releases repo, the same one tauri.conf.json's endpoint names", () => {
+  it("points at the Ensayo repo itself, the same one tauri.conf.json's endpoint names", () => {
     const conf = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
     assert.deepEqual(conf.plugins.updater.endpoints, [`https://github.com/${DEFAULT_REPO}/releases/latest/download/latest.json`]);
     assert.equal(conf.bundle.createUpdaterArtifacts, true);
