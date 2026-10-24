@@ -11,9 +11,11 @@ Ensayo is a free practice app for interviews: you answer out loud, it gives you 
 
 ## Windows
 
-1. Download `Ensayo_<version>_x64-setup.exe` and run it.
+Ensayo needs 64-bit Windows 10 or 11 on a PC from about 2015 or newer (a processor with AVX2).
+
+1. Download `Ensayo_<version>_x64-setup.exe` and run it. It installs for you only, with no administrator prompt.
 2. If Windows says it protected your PC, choose **More info, then Run anyway**. (This appears for any app without a paid certificate.)
-3. Open Ensayo from the Start menu. When Windows asks about the microphone, allow it. If you missed it: **Settings, Privacy & security, Microphone**.
+3. Open Ensayo from the Start menu. Windows does not ask about the microphone the way a Mac does: it is allowed unless it was switched off. If Ensayo says it is blocked, open **Settings, Privacy & security, Microphone** and turn on both **Microphone access** and **Let desktop apps access your microphone**.
 
 ## Updates
 

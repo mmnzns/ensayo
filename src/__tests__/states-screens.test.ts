@@ -73,6 +73,10 @@ describe("states group", () => {
 
   it("error pages link to the right settings screen", () => {
     expect(render("states-error-mic-denied")).toContain('href="#/8-7-settings-check-setup"');
+    // The steps are this computer's own (Windows has no per-app switch for a desktop app), not a generic list.
+    const mic = text(render("states-error-mic-denied"));
+    expect(mic).not.toContain("Switch Ensayo on");
+    expect(mic).toContain("press Try again");
     expect(render("states-error-no-speech-model")).toContain('href="#/8-4-settings-speech"');
     expect(render("states-error-key-rejected")).toContain('href="#/8-5-settings-ai"');
     expect(text(render("states-didnt-catch-that"))).toContain("Record again");

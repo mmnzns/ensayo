@@ -87,7 +87,7 @@ export function osOf(text: string): Os {
 /** How to turn the microphone on, one step per line, for this computer. */
 export function micFix(os: Os): string[] {
   if (os === "mac") return ["Open System Settings, then Privacy and Security, then Microphone.", "Turn on the switch next to Ensayo.", "Come back here and press Check again."];
-  if (os === "windows") return ["Open Settings, then Privacy, then Microphone.", "Turn on Microphone access, and let desktop apps use your microphone.", "Come back here and press Check again."];
+  if (os === "windows") return ["Open Settings, then Privacy & security, then Microphone.", "Turn on Microphone access, and Let desktop apps access your microphone.", "Come back here and press Check again."];
   return ["Open your system's privacy settings and allow Ensayo to use the microphone.", "Come back here and press Check again."];
 }
 

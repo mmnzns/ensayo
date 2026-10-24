@@ -193,7 +193,8 @@ function MicrophoneLive() {
                     "Press the button and say a few words."
                   )}
                 </span>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => void test.start()} disabled={test.listening || view?.state === "blocked"}>
+                {/* Open even when blocked: if the computer's answer is wrong and Ensayo hears you, you can go on. */}
+                <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => void test.start()} disabled={test.listening}>
                   {test.listening ? "Testing" : test.verdict || test.trouble ? "Test again" : "Test the microphone"}
                 </button>
               </div>

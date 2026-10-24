@@ -1,7 +1,10 @@
 // Practice, interviewer asking. Draft from Design/screens/html/3-1-practice-interviewer-asking.html, wired to useStore().screens.practice.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { isApp } from "../../data/real";
 import { askRoute, nextLiveQuestion, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
+import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import { HearItAgain, Kbd, MicButton, Presence, SessionHeader } from "./parts";
 import { ASK, RECORD, resetFlow } from "./practiceFlow";
@@ -39,6 +42,12 @@ export default function PracticeInterviewerAsking() {
     go(endTo);
   };
   const failed = live && state.phase === "error";
+  // When it failed because the computer blocks the microphone, say so and link to the fix.
+  const [micBlocked, setMicBlocked] = useState(false);
+  useEffect(() => {
+    if (!failed || !isApp()) return setMicBlocked(false);
+    void invoke<string>("mic_permission").then((p) => setMicBlocked(p === "denied" || p === "restricted"), () => {});
+  }, [failed]);
 
   useKeys({ space: failed ? undefined : start, r: hear, n: skip, esc: end });
 
@@ -61,8 +70,11 @@ export default function PracticeInterviewerAsking() {
         )}
         {failed && (
           <div className="e-soft" role="alert" style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "center", maxWidth: "560px" }}>
-            <span className="e-meta" style={{ color: "var(--e-warn-ink)" }}>{state.error}</span>
-            <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={() => void retryQuestion()}>Try again</button>
+            <span className="e-meta" style={{ color: "var(--e-warn-ink)" }}>{micBlocked ? "Your computer is blocking the microphone for Ensayo." : state.error}</span>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
+              {micBlocked && <Link to="states-error-mic-denied" className="e-btn e-btn-soft e-btn-sm">How to turn it on</Link>}
+              <button type="button" className={micBlocked ? "e-btn e-btn-ghost e-btn-sm" : "e-btn e-btn-soft e-btn-sm"} onClick={() => void retryQuestion()}>Try again</button>
+            </div>
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>

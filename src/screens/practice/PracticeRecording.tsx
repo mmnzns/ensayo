@@ -7,7 +7,7 @@ import { SILENCE_START, silenceStep, silenceStop } from "../../practice/silence"
 import { readPrefs } from "../settings/prefs";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
-import { THINK } from "./practiceFlow";
+import { ASK, THINK } from "./practiceFlow";
 import { Kbd, SessionHeader } from "./parts";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
@@ -38,7 +38,7 @@ function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
 export default function PracticeRecording() {
   const { timerMaxSeconds, levelBars } = useStore().screens.practice;
   const { live, session, question, targetSeconds, endTo, onEnd } = usePractice();
-  const mode = useLive().mode;
+  const { mode, phase } = useLive();
   // Mock is like the real call, so no clock. In a Drill the clock follows "Show the timer in Drill" in Settings.
   const [showTimer] = useState(() => readPrefs().practice.timer);
   const noClock = live && (mode === "mock" || !showTimer);
@@ -66,6 +66,12 @@ export default function PracticeRecording() {
     );
     return () => window.clearInterval(id);
   }, [live]);
+
+  // The microphone didn't start (on Windows, a blocked microphone fails here): back to the question, which says
+  // why and offers Try again, instead of a clock ticking over nothing.
+  useEffect(() => {
+    if (live && phase === "error") go(ASK);
+  }, [live, phase]);
 
   // Count up from 0:00 while the screen is mounted.
   useEffect(() => {

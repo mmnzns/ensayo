@@ -17,7 +17,8 @@ describe("microphone check", () => {
   it("says how to fix it when blocked, for this computer", () => {
     const c = micCheck("denied", "windows");
     expect(c.state).toBe("fix");
-    expect(c.fixHelp).toContain("Settings, then Privacy, then Microphone");
+    expect(c.fixHelp).toContain("Settings, then Privacy & security, then Microphone");
+    expect(c.fixHelp).toContain("Let desktop apps access your microphone");
   });
   it("points to the microphone step when it has not been asked yet", () => {
     expect(micCheck("undetermined", "mac")).toMatchObject({ state: "fix", fixTo: "1-4-microphone" });
