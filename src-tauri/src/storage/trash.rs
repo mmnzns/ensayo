@@ -5,7 +5,7 @@
 //! list, rep summaries, habit stats, streaks, readiness) looks in the trash, and the eval copies in `eval/` are never
 //! touched here: a rep the person labelled for the eval set stays in the eval folder.
 
-use super::io::{atomic_write, is_safe_id, read_text};
+use super::io::{atomic_write, is_safe_id, read_text, rename_retrying};
 use super::migrate;
 use super::reps::Session;
 use super::versioned::{load_record, save_record};
@@ -80,7 +80,7 @@ impl Storage {
         fs::create_dir_all(self.trash_sessions_dir()).map_err(|e| io(&self.trash_sessions_dir(), e))?;
         let stamp = src.join(STAMP);
         atomic_write(&stamp, stamp_text(now).as_bytes())?;
-        if let Err(e) = fs::rename(&src, &dest) {
+        if let Err(e) = rename_retrying(&src, &dest) {
             let _ = fs::remove_file(&stamp);
             return Err(io(&src, e));
         }
@@ -127,7 +127,7 @@ impl Storage {
             fs::remove_file(&stamp).map_err(|e| io(&stamp, e))?;
         }
         fs::create_dir_all(self.root().join("sessions")).map_err(|e| io(&self.root().join("sessions"), e))?;
-        fs::rename(&src, &dest).map_err(|e| io(&src, e))?;
+        rename_retrying(&src, &dest).map_err(|e| io(&src, e))?;
         let mut session = load_record::<Session>(&dest.join("session.json"), migrate::unchanged)?.ok_or_else(|| StorageError::NotFound(format!("session {id}")))?;
         if let Some(app) = session.application_id.clone() {
             if !self.application_dir(&app)?.is_dir() {

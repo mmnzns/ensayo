@@ -4,13 +4,12 @@
 //! (you plus the active target) so the screens and prompts written before targets keep working.
 
 use super::applications::{stamp, STAGE_TYPES};
-use super::io::{is_safe_id, list_json, new_id};
+use super::io::{is_safe_id, list_json, new_id, rename_retrying};
 use super::migrate;
 use super::model::{Profile, Story};
 use super::versioned::{load_record, save_record};
 use super::{Loaded, Result, Storage, StorageError};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -270,7 +269,7 @@ impl Storage {
         save_record(&self.you_path(), &you)?;
         let backup = self.root().join("profile.v0.json");
         if !backup.exists() {
-            fs::rename(self.profile_path(), &backup).map_err(|e| StorageError::Io(self.profile_path(), e.to_string()))?;
+            rename_retrying(&self.profile_path(), &backup).map_err(|e| StorageError::Io(self.profile_path(), e.to_string()))?;
         }
         Ok(())
     }
@@ -646,6 +645,7 @@ mod tests {
     use crate::storage::applications::NewApplication;
     use crate::storage::model::{Method, ProofPoint, StoryAngle, Usage};
     use chrono::NaiveDate;
+    use std::fs;
 
     fn fresh() -> (tempfile::TempDir, Storage) {
         let dir = tempfile::tempdir().unwrap();

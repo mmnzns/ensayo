@@ -98,7 +98,7 @@ fn rotate(dir: &Path, keep: usize) -> io::Result<()> {
     for i in (0..keep.saturating_sub(1)).rev() {
         let from = dir.join(file_name(i));
         if from.exists() {
-            fs::rename(&from, dir.join(file_name(i + 1)))?;
+            crate::storage::io::rename_retrying(&from, &dir.join(file_name(i + 1)))?;
         }
     }
     Ok(())

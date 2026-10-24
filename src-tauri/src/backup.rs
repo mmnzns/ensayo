@@ -216,7 +216,7 @@ pub fn create_backup(root: &Path, dest: &Path, now: DateTime<Utc>) -> Res<Manife
             return Err(e);
         }
     };
-    fs::rename(&tmp, dest).map_err(|e| {
+    crate::storage::io::rename_retrying(&tmp, dest).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         io_err(dest, e)
     })?;
@@ -402,7 +402,7 @@ pub fn restore(zip: &Path, root: &Path, mode: Mode, safety_dir: &Path, now: Date
                 if let Some(parent) = dest.parent() {
                     fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
                 }
-                fs::rename(&file, &dest).map_err(|e| io_err(&dest, e))?;
+                crate::storage::io::rename_retrying(&file, &dest).map_err(|e| io_err(&dest, e))?;
                 written += 1;
             }
             Ok(RestoreReport { mode: "merge", written, unchanged, skipped, safety_backup: None })
@@ -416,7 +416,7 @@ pub fn restore(zip: &Path, root: &Path, mode: Mode, safety_dir: &Path, now: Date
                 let staged = staging.0.join(name);
                 if staged.exists() {
                     written += if staged.is_dir() { staged_files(&staged)?.len() } else { 1 };
-                    fs::rename(&staged, root.join(name)).map_err(|e| format!("{} Your data from before is saved in {}.", io_err(&root.join(name), e), safety.display()))?;
+                    crate::storage::io::rename_retrying(&staged, &root.join(name)).map_err(|e| format!("{} Your data from before is saved in {}.", io_err(&root.join(name), e), safety.display()))?;
                 }
             }
             Ok(RestoreReport { mode: "replace", written, unchanged: 0, skipped: 0, safety_backup: Some(safety.to_string_lossy().into_owned()) })

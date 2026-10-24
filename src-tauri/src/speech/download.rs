@@ -269,7 +269,7 @@ fn fetch_file(file: &ModelFile, dir: &Path, cancel: &AtomicBool, idle: Duration,
         let _ = fs::remove_file(&part);
         return Err(DownloadError::Corrupt(file.name.into()).into());
     }
-    fs::rename(&part, dir.join(file.name))?;
+    crate::storage::io::rename_retrying(&part, &dir.join(file.name))?;
     progress(have);
     Ok(())
 }

@@ -46,13 +46,38 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
         let mut f = fs::File::create(&tmp)?;
         f.write_all(bytes)?;
         f.sync_all()?;
-        fs::rename(&tmp, path)
+        drop(f);
+        rename_retrying(&tmp, path)
     })();
     if let Err(e) = result {
         let _ = fs::remove_file(&tmp);
         return Err(io(e));
     }
     Ok(())
+}
+
+/// Waits between tries when Windows says a file is in use: about 2 seconds in all.
+const RENAME_WAITS_MS: [u64; 7] = [25, 50, 100, 200, 400, 600, 600];
+
+/// Windows refuses to rename over (or move) a file another program has open without delete sharing, and Google
+/// Drive, Defender and the search indexer all open fresh files for a moment. These are those "in use" answers:
+/// access denied (5), sharing violation (32) and lock violation (33). A real denial still fails after the waits.
+fn in_use(e: &std::io::Error) -> bool {
+    cfg!(windows) && matches!(e.raw_os_error(), Some(5 | 32 | 33))
+}
+
+/// `fs::rename`, but on Windows a file that is briefly in use is tried again instead of failing the save.
+pub fn rename_retrying(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut waits = RENAME_WAITS_MS.iter();
+    loop {
+        match fs::rename(from, to) {
+            Err(e) if in_use(&e) => match waits.next() {
+                Some(ms) => std::thread::sleep(std::time::Duration::from_millis(*ms)),
+                None => return Err(e),
+            },
+            other => return other,
+        }
+    }
 }
 
 /// The file's text, or `None` when it does not exist.
@@ -84,6 +109,45 @@ pub fn list_json(dir: &Path) -> Result<Vec<PathBuf>> {
 mod tests {
     use super::*;
     use std::fs;
+
+    /// Opens `path` the way Drive or Defender can: no sharing at all, so Windows refuses to rename over it.
+    #[cfg(windows)]
+    fn hold(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        fs::OpenOptions::new().read(true).share_mode(0).open(path).unwrap()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_write_waits_for_a_file_that_is_briefly_in_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("story.json");
+        atomic_write(&path, b"old").unwrap();
+        let held = hold(&path);
+        // Plain rename fails while it is held: this is the failure being fixed.
+        let probe = dir.path().join("probe.tmp");
+        fs::write(&probe, b"x").unwrap();
+        assert!(in_use(&fs::rename(&probe, &path).unwrap_err()));
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            drop(held);
+        });
+        atomic_write(&path, b"new").unwrap();
+        release.join().unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_file_held_for_good_still_fails_and_leaves_no_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("story.json");
+        atomic_write(&path, b"old").unwrap();
+        let _held = hold(&path);
+        assert!(atomic_write(&path, b"new").is_err());
+        let left: Vec<_> = fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(left, vec![std::ffi::OsString::from("story.json")]);
+    }
 
     #[test]
     fn a_write_creates_parent_folders_and_the_file() {
