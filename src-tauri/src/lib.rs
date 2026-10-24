@@ -32,7 +32,20 @@ mod update_commands;
 pub mod update_notice;
 
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // One Ensayo at a time on Windows: a second launch brings the open window forward instead of starting a second
+    // copy on the same data folder, recorder and helper (the lock can't tell two copies on one computer apart).
+    // Registered first, as the plugin asks.
+    #[cfg(target_os = "windows")]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        use tauri::Manager;
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.unminimize();
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }));
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
