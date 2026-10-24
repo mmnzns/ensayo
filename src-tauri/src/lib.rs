@@ -191,6 +191,9 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 ai::local::stop_shared();
                 native_voice::stop();
+                if let Err(e) = data_commands::release_lock_now() {
+                    log::warn!("Could not release the data folder lock: {e}");
+                }
             }
         });
 }

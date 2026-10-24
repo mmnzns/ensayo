@@ -126,7 +126,13 @@ pub async fn data_heartbeat() -> Cmd<()> {
 
 #[tauri::command]
 pub async fn release_data_lock() -> Cmd<()> {
-    blocking(|| open_storage().and_then(|s| s.release_lock(&machine_name())).map_err(plain)).await
+    blocking(release_lock_now).await
+}
+
+/// Gives the data folder back. Run when Ensayo quits, so the other computer can open it straight away instead of
+/// seeing "open on another computer" until the lock goes stale. Only ever removes this computer's own lock.
+pub fn release_lock_now() -> Cmd<()> {
+    open_storage().and_then(|s| s.release_lock(&machine_name())).map_err(plain)
 }
 
 #[tauri::command]
