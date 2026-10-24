@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addStage, fileNameOf, formatPay, isResumeFileName, MAX_LEAD_WITH, parsePay, removeStage, stageChoices, targetToSave, youToSave, SAVE_FAILED, type TargetFields } from "../screens/settings/targetForms";
+import { addStage, fileNameOf, formatPay, isResumeFileName, MAX_LEAD_WITH, parsePay, pastedPath, removeStage, stageChoices, targetToSave, youToSave, SAVE_FAILED, type TargetFields } from "../screens/settings/targetForms";
 import type { Target, You } from "../data/types";
 
 const you: You = { name: "Dana", fullName: "Dana Ortiz", focusHabits: ["to_the_point", "clean_stop"], activeTargetId: "tg_1" };
@@ -104,5 +104,15 @@ describe("the base resume", () => {
     expect(fileNameOf("  ")).toBe("");
     expect(isResumeFileName("Resume.PDF")).toBe(true);
     expect(isResumeFileName("notes.txt")).toBe(false);
+  });
+
+  it("drops the quotes Windows' Copy as path adds", () => {
+    const copied = '"C:\\Users\\dana\\Documents\\Resume.pdf"';
+    expect(pastedPath(copied)).toBe("C:\\Users\\dana\\Documents\\Resume.pdf");
+    expect(fileNameOf(copied)).toBe("Resume.pdf");
+    expect(isResumeFileName(fileNameOf(copied))).toBe(true);
+    expect(pastedPath("  '/Users/dana/Resume.pdf'  ")).toBe("/Users/dana/Resume.pdf");
+    // A quote that is part of the name is kept.
+    expect(pastedPath('C:\\Resumes\\"Final".pdf')).toBe('C:\\Resumes\\"Final".pdf');
   });
 });

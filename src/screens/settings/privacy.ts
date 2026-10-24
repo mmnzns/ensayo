@@ -1,5 +1,6 @@
 // "What leaves this computer" is worked out from the engines in use, so changing engines changes the list.
 import type { PrivacyData } from "../../data/screens/settings";
+import { pastedPath } from "./targetForms";
 
 export interface LeaveRow {
   title: string;
@@ -48,7 +49,7 @@ export const retentionChoice = (label: string): string => RETENTION.find(([l]) =
 
 /** What the data folder box says when its text can't be a folder yet; null when it can. */
 export function folderPathProblem(text: string): string | null {
-  const t = text.trim();
+  const t = pastedPath(text);
   if (!t) return "Type or paste the folder you want to use.";
   if (!/^(\/|~|[A-Za-z]:[\\/]|\\\\)/.test(t)) return "Use the full path to the folder, for example /Users/sam/Drive/Ensayo or C:\\Users\\Sam\\Drive\\Ensayo.";
   return null;

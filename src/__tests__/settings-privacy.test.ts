@@ -14,6 +14,10 @@ describe("choosing a new data folder", () => {
     expect(folderPathProblem("\\\\server\\share\\Ensayo")).toBeNull();
   });
 
+  it("takes a path from Windows' Copy as path, quotes and all", () => {
+    expect(folderPathProblem('"C:\\Users\\Sam\\My Drive (sam@example.com)\\Projects & Work\\Ensayo"')).toBeNull();
+  });
+
   it("says what happened in plain words", () => {
     expect(folderChangedLine("copied")).toMatch(/copied/);
     expect(folderChangedLine("copied")).toMatch(/old/i);

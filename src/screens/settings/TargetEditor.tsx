@@ -16,7 +16,7 @@ import { go } from "../../ui/router";
 import { pickResumePath } from "../../ui/pickFile";
 import { TargetMarker, useTargetChoice } from "../../ui/TargetSwitcher";
 import { setSessionPreset } from "../home/preset";
-import { addStage, fileNameOf, formatPay, isResumeFileName, MAX_LEAD_WITH, removeStage, RESUME_PROBLEM, stageChoices, targetToSave, type TargetFields } from "./targetForms";
+import { addStage, fileNameOf, formatPay, isResumeFileName, MAX_LEAD_WITH, onWindows, pastedPath, removeStage, RESUME_PROBLEM, stageChoices, targetToSave, type TargetFields } from "./targetForms";
 
 const FAMILIES: { id: RoleFamily; label: string }[] = [
   { id: "lifecycle", label: "Lifecycle marketing" },
@@ -427,9 +427,9 @@ function ResumeCard({ resume, onChange }: { resume: Target["baseResume"]; onChan
               {choosing && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => { setChoosing(false); setProblem(""); }}>Keep {resume?.fileName}</button>}
             </span>
             <label htmlFor="rp" className="e-small">Or paste the full path to the PDF or Word file</label>
-            <input id="rp" className="e-input" value={path} placeholder="/Users/you/Documents/Resume.pdf" onChange={(e) => setPath(e.target.value)} />
+            <input id="rp" className="e-input" value={path} placeholder={onWindows() ? "C:\\Users\\you\\Documents\\Resume.pdf" : "/Users/you/Documents/Resume.pdf"} onChange={(e) => setPath(e.target.value)} />
             <span style={{ display: "flex", gap: "8px" }}>
-              <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={!path.trim()} onClick={() => take(fileNameOf(path), path.trim())}>Use this file</button>
+              <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={!pastedPath(path)} onClick={() => take(fileNameOf(path), pastedPath(path))}>Use this file</button>
             </span>
           </div>
         ) : (

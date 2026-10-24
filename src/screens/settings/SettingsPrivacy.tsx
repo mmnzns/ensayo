@@ -12,6 +12,7 @@ import { deleteFailedLine, folderChangedLine, folderPathProblem, folderProblemLi
 import { clearPrefs, readPrefs } from "./prefs";
 import BackupSection from "./BackupSection";
 import { inUseModel, type SpeechModelEntry } from "./speechModels";
+import { onWindows, pastedPath } from "./targetForms";
 
 /** Which delete is asking "are you sure" right now. */
 type Asking = "recordings" | "all" | null;
@@ -76,7 +77,7 @@ export default function SettingsPrivacy() {
     if (problem) return setFolderError(problem);
     setBusy(true);
     try {
-      const result = await invoke<"copied" | "existing">("move_data_folder", { folder: newFolder.trim() });
+      const result = await invoke<"copied" | "existing">("move_data_folder", { folder: pastedPath(newFolder) });
       setFolderDone(folderChangedLine(result));
       reopen();
     } catch (e) {
@@ -158,7 +159,7 @@ export default function SettingsPrivacy() {
               <div style={{ flexBasis: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
                 <span className="e-small">Choose an empty folder, or one that already holds your Ensayo data. An empty folder gets a copy of your data. Ensayo reopens afterwards. You can also paste a full path.</span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
-                  <input className="e-input" style={{ flex: "1 1 280px" }} aria-label="New data folder" placeholder="/Users/you/Drive/Ensayo" value={newFolder} onChange={(e) => { setNewFolder(e.target.value); setFolderError(""); }} />
+                  <input className="e-input" style={{ flex: "1 1 280px" }} aria-label="New data folder" placeholder={onWindows() ? "C:\\Users\\you\\Google Drive\\Ensayo" : "/Users/you/Drive/Ensayo"} value={newFolder} onChange={(e) => { setNewFolder(e.target.value); setFolderError(""); }} />
                   <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={busy} onClick={() => void browseFolder()}>Choose a folder…</button>
                   <button type="button" className="e-btn e-btn-primary e-btn-sm" disabled={busy} onClick={() => void moveFolder()}>{busy ? "Moving…" : "Use this folder"}</button>
                   <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={busy} onClick={() => { setFolderNote(null); setFolderError(""); }}>Cancel</button>

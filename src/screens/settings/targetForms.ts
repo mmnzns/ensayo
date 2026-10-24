@@ -3,7 +3,7 @@
 
 import { roleFamilyOf, targetName } from "../../data/targets";
 import type { CompanyStage, HabitId, RoleFamily, SellsTo, Seniority, StageId, Target, You } from "../../data/types";
-import { NAME_PROBLEM, ROLE_PROBLEM } from "../first-run/setup";
+import { NAME_PROBLEM, osOf, ROLE_PROBLEM } from "../first-run/setup";
 
 export const SAVE_FAILED = "That change didn't save. Ensayo will try again when you change something else.";
 
@@ -96,8 +96,14 @@ export const removeStage = (stages: StageId[], stage: StageId): StageId[] => sta
 /** The stages not yet in the list, in the usual order. */
 export const stageChoices = (stages: StageId[]): StageId[] => ALL_STAGES.filter((s) => !stages.includes(s));
 
+/** Path placeholders show this computer's kind of path. */
+export const onWindows = (): boolean => osOf(typeof navigator === "undefined" ? "" : navigator.userAgent) === "windows";
+
+/** A path as pasted: trimmed, and without the quotes Windows' "Copy as path" puts around it. */
+export const pastedPath = (text: string): string => text.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+
 /** The file name at the end of a path from either kind of computer. */
-export const fileNameOf = (path: string): string => path.trim().split(/[\\/]/).pop() ?? "";
+export const fileNameOf = (path: string): string => pastedPath(path).split(/[\\/]/).pop() ?? "";
 
 /** Ensayo reads PDF and Word files. */
 export const isResumeFileName = (name: string): boolean => /\.(pdf|docx?)$/i.test(name.trim());
