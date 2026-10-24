@@ -72,9 +72,7 @@ fn state_of(store: &models::ModelStore, m: &models::ModelInfo) -> &'static str {
 
 /// Every model that turns speech into text, in the order Settings lists them, with its state.
 pub fn speech_model_list(store: &models::ModelStore) -> Vec<SpeechModelEntry> {
-    models::CATALOG
-        .iter()
-        .filter(|m| m.engine.is_speech())
+    models::speech_in_order()
         .map(|m| SpeechModelEntry { id: m.id, name: m.name, maker: m.maker, note: m.note, languages: m.languages, size_mb: m.size() / 1_000_000, state: state_of(store, m) })
         .collect()
 }
@@ -215,7 +213,7 @@ mod tests {
     fn the_speech_list_has_every_speech_model_and_nothing_else() {
         let dir = tempfile::tempdir().unwrap();
         let list = speech_model_list(&models::ModelStore::new(dir.path().to_path_buf(), false));
-        assert_eq!(list[0].id, "whisper-turbo", "the recommended model comes first");
+        assert_eq!(list[0].id, models::DEFAULT_MODEL, "this computer's recommended model comes first");
         assert!(list.iter().all(|m| m.state == "missing"), "an empty folder has nothing");
         assert!(list.iter().all(|m| m.id != "vad"), "voice detection is not a model to pick");
         assert_eq!(list.len(), models::CATALOG.iter().filter(|m| m.engine.is_speech()).count());

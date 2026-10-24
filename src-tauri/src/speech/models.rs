@@ -235,9 +235,21 @@ pub static VAD: ModelInfo = ModelInfo {
     files: &[ModelFile { name: "ggml-silero-v6.2.0.bin", url: "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin", size: 885_098, sha256: "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987" }],
 };
 
-/// Whisper Turbo: on real calls it was more complete and accurate than Parakeet (which skipped stretches and
-/// misheard more), and at ~13x real time an hour of speech takes a few minutes.
-pub const DEFAULT_MODEL: &str = "whisper-turbo";
+/// The model setup offers and a session tries first.
+///
+/// Mac: Whisper Turbo. On real calls it was more complete and accurate than Parakeet (which skipped stretches and
+/// misheard more), and Metal runs it at about 25x real time.
+///
+/// Windows: Parakeet Ultra (decided 2026-10-24). Windows has no GPU path, and on the processor Turbo ran at about
+/// 2x real time on a fast desktop (a two-minute answer waited about a minute) while Parakeet Ultra ran at about 50x
+/// with the same word accuracy and kept every "um" and "uh" (bench_real_models, two voices).
+pub const DEFAULT_MODEL: &str = if cfg!(target_os = "windows") { "parakeet-ultra" } else { "whisper-turbo" };
+
+/// The speech models in the order Settings lists them: this computer's default first, then the catalog's order.
+pub fn speech_in_order() -> impl Iterator<Item = &'static ModelInfo> {
+    let default = find(DEFAULT_MODEL);
+    default.into_iter().chain(CATALOG.iter().filter(|m| m.engine.is_speech() && m.id != DEFAULT_MODEL))
+}
 
 pub fn find(id: &str) -> Option<&'static ModelInfo> {
     if id == VAD.id {
@@ -335,6 +347,16 @@ mod tests {
     fn sparse(path: &Path, size: u64) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::File::create(path).unwrap().set_len(size).unwrap();
+    }
+
+    #[test]
+    fn windows_starts_with_parakeet_ultra_and_the_mac_with_whisper_turbo() {
+        let expected = if cfg!(target_os = "windows") { "parakeet-ultra" } else { "whisper-turbo" };
+        assert_eq!(DEFAULT_MODEL, expected);
+        let order: Vec<&str> = speech_in_order().map(|m| m.id).collect();
+        assert_eq!(order[0], expected);
+        assert_eq!(order.len(), CATALOG.iter().filter(|m| m.engine.is_speech()).count(), "every speech model, once");
+        assert!(!order.contains(&VAD.id));
     }
 
     #[test]

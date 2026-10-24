@@ -58,7 +58,7 @@ Windows: dot-source `scripts/cpu-baseline.ps1` before release builds (whisper.cp
 
 - **Tauri commands that build a window or run long must be `async`** (use `spawn_blocking`), or the app freezes on Windows (WebView2).
 - **Windows whisper.cpp** must build with speed optimisations (`.cargo/config.toml`) and the AVX2 baseline (`scripts/cpu-baseline.ps1`); the Windows CI job fails if a CMake cache shows NATIVE or AVX-512 on.
-- **Whisper Large Turbo** is the default speech model, with Silero voice detection first. Thread counts: about three quarters of the threads on Windows, all (2 to 8) on the Mac.
+- **Default speech model: Whisper Large Turbo on the Mac, Parakeet Ultra on Windows** (decided 2026-10-24: with no GPU path, Turbo ran at about 2x real time on the PC's processor, Parakeet Ultra at about 50x with the same accuracy; `models::DEFAULT_MODEL` and `speechOrder` in `speechModels.ts` must agree). Silero voice detection first. The model stays loaded between answers (`speech::loaded`). Compare models on a machine with `bench_real_models`. Thread counts: about three quarters of the threads on Windows, all (2 to 8) on the Mac.
 - Speech models already downloaded by Talaan are reused read-only and shown as "On this computer".
 - **Claude-launched dev builds on Windows** save settings in Claude's sandbox folder. Test settings and data from a normally launched app.
 - One design for Mac and Windows; platform-neutral words ("this computer", "your system's secure key storage").

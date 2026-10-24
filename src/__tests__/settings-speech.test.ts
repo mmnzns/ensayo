@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { SPEECH_MODELS } from "../practice/api";
-import { candidateModels, inUseModel, modelRows, modelsSize, progressPercent, type SpeechModelEntry } from "../screens/settings/speechModels";
+import { candidateModels, inUseModel, modelRows, modelsSize, progressPercent, speechOrder, type SpeechModelEntry } from "../screens/settings/speechModels";
 
 const entry = (id: string, state: SpeechModelEntry["state"], size_mb = 100): SpeechModelEntry => ({ id, name: id, maker: "OpenAI", note: "", languages: "", size_mb, state });
 
 describe("which speech model is in use", () => {
+  it("starts with Parakeet Ultra on Windows and Whisper Turbo on the Mac, with the same models in both", () => {
+    expect(speechOrder("windows")[0]).toBe("parakeet-ultra");
+    expect(speechOrder("mac")[0]).toBe("whisper-turbo");
+    expect(speechOrder("other")[0]).toBe("whisper-turbo");
+    expect([...speechOrder("windows")].sort()).toEqual([...speechOrder("mac")].sort());
+  });
+
   it("tries the one chosen first, then Ensayo's usual order, without repeats", () => {
     expect(candidateModels("")).toEqual(SPEECH_MODELS);
     expect(candidateModels("parakeet-v3")).toEqual(["parakeet-v3", ...SPEECH_MODELS]);

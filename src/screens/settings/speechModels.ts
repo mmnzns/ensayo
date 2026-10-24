@@ -1,8 +1,19 @@
 // Settings, Speech in the app: plain functions between what the backend reports (`speech_models`) and what the screen
 // says. The screen talks to the backend; these decide what to show.
 
-/** Speech models in the order Ensayo prefers them; the first one on this computer is used. */
-export const SPEECH_MODELS = ["whisper-turbo", "parakeet-ultra", "whisper-small", "whisper-base", "whisper-tiny"];
+import { osOf, type Os } from "../first-run/setup";
+
+/** Speech models in the order Ensayo prefers them; the first one on this computer is used. Windows starts with
+ *  Parakeet Ultra: with no graphics chip to run Whisper Turbo, a two-minute answer waited about a minute for it,
+ *  against a few seconds for Parakeet Ultra at the same accuracy (decided 2026-10-24). The Mac keeps Turbo. Matches
+ *  the backend's `models::DEFAULT_MODEL`. */
+export function speechOrder(os: Os): string[] {
+  return os === "windows"
+    ? ["parakeet-ultra", "whisper-turbo", "whisper-small", "whisper-base", "whisper-tiny"]
+    : ["whisper-turbo", "parakeet-ultra", "whisper-small", "whisper-base", "whisper-tiny"];
+}
+
+export const SPEECH_MODELS = speechOrder(osOf(typeof navigator === "undefined" ? "" : navigator.userAgent));
 
 export interface SpeechModelEntry {
   id: string;

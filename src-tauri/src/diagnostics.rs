@@ -42,7 +42,7 @@ fn safe_model(name: &str) -> String {
 
 fn speech_line(i: &Inputs) -> String {
     let chosen = i.speech_choice.and_then(models::find).filter(|m| m.engine.is_speech());
-    let by_order = || models::CATALOG.iter().filter(|m| m.engine.is_speech()).find(|m| i.speech_store.locate(m) != Location::Missing);
+    let by_order = || models::speech_in_order().find(|m| i.speech_store.locate(m) != Location::Missing);
     let Some(m) = chosen.or_else(by_order).or_else(|| models::find(models::DEFAULT_MODEL)) else { return "Speech model: none".into() };
     let state = match i.speech_store.locate(m) {
         Location::Own(_) => "files present",
@@ -219,7 +219,9 @@ mod tests {
         let (_d, f) = fixture(AiSettings { provider: "claude".into(), ..Default::default() }, vec!["2026-10-22 09:00:00.000 INFO ensayo_lib::cmd: finish_rep 812 ms".into()]);
         let out = build(&inputs(&f, "ready", None), &redactor());
         assert!(out.starts_with("Ensayo 0.2.0\nSystem: macOS 15.1 (aarch64)\n"), "{out}");
-        assert!(out.contains("Speech model: Whisper Large Turbo (whisper-turbo), files missing. Voice detection: missing"), "{out}");
+        // Nothing downloaded: the line names this computer's default.
+        let default = crate::speech::models::find(crate::speech::models::DEFAULT_MODEL).unwrap();
+        assert!(out.contains(&format!("Speech model: {} ({}), files missing. Voice detection: missing", default.name, default.id)), "{out}");
         assert!(out.contains("Feedback engine: claude (fast claude-haiku-5-5, strong claude-sonnet-5-5), API key saved"), "{out}");
         assert!(out.contains("Built-in AI: qwen3.5-4b not downloaded, helper found"), "{out}");
         assert!(out.contains("Data folder: ready"), "{out}");
