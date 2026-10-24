@@ -185,4 +185,89 @@ mod tests {
         assert!(t.words.len() > 5);
         assert!(t.words.windows(2).all(|p| p[0].start_ms <= p[1].start_ms), "word times must be in order");
     }
+
+    /// Lower case words with the punctuation taken off, numbers left out (engines write "90%" where the script
+    /// says "ninety percent", and that is not a mistake).
+    fn bench_words(text: &str) -> Vec<String> {
+        const NUMBER_WORDS: &[&str] = &["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "twenty", "thirty", "forty", "fifty", "ninety", "hundred", "point", "percent"];
+        text.split_whitespace()
+            .map(|w| w.to_lowercase().chars().filter(|c| c.is_alphanumeric() || *c == '\'').collect::<String>())
+            .filter(|w| !w.is_empty() && !w.chars().any(|c| c.is_ascii_digit()) && !NUMBER_WORDS.contains(&w.as_str()))
+            .collect()
+    }
+
+    /// Word error rate: word-level edit distance over the script's length.
+    fn word_error_rate(script: &[String], heard: &[String]) -> f64 {
+        let mut row: Vec<usize> = (0..=heard.len()).collect();
+        for (i, s) in script.iter().enumerate() {
+            let mut prev = row[0];
+            row[0] = i + 1;
+            for (j, h) in heard.iter().enumerate() {
+                let cur = row[j + 1];
+                row[j + 1] = if s == h { prev } else { 1 + prev.min(row[j]).min(row[j + 1]) };
+                prev = cur;
+            }
+        }
+        row[heard.len()] as f64 / script.len().max(1) as f64
+    }
+
+    #[test]
+    fn the_bench_scores_words_and_ignores_numbers() {
+        let script = bench_words("Um, the score went to ninety percent.");
+        assert_eq!(script, vec!["um", "the", "score", "went", "to"]);
+        assert_eq!(word_error_rate(&script, &bench_words("Um the score went to 90%.")), 0.0);
+        assert_eq!(word_error_rate(&script, &bench_words("The score went to 90%.")), 0.2);
+    }
+
+    /// Compares speech models on one recording, the way a rep uses them: load time (paid on every answer until the
+    /// model is kept loaded), transcribe time, speed against real time, word error rate against the script, and
+    /// which filler words survived (the filler habit counts them). Missing models are downloaded first.
+    ///
+    /// ENSAYO_BENCH_WAV=<16 kHz mono wav> ENSAYO_BENCH_SCRIPT=<text file, what was said> \
+    /// ENSAYO_BENCH_MODELS=whisper-turbo,parakeet-v2 \
+    /// cargo test --release --manifest-path src-tauri/Cargo.toml bench_real_models -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn bench_real_models() {
+        use crate::speech::{download, engine, models};
+        use std::sync::atomic::AtomicBool;
+        use std::time::Instant;
+        let wav = std::env::var("ENSAYO_BENCH_WAV").expect("set ENSAYO_BENCH_WAV");
+        let script = std::fs::read_to_string(std::env::var("ENSAYO_BENCH_SCRIPT").expect("set ENSAYO_BENCH_SCRIPT")).unwrap();
+        let ids = std::env::var("ENSAYO_BENCH_MODELS").unwrap_or_else(|_| "whisper-turbo".into());
+        let store = models::ModelStore::new(crate::paths::models_dir(), true);
+        let fetch = |m: &models::ModelInfo| -> std::path::PathBuf {
+            if let Some(dir) = store.locate(m).dir() {
+                return dir.to_path_buf();
+            }
+            println!("downloading {} ({} MB)", m.name, m.size() / 1_000_000);
+            download::download_model(m, &store.own_dir(m), &AtomicBool::new(false), &mut |_| {}).unwrap();
+            store.own_dir(m)
+        };
+        let vad = fetch(&models::VAD).join(models::VAD.files[0].name);
+        let samples = vad::read_track(Path::new(&wav)).unwrap();
+        let audio_s = samples.len() as f64 / RATE as f64;
+        let t = Instant::now();
+        let spans = Vad::load(&vad).unwrap().detect(&samples).unwrap();
+        println!("voice detection: {:.2}s for {audio_s:.1}s of audio", t.elapsed().as_secs_f64());
+        let script_words = bench_words(&script);
+        const FILLERS: &[&str] = &["um", "uh"];
+        let said: Vec<usize> = FILLERS.iter().map(|f| script_words.iter().filter(|w| w == f).count()).collect();
+        println!("{:<22} {:>7} {:>11} {:>9} {:>6} {:>8}", "model", "load", "transcribe", "x real", "WER", "um/uh");
+        for id in ids.split(',').map(str::trim) {
+            let model = models::find(id).unwrap_or_else(|| panic!("unknown model {id}"));
+            let dir = fetch(model);
+            let t = Instant::now();
+            let mut eng = engine::load(model, &dir, cfg!(target_os = "macos")).unwrap();
+            let load = t.elapsed().as_secs_f64();
+            // The first pass warms caches; the second is the one an answer after the first sees.
+            let _ = transcribe_with(eng.as_mut(), &samples, &spans).unwrap();
+            let t = Instant::now();
+            let out = transcribe_with(eng.as_mut(), &samples, &spans).unwrap();
+            let run = t.elapsed().as_secs_f64();
+            let heard = bench_words(&out.words.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" "));
+            let kept: Vec<String> = FILLERS.iter().zip(&said).map(|(f, n)| format!("{}/{n}", heard.iter().filter(|w| w == f).count())).collect();
+            println!("{:<22} {:>6.1}s {:>10.1}s {:>8.1}x {:>5.1}% {:>8}", id, load, run, audio_s / run, word_error_rate(&script_words, &heard) * 100.0, kept.join(" "));
+        }
+    }
 }
