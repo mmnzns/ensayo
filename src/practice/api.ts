@@ -16,6 +16,8 @@ export interface RepApi {
   stopRecording(): Promise<{ path: string; duration_ms: number }>;
   level(): Promise<{ level: number; elapsed_ms: number } | null>;
   finishRep(args: FinishArgs): Promise<RepOutcome>;
+  /** Loads the speech model while the answer is recorded, so the transcript doesn't wait for it. Optional: fakes skip it. */
+  warmSpeech?(): Promise<void>;
   rescoreRep(sessionId: string, n: number, keepRestart: boolean): Promise<RepOutcome>;
   deleteRep(sessionId: string, n: number): Promise<void>;
   labelRep(sessionId: string, n: number, wrong: boolean): Promise<void>;
@@ -53,6 +55,7 @@ export async function tauriApi(): Promise<RepApi> {
     stopRecording: () => invoke("stop_recording"),
     level: () => invoke("recording_level"),
     finishRep: async (args) => invoke("finish_rep", { args, modelId: await pickModel() }),
+    warmSpeech: async () => invoke("warm_speech_model", { modelId: await pickModel() }),
     rescoreRep: (sessionId, n, keepRestart) => invoke("rescore_rep", { sessionId, n, keepRestart }),
     deleteRep: (sessionId, n) => invoke("delete_rep", { sessionId, n }),
     labelRep: (sessionId, n, wrong) => invoke("label_rep", { sessionId, n, wrong }),

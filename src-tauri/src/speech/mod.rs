@@ -2,6 +2,7 @@
 
 pub mod download;
 pub mod engine;
+pub mod loaded;
 pub mod models;
 pub mod transcribe;
 pub mod vad;

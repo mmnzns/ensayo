@@ -4,7 +4,7 @@
 use crate::paths;
 use crate::recorder::capture::Capture;
 use crate::recorder::mic::{input_devices, MicSource};
-use crate::speech::{download, engine, models, transcribe};
+use crate::speech::{download, models, transcribe};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -184,12 +184,7 @@ pub async fn stop_recording(state: State<'_, RecorderState>) -> Result<StoppedRe
 pub async fn transcribe_recording(path: PathBuf, model_id: String) -> Result<transcribe::Transcript, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _t = crate::logging::Timer::new("transcribe_recording");
-        let m = models::find(&model_id).ok_or("Unknown model")?;
-        let store = models::ModelStore::new(paths::models_dir(), true);
-        let dir = store.locate(m).dir().ok_or("That speech model isn't downloaded yet")?.to_path_buf();
-        let vad_dir = store.locate(&models::VAD).dir().ok_or("The voice detection model isn't downloaded yet")?.to_path_buf();
-        let mut eng = engine::load(m, &dir, cfg!(target_os = "macos"))?;
-        transcribe::transcribe_wav(&path, eng.as_mut(), &vad_dir.join(models::VAD.files[0].name))
+        crate::speech::loaded::transcribe_wav(&path, &model_id)
     })
     .await
     .map_err(|e| e.to_string())?

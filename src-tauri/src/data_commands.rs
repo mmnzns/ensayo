@@ -208,8 +208,9 @@ pub async fn move_data_folder(folder: PathBuf) -> Cmd<&'static str> {
 #[tauri::command]
 pub async fn delete_all_data() -> Cmd<()> {
     blocking(|| {
-        // The built-in local AI holds its model file open (Windows will not delete it then).
+        // The built-in local AI holds its model file open (Windows will not delete it then); so may the speech model.
         crate::ai::local::stop_shared();
+        crate::speech::loaded::unload();
         if let Ok(storage) = open_storage() {
             storage.delete_all().map_err(plain)?;
         }

@@ -12,7 +12,7 @@ use crate::paths;
 use crate::scoring::pipeline::{self, QuestionInfo, ScoreInput};
 use crate::scoring::run::Budget;
 use crate::speech::words::Word;
-use crate::speech::{engine, models, transcribe};
+use crate::speech::transcribe;
 use crate::storage::model::Story;
 use crate::scoring::followup::{self, FollowScoreInput, FollowScored, GenInput};
 use crate::scoring::inputs::{transcript_text, transcript_text_first};
@@ -519,12 +519,14 @@ pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Sen
 }
 
 fn transcribe_path(path: &Path, model_id: &str) -> Cmd<transcribe::Transcript> {
-    let m = models::find(model_id).ok_or("Unknown model")?;
-    let store = models::ModelStore::new(paths::models_dir(), true);
-    let dir = store.locate(m).dir().ok_or("That speech model isn't downloaded yet")?.to_path_buf();
-    let vad_dir = store.locate(&models::VAD).dir().ok_or("The voice detection model isn't downloaded yet")?.to_path_buf();
-    let mut eng = engine::load(m, &dir, cfg!(target_os = "macos"))?;
-    transcribe::transcribe_wav(path, eng.as_mut(), &vad_dir.join(models::VAD.files[0].name))
+    crate::speech::loaded::transcribe_wav(path, model_id)
+}
+
+/// Loads the speech model while an answer is being recorded, so its transcript doesn't wait for the load. Failing
+/// here is fine: the transcript loads it (and says what is wrong) as before.
+#[tauri::command]
+pub async fn warm_speech_model(model_id: String) -> Cmd<()> {
+    blocking(move || crate::speech::loaded::warm(&model_id)).await
 }
 
 /// Runs `f` with a model client and the session's budget when an engine is set up and usable. When it is not (no key,

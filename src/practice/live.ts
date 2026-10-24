@@ -305,8 +305,11 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export async function beginRecording() {
   try {
-    await (await repApi()).startRecording();
+    const api = await repApi();
+    await api.startRecording();
     set({ phase: "recording", error: null });
+    // Load the speech model while you talk; if it can't, the transcript says why when you stop.
+    void api.warmSpeech?.().catch(() => {});
   } catch (e) {
     set({ phase: "error", error: message(e) });
   }

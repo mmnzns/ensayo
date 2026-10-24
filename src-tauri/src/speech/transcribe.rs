@@ -3,9 +3,12 @@
 //! not scored; Whisper's silence hallucinations are stripped.
 
 use super::engine::Engine;
-use super::vad::{self, Span, Vad, RATE};
+#[cfg(test)]
+use super::vad::Vad;
+use super::vad::{self, Span, RATE};
 use super::words::{offset, Word};
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use std::path::Path;
 
 pub const DIDNT_CATCH_THAT: &str = "Didn't catch that";
@@ -57,7 +60,9 @@ pub fn transcribe_with(engine: &mut dyn Engine, samples: &[f32], spans: &[Span])
     Ok(Transcript { words, language, engine: engine.label().to_string(), duration_ms })
 }
 
-/// The real thing: read the WAV, run Silero VAD, transcribe.
+/// Read the WAV, run Silero VAD, transcribe, with models the caller loaded. The app goes through `loaded`, which
+/// keeps them loaded between answers; this is for the real-model checks below.
+#[cfg(test)]
 pub fn transcribe_wav(wav: &Path, engine: &mut dyn Engine, vad_model: &Path) -> Result<Transcript, String> {
     let samples = vad::read_track(wav).map_err(|e| format!("Couldn't read the recording: {e}"))?;
     let spans = Vad::load(vad_model)?.detect(&samples)?;

@@ -95,6 +95,7 @@ pub fn run() {
             data_commands::move_data_folder,
             data_commands::delete_all_data,
             rep_commands::finish_rep,
+            rep_commands::warm_speech_model,
             rep_commands::rescore_rep,
             rep_commands::delete_rep,
             rep_commands::label_rep,
