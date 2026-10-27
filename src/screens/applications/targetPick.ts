@@ -58,7 +58,7 @@ export function filterChoices(apps: Application[], targets: Target[]): Target[] 
 }
 
 const KIND: Record<SellsTo, string> = { b2b: "B2B", b2c: "B2C", both: "both B2B and B2C" };
-const FAMILY: Record<RoleFamily, string> = { lifecycle: "a lifecycle role", marketing_ops: "a marketing ops role", growth: "a growth role", product_marketing: "a product marketing role", other: "a different kind of role" };
+const FAMILY: Record<RoleFamily, string> = { lifecycle: "a lifecycle role", marketing_ops: "a marketing ops role", growth: "a growth role", product_marketing: "a product marketing role", gtm: "a GTM and revenue ops role", other: "a different kind of role" };
 
 export interface FitNote {
   /** "This posting is B2B. It's filed under B2C lifecycle." */

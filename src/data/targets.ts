@@ -11,12 +11,13 @@ export const COLOR_VALUE: Record<TargetColor, string> = { coral: "#B8432C", slat
 /** Colours go out in order and repeat after five. */
 export const colorFor = (index: number): TargetColor => TARGET_COLORS[((index % TARGET_COLORS.length) + TARGET_COLORS.length) % TARGET_COLORS.length];
 
-const FAMILY_LABEL: Record<RoleFamily, string> = { lifecycle: "lifecycle", marketing_ops: "marketing ops", growth: "growth", product_marketing: "product marketing", other: "" };
+const FAMILY_LABEL: Record<RoleFamily, string> = { lifecycle: "lifecycle", marketing_ops: "marketing ops", growth: "growth", product_marketing: "product marketing", gtm: "GTM and revenue ops", other: "" };
 
 /** The role words decide the family: "Senior Lifecycle Marketing Manager" is lifecycle, "Marketing Operations Manager" is marketing ops. */
 export function roleFamilyOf(role: string): RoleFamily {
   const r = role.toLowerCase();
-  if (/marketing ops|marketing operations|revops|revenue operations|martech/.test(r)) return "marketing_ops";
+  if (/gtm|go-to-market|go to market|revops|revenue operations|revenue ops|sales operations|sales ops/.test(r)) return "gtm";
+  if (/marketing ops|marketing operations|martech/.test(r)) return "marketing_ops";
   if (/lifecycle|crm|retention|email marketing/.test(r)) return "lifecycle";
   if (/product marketing|pmm/.test(r)) return "product_marketing";
   if (/growth|acquisition|demand gen/.test(r)) return "growth";

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 pub const TARGET_COLORS: [&str; 5] = ["coral", "slate", "green", "gold", "plum"];
-const ROLE_FAMILIES: [&str; 5] = ["lifecycle", "marketing_ops", "growth", "product_marketing", "other"];
+const ROLE_FAMILIES: [&str; 6] = ["lifecycle", "marketing_ops", "growth", "product_marketing", "gtm", "other"];
 const SELLS_TO: [&str; 3] = ["b2b", "b2c", "both"];
 const SENIORITIES: [&str; 5] = ["early", "mid", "senior", "lead", "director"];
 const COMPANY_STAGES: [&str; 4] = ["startup", "growth", "enterprise", "any"];
@@ -30,13 +30,15 @@ pub fn color_for(index: usize) -> &'static str {
 }
 
 /// The role words decide the family: "Senior Lifecycle Marketing Manager" is lifecycle, "Marketing Operations Manager"
-/// is marketing ops.
+/// is marketing ops, "GTM Architect" and "Revenue Operations Manager" are GTM and revenue ops.
 pub fn role_family_of(role: &str) -> &'static str {
     let r = role.to_lowercase();
     let has = |words: &[&str]| words.iter().any(|w| r.contains(w));
-    if has(&["lifecycle", "crm", "retention", "email marketing"]) {
+    if has(&["gtm", "go-to-market", "go to market", "revops", "revenue operations", "revenue ops", "sales operations", "sales ops"]) {
+        "gtm"
+    } else if has(&["lifecycle", "crm", "retention", "email marketing"]) {
         "lifecycle"
-    } else if has(&["marketing ops", "marketing operations", "operations", "revops", "martech"]) {
+    } else if has(&["marketing ops", "marketing operations", "operations", "martech"]) {
         "marketing_ops"
     } else if has(&["growth", "acquisition", "demand gen"]) {
         "growth"
@@ -45,6 +47,12 @@ pub fn role_family_of(role: &str) -> &'static str {
     } else {
         "other"
     }
+}
+
+/// The target's kind of role. A target saved as "other" before a family existed for its role words gets the family
+/// those words point to now ("GTM Architect" saved before GTM and revenue ops was a kind of role).
+pub fn family_of(t: &Target) -> &str {
+    if t.role_family == "other" { role_family_of(&t.role) } else { t.role_family.as_str() }
 }
 
 /// "B2C lifecycle", "B2B marketing ops", "Both growth". With no known family the role itself is the name.
@@ -59,6 +67,7 @@ pub fn target_name(role: &str, sells_to: &str, family: &str) -> String {
         "marketing_ops" => "marketing ops",
         "growth" => "growth",
         "product_marketing" => "product marketing",
+        "gtm" => "GTM and revenue ops",
         _ => "",
     };
     if what.is_empty() {
@@ -1235,7 +1244,7 @@ mod tests {
         assert_eq!(target_name("Head of Growth", "both", "growth"), "Both growth");
         assert_eq!(target_name("Chef", "both", "other"), "Chef");
         assert_eq!(target_name("", "both", "other"), "My target");
-        for (role, family) in [("Senior Lifecycle Marketing Manager", "lifecycle"), ("CRM lead", "lifecycle"), ("Marketing Operations Manager", "marketing_ops"), ("Revenue Operations Analyst", "marketing_ops"), ("Head of Growth", "growth"), ("Product Marketing Manager", "product_marketing"), ("Poet", "other")] {
+        for (role, family) in [("Senior Lifecycle Marketing Manager", "lifecycle"), ("CRM lead", "lifecycle"), ("Marketing Operations Manager", "marketing_ops"), ("Revenue Operations Analyst", "gtm"), ("GTM Architect", "gtm"), ("GTM Engineer", "gtm"), ("Head of Growth", "growth"), ("Product Marketing Manager", "product_marketing"), ("Poet", "other")] {
             assert_eq!(role_family_of(role), family, "{role}");
         }
     }

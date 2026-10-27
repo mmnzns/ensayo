@@ -23,6 +23,7 @@ const FAMILIES: { id: RoleFamily; label: string }[] = [
   { id: "marketing_ops", label: "Marketing operations" },
   { id: "growth", label: "Growth marketing" },
   { id: "product_marketing", label: "Product marketing" },
+  { id: "gtm", label: "GTM and revenue ops" },
   { id: "other", label: "Other" },
 ];
 const STAGES: { id: CompanyStage; label: string }[] = [

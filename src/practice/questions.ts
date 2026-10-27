@@ -33,6 +33,7 @@ const PACK_FILE: Partial<Record<RoleFamily, string>> = {
   marketing_ops: "pack-lifecycle-marketing-ops",
   growth: "pack-growth",
   product_marketing: "pack-product-marketing",
+  gtm: "pack-lifecycle-marketing-ops",
 };
 const PACK_FILES = import.meta.glob<{ questions: BankQuestion[] }>("../../questions/pack-*.json", { eager: true, import: "default" });
 const packFor = (family: RoleFamily): BankQuestion[] => {

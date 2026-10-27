@@ -80,6 +80,8 @@ name, and the candidate's targets are not evidence of what this job is.
   journeys), `marketing_ops` (marketing operations: the automation platform, CRM administration,
   lead routing and scoring, data and reporting plumbing), `growth` (acquisition and experiments
   across the funnel), `product_marketing` (positioning, launches, messaging, sales enablement),
+  `gtm` (GTM and revenue operations: GTM engineering or architecture, the systems and automations
+  that connect marketing, sales and customer success, revenue reporting, sales operations),
   `other` (anything else). Pick the one the job's main work belongs to, not the job title alone.
 - `seniority`: `early` (coordinator, associate, about two years or less), `mid` (manager or
   specialist, about three to five years), `senior` (senior manager, or owns a function alone,
@@ -91,7 +93,7 @@ name, and the candidate's targets are not evidence of what this job is.
     `both`.
   - `strong`: fits the buyer, same role family, and seniority the same or one step apart.
   - `ok`: fits the buyer, and exactly one thing is off: a close role family (lifecycle and growth,
-    lifecycle and marketing_ops, growth and product_marketing) or seniority two steps apart.
+    lifecycle and marketing_ops, growth and product_marketing, gtm and marketing_ops, gtm and growth) or seniority two steps apart.
   - `weak`: does not fit the buyer, or a role family that is not close, or seniority three or
     more steps apart, or two things are off.
   - Company stage: when the target's `company_stage` is not `any` and clearly differs from the

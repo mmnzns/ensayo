@@ -64,10 +64,11 @@ fn product_marketing_pack() -> &'static Vec<BankQuestion> {
 }
 
 /// The general set, plus the pack for a kind of role (the same table as `PACKS` in src/practice/questions.ts): lifecycle and
-/// marketing ops share one pack; "other" gets the general set only.
+/// marketing ops share one pack, and GTM and revenue ops uses it too (the same systems work); "other" gets the general
+/// set only.
 pub fn banks_for_family(family: &str) -> Vec<&'static BankQuestion> {
     let pack: &[BankQuestion] = match family {
-        "lifecycle" | "marketing_ops" => lifecycle_pack(),
+        "lifecycle" | "marketing_ops" | "gtm" => lifecycle_pack(),
         "growth" => growth_pack(),
         "product_marketing" => product_marketing_pack(),
         _ => &[],

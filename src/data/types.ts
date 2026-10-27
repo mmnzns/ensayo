@@ -34,7 +34,7 @@ export interface Profile {
   focusHabits: HabitId[];
 }
 
-export type RoleFamily = "lifecycle" | "marketing_ops" | "growth" | "product_marketing" | "other";
+export type RoleFamily = "lifecycle" | "marketing_ops" | "growth" | "product_marketing" | "gtm" | "other";
 export type CompanyStage = "startup" | "growth" | "enterprise" | "any";
 export type TargetColor = "coral" | "slate" | "green" | "gold" | "plum";
 

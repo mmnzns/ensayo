@@ -19,6 +19,8 @@ describe("target names and colours", () => {
     expect(roleFamilyOf("Marketing Operations Manager")).toBe("marketing_ops");
     expect(roleFamilyOf("CRM lead")).toBe("lifecycle");
     expect(roleFamilyOf("Head of Growth")).toBe("growth");
+    expect(roleFamilyOf("GTM Architect")).toBe("gtm");
+    expect(roleFamilyOf("Revenue Operations Manager")).toBe("gtm");
     expect(roleFamilyOf("Poet")).toBe("other");
   });
   it("hand colours out in order and repeat after five", () => {

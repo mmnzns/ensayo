@@ -3,7 +3,7 @@
 //! target and flagged, so the screen can ask for a rewrite.
 
 use crate::storage::applications::AppRecord;
-use crate::storage::targets::{role_family_of, target_name, color_for, FitRow, Target, TargetFit};
+use crate::storage::targets::{family_of, role_family_of, target_name, color_for, FitRow, Target, TargetFit};
 use crate::storage::{Result as StorageResult, Storage};
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +72,7 @@ fn family_words(family: &str) -> &'static str {
         "marketing_ops" => "marketing ops",
         "growth" => "growth",
         "product_marketing" => "product marketing",
+        "gtm" => "GTM and revenue ops",
         _ => "another kind of role",
     }
 }
@@ -104,20 +105,29 @@ fn level_words(level: &str) -> &'static str {
     }
 }
 
-const KNOWN_FAMILIES: &str = "lifecycle, marketing ops, growth or product marketing";
+const KNOWN_FAMILIES: &str = "lifecycle, marketing ops, growth, product marketing, or GTM and revenue ops";
+
+/// Kinds of role close enough that one counts half for the other, as prompt 09 rates them.
+fn close(a: &str, b: &str) -> bool {
+    let pair = |x: &str, y: &str| (a == x && b == y) || (a == y && b == x);
+    pair("lifecycle", "growth") || pair("lifecycle", "marketing_ops") || pair("growth", "product_marketing") || pair("gtm", "marketing_ops") || pair("gtm", "growth")
+}
 
 /// The line under each target: what was compared and what each side reads as, so "okay fit" always says why.
 fn rate(g: &Guess, t: &Target) -> Rated {
-    let (family, family_text) = if g.role_family == t.role_family && g.role_family != "other" {
+    let t_family = family_of(t);
+    let (family, family_text) = if g.role_family == t_family && g.role_family != "other" {
         (2, format!("Same kind of role: both are {}.", family_words(&g.role_family)))
-    } else if g.role_family == "other" && t.role_family == "other" {
+    } else if g.role_family == "other" && t_family == "other" {
         (1, format!("Kind of role not compared: neither the posting nor {} is {KNOWN_FAMILIES}.", t.name))
     } else if g.role_family == "other" {
-        (1, format!("Kind of role not compared: the posting doesn't read as {KNOWN_FAMILIES}; {} is {}.", t.name, family_words(&t.role_family)))
-    } else if t.role_family == "other" {
+        (1, format!("Kind of role not compared: the posting doesn't read as {KNOWN_FAMILIES}; {} is {}.", t.name, family_words(t_family)))
+    } else if t_family == "other" {
         (1, format!("Kind of role not compared: the posting is {}, and {} isn't {KNOWN_FAMILIES}.", family_words(&g.role_family), t.name))
+    } else if close(&g.role_family, t_family) {
+        (1, format!("Close kind of role: the posting is {}, {} is {}.", family_words(&g.role_family), t.name, family_words(t_family)))
     } else {
-        (0, format!("Different kind of role: the posting is {}, {} is {}.", family_words(&g.role_family), t.name, family_words(&t.role_family)))
+        (0, format!("Different kind of role: the posting is {}, {} is {}.", family_words(&g.role_family), t.name, family_words(t_family)))
     };
     let (sells, sells_text) = if g.sells_to == t.sells_to && g.sells_to != "both" {
         (1, format!("Same buyer: both sell to {}.", customers_words(&g.sells_to)))
@@ -156,8 +166,8 @@ pub fn fit_against(g: &Guess, targets: &[Target], filed: Option<&str>) -> Option
     let best = rated.iter().filter(|(_, r)| r.score == top && r.fit != "weak").map(|(t, _)| *t).find(|t| Some(t.id.as_str()) == filed).or_else(|| rated.iter().find(|(_, r)| r.score == top && r.fit != "weak").map(|(t, _)| *t));
     let mut notes = vec![];
     if let Some(f) = filed.and_then(|id| live.iter().find(|t| t.id == id)) {
-        if g.role_family != "other" && f.role_family != "other" && g.role_family != f.role_family {
-            notes.push(format!("The role reads as {}; {} is set up for {}.", family_words(&g.role_family), f.name, family_words(&f.role_family)));
+        if g.role_family != "other" && family_of(f) != "other" && g.role_family != family_of(f) {
+            notes.push(format!("The role reads as {}; {} is set up for {}.", family_words(&g.role_family), f.name, family_words(family_of(f))));
         }
         if g.sells_to != "both" && f.sells_to != "both" && g.sells_to != f.sells_to {
             notes.push(format!("The posting sells to {}; {} is set up for {}.", customers_words(&g.sells_to), f.name, customers_words(&f.sells_to)));
@@ -342,11 +352,14 @@ mod tests {
         let gtm = Target { name: "GTM Architect".into(), ..target("tg_gtm", "GTM Architect", "other", "b2b", "lead") };
         let fit = keyword_fit(&rec("Senior Marketing Operations Manager"), B2B_OPS, &[gtm], None).unwrap();
         let why = &fit.per_target[0].why;
-        assert_eq!(fit.per_target[0].fit, "ok");
-        assert!(why.contains("the posting is marketing ops, and GTM Architect isn't"), "{why}");
+        assert_eq!(fit.per_target[0].fit, "ok", "{}", fit.per_target[0].why);
+        assert!(why.contains("Close kind of role: the posting is marketing ops, GTM Architect is GTM and revenue ops."), "{why}");
         assert!(why.contains("Same buyer: both sell to businesses."), "{why}");
         assert!(why.contains("the posting is senior, GTM Architect is lead"), "{why}");
         assert!(!why.contains("not clear") && !why.contains('\u{2014}'), "{why}");
+        let chef = Target { name: "Chef".into(), ..target("tg_chef", "Head Chef", "other", "b2b", "senior") };
+        let odd = keyword_fit(&rec("Senior Marketing Operations Manager"), B2B_OPS, &[chef], None).unwrap();
+        assert!(odd.per_target[0].why.contains("the posting is marketing ops, and Chef isn't lifecycle"), "{}", odd.per_target[0].why);
         let life = Target { name: "Lifecycle".into(), ..target("tg_life", "Lifecycle Manager", "lifecycle", "b2c", "mid") };
         let far = keyword_fit(&rec("Director of Marketing Operations"), B2B_OPS, &[life], None).unwrap();
         let why = &far.per_target[0].why;
@@ -577,7 +590,7 @@ pub fn targets_text(targets: &[Target], first: Option<&str>) -> String {
             let lead = t.lead_with.iter().map(|p| p.trim()).filter(|p| !p.is_empty()).collect::<Vec<_>>().join("; ");
             format!(
                 "id: {}\nname: {}\nsells_to: {}\nrole_family: {}\nseniority: {}\ncompany_stage: {}\npitch: {}\nlead_with: {}",
-                t.id, t.name, t.sells_to, t.role_family, t.seniority, t.company_stage, or_none(&t.pitch), or_none(&lead)
+                t.id, t.name, t.sells_to, family_of(t), t.seniority, t.company_stage, or_none(&t.pitch), or_none(&lead)
             )
         })
         .collect::<Vec<_>>()

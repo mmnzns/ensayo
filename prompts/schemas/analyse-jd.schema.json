@@ -52,7 +52,7 @@
       "required": ["sells_to", "role_family", "seniority", "best_target_id", "mismatch_notes", "per_target"],
       "properties": {
         "sells_to": {"enum": ["b2b", "b2c", "both"]},
-        "role_family": {"enum": ["lifecycle", "marketing_ops", "growth", "product_marketing", "other"]},
+        "role_family": {"enum": ["lifecycle", "marketing_ops", "growth", "product_marketing", "gtm", "other"]},
         "seniority": {"enum": ["early", "mid", "senior", "lead", "director"]},
         "best_target_id": {"type": ["string", "null"]},
         "mismatch_notes": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 160}},
