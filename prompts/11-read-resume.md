@@ -57,7 +57,10 @@ points):
   matches). Show the arithmetic in `note` when you convert.
 - `differs`: the same metric with a value that does not follow (resume "5 steps to 1", bank
   "3 steps to 1"). Name both values in `note`. Never decide which is right.
-- `not_in_bank`: no bank proof point for this metric.
+- `not_in_bank`: no bank proof point for this metric. The `note` names the resume metric and
+  says no bank story has it.
+Every `note` is specific: for `matches`, name the bank story and its value ("Matches Onboarding
+drop-off: 31% to 44%"). Never just "Matches." or "Not found."
 When the metric is ambiguous (two bank stories could be the one), pick none and use
 `not_in_bank` with a note naming the candidates.
 
@@ -67,8 +70,8 @@ These rules are for resume points only; lead-with points are handled in `lead_wi
 Only when `jd_analysis` is present; otherwise return an empty list. Choose two or three items
 where a priority or `must_believe` from the job analysis meets something the resume shows. Each
 item: `qualification` (short, plain, under 10 words, said the way a person would say it),
-`resume_quote` (at most 20 words copied from the resume), `why` (which priority or belief it
-answers, one sentence), `story_id` (the bank story that tells it, or null). Prefer items the
+`resume_quote` (at most 20 words copied from the resume), `why` (one sentence naming the priority
+or belief from the job analysis and the part of the resume line that answers it), `story_id` (the bank story that tells it, or null). Prefer items the
 interviewer is likely to skim past: things buried in a bullet, not the job title. Never choose
 something the resume does not show.
 
@@ -92,8 +95,9 @@ Return one item per lead-with point, in the order given, with the same `id`:
   `must_believe`, or the problem in its `summary`), so saying it out loud would help in this
   process. False when the posting gives no reason to care about it, or points the other way (a
   point about leading a team, for a job with no team).
-- `why`: one short plain sentence naming the priority, belief or line of the summary it answers,
-  or why it does not matter here.
+- `why`: one short plain sentence naming the priority, belief or line of the summary it answers.
+  When `fits` is false, name what the posting says or lacks that makes it not matter ("The posting
+  has no direct reports, and this point is about leading a team"), never just "not relevant".
 A point does not need to appear in the resume to fit. Never reword, merge or add points.
 
 ### unreadable

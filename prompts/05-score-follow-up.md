@@ -25,9 +25,12 @@ the first answer are numbered `[A n]`.
 
 Criteria:
 - `f1_answer_push`: the first sentence of the follow-up answer answers the follow-up directly.
-  Same strictness as answer_first in the rubric. Return `first_answer_sentence`.
+  Same strictness as answer_first in the rubric. Return `first_answer_sentence`. On a fail,
+  `reason` says what the first sentence did instead of answering.
 - `f2_new_specific`: the answer adds at least one new detail, decision, trade-off, name, mechanism
   or number that was not in the first answer. Retelling the first answer in other words fails.
+  `reason` names the new detail that was added, or on a fail the detail from the first answer
+  that was repeated.
 - `f3_consistent`: numbers, the speaker's role and the timeline match the first answer and the
   bank stories. A different value for the same metric fails; name both values in `reason`.
   A new number that is not in the bank or the first answer passes F3 but is noted in `reason`
@@ -35,7 +38,8 @@ Criteria:
 - `f5_held_position`: only for `skeptic_push`, else `na`. Fails if the candidate backed off their
   claim, apologised for it, or added a hedge ("I guess it might have happened anyway", "but that's
   just my view") without new information that justifies the change. Calmly agreeing with a fair
-  point and explaining why the claim still holds passes.
+  point and explaining why the claim still holds passes. On a fail, `reason` quotes the hedge or
+  backtrack and names the claim it weakened.
 - Also report `clarifying_question` and `not_an_answer` as in prompt 02. A clarifying question
   here triggers prompt 06 the same way as after a first answer.
 - Always set `"rubric_version": 1`.

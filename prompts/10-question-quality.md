@@ -62,8 +62,11 @@ not in the inputs as an assumption ("I'd guess..."). Plain spoken English, under
 dashes, no framework names.
 
 `note`: one or two sentences in plain words on the single most useful change, written to the
-candidate ("Open with what you think matters most, then ask. It shows you've already thought about
-the job."). No praise padding. If every question passes, say what made the best one work.
+candidate. Quote a few words of their weakest question, say what it missed, and give the change
+using a detail from the posting or the interview ("You asked 'What's the culture like?', which
+fits any company. Ask how the team is handling the onboarding rebuild instead."). No praise
+padding. If every question passes, quote the best one and name the posting detail it used. Never
+write a note that would fit a different candidate.
 
 ### must_say_said
 

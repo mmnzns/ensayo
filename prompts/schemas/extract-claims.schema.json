@@ -14,7 +14,7 @@
         "properties": {
           "type": {"enum": ["reason_for_leaving", "why_this_company", "compensation", "availability", "role_title", "tenure", "proof_number"]},
           "subject": {"type": "string", "maxLength": 80, "description": "what the claim is about, e.g. 'notice period', 'activation rate 7-day', 'title at Fernhill'"},
-          "value": {"type": "string", "maxLength": 200, "description": "the claim in a short normalised form"},
+          "value": {"type": "string", "maxLength": 200, "description": "the claim in short form, keeping every number, date, title and company name as said"},
           "quote": {"type": "string", "maxLength": 200},
           "sentence": {"type": "integer", "minimum": 1}
         }

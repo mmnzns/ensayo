@@ -48,8 +48,9 @@ Fields:
   `reduce_costs`, `market_share`, `attract_customers`, `retain_customers`, `productivity`,
   `develop_people`, `compliance`.
 - `branches`: for each of `leadership`, `ambiguity`, `data`, `technical`, `failure`,
-  `avoided_failure`, a `trigger` (the follow-up question that leads there) and an `angle` (what in
-  the story answers it), only if the text has material for it. Omit branches with no material.
+  `avoided_failure`, a `trigger` (the follow-up question that leads there) and an `angle`: the
+  specific step, decision or number from the text that answers it, in first person ("I traced the
+  drop to a broken handoff in the signup data"), only if the text has material for it. Omit branches with no material.
 - `missing`: list every field you left empty that a strong story should have (`approach`,
   `proof_points`, `ownership`, `result`, `scale`). The app shows these as the gaps to fill.
 - `numbers_check`: every number you put in any field, exactly as it appears in the text, so code

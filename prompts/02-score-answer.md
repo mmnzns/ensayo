@@ -71,7 +71,11 @@ How to work:
 6. Judge each criterion listed in `active_criteria` using the rubric. For criteria not listed,
    return `na`. For each: `result`, `sentences` (the evidence indices, can be empty for a pass with
    nothing to point at), `quote` (at most 20 words copied from the transcript, or empty), `reason`
-   (one short plain sentence a developer can read in a log; not shown to the user).
+   (one short plain sentence). The coach note is written from `reason` and `quote`, so on a fail
+   they must be specific. `reason` names the missing or wrong thing with its value: what sentence
+   1 does instead of answering, how many context sentences came before the action, the number
+   said and the bank value, the hedge words used, or the "we" sentence with no "I". `quote` is
+   never empty on a fail; when something is absent, quote the sentence where it should have been.
 7. Be strict on `answer_first`. Most people tell stories in time order. Unless sentence 1 (or
    sentence 2 after a five-word-or-shorter acknowledgement) actually answers the question, it fails.
    An angle headline (step 5) is a direct answer; scene-setting is still scene-setting.

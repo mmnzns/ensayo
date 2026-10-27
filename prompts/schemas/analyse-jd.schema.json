@@ -59,7 +59,7 @@
         "per_target": {
           "type": "array",
           "items": {"type": "object", "additionalProperties": false, "required": ["target_id", "fit", "why"],
-            "properties": {"target_id": {"type": "string"}, "fit": {"enum": ["strong", "ok", "weak"]}, "why": {"type": "string", "maxLength": 200}}}
+            "properties": {"target_id": {"type": "string"}, "fit": {"enum": ["strong", "ok", "weak"]}, "why": {"type": "string", "maxLength": 280}}}
         }
       }
     },
