@@ -118,6 +118,10 @@ fn base_of(base: &str) -> &str {
     base.trim_end_matches('/')
 }
 
+/// Extra output room for models that think before they answer (their thinking is counted as output). The reply
+/// itself still has the caller's limit's worth of room after the thinking.
+pub const THINKING_ROOM: u32 = 16_000;
+
 /// Anthropic Messages API: `system` is a top-level field and `max_tokens` is required. It has no JSON mode, so
 /// `req.json` changes nothing here; the prompt asks for JSON and `json::extract_json` reads it.
 pub fn anthropic_request(base: &str, key: &str, model: &str, req: &LlmRequest, settings: &ModelSettings) -> WireRequest {
@@ -145,7 +149,10 @@ pub fn openai_request(provider: Provider, base: &str, key: &str, model: &str, re
     }
     messages.push(json!({ "role": "user", "content": req.user }));
     let mut body = json!({ "model": model, "messages": messages });
-    body[if provider == Provider::OpenAi { "max_completion_tokens" } else { "max_tokens" }] = json!(req.max_tokens);
+    // A reasoning model's thinking counts against this limit too; without room for it, GPT-6 Sol used all 4,000 on
+    // thinking while reading a resume and wrote nothing ("ran out of room"). Only tokens used are paid for.
+    let limit = if settings.reasoning_effort.is_some() { req.max_tokens + THINKING_ROOM } else { req.max_tokens };
+    body[if provider == Provider::OpenAi { "max_completion_tokens" } else { "max_tokens" }] = json!(limit);
     if let Some(t) = settings.temperature {
         body["temperature"] = json!(t);
     }
@@ -161,7 +168,8 @@ pub fn openai_request(provider: Provider, base: &str, key: &str, model: &str, re
 /// Gemini's native API. The model is part of the address.
 pub fn gemini_request(base: &str, key: &str, model: &str, req: &LlmRequest, settings: &ModelSettings) -> WireRequest {
     let model = model.strip_prefix("models/").unwrap_or(model);
-    let mut config = json!({ "maxOutputTokens": req.max_tokens });
+    // Gemini 3 models think by default, and the thinking counts against maxOutputTokens: same room as above.
+    let mut config = json!({ "maxOutputTokens": req.max_tokens + THINKING_ROOM });
     if let Some(t) = settings.temperature {
         config["temperature"] = json!(t);
     }
@@ -487,7 +495,7 @@ mod tests {
         assert_eq!(w.body["messages"][1], json!({ "role": "user", "content": "Score this answer." }));
         assert_eq!(w.body["response_format"], json!({ "type": "json_object" }));
         assert_eq!(w.body["reasoning_effort"], "medium");
-        assert_eq!(w.body["max_completion_tokens"], 500);
+        assert_eq!(w.body["max_completion_tokens"], 500 + THINKING_ROOM, "room to think on top of the reply");
         assert!(w.body.get("max_tokens").is_none() && w.body.get("temperature").is_none());
 
         let s = model_settings(Provider::Groq, "openai/gpt-oss-120b", Tier::Fast);
@@ -513,7 +521,7 @@ mod tests {
         assert_eq!(w.body["systemInstruction"], json!({ "parts": [{ "text": "Be brief." }] }));
         assert_eq!(w.body["contents"], json!([{ "role": "user", "parts": [{ "text": "Score this answer." }] }]));
         assert_eq!(w.body["generationConfig"]["responseMimeType"], "application/json");
-        assert_eq!(w.body["generationConfig"]["maxOutputTokens"], 500);
+        assert_eq!(w.body["generationConfig"]["maxOutputTokens"], 500 + THINKING_ROOM);
         assert!(w.body["generationConfig"].get("temperature").is_none());
         let w = gemini_request("b", "k", "gemini-3.8-flash", &request(false, Tier::Fast), &s);
         assert!(w.body["generationConfig"].get("responseMimeType").is_none());
@@ -553,6 +561,20 @@ mod tests {
         });
         let r = parse_gemini(&body, "gemini-3.8-flash", &request(true, Tier::Fast)).unwrap();
         assert_eq!((r.text.as_str(), r.input_tokens, r.output_tokens), ("{\"ok\":true}", 50, 50));
+    }
+
+    #[test]
+    fn a_thinking_model_gets_room_to_think_on_top_of_the_reply() {
+        let req = LlmRequest { system: String::new(), user: "u".into(), json: true, max_tokens: 4000, tier: Tier::Strong };
+        let sol = model_settings(Provider::OpenAi, "gpt-6-sol", Tier::Strong);
+        assert!(sol.reasoning_effort.is_some());
+        let w = openai_request(Provider::OpenAi, "https://api.openai.com/v1", "k", "gpt-6-sol", &req, &sol, true);
+        assert_eq!(w.body["max_completion_tokens"], json!(4000 + THINKING_ROOM));
+        let plain = model_settings(Provider::OpenAi, "gpt-4.1", Tier::Strong);
+        let w = openai_request(Provider::OpenAi, "https://api.openai.com/v1", "k", "gpt-4.1", &req, &plain, true);
+        assert_eq!(w.body["max_completion_tokens"], json!(4000), "a model that doesn't think keeps the plain limit");
+        let g = gemini_request("https://generativelanguage.googleapis.com/v1beta", "k", "gemini-3.1-pro-preview", &req, &model_settings(Provider::Gemini, "gemini-3.1-pro-preview", Tier::Strong));
+        assert_eq!(g.body["generationConfig"]["maxOutputTokens"], json!(4000 + THINKING_ROOM));
     }
 
     #[test]
