@@ -85,12 +85,75 @@ pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, b
         let user = if attempt == 0 { user.clone() } else { format!("{user}\n\nYour last reply was rejected: {last}. Return only one JSON object that matches the schema.") };
         let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, max_tokens, tier: prompt.tier }).map_err(from_ai)?;
         budget.spend.add_from(budget.provider, &reply);
-        match extract_json(&reply.text).and_then(|v| validate(&prompt.schema, &v).map(|_| v)) {
-            Ok(value) => return Ok(Called { value }),
-            Err(e) => last = e,
+        let mut value = match extract_json(&reply.text) {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("{} reply rejected (attempt {}): no JSON object in it", prompt.id, attempt + 1);
+                last = e;
+                continue;
+            }
+        };
+        match validate(&prompt.schema, &value) {
+            Ok(()) => return Ok(Called { value }),
+            // Only too long or too many: keep it (lists cut to their limit) rather than lose the whole reply.
+            Err(_) if validate(&without_size_limits(&prompt.schema), &value).is_ok() => {
+                clip_lists(&prompt.schema, &mut value);
+                log::info!("{} reply kept past its length limits", prompt.id);
+                return Ok(Called { value });
+            }
+            Err(e) => {
+                log::warn!("{} reply rejected (attempt {}): {}", prompt.id, attempt + 1, problem_places(&prompt.schema, &value));
+                last = e;
+            }
         }
     }
     Err(CallError::Invalid(last))
+}
+
+/// The schemas cap text length and list size to keep replies tidy. A verbose model (GPT-6 Luna reading a long story)
+/// broke a `maxLength` on both tries and the whole read failed, so a reply that breaks only those is kept instead.
+fn without_size_limits(schema: &Value) -> Value {
+    match schema {
+        Value::Object(map) => Value::Object(
+            map.iter().filter(|(k, _)| k.as_str() != "maxLength" && k.as_str() != "maxItems").map(|(k, v)| (k.clone(), without_size_limits(v))).collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(without_size_limits).collect()),
+        other => other.clone(),
+    }
+}
+
+/// Cuts each list down to its `maxItems`, following `properties` and `items`. Long text is left whole.
+fn clip_lists(schema: &Value, value: &mut Value) {
+    match value {
+        Value::Array(items) => {
+            if let Some(max) = schema.get("maxItems").and_then(Value::as_u64) {
+                items.truncate(max as usize);
+            }
+            if let Some(item_schema) = schema.get("items") {
+                for item in items.iter_mut() {
+                    clip_lists(item_schema, item);
+                }
+            }
+        }
+        Value::Object(map) => {
+            if let Some(Value::Object(props)) = schema.get("properties") {
+                for (k, v) in map.iter_mut() {
+                    if let Some(s) = props.get(k) {
+                        clip_lists(s, v);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Where a reply broke the schema, as schema rules and field paths only: never the reply's text, which can hold the
+/// user's words (the log never does).
+fn problem_places(schema: &Value, value: &Value) -> String {
+    let Ok(validator) = jsonschema::validator_for(schema) else { return "bad schema".into() };
+    let places: Vec<String> = validator.iter_errors(value).take(4).map(|e| format!("{} at {}", e.schema_path, e.instance_path)).collect();
+    places.join("; ")
 }
 
 #[cfg(test)]

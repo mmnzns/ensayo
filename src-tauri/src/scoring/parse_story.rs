@@ -246,4 +246,27 @@ mod tests {
         let llm = Scripted::new(vec![Ok("nope"), Ok("still nope")]);
         assert!(matches!(parse(&llm), Err(CallError::Invalid(_))));
     }
+
+    /// GPT-6 Luna on a long, detailed story: text past the length limits and too many tags. That used to fail the
+    /// read twice ("The AI's reply could not be read"); the reply is kept, the lists cut to their limits.
+    #[test]
+    fn a_long_wordy_reply_is_kept_not_thrown_away() {
+        let long_action = "I built the enrichment pipeline step by step. ".repeat(40);
+        let llm = Scripted::new(vec![Ok(&reply(|v| {
+            v["action"] = json!(long_action);
+            v["best_for"] = json!(["a", "b", "c", "d", "e", "f"]);
+        }))]);
+        let p = parse(&llm).unwrap();
+        assert_eq!(llm.calls(), 1, "no second try needed");
+        assert_eq!(p.story.action, long_action.trim(), "long text is kept whole");
+        assert_eq!(p.story.best_for.len(), 4, "a list is cut to its limit");
+    }
+
+    #[test]
+    fn a_reply_with_a_real_mistake_is_still_asked_again_then_refused() {
+        let bad = reply(|v| v["great_eight"] = json!(["make_things_better"]));
+        let llm = Scripted::new(vec![Ok(&bad), Ok(&bad)]);
+        assert!(matches!(parse(&llm), Err(CallError::Invalid(_))));
+        assert_eq!(llm.calls(), 2);
+    }
 }
