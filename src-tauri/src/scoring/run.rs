@@ -62,7 +62,7 @@ pub struct Called {
 
 fn validate(schema: &Value, value: &Value) -> Result<(), String> {
     let validator = jsonschema::validator_for(schema).map_err(|e| format!("bad schema: {e}"))?;
-    let problems: Vec<String> = validator.iter_errors(value).take(4).map(|e| format!("{} (at {})", e, e.instance_path)).collect();
+    let problems: Vec<String> = validator.iter_errors(value).take(8).map(|e| format!("{} (at {})", e, e.instance_path)).collect();
     if problems.is_empty() {
         Ok(())
     } else {
@@ -77,12 +77,23 @@ fn from_ai(e: AiError) -> CallError {
     }
 }
 
+/// The system prompt with the reply's JSON Schema after it. The prompts describe the fields in prose; without the
+/// schema itself a model guesses names and allowed values (GPT-6 replies to the resume and posting reads were refused
+/// for exactly that), so every call carries it.
+fn with_schema(system: &str, schema: &Value) -> String {
+    format!(
+        "{system}\n\n## Reply format\n\nReply with one JSON object that matches this JSON Schema exactly: the same field names, every required field, no other fields, and only the allowed values where a field lists them.\n\n{}",
+        serde_json::to_string(schema).unwrap_or_default()
+    )
+}
+
 pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, budget: &mut Budget) -> Result<Called, CallError> {
     let (system, user) = prompt.render(vars);
+    let system = with_schema(&system, &prompt.schema);
     let mut last = String::new();
     for attempt in 0..2 {
         budget.check()?;
-        let user = if attempt == 0 { user.clone() } else { format!("{user}\n\nYour last reply was rejected: {last}. Return only one JSON object that matches the schema.") };
+        let user = if attempt == 0 { user.clone() } else { format!("{user}\n\nYour last reply was rejected: {last}. Return only one JSON object that matches the JSON Schema in the reply format: its field names, required fields and allowed values.") };
         let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, max_tokens, tier: prompt.tier }).map_err(from_ai)?;
         budget.spend.add_from(budget.provider, &reply);
         let mut value = match extract_json(&reply.text) {
@@ -228,6 +239,15 @@ mod tests {
         assert_eq!(seen.len(), 2);
         assert!(seen[1].user.contains("Your last reply was rejected"));
         assert!(!seen[0].user.contains("rejected"));
+    }
+
+    #[test]
+    fn every_call_shows_the_model_the_schema_it_must_match() {
+        let llm = Scripted::new(vec![Ok(GOOD)]);
+        call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap();
+        let system = llm.seen.lock().unwrap()[0].system.clone();
+        assert!(system.contains("## Reply format"));
+        assert!(system.contains("\"behavioral_situation\"") && system.contains("\"required\""), "the schema itself, with its field names");
     }
 
     #[test]
