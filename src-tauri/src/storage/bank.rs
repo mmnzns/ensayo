@@ -84,7 +84,9 @@ impl Storage {
             let said = numbers::extract(&without_compounds(&angle.headline));
             if let Some(bad) = said.iter().find(|n| !known.iter().any(|k| numbers::same(k.value, n.value))) {
                 let shown = if bad.percent { format!("{}%", bad.value) } else { bad.raw.clone() };
-                return Err(StorageError::Invalid(format!("The opening sentence for {} says {shown}, which is not one of this story's numbers.", target.name)));
+                let own = known.iter().map(|k| k.raw.clone()).collect::<Vec<_>>().join(", ");
+                let own = if own.is_empty() { "none yet".to_string() } else { own };
+                return Err(StorageError::Invalid(format!("The opening sentence for {} says {shown}, which is not one of this story's numbers ({own}). Use one of those, or add {shown} to the story's numbers first.", target.name)));
             }
         }
         Ok(())
@@ -386,12 +388,14 @@ mod tests {
         let (_d, s, t) = with_targets();
         let err = s.save_story(&angled(&t, "Activation up 52% in a quarter")).unwrap_err();
         assert!(matches!(err, StorageError::Invalid(_)));
-        assert_eq!(err.to_string(), "The opening sentence for B2B marketing ops says 52%, which is not one of this story's numbers.");
+        let msg = err.to_string();
+        assert!(msg.starts_with("The opening sentence for B2B marketing ops says 52%, which is not one of this story's numbers ("), "{msg}");
+        assert!(msg.contains("add 52% to the story's numbers"), "{msg}");
         assert!(matches!(s.story("st_act"), Err(StorageError::NotFound(_))), "nothing was saved");
         let err = s.save_story(&angled(&t, "Activation went up by fifty two percent")).unwrap_err();
-        assert!(err.to_string().contains("which is not one of this story's numbers."), "{err}");
+        assert!(err.to_string().contains("which is not one of this story's numbers (31%, 44%, 12)"), "{err}");
         let err = s.save_story(&angled(&t, "I led 30 people")).unwrap_err();
-        assert_eq!(err.to_string(), "The opening sentence for B2B marketing ops says 30, which is not one of this story's numbers.");
+        assert!(err.to_string().starts_with("The opening sentence for B2B marketing ops says 30, which is not one of this story's numbers ("), "{err}");
     }
 
     #[test]

@@ -286,7 +286,11 @@ fn said_claims(app: &AppRecord, claims: &[ClaimRec]) -> Vec<ClaimView> {
         .filter(|c| c.stage != "resume")
         .map(|c| {
             let (status, note) = if !live(c) {
-                ("consistent", Some("Replaced by the current answer.".to_string()))
+                let now = c.superseded_by.as_deref().and_then(|id| claims.iter().find(|x| x.id == id)).map(|x| x.value.clone());
+                ("consistent", Some(match now {
+                    Some(v) => format!("Replaced by your current answer: \"{v}\"."),
+                    None => "Replaced by a newer answer.".to_string(),
+                }))
             } else if c.source == "updated" {
                 ("updated", Some("Marked as the current answer".to_string()))
             } else if let Some(n) = flagged.get(&c.id) {

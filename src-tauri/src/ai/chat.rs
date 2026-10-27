@@ -198,9 +198,9 @@ fn token_count(v: &Value) -> Option<u32> {
 fn finish(provider: Provider, model: &str, req: &LlmRequest, text: String, usage: (Option<u32>, Option<u32>), cut_off: bool) -> Result<LlmReply, AiError> {
     if text.trim().is_empty() {
         return Err(AiError::Failed(if cut_off {
-            format!("{} ran out of room before it finished answering.", provider.name())
+            format!("{} ({model}) ran out of room before it finished answering. Try again, or choose a model that doesn't think as long in Settings › AI.", provider.name())
         } else {
-            format!("{} sent back an empty answer.", provider.name())
+            format!("{} ({model}) sent back an empty answer. Try again in a minute.", provider.name())
         }));
     }
     let input_tokens = usage.0.unwrap_or_else(|| estimate_tokens(&req.system).saturating_add(estimate_tokens(&req.user)));

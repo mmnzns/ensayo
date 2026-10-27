@@ -126,7 +126,7 @@ pub(super) fn transport_error(provider: Provider, url: &str, e: &reqwest::Error)
     if e.is_connect() {
         AiError::Unavailable(format!("Couldn't reach {} at {url}. Is it running, and is this computer online?", provider.name()))
     } else if e.is_timeout() {
-        AiError::Failed(format!("{} took too long to answer.", provider.name()))
+        AiError::Failed(format!("{} took too long to answer and the request was stopped. It may be busy: try again in a minute.", provider.name()))
     } else {
         AiError::Failed(format!("Couldn't reach {}: {e}", provider.name()))
     }

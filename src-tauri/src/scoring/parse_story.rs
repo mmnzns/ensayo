@@ -89,7 +89,8 @@ pub fn parse_story(llm: &dyn Llm, raw_story: &str, employer_hint: &str, budget: 
         if grounded(&v, &source) {
             v
         } else {
-            dropped.push(format!("The {name} had a number that is not in your text, so it was left empty."));
+            let stray: Vec<String> = numbers::extract(&without_compounds(&v)).into_iter().filter(|n| !source.iter().any(|s| numbers::same(*s, n.value))).map(|n| n.raw).collect();
+            dropped.push(format!("The {name} had {}, which isn't in your text, so it was left empty. Fill it in with your own numbers.", if stray.is_empty() { "a number".to_string() } else { stray.join(", ") }));
             String::new()
         }
     };

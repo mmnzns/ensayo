@@ -52,7 +52,7 @@ pub fn resolve(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>) -> Resul
     if s.provider.trim().is_empty() {
         return Ok(None);
     }
-    let provider = Provider::parse(s.provider.trim()).ok_or_else(|| "The feedback engine in Settings is not one Ensayo knows. Pick one again.".to_string())?;
+    let provider = Provider::parse(s.provider.trim()).ok_or_else(|| format!("The feedback engine saved in Settings (\"{}\") is not one Ensayo knows. Pick one again in Settings › AI.", s.provider.trim()))?;
     let key = key_of(provider.key_id()).unwrap_or_default();
     if provider != Provider::Compatible && key.is_empty() {
         return Err(format!("There is no {} API key saved. Add one in Settings › AI.", provider.name()));
@@ -62,7 +62,7 @@ pub fn resolve(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>) -> Resul
     let fast = pick(&s.fast_model, fast_default);
     let strong = if s.strong_model.trim().is_empty() && !s.fast_model.trim().is_empty() && provider == Provider::Compatible { fast.clone() } else { pick(&s.strong_model, strong_default) };
     if fast.is_empty() {
-        return Err("Choose a model in Settings › AI.".to_string());
+        return Err(format!("No {} model is chosen. Choose one in Settings › AI.", provider.name()));
     }
     let base = if provider == Provider::Compatible {
         compatible_base(if s.base_url.trim().is_empty() { "http://localhost:11434" } else { &s.base_url })
@@ -125,7 +125,7 @@ pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, l
         return resolve(s, key_of).map(|r| r.map(Engine::Cloud));
     }
     let model = local_models::choose(&s.fast_model);
-    let file = model.file_in(&locate(model)).ok_or_else(|| "Download the local AI model in Settings › AI.".to_string())?;
+    let file = model.file_in(&locate(model)).ok_or_else(|| format!("The local AI model ({}) isn't downloaded yet. Download it in Settings › AI.", model.info.name))?;
     Ok(Some(Engine::Local(LocalChoice { id: model.info.id, name: model.info.name, file })))
 }
 
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn a_local_server_needs_no_key_but_needs_a_model_and_gets_the_v1_address() {
-        assert!(resolve(&s("compatible"), no_keys).unwrap_err().contains("Choose a model"));
+        assert!(resolve(&s("compatible"), no_keys).unwrap_err().contains("Choose one in Settings"));
         let mut a = s("compatible");
         a.fast_model = "llama3.2:3b".into();
         let r = resolve(&a, no_keys).unwrap().unwrap();
@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn the_local_engine_needs_its_model_and_says_where_to_download_it() {
         let err = resolve_engine(&s("local"), no_keys, not_found).unwrap_err();
-        assert!(err.contains("Download the local AI model") && err.contains("Settings"), "{err}");
+        assert!(err.contains("isn't downloaded yet") && err.contains("Settings › AI"), "{err}");
     }
 
     #[test]
