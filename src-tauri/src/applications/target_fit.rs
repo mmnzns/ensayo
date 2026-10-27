@@ -94,26 +94,49 @@ struct Rated {
     why: String,
 }
 
+fn level_words(level: &str) -> &'static str {
+    match level {
+        "early" => "early career",
+        "senior" => "senior",
+        "lead" => "lead",
+        "director" => "director",
+        _ => "mid level",
+    }
+}
+
+const KNOWN_FAMILIES: &str = "lifecycle, marketing ops, growth or product marketing";
+
+/// The line under each target: what was compared and what each side reads as, so "okay fit" always says why.
 fn rate(g: &Guess, t: &Target) -> Rated {
     let (family, family_text) = if g.role_family == t.role_family && g.role_family != "other" {
-        (2, "the same kind of role")
-    } else if g.role_family == "other" || t.role_family == "other" {
-        (1, "a role kind that is not clear")
+        (2, format!("Same kind of role: both are {}.", family_words(&g.role_family)))
+    } else if g.role_family == "other" && t.role_family == "other" {
+        (1, format!("Kind of role not compared: neither the posting nor {} is {KNOWN_FAMILIES}.", t.name))
+    } else if g.role_family == "other" {
+        (1, format!("Kind of role not compared: the posting doesn't read as {KNOWN_FAMILIES}; {} is {}.", t.name, family_words(&t.role_family)))
+    } else if t.role_family == "other" {
+        (1, format!("Kind of role not compared: the posting is {}, and {} isn't {KNOWN_FAMILIES}.", family_words(&g.role_family), t.name))
     } else {
-        (0, "a different kind of role")
+        (0, format!("Different kind of role: the posting is {}, {} is {}.", family_words(&g.role_family), t.name, family_words(&t.role_family)))
     };
-    let (sells, sells_text) = if g.sells_to == t.sells_to || g.sells_to == "both" || t.sells_to == "both" { (1, "customers that fit") } else { (0, "different customers") };
+    let (sells, sells_text) = if g.sells_to == t.sells_to && g.sells_to != "both" {
+        (1, format!("Same buyer: both sell to {}.", customers_words(&g.sells_to)))
+    } else if g.sells_to == "both" {
+        (1, "Buyer fits: the posting doesn't pick businesses or consumers.".to_string())
+    } else if t.sells_to == "both" {
+        (1, format!("Buyer fits: the posting sells to {}, and {} covers both.", customers_words(&g.sells_to), t.name))
+    } else {
+        (0, format!("Different buyer: the posting sells to {}, {} to {}.", customers_words(&g.sells_to), t.name, customers_words(&t.sells_to)))
+    };
     let gap = (level_index(&g.seniority) - level_index(&t.seniority)).abs();
     let (level, level_text) = match gap {
-        0 => (1, "the same level"),
-        1 => (1, "a level one step away"),
-        _ => (0, "a level far apart"),
+        0 => (1, format!("Same level: {}.", level_words(&g.seniority))),
+        1 => (1, format!("Level one step apart: the posting is {}, {} is {}.", level_words(&g.seniority), t.name, level_words(&t.seniority))),
+        n => (0, format!("Level {n} steps apart: the posting is {}, {} is {}.", level_words(&g.seniority), t.name, level_words(&t.seniority))),
     };
     let score = family + sells + level;
     let fit = if family == 0 || score < 3 { "weak" } else if score >= 4 { "strong" } else { "ok" };
-    let mut why = format!("{family_text}, {sells_text}, {level_text}.");
-    why[..1].make_ascii_uppercase();
-    Rated { score, fit, why }
+    Rated { score, fit, why: format!("{family_text} {sells_text} {level_text}") }
 }
 
 /// The posting against every target that is not archived. `None` when there is no such target. `filed` is the target the
@@ -312,6 +335,24 @@ mod tests {
         assert_eq!(fit.per_target.len(), 2);
         let again = keyword_fit(&rec("Lifecycle Marketing Manager"), B2C_LIFECYCLE, &[lifecycle, ops], Some("tg_life")).unwrap();
         assert_eq!(again.best_target_id.as_deref(), Some("tg_life"));
+    }
+
+    #[test]
+    fn the_line_under_a_target_names_what_each_side_reads_as() {
+        let gtm = Target { name: "GTM Architect".into(), ..target("tg_gtm", "GTM Architect", "other", "b2b", "lead") };
+        let fit = keyword_fit(&rec("Senior Marketing Operations Manager"), B2B_OPS, &[gtm], None).unwrap();
+        let why = &fit.per_target[0].why;
+        assert_eq!(fit.per_target[0].fit, "ok");
+        assert!(why.contains("the posting is marketing ops, and GTM Architect isn't"), "{why}");
+        assert!(why.contains("Same buyer: both sell to businesses."), "{why}");
+        assert!(why.contains("the posting is senior, GTM Architect is lead"), "{why}");
+        assert!(!why.contains("not clear") && !why.contains('\u{2014}'), "{why}");
+        let life = Target { name: "Lifecycle".into(), ..target("tg_life", "Lifecycle Manager", "lifecycle", "b2c", "mid") };
+        let far = keyword_fit(&rec("Director of Marketing Operations"), B2B_OPS, &[life], None).unwrap();
+        let why = &far.per_target[0].why;
+        assert!(why.contains("the posting is marketing ops, Lifecycle is lifecycle"), "{why}");
+        assert!(why.contains("the posting sells to businesses, Lifecycle to consumers"), "{why}");
+        assert!(why.contains("Level 3 steps apart"), "{why}");
     }
 
     #[test]

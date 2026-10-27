@@ -89,8 +89,12 @@ name, and the candidate's targets are not evidence of what this job is.
   - Company stage: when the target's `company_stage` is not `any` and clearly differs from the
     posting (`early_startup` is startup; `growth` and `scale_up` are growth; `enterprise` is
     enterprise; `unknown` never differs), a `strong` becomes `ok`.
-  - `why`: one short plain sentence naming what matches and what differs ("Same buyer and role,
-    one level more senior."). Say "the posting" or "this job", never a target id.
+  - `why`: one or two short plain sentences that name the actual values on both sides for the
+    buyer, the kind of role and the level, so the candidate can see exactly what was compared:
+    "Both sell to businesses and are marketing ops. The posting is lead, this target is senior."
+    Never say a part is "not clear", "fits" or "differs" without saying what each side is. When
+    a role family is `other`, say what the work is in a few words ("go-to-market systems design")
+    instead of calling it unclear. Say "the posting" or "this job", never a target id.
   - The pitch and lead-with points never change a fit level. Use them only in `why` and to choose
     between targets that fit equally well.
 - `best_target_id`: the target with the best fit. On a tie, the one whose pitch and lead-with
