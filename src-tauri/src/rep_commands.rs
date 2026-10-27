@@ -364,7 +364,10 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             }
             Judged::NotAnAnswer => {
                 let _ = std::fs::remove_file(&args.audio_path);
-                return Ok(outcome_without_rep("not_an_answer", session_id));
+                // What was heard goes back to the screen only (never the log), so the user can see why it didn't count.
+                let mut out = outcome_without_rep("not_an_answer", session_id);
+                out.transcript_text = Some(metrics.sentences.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" "));
+                return Ok(out);
             }
             Judged::Fallback(n) => notice = Some(n),
         }
