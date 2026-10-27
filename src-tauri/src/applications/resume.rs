@@ -73,9 +73,86 @@ pub fn is_garbled(text: &str) -> bool {
     words.len() >= 20 && (words.iter().filter(|w| has_vowel(w)).count() as f64) < 0.5 * words.len() as f64
 }
 
+/// pdf-extract's plain text output, with one change in where spaces go. pdf-extract adds a space wherever the next
+/// glyph starts a tenth of the font size past where the last one should have ended. Some PDFs give wrong widths for
+/// some glyphs, and those gaps come out as "imp rove", "Zap ier" and "4 0 %". When a document carries its own space
+/// characters (most do), a gap is a word break only when it is wide (a column or a tab); when it has almost none (some
+/// LaTeX output), the gaps are the only word breaks there are and pdf-extract's rule stands.
+struct PageText {
+    pages: Vec<String>,
+    page: String,
+    flip: (f64, f64),
+    first_char: bool,
+    last_end: f64,
+    last_y: f64,
+}
+
+/// Marks for a gap while a page is read, settled once the whole document is seen: wide (a column or a tab), or narrow.
+const WIDE_GAP: char = '\u{e000}';
+const NARROW_GAP: char = '\u{e001}';
+
+impl pdf_extract::OutputDev for PageText {
+    fn begin_page(&mut self, _n: u32, media_box: &pdf_extract::MediaBox, _art: Option<(f64, f64, f64, f64)>) -> Result<(), pdf_extract::OutputError> {
+        self.flip = (1.0, media_box.ury - media_box.lly);
+        self.page.clear();
+        Ok(())
+    }
+    fn end_page(&mut self) -> Result<(), pdf_extract::OutputError> {
+        self.pages.push(std::mem::take(&mut self.page));
+        Ok(())
+    }
+    fn output_character(&mut self, trm: &pdf_extract::Transform, width: f64, _spacing: f64, font_size: f64, ch: &str) -> Result<(), pdf_extract::OutputError> {
+        // The same arithmetic as pdf-extract's PlainTextOutput: the position with y flipped, and the font size after
+        // the text matrix.
+        let (x, y) = (trm.m31, self.flip.1 - trm.m32);
+        let (fx, fy) = (font_size * trm.m11 + font_size * trm.m21, font_size * trm.m12 + font_size * trm.m22);
+        let size = (fx * fy).abs().sqrt();
+        if self.first_char {
+            if (y - self.last_y).abs() > size * 1.5 || (x < self.last_end && (y - self.last_y).abs() > size * 0.5) {
+                self.page.push('\n');
+            } else if x > self.last_end + size * 0.1 && !self.page.ends_with(char::is_whitespace) {
+                self.page.push(if x > self.last_end + size { WIDE_GAP } else { NARROW_GAP });
+            }
+        }
+        self.page.push_str(ch);
+        self.first_char = false;
+        self.last_y = y;
+        self.last_end = x + width * size;
+        Ok(())
+    }
+    fn begin_word(&mut self) -> Result<(), pdf_extract::OutputError> {
+        self.first_char = true;
+        Ok(())
+    }
+    fn end_word(&mut self) -> Result<(), pdf_extract::OutputError> {
+        Ok(())
+    }
+    fn end_line(&mut self) -> Result<(), pdf_extract::OutputError> {
+        Ok(())
+    }
+}
+
+/// Turns the gap marks into spaces or nothing, for the whole document at once (see `PageText`).
+fn settle_gaps(pages: Vec<String>) -> Vec<String> {
+    let count = |c: char| pages.iter().map(|p| p.chars().filter(|x| *x == c).count()).sum::<usize>();
+    let own_spaces = count(' ');
+    let gaps = count(WIDE_GAP) + count(NARROW_GAP);
+    let narrow = if own_spaces >= 2 * gaps { "" } else { " " };
+    pages.into_iter().map(|p| p.replace(WIDE_GAP, " ").replace(NARROW_GAP, narrow)).collect()
+}
+
 fn pdf_pages(bytes: &[u8]) -> Result<Vec<String>, String> {
     // Some PDFs make the reader panic; that is "can't read this file", not a crash.
-    std::panic::catch_unwind(|| pdf_extract::extract_text_from_mem_by_pages(bytes)).map_err(|_| "the reader gave up on this file".to_string())?.map_err(|e| e.to_string())
+    std::panic::catch_unwind(|| -> Result<Vec<String>, String> {
+        let mut doc = pdf_extract::Document::load_mem(bytes).map_err(|e| e.to_string())?;
+        if doc.is_encrypted() {
+            doc.decrypt("").map_err(|e| e.to_string())?;
+        }
+        let mut out = PageText { pages: vec![], page: String::new(), flip: (1.0, 0.0), first_char: false, last_end: 0.0, last_y: 0.0 };
+        pdf_extract::output_doc(&doc, &mut out).map_err(|e| e.to_string())?;
+        Ok(settle_gaps(out.pages))
+    })
+    .map_err(|_| "the reader gave up on this file".to_string())?
 }
 
 const CANNOT_OPEN: &str = "Ensayo couldn't open this file. It may be damaged or locked with a password. You can paste the text of your resume instead, and Ensayo will read that.";
@@ -733,12 +810,27 @@ fn ai_read(ai: &mut AiCtx, rec_company: &str, rec_role: &str, text: &str, postin
     serde_json::from_value(called.value).map_err(|e| CallError::Invalid(e.to_string()))
 }
 
+/// Takes the text out of the attached PDF again before a reading, so a better text reader (wrong glyph widths no
+/// longer split words) reaches resumes attached before it. Pasted text has no PDF beside it and stays as it is, and so
+/// does the saved text when the PDF reads no better than before.
+fn refresh_pdf_text(storage: &Storage, id: &str) -> StorageResult<()> {
+    let path = storage.application_path(id, "resume/resume.pdf")?;
+    let Ok(bytes) = std::fs::read(&path) else { return Ok(()) };
+    if let TextOutcome::Text { text, .. } = extract_text(&bytes, "pdf", &NoFallback) {
+        if storage.application_text(id, "resume/resume.txt")?.as_deref() != Some(text.as_str()) {
+            storage.save_application_text(id, "resume/resume.txt", &text)?;
+        }
+    }
+    Ok(())
+}
+
 /// Reads the resume once the user confirmed: with the engine when there is one and it works, by pattern when not. The
 /// resume's claims go into the log as stage `resume`; lines the user fixed are kept and never duplicated. The "say
 /// these out loud" list needs the posting read by the engine; without it the list waits.
 pub fn read_resume(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<ReadResult> {
     let app = storage.application(id)?;
     let mut rec = load_resume(storage, id)?.ok_or_else(|| StorageError::Invalid("Attach the resume you sent first, then Ensayo can read it.".into()))?;
+    refresh_pdf_text(storage, id)?;
     let raw_text = storage.application_text(id, "resume/resume.txt")?.ok_or_else(|| StorageError::Invalid("Ensayo has no text from this resume yet. You can paste the text of your resume, then read it.".into()))?;
     let text = strip_html_comments(&raw_text);
     let no_text = |storage: &Storage, mut rec: ResumeRec| -> StorageResult<ReadResult> {
@@ -887,6 +979,35 @@ pub fn record_must_say(storage: &Storage, id: &str, said_ids: &[String]) -> Stor
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn narrow_gaps_are_dropped_when_the_pdf_has_its_own_spaces_and_kept_when_it_has_none() {
+        let with_spaces = vec![format!("to imp{NARROW_GAP}rove accuracy from ~4{NARROW_GAP}0% to ~80%{WIDE_GAP}2024 to now and more words here")];
+        assert_eq!(settle_gaps(with_spaces)[0], "to improve accuracy from ~40% to ~80% 2024 to now and more words here");
+        let without = vec![format!("Raised{NARROW_GAP}activation{NARROW_GAP}from{NARROW_GAP}31%")];
+        assert_eq!(settle_gaps(without)[0], "Raised activation from 31%");
+    }
+
+    /// Run with ENSAYO_PDF=/path/to/file.pdf to see how a real PDF reads (prints word counts only, never the text).
+    #[test]
+    #[ignore]
+    fn a_real_pdf_reads_without_split_words() {
+        let Ok(path) = std::env::var("ENSAYO_PDF") else { return };
+        let bytes = std::fs::read(path).unwrap();
+        let ours = pdf_pages(&bytes).unwrap().join("\n");
+        let theirs = pdf_extract::extract_text_from_mem_by_pages(&bytes).unwrap().join("\n");
+        let split = |t: &str| t.split_whitespace().filter(|w| w.chars().count() == 1 && w.chars().all(|c| c.is_ascii_digit())).count();
+        println!("words: ours {} theirs {}; lone digits: ours {} theirs {}", ours.split_whitespace().count(), theirs.split_whitespace().count(), split(&ours), split(&theirs));
+        assert!(split(&ours) <= split(&theirs));
+        for w in ["improve", "Zapier", "operations", "HubSpot", "OpenAI", "12+", "40%"] {
+            println!("{w}: {}", ours.contains(w));
+        }
+        let long: Vec<usize> = ours.split_whitespace().map(|w| w.chars().filter(|c| c.is_alphabetic()).count()).filter(|n| *n > 16).collect();
+        println!("tokens over 16 letters: {long:?}");
+        for w in ours.split_whitespace().filter(|w| w.chars().filter(|c| c.is_alphabetic()).count() > 16) {
+            println!("long token shape: has @ {}, has / {}, has . {}, has - {}, capitals {}", w.contains('@'), w.contains('/'), w.contains('.'), w.contains('-'), w.chars().filter(|c| c.is_uppercase()).count());
+        }
+    }
+
     #[test]
     fn a_contact_line_is_not_read_as_a_claim() {
         let claims = pattern_claims("Vancouver, BC | +1-778-555-0100 | name@example.com\nRaised activation from 31% to 44% in two quarters.");
