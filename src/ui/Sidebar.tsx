@@ -1,19 +1,20 @@
 import type { ReactNode } from "react";
 import { TIMING_ONLY_MISSING } from "../data/engine";
 import { useStore } from "../data/store";
-import { ApplicationsIcon, FeedbackIcon, HomeIcon, ProgressIcon, SettingsIcon, StoriesIcon } from "./Icons";
+import { ApplicationsIcon, FeedbackIcon, HomeIcon, ProfileIcon, ProgressIcon, SettingsIcon, StoriesIcon } from "./Icons";
 import Link from "./Link";
 import TargetSwitcher from "./TargetSwitcher";
 import Wordmark from "./Wordmark";
 
-export type NavId = "home" | "stories" | "applications" | "progress" | "settings" | "feedback";
+export type NavId = "home" | "stories" | "applications" | "profile" | "progress" | "settings" | "feedback";
 
 const ITEMS: { id: NavId; to: string; label: string; icon: ReactNode }[] = [
   { id: "home", to: "2-1-home", label: "Home", icon: <HomeIcon /> },
   { id: "stories", to: "5-1-stories", label: "Stories", icon: <StoriesIcon /> },
   { id: "applications", to: "6-1-applications", label: "Applications", icon: <ApplicationsIcon /> },
+  { id: "profile", to: "profile", label: "Profile", icon: <ProfileIcon /> },
   { id: "progress", to: "7-1-progress-habits", label: "Progress", icon: <ProgressIcon /> },
-  { id: "settings", to: "8-1-settings-you", label: "Settings", icon: <SettingsIcon /> },
+  { id: "settings", to: "settings-general", label: "Settings", icon: <SettingsIcon /> },
   { id: "feedback", to: "9-1-feedback", label: "Feedback", icon: <FeedbackIcon /> },
 ];
 

@@ -1,4 +1,4 @@
-// Draft generated from Design/screens/html/8-2-settings-practice.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
+// Settings, General: how the app looks and how practice runs. Drafted from Design/screens/html/8-2-settings-practice.html.
 import { useState } from "react";
 import { useStore } from "../../data/store";
 import { followUpHint } from "../home/state";
@@ -38,9 +38,18 @@ export default function SettingsPractice() {
   };
 
   return (
-    <SettingsLayout active="8-2-settings-practice">
+    <SettingsLayout active="settings-general">
       <section className="e-card" style={{ flex: "999 1 480px", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
-        <span className="e-h2" style={{ paddingBottom: "10px" }}>Practice</span>
+        <span className="e-h2" style={{ paddingBottom: "10px" }}>General</span>
+        <div className="e-rowline">
+          <span style={{ flex: "1" }}>Appearance</span>
+          <div style={{ display: "flex", gap: "6px" }} role="group" aria-label="Appearance">
+            {APPEARANCE.map((a) => (
+              <button key={a.mode} type="button" className={theme === a.mode ? "e-chip e-chip-on" : "e-chip"} aria-pressed={theme === a.mode} onClick={() => pickTheme(a.mode)}>{a.label}</button>
+            ))}
+          </div>
+        </div>
+        <span style={{ fontSize: "14px", fontWeight: "600", paddingTop: "18px" }}>Practice</span>
         <div className="e-rowline">
           <RowText title="Default stage" hint="Which interviewer you practice with when no application is picked." />
           <select className="e-input" style={{ width: "200px" }} aria-label="Default stage" value={stageLabelOf(stage)} onChange={(e) => change({ stage: stageIdOf(e.target.value) })}>
@@ -63,14 +72,6 @@ export default function SettingsPractice() {
         <ToggleRow title="Show the timer in Drill" hint="Hidden in Mock, like a real call." checked={timer} onChange={(v) => change({ timer: v })} />
         <ToggleRow title="Follow-up questions" hint={followUpHint(store.engine.kind, false)} checked={followUps} onChange={(v) => change({ followUps: v })} />
         <ToggleRow title="Stop recording after 8 seconds of silence" hint="Off by default. Pausing to find a word shouldn't cut you off." checked={autoStop} onChange={(v) => change({ autoStop: v })} />
-        <div className="e-rowline">
-          <span style={{ flex: "1" }}>Appearance</span>
-          <div style={{ display: "flex", gap: "6px" }} role="group" aria-label="Appearance">
-            {APPEARANCE.map((a) => (
-              <button key={a.mode} type="button" className={theme === a.mode ? "e-chip e-chip-on" : "e-chip"} aria-pressed={theme === a.mode} onClick={() => pickTheme(a.mode)}>{a.label}</button>
-            ))}
-          </div>
-        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px", paddingTop: "14px" }}>
           <span style={{ fontSize: "14px", fontWeight: "600" }}>Shortcuts while practicing</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px 24px" }} className="e-meta">

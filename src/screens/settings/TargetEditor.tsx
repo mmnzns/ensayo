@@ -73,16 +73,16 @@ export default function TargetEditor() {
 
   if (id && !existing) {
     return (
-      <AppShell nav="settings">
+      <AppShell nav="profile">
         <h1 className="e-h1">That target isn't here any more</h1>
         <p className="e-meta" style={{ margin: 0 }}>It may have been removed on another computer.</p>
-        <Link to="8-2-settings-targets" className="e-btn e-btn-primary" style={{ alignSelf: "flex-start" }}>Back to Targets</Link>
+        <Link to="profile" className="e-btn e-btn-primary" style={{ alignSelf: "flex-start" }}>Back to Profile</Link>
       </AppShell>
     );
   }
   if (draft === "loading") {
     return (
-      <AppShell nav="settings">
+      <AppShell nav="profile">
         <span className="e-meta" role="status">Reading the posting for a first draft…</span>
       </AppShell>
     );
@@ -115,11 +115,11 @@ function EditorForm({ base, pitchCopied, draftFailed }: { base: Target | undefin
     setShown(true);
     setError("");
     if (decision.kind === "problem") return;
-    if (decision.kind === "same" && !isNew) return go("8-2-settings-targets");
+    if (decision.kind === "same" && !isNew) return go("profile");
     setBusy(true);
     try {
       await actions.saveTarget(decision.kind === "save" ? decision.target : start);
-      go("8-2-settings-targets");
+      go("profile");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ensayo couldn't save this target. Try again.");
       setBusy(false);
@@ -134,17 +134,17 @@ function EditorForm({ base, pitchCopied, draftFailed }: { base: Target | undefin
   const setLead = (i: number, v: string) => set("leadWith", Array.from({ length: Math.max(leadRows, i + 1) }, (_, k) => (k === i ? v : (f.leadWith[k] ?? ""))));
 
   return (
-    <AppShell nav="settings">
+    <AppShell nav="profile">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to="8-2-settings-targets" className="e-small" style={{ textDecoration: "none" }}>‹ Targets</Link>
+          <Link to="profile" className="e-small" style={{ textDecoration: "none" }}>‹ Profile</Link>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <TargetMarker color={start.color} size={14} />
             <h1 className="e-h1">{title}</h1>
           </div>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <Link to="8-2-settings-targets" className="e-btn e-btn-ghost">Cancel</Link>
+          <Link to="profile" className="e-btn e-btn-ghost">Cancel</Link>
           <button type="button" className="e-btn e-btn-primary" disabled={busy} onClick={() => void save()}>Save target</button>
         </div>
       </header>
@@ -458,7 +458,7 @@ function ArchiveBox({ target, others, count }: { target: Target; others: Target[
     setError("");
     try {
       await archiveTarget(target.id, count > 0 ? moveTo : undefined);
-      go("8-2-settings-targets");
+      go("profile");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ensayo couldn't archive this target. Try again.");
       setBusy(false);

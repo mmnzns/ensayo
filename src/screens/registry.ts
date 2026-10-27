@@ -37,3 +37,8 @@ for (const s of allScreens) {
     registry[s.id] = () => createElement(ScreenStub, { id: s.id });
   }
 }
+
+// Old routes kept as aliases (8-1-settings-you now opens Profile) are in a group's routes but not in the screen list.
+for (const g of Object.values(groups)) {
+  for (const [id, built] of Object.entries(g.routes)) registry[id] ??= built;
+}

@@ -100,7 +100,7 @@ export function TargetChoice({ onDone, withHelp = true }: { onDone: () => void; 
       <div style={{ height: 1, background: "var(--e-line)", margin: "6px 4px" }} />
       <Link to="8-3-target-editor" className="e-nav" style={{ minHeight: 40, padding: "8px 12px" }} onClick={onDone}>+ Add a target</Link>
       {(many || hasArchived) && (
-        <Link to="8-2-settings-targets" className="e-nav" style={{ minHeight: 40, padding: "8px 12px" }} onClick={onDone}>Manage targets</Link>
+        <Link to="profile" className="e-nav" style={{ minHeight: 40, padding: "8px 12px" }} onClick={onDone}>Manage targets</Link>
       )}
       {withHelp && (
         <span className="e-small" style={{ padding: "8px 12px 6px", lineHeight: 1.45 }}>

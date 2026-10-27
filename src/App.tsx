@@ -7,7 +7,7 @@ import { registry } from "./screens/registry";
 import { applyStoredTheme } from "./screens/settings/theme";
 import { useRoute } from "./ui/router";
 
-// Appearance (Settings › Practice): Auto unless the user chose Light or Dark.
+// Appearance (Settings › General): Auto unless the user chose Light or Dark.
 applyStoredTheme();
 
 /** First-run until the profile is set up, then Home. M1 has no real profile yet, so "" opens Home. */
