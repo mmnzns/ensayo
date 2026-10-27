@@ -177,9 +177,10 @@ fn stage_words(stage_type: &str) -> String {
 /// `c1_consistent`, built from prompt 07's conflicts (`prompts/rubric-v1.md`): it fails when there is any, with the
 /// conflict's sentence and both values as evidence, naming where the earlier version was said ("In the recruiter stage
 /// you said ..."). With nothing to compare against (an empty log) there is no check at all.
-pub fn c1_check(conflicts: &[ConflictNote], had_log: bool) -> Option<Check> {
+pub fn c1_check(conflicts: &[ConflictNote], compared: usize) -> Option<Check> {
     if conflicts.is_empty() {
-        return had_log.then(|| Check { id: "c1_consistent".into(), passed: Some(true), evidence: "What you said matches what you said before.".into(), sentences: vec![], seconds: None });
+        let what = if compared == 1 { "the 1 thing".to_string() } else { format!("the {compared} things") };
+        return (compared > 0).then(|| Check { id: "c1_consistent".into(), passed: Some(true), evidence: format!("Nothing here contradicts {what} you said earlier in this application, in other stages or on your resume."), sentences: vec![], seconds: None });
     }
     let evidence = conflicts
         .iter()
@@ -388,30 +389,30 @@ mod tests {
 
     #[test]
     fn a_conflict_fails_c1_with_the_sentence_and_both_values_and_names_the_stage() {
-        let c = c1_check(&[note("recruiter", "four weeks", "two weeks", 3)], true).unwrap();
+        let c = c1_check(&[note("recruiter", "four weeks", "two weeks", 3)], 3).unwrap();
         assert_eq!((c.id.as_str(), c.passed, c.sentences.clone()), ("c1_consistent", Some(false), vec![3]));
         assert_eq!(c.evidence, "In the recruiter stage you said \"four weeks\". Here you said \"two weeks\".");
-        let h = c1_check(&[note("hiring_manager", "I want to own more", "My manager left", 2)], true).unwrap();
+        let h = c1_check(&[note("hiring_manager", "I want to own more", "My manager left", 2)], 3).unwrap();
         assert!(h.evidence.starts_with("In the hiring manager stage you said"), "{}", h.evidence);
     }
 
     #[test]
     fn a_conflict_with_the_resume_says_the_resume() {
-        let c = c1_check(&[note("resume", "31% to 44%", "about 50%", 1)], true).unwrap();
+        let c = c1_check(&[note("resume", "31% to 44%", "about 50%", 1)], 3).unwrap();
         assert_eq!(c.evidence, "Your resume says \"31% to 44%\". Here you said \"about 50%\".");
     }
 
     #[test]
     fn several_conflicts_share_one_check_with_each_sentence() {
-        let c = c1_check(&[note("recruiter", "a", "b", 4), note("resume", "c", "d", 2), note("recruiter", "e", "f", 4)], true).unwrap();
+        let c = c1_check(&[note("recruiter", "a", "b", 4), note("resume", "c", "d", 2), note("recruiter", "e", "f", 4)], 3).unwrap();
         assert_eq!(c.sentences, vec![2, 4]);
         assert_eq!(c.evidence.matches("Here you said").count(), 3);
     }
 
     #[test]
     fn nothing_to_compare_with_makes_no_check_and_no_conflict_with_something_to_compare_passes() {
-        assert!(c1_check(&[], false).is_none());
-        let c = c1_check(&[], true).unwrap();
+        assert!(c1_check(&[], 0).is_none());
+        let c = c1_check(&[], 3).unwrap();
         assert_eq!(c.passed, Some(true));
         assert!(!c.evidence.is_empty());
     }
@@ -422,7 +423,7 @@ mod tests {
             Check { id: "proof".into(), passed: Some(false), evidence: "".into(), sentences: vec![], seconds: None },
             Check { id: "c1_consistent".into(), passed: Some(true), evidence: "old".into(), sentences: vec![], seconds: None },
         ];
-        with_c1(&mut checks, c1_check(&[note("recruiter", "a", "b", 1)], true));
+        with_c1(&mut checks, c1_check(&[note("recruiter", "a", "b", 1)], 3));
         assert_eq!(checks.iter().filter(|c| c.id == "c1_consistent").count(), 1);
         assert_eq!(crate::metrics::fix::top_fix(&checks), Some("c1_consistent"), "a conflict outranks the proof fix");
         checks.push(Check { id: "answer_first".into(), passed: Some(false), evidence: "".into(), sentences: vec![], seconds: None });

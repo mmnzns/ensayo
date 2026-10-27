@@ -72,7 +72,7 @@ impl Extracted {
     /// `c1_consistent` for this answer: failed with the evidence when there is a conflict, passed when there was a log
     /// to compare with, nothing when the log was empty.
     pub fn check(&self) -> Option<Check> {
-        c1_check(&self.notes(), self.sent > 0)
+        c1_check(&self.notes(), self.sent)
     }
 }
 

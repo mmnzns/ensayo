@@ -33,7 +33,7 @@ pub fn input_devices() -> Vec<String> {
 fn open(feed: &SharedFeed, preferred: Option<&str>) -> Result<(Stream, String), String> {
     let host = cpal::default_host();
     let chosen = preferred.and_then(|want| host.input_devices().ok()?.find(|d| d.to_string() == want));
-    let device = chosen.or_else(|| host.default_input_device()).ok_or_else(|| "No microphone found".to_string())?;
+    let device = chosen.or_else(|| host.default_input_device()).ok_or_else(|| "No microphone found. Plug one in or turn one on, then test it in Settings › Check setup.".to_string())?;
     let name = device.to_string();
     let supported = device.default_input_config().map_err(|e| e.to_string())?;
     let format = supported.sample_format();

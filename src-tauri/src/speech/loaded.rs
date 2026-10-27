@@ -69,10 +69,10 @@ fn lock() -> std::sync::MutexGuard<'static, Kept<Speech>> {
 /// Where the model and the voice detection model are; the key includes the folder, so a model that moved (downloaded
 /// after Talaan's copy was used, say) is loaded from its new place.
 fn locate(model_id: &str) -> Result<(&'static ModelInfo, PathBuf, PathBuf), String> {
-    let m = models::find(model_id).ok_or("Unknown model")?;
+    let m = models::find(model_id).ok_or_else(|| format!("Ensayo doesn't know the speech model \"{model_id}\". Pick one again in Settings › Speech."))?;
     let store = models::ModelStore::new(paths::models_dir(), true);
-    let dir = store.locate(m).dir().ok_or("That speech model isn't downloaded yet")?.to_path_buf();
-    let vad_dir = store.locate(&models::VAD).dir().ok_or("The voice detection model isn't downloaded yet")?.to_path_buf();
+    let dir = store.locate(m).dir().ok_or_else(|| format!("The speech model {} isn't downloaded yet. Download it in Settings › Speech.", m.name))?.to_path_buf();
+    let vad_dir = store.locate(&models::VAD).dir().ok_or_else(|| "The voice detection model isn't downloaded yet. Download it in Settings › Speech.".to_string())?.to_path_buf();
     Ok((m, dir, vad_dir.join(models::VAD.files[0].name)))
 }
 

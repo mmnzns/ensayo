@@ -101,7 +101,7 @@ impl Capture {
         let samples = self.writer.join().map_err(|_| "The recorder stopped unexpectedly".to_string())?.map_err(|e| e.to_string())?;
         if samples == 0 {
             let _ = std::fs::remove_file(&self.path);
-            return Err("No audio came from the microphone".into());
+            return Err(format!("No audio came from {}. Check that Ensayo may use the microphone in your system's privacy settings, then test it in Settings › Check setup.", if self.mic_name.is_empty() { "the microphone" } else { self.mic_name.as_str() }));
         }
         Ok(Recorded { path: self.path, duration_ms: samples * 1000 / RATE as u64 })
     }
