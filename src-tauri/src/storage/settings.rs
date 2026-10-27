@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 /// Which engine judges the answers. Empty `provider` means timing only (no AI). Keys never live here: they are in
 /// the system's secure key storage (`keys.rs`).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AiSettings {
     /// A `Provider::key_id` ("claude", "openai", ..., "compatible"), or empty for timing only.
     #[serde(default)]
@@ -33,6 +33,14 @@ pub struct AiSettings {
 /// and a thinking model's reasoning add more. The cap is there to stop a runaway, not to cut a normal session short.
 fn default_cap() -> f64 {
     1.0
+}
+
+/// Written by hand so a fresh setting has the cap too: the derived default was 0 (no cap), and setup saved that back,
+/// so every new user ran with no cap at all.
+impl Default for AiSettings {
+    fn default() -> Self {
+        AiSettings { provider: String::new(), fast_model: String::new(), strong_model: String::new(), base_url: String::new(), cost_cap_usd: default_cap() }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

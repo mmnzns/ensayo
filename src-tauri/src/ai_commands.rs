@@ -294,7 +294,7 @@ mod tests {
         let r = resolve(&s("claude"), |_| Some("k".into())).unwrap().unwrap();
         assert_eq!((r.fast.as_str(), r.strong.as_str()), ("claude-sonnet-5-5", "claude-sonnet-5-5"));
         assert_eq!(r.base, "https://api.anthropic.com/v1");
-        assert_eq!(r.cap_usd, 0.0, "AiSettings::default has no cap; saved settings carry 1.0 by serde default");
+        assert_eq!(r.cap_usd, 1.0, "a fresh setting has the 1 dollar cap, saved or not");
     }
 
     #[test]
