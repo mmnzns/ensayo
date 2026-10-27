@@ -48,6 +48,18 @@ export const MIN_FOR_TREND = 5;
 export const GRADUATION_PASSES = 8;
 export const GRADUATION_OF = 10;
 
+/** What a pass means for each habit, in one plain line, for Progress. The two numbers match timing.rs. */
+export const HABIT_MEASURE: Record<HabitId, string> = {
+  to_the_point: "Passes when the answer comes before the backstory.",
+  clean_stop: "Passes when you stop less than 15 seconds after your number.",
+  numbers: "Passes when you say a number from your stories.",
+  ownership: 'Passes when you say what you decided, with "I".',
+  why_first: "Passes when you say why before what you built.",
+  method_first: "Passes when you open with how you handle this kind of problem.",
+  conviction: "Passes when the answer has no hedge or apology.",
+  fillers: "Passes under 4 filler words a minute.",
+};
+
 /** A habit passes on a rep when every one of its criteria that applied passed. null when none applied. */
 export function habitResult(habit: Habit, rep: RepSummary): boolean | null {
   const results = habit.criteria.map((id) => rep.checks.find((c) => c.id === id)?.passed ?? null).filter((r): r is boolean => r !== null);
@@ -135,13 +147,18 @@ export function streakOf(reps: RepSummary[], now: Date): Streak {
   return { daysInARow, answers, questions, followUps: reps.filter((r) => r.follow_up).length };
 }
 
-/** The small note under a habit on Home and Progress. */
-function habitNote(first: [number, number], retry: [number, number], isGraduated: boolean, ready: boolean): string {
-  if (isGraduated) return "Graduated. This one has stuck.";
-  if (!ready) return "A few more answers and the trend shows.";
-  if (retry[1] > 0) return `Fixes stick on the second try ${retry[0]} out of ${retry[1]} times.`;
-  const left = GRADUATION_PASSES - first[0];
-  return left > 0 && first[1] >= GRADUATION_OF ? "Still getting there." : "Keep going.";
+/** The small note under a habit on Home and Progress: the graduation rule against the last ten first tries, or how
+ *  many answers are still needed before a trend means anything. */
+export function habitNote(lastTen: boolean[], retry: [number, number], isGraduated: boolean, answered: number): string {
+  const passes = lastTen.filter(Boolean).length;
+  const rule = `${GRADUATION_PASSES} of ${GRADUATION_OF}`;
+  if (isGraduated) return `Graduated: passed on ${passes} of your last ${lastTen.length} first tries. ${rule} graduates a habit.`;
+  if (answered < MIN_FOR_TREND) {
+    const left = MIN_FOR_TREND - answered;
+    return `${left} more ${left === 1 ? "answer" : "answers"} and the trend shows.`;
+  }
+  const fixes = retry[1] > 0 ? ` Fixes held on the second try ${retry[0]} of ${retry[1]} times.` : "";
+  return `Passed on ${passes} of your last ${lastTen.length} first tries. ${rule} and it graduates.${fixes}`;
 }
 
 /** One entry per habit, in the habit table's order, as Home and Progress show them. */
@@ -150,7 +167,7 @@ export function habitStats(habits: Habit[], reps: RepSummary[]): HabitStat[] {
     const first = firstTryStat(h, reps);
     const retry = retryStat(h, reps);
     const isGraduated = graduated(h, reps);
-    const stat: HabitStat = { id: h.id, firstTry: first, note: habitNote(first, retry, isGraduated, trendReady(h, reps)) };
+    const stat: HabitStat = { id: h.id, firstTry: first, note: habitNote(lastTenResults(h, reps), retry, isGraduated, applicable(h, reps).length) };
     if (retry[1] > 0) stat.retry = retry;
     if (isGraduated) stat.graduated = true;
     return stat;
@@ -171,6 +188,19 @@ export function whenText(iso: string, now: Date): string {
   if (days === 0) return `Today, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
   if (days === 1) return "Yesterday";
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+/** "This week" and "Last week" by calendar week (weeks start on Monday), then the month for anything older. */
+export function sessionGroup(iso: string, now: Date): string {
+  const d = new Date(iso);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const lastWeekStart = new Date(weekStart);
+  lastWeekStart.setDate(weekStart.getDate() - 7);
+  if (d.getTime() >= weekStart.getTime()) return "This week";
+  if (d.getTime() >= lastWeekStart.getTime()) return "Last week";
+  return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
 /** Fixes that stuck: answers whose top fix passed on the next attempt at the same question, in one session. */
@@ -195,15 +225,15 @@ export function sessionList(reps: RepSummary[], now: Date, companyOf: (applicati
       const first = rs[0];
       const stage = STAGE_LABELS[first.stage] ?? first.stage;
       const company = first.application_id ? companyOf(first.application_id) : undefined;
-      const { stuck } = fixesStuck(rs);
+      const { stuck, of } = fixesStuck(rs);
       const answered = rs.filter((r) => !r.follow_up).length;
       const row: SessionSummary = {
         id,
         when: whenText(first.started, now),
-        group: now.getTime() - new Date(first.started).getTime() < 7 * DAY ? "This week" : "Last week",
+        group: sessionGroup(first.started, now),
         mode: first.mode === "mock" ? "mock" : "drill",
         title: `${stage} · ${company ?? "general questions"}`,
-        headline: stuck > 0 ? `${stuck} fix${stuck === 1 ? "" : "es"} stuck` : `${answered} answer${answered === 1 ? "" : "s"}`,
+        headline: of > 0 ? `${stuck} of ${of} ${of === 1 ? "fix" : "fixes"} held on the next try` : `${answered} ${answered === 1 ? "answer" : "answers"} · no fix tried again`,
         ...(first.application_id ? { applicationId: first.application_id } : {}),
       };
       return { row, started: first.started };
@@ -251,12 +281,16 @@ export interface DrillQuestion {
   /** In the focus habit's unit (seconds) for "seconds" habits; 1 when it passed and 0 when it did not for "flags". */
   firstTry: number;
   bestTry: number;
+  /** How many tries the question got (follow-ups left out). */
+  tries: number;
 }
 
 export interface DrillView {
   applicationId: string | null;
   stage: string;
   focusHabitId: HabitId;
+  /** True when the focus is the habit the user chose; false when none of theirs came up and the most missed one stands in. */
+  focusIsYours: boolean;
   kind: FocusKind;
   /** Target in seconds for "seconds" habits. */
   targetSeconds: number;
@@ -264,8 +298,9 @@ export interface DrillView {
   questions: DrillQuestion[];
   fixes: { stuck: number; of: number };
   /** null when the session had no answer to show. */
-  best: { question: string; attempt: number; pointAtSeconds: number; note: string; spoken: string; sessionId: string; n: number } | null;
-  nextTime: { habitId: HabitId; keptGoingSeconds: number; advice: string };
+  best: { question: string; attempt: number; pointAtSeconds: number | null; note: string; spoken: string; sessionId: string; n: number } | null;
+  /** The habit to carry, what this session showed about it, and what to do. */
+  nextTime: { habitId: HabitId; evidence: string; advice: string };
   totals: { answers: number; followUps: number; costCents: number };
   /** A habit that reached the graduation line during this session, if any. */
   graduatedHabit: HabitId | null;
@@ -301,27 +336,41 @@ export function drillView(habits: Habit[], session: (RepSummary & { text?: strin
   const firsts = scored.filter((r) => r.attempt === 1 && !r.follow_up);
   const failures = (h: Habit) => firsts.filter((r) => habitResult(h, r) === false).length;
   const inSession = (h: Habit) => firsts.some((r) => habitResult(h, r) !== null);
-  const focus = habits.find((h) => focusHabits.includes(h.id) && inSession(h)) ?? [...habits].filter(inSession).sort((a, b) => failures(b) - failures(a))[0] ?? habits[0];
+  const chosen = habits.find((h) => focusHabits.includes(h.id) && inSession(h));
+  const focus = chosen ?? [...habits].filter(inSession).sort((a, b) => failures(b) - failures(a))[0] ?? habits[0];
   const spec = SECONDS_HABITS[focus.id];
   const questionIds = [...new Set(firsts.map((r) => r.question_id))];
   const questions: DrillQuestion[] = questionIds.map((id) => {
     const tries = scored.filter((r) => r.question_id === id && !r.follow_up).sort((a, b) => a.attempt - b.attempt);
     if (spec) {
       const secs = tries.map((r) => secondsOf(r, focus.id)).filter((s): s is number => s !== null);
-      return { id, firstTry: secs[0] ?? 0, bestTry: secs.length ? Math.min(...secs) : 0 };
+      return { id, firstTry: secs[0] ?? 0, bestTry: secs.length ? Math.min(...secs) : 0, tries: tries.length };
     }
     const results = tries.map((r) => (habitResult(focus, r) ? 1 : 0));
-    return { id, firstTry: results[0] ?? 0, bestTry: results.length ? Math.max(...results) : 0 };
+    return { id, firstTry: results[0] ?? 0, bestTry: results.length ? Math.max(...results) : 0, tries: tries.length };
   });
 
   const done = scored.filter((r) => !r.follow_up);
-  const passCount = (r: RepSummary) => r.checks.filter((c) => c.passed === false).length;
-  const best = [...done].sort((a, b) => passCount(a) - passCount(b) || (a.recorded_at < b.recorded_at ? 1 : -1))[0];
+  const missCount = (r: RepSummary) => r.checks.filter((c) => c.passed === false).length;
+  const best = [...done].sort((a, b) => missCount(a) - missCount(b) || (a.recorded_at < b.recorded_at ? 1 : -1))[0];
   const pointCheck = best?.checks.find((c) => c.id === "time_to_point");
   const notes = [best?.checks.find((c) => c.id === "clean_stop")?.passed ? "stopped right after the result" : "", best?.checks.find((c) => c.id === "proof")?.passed ? "said your number" : ""].filter(Boolean);
+  const applied = best ? best.checks.filter((c) => c.passed !== null).length : 0;
+  const bestNote = best
+    ? `Picked because it missed the fewest checks: ${applied - missCount(best)} of ${applied} passed.${notes.length ? ` You ${notes.join(" and ")}.` : ""}`
+    : "";
 
   const carry = habits.filter((h) => h.id !== focus.id && inSession(h)).sort((a, b) => failures(b) - failures(a))[0] ?? focus;
   const tails = firsts.map((r) => r.tail_ms).filter((t): t is number => t !== null);
+  const carryOf = firsts.filter((r) => habitResult(carry, r) !== null).length;
+  const evidence =
+    carry.id === "clean_stop" && tails.length
+      ? `You kept going ${Math.round(tails.reduce((a, b) => a + b, 0) / tails.length / 1000)} seconds on average after your number. Under ${SECONDS_HABITS.clean_stop!.target} is a clean stop.`
+      : carryOf === 0
+        ? "It did not come up on a first try this session."
+        : failures(carry) === 0
+          ? `Passed on all ${carryOf} first ${carryOf === 1 ? "try" : "tries"} this session. Keep it there.`
+          : `Missed on ${failures(carry)} of ${carryOf} first ${carryOf === 1 ? "try" : "tries"} this session.`;
   const sessionId = scored[0].session_id;
   const before = all.filter((r) => r.session_id !== sessionId && r.recorded_at < scored[0].recorded_at);
   const graduatedHabit = habits.find((h) => graduated(h, all) && !graduated(h, before))?.id ?? null;
@@ -330,13 +379,14 @@ export function drillView(habits: Habit[], session: (RepSummary & { text?: strin
     applicationId: scored[0].application_id,
     stage: scored[0].stage,
     focusHabitId: focus.id,
+    focusIsYours: chosen !== undefined,
     kind: spec ? "seconds" : "flags",
     targetSeconds: spec?.target ?? 0,
     chartMaxSeconds: Math.max(60, ...questions.flatMap((q) => [q.firstTry, q.bestTry])),
     questions,
     fixes: fixesStuck(scored),
-    best: best ? { question: best.question_text, attempt: best.attempt, pointAtSeconds: pointCheck?.seconds ?? 0, note: notes.join(" and ") || "that is the one to keep", spoken: (best as { text?: string }).text ?? "", sessionId: best.session_id, n: best.n } : null,
-    nextTime: { habitId: carry.id, keptGoingSeconds: tails.length ? Math.round(tails.reduce((a, b) => a + b, 0) / tails.length / 1000) : 0, advice: ADVICE[carry.id] },
+    best: best ? { question: best.question_text, attempt: best.attempt, pointAtSeconds: pointCheck?.seconds ?? null, note: bestNote, spoken: (best as { text?: string }).text ?? "", sessionId: best.session_id, n: best.n } : null,
+    nextTime: { habitId: carry.id, evidence, advice: ADVICE[carry.id] },
     totals: { answers: done.length, followUps: scored.filter((r) => r.follow_up).length, costCents: Math.round(scored.reduce((s, r) => s + (r.ai_cost_usd ?? 0), 0) * 100) },
     graduatedHabit,
   };

@@ -10,6 +10,12 @@ import { claimToUpdate } from "../../practice/applied";
 import { useClaimUpdater } from "../../practice/extras";
 import DeleteSession from "./DeleteSession";
 
+/** What the follow-ups tile counted: held means no check was missed on the follow-up answer. */
+export function followUpsLine(d: Pick<MockDebriefData, "followUps" | "timingOnly">): string {
+  if (d.followUps.of > 0) return "Held: no check missed on the follow-up answer.";
+  return d.timingOnly ? "Follow-ups need an AI engine to ask them." : "The interviewer asked no follow-ups.";
+}
+
 export default function SessionResultsMockDebrief() {
   const state = useDebrief();
   const { screens } = useStore();
@@ -79,26 +85,26 @@ export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefDat
             <span className="e-meta">{d.summary}</span>
           </div>
           <div style={{ flex: "1 1 280px", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
-            <div className="e-soft" style={{ padding: "16px" }}>
+            <div className="e-soft" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "2px" }}>
               <span className="e-small">Follow-ups</span>
-              <div className="e-h2">
-                {d.followUps.held} of {d.followUps.of} held
-              </div>
+              <div className="e-h2">{d.followUps.of === 0 ? "None this time" : `${d.followUps.held} of ${d.followUps.of} held`}</div>
+              <span className="e-small">{followUpsLine(d)}</span>
             </div>
-            <div className="e-soft" style={{ padding: "16px" }}>
+            <div className="e-soft" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "2px" }}>
               <span className="e-small">Average answer</span>
               <div className="e-h2">{clock(d.averageAnswerSeconds)}</div>
+              {d.averageWindow && <span className="e-small">{`This stage wants ${d.averageWindow.min_s} to ${d.averageWindow.max_s} seconds.`}</span>}
             </div>
-            <div className="e-soft" style={{ padding: "16px" }}>
+            <div className="e-soft" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "2px" }}>
               <span className="e-small">Numbers said</span>
-              <div className="e-h2">
-                {d.numbers.said} of {d.numbers.of}
-              </div>
+              <div className="e-h2">{d.numbers.of === 0 ? "None to check" : `${d.numbers.said} of ${d.numbers.of}`}</div>
+              <span className="e-small">{d.numbers.of === 0 ? "No answer here called for a number." : "Answers that said a number from your stories."}</span>
             </div>
             {d.consistencyChecked !== false && (
-            <div className="e-soft" style={{ padding: "16px", background: mismatch ? "var(--e-highlight)" : "var(--e-ok-tint)" }}>
+            <div className="e-soft" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "2px", background: mismatch ? "var(--e-highlight)" : "var(--e-ok-tint)" }}>
               <span className="e-small">To check</span>
               <div className="e-h2">{mismatch === 0 ? "All matched" : mismatch === 1 ? "1 mismatch" : `${mismatch} mismatches`}</div>
+              <span className="e-small">Your answers against your earlier stages and the resume for this application.</span>
             </div>
             )}
           </div>

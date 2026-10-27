@@ -93,7 +93,11 @@ describe("a rep as the result screen shows it", () => {
 
   it("says so when the measured parts are clean and lists what went well", () => {
     const a = attemptFromOutcome(outcome(null, [check("proof", true), check("clean_stop", true), check("length", true), check("fillers", true)], { length: "fits", speaking_ms: 55_000, proof: { matched: [{ value: 24, percent: true, raw: "24%", token: 4 }], landed_sentence: 1, tail_ms: 4_000 } }));
-    expect(a.coachNote).toBe("The parts that can be measured are clean: the number, the stop, the length and the fillers.");
+    expect(a.coachNote).toBe("The timing checks are clean: the number, the stop, the length and the fillers.");
+    // A timing-only rep says on the main card what was not judged, and why.
+    expect(a.notJudged).toBe("Not judged this time: whether you answered first, said what you decided and picked a story that fits. No AI engine is set up, so only the timing checks ran. Add one in Settings, under AI.");
+    const capped = attemptFromOutcome({ ...outcome(null, [check("length", true)]), notice: "This session reached its spending cap, so the rest is timing only." });
+    expect(capped.notJudged).toContain("reached its spending cap");
     expect(a.wins).toEqual(["Said 24%", "Stopped right after it", "0:55 long", "1 filler word"]);
     expect(a.trySaying).toBeUndefined();
   });
@@ -102,11 +106,14 @@ describe("a rep as the result screen shows it", () => {
     const secs: Delta = { check: "length", label: "Length of the answer", from_seconds: 90, to_seconds: 60, from_count: null, to_count: null, improved: true };
     const a = attemptFromOutcome(outcome("fillers", [check("fillers", false)], {}, secs, 2));
     expect(a.number).toBe(2);
-    expect(a.delta).toEqual({ label: "Length of the answer", fromSeconds: 90, toSeconds: 60 });
+    expect(a.delta).toEqual({ label: "Length of the answer", fromSeconds: 90, toSeconds: 60, caption: "Better than your previous attempt", improved: true });
     const count: Delta = { check: "fillers", label: "Filler words", from_seconds: null, to_seconds: null, from_count: 7, to_count: 2, improved: true };
-    expect(attemptFromOutcome(outcome("fillers", [check("fillers", false)], {}, count, 2)).delta).toEqual({ label: "Filler words", caption: "7 → 2" });
+    expect(attemptFromOutcome(outcome("fillers", [check("fillers", false)], {}, count, 2)).delta).toEqual({ label: "7 → 2 filler words", caption: "Better than your previous attempt", improved: true });
     const said: Delta = { check: "proof", label: "Said the number this time", from_seconds: null, to_seconds: null, from_count: null, to_count: null, improved: true };
-    expect(attemptFromOutcome(outcome("fillers", [check("fillers", false)], {}, said, 2)).delta).toEqual({ label: "Said the number this time" });
+    expect(attemptFromOutcome(outcome("fillers", [check("fillers", false)], {}, said, 2)).delta).toEqual({ label: "Said the number this time", caption: "Better than your previous attempt", improved: true });
+    // A change for the worse is not drawn as a win, and says so.
+    const worse: Delta = { check: "fillers", label: "Filler words", from_seconds: null, to_seconds: null, from_count: 4, to_count: 6, improved: false };
+    expect(attemptFromOutcome(outcome("fillers", [check("fillers", false)], {}, worse, 2)).delta).toEqual({ label: "4 → 6 filler words", caption: "Not better than your previous attempt yet", improved: false });
   });
 
   it("builds the details rows from what was measured and leaves out checks that do not apply", () => {
@@ -114,7 +121,11 @@ describe("a rep as the result screen shows it", () => {
     const labels = a.details.rows.map((r) => r.label);
     expect(labels).toEqual(["Said your number", "Stopped once the number landed", "Length", "Filler words", "Pace", "Pauses"]);
     expect(a.details.rows.find((r) => r.label === "Pace")).toMatchObject({ state: "info", note: "12.6 words a minute · 1:02" });
-    expect(a.details.rows.find((r) => r.label === "Pauses")!.note).toContain("never counted against you");
+    expect(a.details.rows.find((r) => r.label === "Pauses")!.note).toMatch(/^\d+ pauses? of a second or more, never counted against you$/);
+    // Every scored row says what it measures; a pass keeps its numbers, and the length row names the window.
+    expect(a.details.rows.find((r) => r.label === "Length")).toMatchObject({ state: "yes", measures: "Your speaking time against this stage's window of 45 to 60 seconds.", note: "ran 1:02" });
+    expect(a.details.rows.find((r) => r.label === "Said your number")!.measures).toBe("A number from your stories, said out loud.");
+    expect(a.details.rows.find((r) => r.label === "Filler words")!.measures).toContain("Under 4 a minute");
     const nostop = attemptFromOutcome(outcome("proof", [check("proof", false), check("clean_stop", null)], { pauses: [] }));
     expect(nostop.details.rows.map((r) => r.label)).not.toContain("Stopped once the number landed");
     expect(nostop.details.rows.map((r) => r.label)).not.toContain("Pauses");
@@ -176,7 +187,8 @@ describe("a rep judged by the AI", () => {
 
   it("drops the 'turns on once you add a key' footnote when an AI judged it, and keeps it for a timing-only rep", () => {
     expect(attemptFromOutcome(ai()).details.footnote).toBe("");
-    expect(attemptFromOutcome(outcome("length", [check("length", false)])).details.footnote).toContain("add an AI key");
+    expect(attemptFromOutcome(outcome("length", [check("length", false)])).details.footnote).toContain("need an AI engine");
+    expect(attemptFromOutcome(ai()).notJudged).toBeUndefined();
   });
 
   it("lists what went well when nothing failed", () => {

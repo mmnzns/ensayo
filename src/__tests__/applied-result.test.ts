@@ -49,9 +49,9 @@ describe("the result screen with the consistency check", () => {
     expect(a.coachNote).toBe("Pick one answer for notice.");
   });
 
-  it("shows a pass as a yes with nothing to explain, and skips a check that did not apply", () => {
+  it("shows a pass as a yes with what it was compared with, and skips a check that did not apply", () => {
     const pass = attemptFromOutcome(outcomeOf(fullRep([check("c1_consistent", true, "What you said matches what you said before.")], null)));
-    expect(pass.details.rows.find((r) => r.id === "c1_consistent")).toMatchObject({ state: "yes", note: "" });
+    expect(pass.details.rows.find((r) => r.id === "c1_consistent")).toMatchObject({ state: "yes", note: "What you said matches what you said before.", measures: "The same facts as your earlier stages and your resume." });
     const none = attemptFromOutcome(outcomeOf(fullRep([check("c1_consistent", null)], null)));
     expect(none.details.rows.find((r) => r.id === "c1_consistent")).toBeUndefined();
   });

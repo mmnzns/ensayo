@@ -1,6 +1,7 @@
 // Draft generated from Design/screens/html/8-2-settings-practice.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
 import { useState } from "react";
 import { useStore } from "../../data/store";
+import { followUpHint } from "../home/state";
 import { ChipChoice, RowText, SettingsLayout, ToggleRow } from "./parts";
 import { readPrefs, stageIdOf, stageLabelOf, updatePractice, type PracticePrefs } from "./prefs";
 import { applyTheme, getStoredTheme, type ThemeMode } from "./theme";
@@ -23,7 +24,8 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 export default function SettingsPractice() {
-  const { stages } = useStore().screens.settings;
+  const store = useStore();
+  const { stages } = store.screens.settings;
   // These are kept on this computer (see prefs.ts), and Start a session begins from them.
   const [prefs, setPrefs] = useState<PracticePrefs>(() => readPrefs().practice);
   const [theme, setTheme] = useState<ThemeMode>(getStoredTheme);
@@ -52,14 +54,14 @@ export default function SettingsPractice() {
           <ChipChoice options={LENGTHS} value={drill} onChange={(v) => change({ questions: v })} label="Questions per Drill" />
         </div>
         <div className="e-rowline">
-          <span style={{ flex: "1" }}>Tries per question</span>
+          <RowText title="Tries per question" hint="How many times you can answer the same question in a Drill. After the last try, you move on to the next question." />
           <select className="e-input" style={{ width: "200px" }} aria-label="Tries per question" value={tries} onChange={(e) => change({ tries: e.target.value === "2" ? 2 : 3 })}>
             <option value={2}>2</option>
             <option value={3}>3</option>
           </select>
         </div>
         <ToggleRow title="Show the timer in Drill" hint="Hidden in Mock, like a real call." checked={timer} onChange={(v) => change({ timer: v })} />
-        <ToggleRow title="Follow-up questions" checked={followUps} onChange={(v) => change({ followUps: v })} />
+        <ToggleRow title="Follow-up questions" hint={followUpHint(store.engine.kind, false)} checked={followUps} onChange={(v) => change({ followUps: v })} />
         <ToggleRow title="Stop recording after 8 seconds of silence" hint="Off by default. Pausing to find a word shouldn't cut you off." checked={autoStop} onChange={(v) => change({ autoStop: v })} />
         <div className="e-rowline">
           <span style={{ flex: "1" }}>Appearance</span>

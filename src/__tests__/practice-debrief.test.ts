@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { habits } from "../data/mock/habits";
 import type { SessionDetail } from "../practice/api";
-import { debriefOfSession, type QuestionQuality } from "../practice/debrief";
+import { debriefOfSession, TIMING_ONLY_CLEAN, type QuestionQuality } from "../practice/debrief";
+import { followUpsLine } from "../screens/results/SessionResultsMockDebrief";
 import type { FullRep } from "../practice/types";
 
 function rep(n: number, over: Partial<FullRep> & { checks?: FullRep["metrics"]["checks"]; text?: string; speaking_ms?: number } = {}): FullRep {
@@ -89,5 +90,27 @@ describe("the Mock debrief", () => {
     const quality: QuestionQuality = { questions: [], weakest: 1, try_asking: "", note: "", must_say_said: [{ id: "ms-1", said: true, where: "[A 1.1]", quote: "ran it alone" }] };
     const out = debriefOfSession(habits, detail([rep(1)]), quality, [{ id: "ms-1", text: "No ops team" }, { id: "ms-2", text: "Weekly reporting" }])!;
     expect(out.data.mustSay).toEqual([{ id: "ms-1", text: "No ops team", said: true }, { id: "ms-2", text: "Weekly reporting", said: false }]);
+  });
+
+  it("says which checks ran on a timing-only mock, and that answering first, ownership and story fit were not judged", () => {
+    const clean = debriefOfSession(habits, detail([rep(1, { checks: [chk("proof", true), chk("length", true)] })]), null, [])!;
+    expect(clean.data.timingOnly).toBe(true);
+    expect(clean.data.summary).toBe(TIMING_ONLY_CLEAN);
+    expect(clean.data.rows[0].note).toBe(TIMING_ONLY_CLEAN);
+    expect(TIMING_ONLY_CLEAN).toContain("length, filler words, the number and the stop");
+    expect(TIMING_ONLY_CLEAN).toContain("were not judged");
+    expect(clean.data.averageWindow).toEqual({ min_s: 60, max_s: 90 });
+    // A timing-only fix with no coach note still leads with what was found, not with "everything held".
+    const missed = debriefOfSession(habits, detail([rep(1, { checks: [chk("proof", false)], fix: "proof" })]), null, [])!;
+    expect(missed.data.summary).toBe("No number came up.");
+    const judged = debriefOfSession(habits, detail([rep(1, { ai: { prompts: [], rubric_version: 1, cost_usd: 0 } })]), null, [])!;
+    expect(judged.data.timingOnly).toBe(false);
+    expect(judged.data.summary).toBe("Every answer came out clean on every check that applied.");
+  });
+
+  it("says what the follow-ups tile counted, and handles none", () => {
+    expect(followUpsLine({ followUps: { held: 2, of: 3 } })).toBe("Held: no check missed on the follow-up answer.");
+    expect(followUpsLine({ followUps: { held: 0, of: 0 }, timingOnly: true })).toBe("Follow-ups need an AI engine to ask them.");
+    expect(followUpsLine({ followUps: { held: 0, of: 0 }, timingOnly: false })).toBe("The interviewer asked no follow-ups.");
   });
 });

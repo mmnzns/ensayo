@@ -110,13 +110,14 @@ function DrillResults({ results }: { results: SessionResults }) {
         )}
         <section className="e-card" style={{ padding: "40px", display: "flex", flexWrap: "wrap", gap: "40px", alignItems: "center" }}>
           <div style={{ flex: "1 1 340px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            <span className="e-label">Your focus this session</span>
+            <span className="e-label">{d.focusIsYours === false ? "Most missed this session" : "Your focus this session"}</span>
             <span className="e-h2">{heroLabel}</span>
             <span className="e-hand" style={{ fontSize: "53px", color: "var(--e-win)" }}>
               {flags ? `${gotFirst} of ${n} → ${gotBest} of ${n}` : `${firstAvg}s → ${bestAvg}s`}
             </span>
             <span className="e-meta">
               {flags ? `Questions where you had it on the first try, against your best try, across ${plural(n, "question")}.` : `Average first try against your best try, across ${plural(n, "question")}.`}
+              {d.focusIsYours === false ? " None of your chosen habits came up, so this is the one missed most on first tries." : ""}
             </span>
           </div>
           {flags ? (
@@ -125,7 +126,7 @@ function DrillResults({ results }: { results: SessionResults }) {
               {d.questions.map((q, i) => (
                 <div key={q.id} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <span className="e-small" style={{ width: "32px" }}>Q{i + 1}</span>
-                  <span className="e-meta">{q.firstTry > 0 ? "Had it first time" : q.bestTry > 0 ? "Missed, then got it" : "Not yet"}</span>
+                  <span className="e-meta">{q.firstTry > 0 ? "Had it on the first try" : q.bestTry > 0 ? "Missed on the first try, had it on a later one" : `${focusLabel}: missed on ${q.tries === undefined ? "every try" : q.tries === 1 ? "the only try" : `all ${q.tries} tries`}`}</span>
                 </div>
               ))}
             </div>
@@ -170,14 +171,14 @@ function DrillResults({ results }: { results: SessionResults }) {
             <span className="e-label">Best answer</span>
             <span className="e-h3">"{shorten(best.question)}"</span>
             <span className="e-meta">
-              Attempt {best.attempt}. Point at {clock(best.pointAtSeconds)}, {best.note}.
+              {`Attempt ${best.attempt}.${best.pointAtSeconds !== null ? ` Point at ${clock(best.pointAtSeconds)}.` : ""} ${best.note}`}
             </span>
             <ListenBest from={d.bestFrom} text={best.spoken} />
           </section>
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <span className="e-label">Next time</span>
             <span className="e-h3">{habitLabel(next.habitId)}</span>
-            <span className="e-meta">You kept going {next.keptGoingSeconds} seconds on average after your result. {next.advice}</span>
+            <span className="e-meta">{`${next.evidence} ${next.advice}`}</span>
             <Link to="2-3-start-a-session" className="e-small" style={{ marginTop: "auto" }}>Practice just this</Link>
           </section>
         </div>

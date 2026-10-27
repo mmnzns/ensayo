@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { TIMING_ONLY_MISSING } from "../data/engine";
 import { useStore } from "../data/store";
 import { ApplicationsIcon, FeedbackIcon, HomeIcon, ProgressIcon, SettingsIcon, StoriesIcon } from "./Icons";
 import Link from "./Link";
@@ -42,11 +43,12 @@ export default function Sidebar({ active }: { active: NavId }) {
         </svg>
         Buy me a coffee
       </Link>
-      <Link to="8-5-settings-ai" className="e-pill" style={{ alignSelf: "flex-start", margin: "8px 12px 0", textDecoration: "none" }}>
+      <Link to="8-5-settings-ai" className="e-pill" title={engine.kind === "timing" ? TIMING_ONLY_MISSING : undefined} style={{ alignSelf: "flex-start", margin: "8px 12px 0", textDecoration: "none" }}>
         <span className="e-dot" style={{ width: 8, height: 8 }} />
         {engine.label}
         {engine.offline ? " · offline" : ""}
       </Link>
+      {engine.kind === "timing" && <span className="e-small" style={{ margin: "4px 12px 0" }}>Checks timing, length, fillers and numbers only. Answering first and ownership need an AI engine.</span>}
     </nav>
   );
 }

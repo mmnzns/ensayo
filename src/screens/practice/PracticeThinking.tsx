@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
+import type { EngineStatus } from "../../data/types";
 import { askRoute, MOCK_DEBRIEF, resultRoute, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
@@ -20,8 +21,27 @@ const tick = (
   </span>
 );
 
+/** Who picks the fix and where, from the engine in Settings and whether it answered when the session started. Speech
+ *  to text is always on this computer. */
+export function judgeLines(engine: EngineStatus, aiReady: boolean): { step: string; where: string; footer: string } {
+  if (engine.kind === "timing" || !aiReady) {
+    return {
+      step: "Picking the fix from timing only",
+      where: engine.kind === "timing" ? "No AI engine set up, so no AI picks a fix" : `${engine.label} is not ready (see Settings, AI), so no AI picks a fix`,
+      footer: "Your audio and your words stay on this computer.",
+    };
+  }
+  if (engine.kind === "local") return { step: "Picking the one thing to fix", where: `${engine.label}, on this computer`, footer: "Your audio and your words stay on this computer." };
+  return {
+    step: "Picking the one thing to fix",
+    where: engine.offline ? `${engine.label} with your key. You are offline, so it may fall back to timing only` : `${engine.label} with your key`,
+    footer: `Your audio stays on this computer. Only the text goes to ${engine.label}.`,
+  };
+}
+
 export default function PracticeThinking() {
-  const { attempts, thinking } = useStore().screens.practice;
+  const store = useStore();
+  const { attempts, thinking } = store.screens.practice;
   const { live, session, endTo, onEnd } = usePractice();
   const state = useLive();
   const attempt = live ? undefined : attempts[Math.min(getAttempt(), attempts.length) - 1];
@@ -55,6 +75,7 @@ export default function PracticeThinking() {
   };
   useKeys({ esc: end });
   const failed = live && state.phase === "error";
+  const judge = live ? judgeLines(store.engine, state.aiReady) : { step: "Picking the one thing to fix", where: thinking.engine, footer: "Your audio stays on this computer. Only the text is checked." };
 
   return (
     <FocusShell>
@@ -84,20 +105,20 @@ export default function PracticeThinking() {
           <div style={{ display: failed ? "none" : "flex", flexDirection: "column", gap: "0" }}>
             <div className="e-rowline">
               {tick}
-              {" "}<span style={{ flex: "1", fontSize: "16px" }}>Turning your answer into text</span>{" "}<span className="e-small">{thinking.speechWhere}</span>
+              {" "}<span style={{ flex: "1", fontSize: "16px" }}>Turning your answer into text</span>{" "}<span className="e-small">{live ? "On this computer" : thinking.speechWhere}</span>
             </div>
             <div className="e-rowline">
               {tick}
-              {" "}<span style={{ flex: "1", fontSize: "16px" }}>Timing and filler words</span>{" "}<span className="e-small">Done</span>
+              {" "}<span style={{ flex: "1", fontSize: "16px" }}>Timing, length and filler words</span>{" "}<span className="e-small">On this computer</span>
             </div>
             <div className="e-rowline" style={{ borderBottom: "none" }}>
-              <span className="e-think-spin" style={{ width: "24px", height: "24px", borderRadius: "50%", boxShadow: "inset 0 0 0 3px var(--e-tint)", borderTop: "3px solid var(--e-primary)", boxSizing: "border-box", flex: "none" }} aria-hidden="true" />{" "}<span style={{ flex: "1", fontSize: "16px", fontWeight: "600" }}>Picking the one thing to fix</span>{" "}<span className="e-small">{live ? "On this computer" : thinking.engine}</span>
+              <span className="e-think-spin" style={{ width: "24px", height: "24px", borderRadius: "50%", boxShadow: "inset 0 0 0 3px var(--e-tint)", borderTop: "3px solid var(--e-primary)", boxSizing: "border-box", flex: "none" }} aria-hidden="true" />{" "}<span style={{ flex: "1", fontSize: "16px", fontWeight: "600" }}>{judge.step}</span>{" "}<span className="e-small" style={{ maxWidth: "220px", textAlign: "right" }}>{judge.where}</span>
             </div>
           </div>
         </div>
       </div>
       <div className="e-wrap" style={{ width: "100%" }}>
-        <span className="e-small" style={{ textAlign: "center" }}>Your audio stays on this computer. Only the text is checked.</span>
+        <span className="e-small" style={{ textAlign: "center" }}>{judge.footer}</span>
       </div>
     </FocusShell>
   );

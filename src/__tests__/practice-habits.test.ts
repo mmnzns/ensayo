@@ -87,13 +87,16 @@ describe("graduation and trends", () => {
     expect(graduated(H("ownership"), [...passes(0, 5), ...passes(8, 10).map((r, i) => ({ ...r, recorded_at: `2026-10-21T10:${String(i).padStart(2, "0")}:00Z` }))])).toBe(true);
     const stat = habitStats(habits, passes(8, 10)).find((s) => s.id === "ownership")!;
     expect(stat.graduated).toBe(true);
-    expect(stat.note).toContain("Graduated");
+    expect(stat.note).toBe("Graduated: passed on 8 of your last 10 first tries. 8 of 10 graduates a habit.");
+    const going = habitStats(habits, passes(6, 10)).find((s) => s.id === "ownership")!;
+    expect(going.note).toBe("Passed on 6 of your last 10 first tries. 8 of 10 and it graduates.");
   });
 
   it("shows no trend until there are five answers", () => {
     expect(trendReady(H("ownership"), passes(4, 4))).toBe(false);
     expect(trendReady(H("ownership"), passes(4, 5))).toBe(true);
-    expect(habitStats(habits, passes(2, 3)).find((s) => s.id === "ownership")!.note).toContain("few more answers");
+    expect(habitStats(habits, passes(2, 3)).find((s) => s.id === "ownership")!.note).toBe("2 more answers and the trend shows.");
+    expect(habitStats(habits, passes(2, 4)).find((s) => s.id === "ownership")!.note).toBe("1 more answer and the trend shows.");
   });
 
   it("marks where the rubric changed", () => {
@@ -143,12 +146,20 @@ describe("the sessions list", () => {
     ];
     const rows = sessionList(reps, now, (id) => (id === "app_k" ? "Kestrel Pay" : undefined));
     expect(rows.map((r) => r.id)).toEqual(["new", "old"]);
-    expect(rows[0]).toMatchObject({ title: "Hiring manager · Kestrel Pay", headline: "1 fix stuck", group: "This week", applicationId: "app_k" });
-    expect(rows[1]).toMatchObject({ title: "Recruiter · general questions", headline: "1 answer", group: "Last week" });
+    expect(rows[0]).toMatchObject({ title: "Hiring manager · Kestrel Pay", headline: "1 of 1 fix held on the next try", group: "This week", applicationId: "app_k" });
+    expect(rows[1]).toMatchObject({ title: "Recruiter · general questions", headline: "1 answer · no fix tried again", group: "Last week" });
+  });
+
+  it("groups by calendar week (Monday on), then by month, never calling an old session last week", () => {
+    expect(sessionGroup(new Date(2026, 9, 19, 8).toISOString(), now)).toBe("This week");
+    expect(sessionGroup(new Date(2026, 9, 18, 20).toISOString(), now)).toBe("Last week");
+    expect(sessionGroup(new Date(2026, 9, 12, 8).toISOString(), now)).toBe("Last week");
+    expect(sessionGroup(new Date(2026, 9, 11, 20).toISOString(), now)).toBe("October 2026");
+    expect(sessionGroup(new Date(2026, 7, 3).toISOString(), now)).toBe("August 2026");
   });
 });
 
-import { drillView, lastTenResults, nextHabitChoices } from "../practice/habits";
+import { drillView, lastTenResults, nextHabitChoices, sessionGroup } from "../practice/habits";
 
 describe("what a finished drill says", () => {
   const s = (over: Partial<RepSummary> & { text?: string } = {}) => ({ ...rep({ session_id: "now", recorded_at: "2026-10-21T20:00:00Z", ...over }), text: over.text ?? "I said it." });
@@ -162,7 +173,8 @@ describe("what a finished drill says", () => {
     const v = drillView(habits, reps, reps, ["to_the_point"])!;
     expect(v.focusHabitId).toBe("to_the_point");
     expect(v.kind).toBe("seconds");
-    expect(v.questions).toEqual([{ id: "a", firstTry: 41, bestTry: 6 }, { id: "b", firstTry: 9, bestTry: 9 }]);
+    expect(v.questions).toEqual([{ id: "a", firstTry: 41, bestTry: 6, tries: 2 }, { id: "b", firstTry: 9, bestTry: 9, tries: 1 }]);
+    expect(v.focusIsYours).toBe(true);
     expect(v.targetSeconds).toBe(10);
     expect(v.fixes).toEqual({ stuck: 1, of: 1 });
     expect(v.totals).toMatchObject({ answers: 3, followUps: 0 });
@@ -173,7 +185,8 @@ describe("what a finished drill says", () => {
     const v = drillView(habits, reps, reps, [])!;
     expect(v.focusHabitId).toBe("ownership");
     expect(v.kind).toBe("flags");
-    expect(v.questions).toEqual([{ id: "a", firstTry: 0, bestTry: 1 }]);
+    expect(v.questions).toEqual([{ id: "a", firstTry: 0, bestTry: 1, tries: 2 }]);
+    expect(v.focusIsYours).toBe(false);
   });
 
   it("picks the best answer: the attempt with the fewest misses, the latest on a tie, and says what went well", () => {
@@ -182,15 +195,24 @@ describe("what a finished drill says", () => {
       s({ question_id: "a", n: 2, attempt: 2, recorded_at: "2026-10-21T20:05:00Z", checks: [chk("proof", true), chk("ownership", true), chk("time_to_point", true, 5), chk("clean_stop", true, 2)], text: "second" }),
     ];
     const v = drillView(habits, reps, reps, [])!;
-    expect(v.best).toMatchObject({ attempt: 2, pointAtSeconds: 5, spoken: "second", n: 2, note: "stopped right after the result and said your number" });
+    expect(v.best).toMatchObject({ attempt: 2, pointAtSeconds: 5, spoken: "second", n: 2, note: "Picked because it missed the fewest checks: 4 of 4 passed. You stopped right after the result and said your number." });
+    // No point time measured: left out, never shown as 0:00.
+    const nopoint = drillView(habits, [s({ question_id: "a", checks: [chk("proof", true), chk("fillers", false)] })], [], [])!;
+    expect(nopoint.best).toMatchObject({ pointAtSeconds: null, note: "Picked because it missed the fewest checks: 1 of 2 passed. You said your number." });
   });
 
   it("names one habit to carry (not the focus) and how long you kept going after the result", () => {
     const reps = [s({ question_id: "a", checks: [chk("time_to_point", false, 30), chk("answer_first", false), chk("clean_stop", false, 14), chk("fillers", false)], tail_ms: 14_000 }), s({ question_id: "b", checks: [chk("time_to_point", false, 25), chk("answer_first", false), chk("clean_stop", false, 20), chk("fillers", true)], tail_ms: 20_000 })];
     const v = drillView(habits, reps, reps, ["to_the_point"])!;
     expect(v.nextTime.habitId).toBe("clean_stop");
-    expect(v.nextTime.keptGoingSeconds).toBe(17);
+    expect(v.nextTime.evidence).toBe("You kept going 17 seconds on average after your number. Under 15 is a clean stop.");
     expect(v.nextTime.advice).toBe("Try ending on the number.");
+  });
+
+  it("backs the habit to carry with its own misses when it is not the clean stop", () => {
+    const reps = [s({ question_id: "a", checks: [chk("answer_first", false), chk("time_to_point", false, 30), chk("ownership", false)] }), s({ question_id: "b", checks: [chk("answer_first", true), chk("time_to_point", true, 4), chk("ownership", true)] }), s({ question_id: "c", checks: [chk("answer_first", true), chk("time_to_point", true, 5), chk("ownership", false)] })];
+    const v = drillView(habits, reps, reps, ["to_the_point"])!;
+    expect(v.nextTime).toMatchObject({ habitId: "ownership", evidence: "Missed on 2 of 3 first tries this session." });
   });
 
   it("sees a habit graduate during this session and not one that had already", () => {

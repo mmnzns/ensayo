@@ -61,15 +61,15 @@ describe("the lead stories line", () => {
   const stories = [story("a", true), story("b", false), story("c", true, 2), story("d", false, 1)];
   it("counts verified pinned stories out of pinned", () => {
     const l = lines(targetReadiness(t("tg_1", { pinnedStoryIds: ["a", "b"] }), { targets, stories, applications: [], reps: [] })).stories;
-    expect(l).toMatchObject({ title: "Lead stories verified", detail: "1 of 2", ok: false });
+    expect(l).toMatchObject({ title: "Lead stories verified", detail: "1 of 2 · verified means every number in the story is checked by you", ok: false });
   });
   it("is ready when every pinned story is verified", () => {
     const l = lines(targetReadiness(t("tg_1", { pinnedStoryIds: ["a", "c"] }), { targets, stories, applications: [], reps: [] })).stories;
-    expect(l).toMatchObject({ detail: "2 of 2", ok: true });
+    expect(l).toMatchObject({ detail: "2 of 2 · verified means every number in the story is checked by you", ok: true });
   });
   it("with nothing pinned counts the stories in use, hidden ones left out", () => {
     const l = lines(targetReadiness(t("tg_1", { hiddenStoryIds: ["c"] }), { targets, stories, applications: [], reps: [] })).stories;
-    expect(l.detail).toBe("1 of 3");
+    expect(l.detail).toBe("1 of 3 · verified means every number in the story is checked by you");
   });
   it("invites pinning when there is nothing to count", () => {
     const l = lines(targetReadiness(first, { targets, stories: [], applications: [], reps: [] })).stories;
@@ -106,11 +106,11 @@ describe("the open gaps line", () => {
   it("collects the gaps of this target's open applications and names them", () => {
     const apps = [app("a1", "Kestrel Pay", "tg_1", ["x"]), app("a2", "Northwind Bank", undefined, ["y"]), app("a3", "Ledgerline", "tg_2", ["z", "w", "v"]), app("a4", "Old Co", "tg_1", ["q"], { status: "closed" })];
     const l = lines(targetReadiness(first, { targets, stories: [], applications: apps, reps: [] })).gaps;
-    expect(l).toMatchObject({ ok: false, title: "2 open gaps", detail: "x, y" });
-    expect(lines(targetReadiness(second, { targets, stories: [], applications: apps, reps: [] })).gaps).toMatchObject({ title: "3 open gaps", detail: "from Ledgerline" });
+    expect(l).toMatchObject({ ok: false, title: "2 open gaps", detail: "things the posting asks for that no story covers: x, y" });
+    expect(lines(targetReadiness(second, { targets, stories: [], applications: apps, reps: [] })).gaps).toMatchObject({ title: "3 open gaps", detail: "things the postings from Ledgerline ask for that no story covers" });
   });
   it("says there are none", () => {
-    expect(lines(targetReadiness(first, { targets, stories: [], applications: [app("a1", "Kestrel Pay", "tg_1", [])], reps: [] })).gaps).toMatchObject({ ok: true, title: "No open gaps", detail: "" });
+    expect(lines(targetReadiness(first, { targets, stories: [], applications: [app("a1", "Kestrel Pay", "tg_1", [])], reps: [] })).gaps).toMatchObject({ ok: true, title: "No open gaps", detail: "every need the postings list has a story" });
   });
   it("lists the applications under the target, three names then a count", () => {
     const apps = [app("a1", "A", "tg_1", []), app("a2", "B", "tg_1", []), app("a3", "C", "tg_1", []), app("a4", "D", "tg_1", [])];

@@ -40,8 +40,18 @@ function rulesNote(rep: FullRep): string {
     case undefined:
     case null:
     default:
-      return "The parts that can be measured are clean: the number, the stop, the length and the fillers.";
+      return rep.ai
+        ? "Nothing to fix on this one: every check that applied came out clean."
+        : "The timing checks are clean: the number, the stop, the length and the fillers.";
   }
+}
+
+/** For a timing-only rep, the main card says what was not judged and why, so a clean note is not read as a clean answer. */
+function notJudgedLine(rep: FullRep, notice: string | null): string | undefined {
+  if (rep.ai) return undefined;
+  const parts = rep.follow_up ? "whether you answered the push first, added something new and held your position" : "whether you answered first, said what you decided and picked a story that fits";
+  const why = notice?.trim() || "No AI engine is set up, so only the timing checks ran. Add one in Settings, under AI.";
+  return `Not judged this time: ${parts}. ${why}`;
 }
 
 function wins(rep: FullRep): string[] {
@@ -116,11 +126,48 @@ function caption(rep: FullRep): string | undefined {
   return "Highlighted: what the note is about.";
 }
 
-function deltaChip(d: Delta | null): PracticeAttempt["delta"] {
+/** The change on the fix since the previous attempt, with its unit, styled by whether it actually got better. */
+export function deltaChip(d: Delta | null): PracticeAttempt["delta"] {
   if (!d) return undefined;
-  if (d.from_seconds !== null && d.to_seconds !== null) return { label: d.label, fromSeconds: d.from_seconds, toSeconds: d.to_seconds };
-  if (d.from_count !== null && d.to_count !== null) return { label: d.label, caption: `${d.from_count} → ${d.to_count}` };
-  return { label: d.label };
+  const caption = d.improved ? "Better than your previous attempt" : "Not better than your previous attempt yet";
+  if (d.from_seconds !== null && d.to_seconds !== null) return { label: d.label, fromSeconds: d.from_seconds, toSeconds: d.to_seconds, caption, improved: d.improved };
+  if (d.from_count !== null && d.to_count !== null) return { label: `${d.from_count} → ${d.to_count} ${d.label.toLowerCase()}`, caption, improved: d.improved };
+  return { label: d.label, caption, improved: d.improved };
+}
+
+// The pass lines of the timing checks, the same numbers as src-tauri/src/metrics/timing.rs.
+const TAIL_PASS_SECONDS = 15;
+const FILLERS_PASS_PER_MINUTE = 4;
+
+/** One plain line per row: what the check looks at, and the line it has to clear when it is a number. */
+const ROW_MEASURES: Record<string, string> = {
+  f1_answer_push: "Whether your first sentence answered the push.",
+  f2_new_specific: "Whether you added a detail the first answer did not have.",
+  f3_consistent: "Whether the facts match your first answer.",
+  f4_short: "Under half the time your first answer took.",
+  f5_held_position: "Whether you kept your position instead of backing off.",
+  answer_first: "Whether the answer came before the backstory.",
+  proof: "A number from your stories, said out loud.",
+  c1_consistent: "The same facts as your earlier stages and your resume.",
+  story_fit: "Whether the story you picked answers this question.",
+  context_short: "How long the setup ran before what you did.",
+  clean_stop: `Seconds you kept talking after your number. Under ${TAIL_PASS_SECONDS} is a clean stop.`,
+  ownership: 'Whether you said what you decided, with "I".',
+  method_first: "Whether you opened with how you handle this kind of problem.",
+  approach_before_action: "Whether you said why before what you built.",
+  conviction: "Hedges and apologies before or during the answer.",
+  no_complaining: "Blame aimed at past teams, bosses or companies.",
+  type_fit: "Whether the answer suits the kind of question asked.",
+  stage_fit: "Whether the answer suits this interviewer.",
+  jd_fit: "Whether you used the needs and words from the posting.",
+  commitment: "Whether you said up front that you want full-time.",
+  builder_operator: "Whether you said which of the two you are.",
+  fillers: `Words like um, uh and like, per minute of speech. Under ${FILLERS_PASS_PER_MINUTE} a minute is clean.`,
+};
+
+function rowMeasures(rep: FullRep, id: string): string {
+  if (id === "length") return `Your speaking time against this stage's window of ${rep.metrics.window.min_s} to ${rep.metrics.window.max_s} seconds.`;
+  return ROW_MEASURES[id] ?? "";
 }
 
 const ROW_LABELS: [string, string][] = [
@@ -154,20 +201,20 @@ function rowNote(rep: FullRep, c: Check): string {
   switch (c.id) {
     case "answer_first": {
       const t = checkOf(m, "time_to_point")?.seconds;
-      return t !== null && t !== undefined ? `point at ${clock(t)}` : c.passed ? "" : c.evidence;
+      return t !== null && t !== undefined ? `point at ${clock(t)}` : c.evidence;
     }
     case "proof":
-      return m.proof.matched.length > 0 ? m.proof.matched.map((n) => n.raw).join(", ") : m.unbanked.length > 0 ? `${m.unbanked.map((n) => n.raw).join(", ")} is not in your stories` : c.passed ? "" : "none came up";
+      return m.proof.matched.length > 0 ? `said ${m.proof.matched.map((n) => n.raw).join(", ")}` : m.unbanked.length > 0 ? `${m.unbanked.map((n) => n.raw).join(", ")} is not in your stories` : c.evidence || "none came up";
     case "clean_stop":
-      return m.proof.tail_ms !== null ? `${seconds(m.proof.tail_ms)} s after` : "";
+      return m.proof.tail_ms !== null ? `${seconds(m.proof.tail_ms)} s after ${lastMatched(m)}` : c.evidence;
     case "length":
-      return `${clock(seconds(m.speaking_ms))} · window ${m.window.min_s} to ${m.window.max_s} s`;
+      return `ran ${clock(seconds(m.speaking_ms))}`;
     case "fillers":
-      return `${m.fillers.per_minute} a minute${m.fillers.items.length > 0 ? ` · ${[...new Set(m.fillers.items.map((f) => f.text))].join(", ")}` : ""}`;
+      return `${m.fillers.count} in all, ${m.fillers.per_minute} a minute${m.fillers.items.length > 0 ? ` · ${[...new Set(m.fillers.items.map((f) => f.text))].join(", ")}` : ""}`;
     case "c1_consistent":
-      return consistencySentences(c).join(" ");
+      return consistencySentences(c).join(" ") || c.evidence;
     default:
-      return c.passed ? "" : c.evidence;
+      return c.evidence;
   }
 }
 
@@ -180,15 +227,15 @@ function rows(rep: FullRep): DetailRow[] {
   const out: DetailRow[] = [];
   for (const [id, label] of ROW_LABELS) {
     const c = checkOf(m, id);
-    if (c && c.passed !== null) out.push({ id, label, state: c.passed ? "yes" : "notyet", note: rowNote(rep, c) });
+    if (c && c.passed !== null) out.push({ id, label, measures: rowMeasures(rep, id), state: c.passed ? "yes" : "notyet", note: rowNote(rep, c) });
   }
   // A check this version has no wording for still shows, in the words of its id, so nothing the engine measured is hidden.
   for (const c of m.checks) {
     if (c.passed === null || KNOWN.has(c.id) || NOT_LISTED.has(c.id)) continue;
-    out.push({ id: c.id, label: unknownCheckLabel(c.id), state: c.passed ? "yes" : "notyet", note: c.passed ? "" : c.evidence });
+    out.push({ id: c.id, label: unknownCheckLabel(c.id), state: c.passed ? "yes" : "notyet", note: c.evidence });
   }
-  out.push({ label: "Pace", state: "info", note: `${m.wpm} words a minute · ${clock(seconds(m.speaking_ms))}` });
-  if (m.pauses.length > 0) out.push({ label: "Pauses", state: "info", note: `${m.pauses.length} of a second or more, never counted against you` });
+  out.push({ label: "Pace", measures: "Shown for you, never counted against you.", state: "info", note: `${m.wpm} words a minute · ${clock(seconds(m.speaking_ms))}` });
+  if (m.pauses.length > 0) out.push({ label: "Pauses", state: "info", note: `${m.pauses.length} ${m.pauses.length === 1 ? "pause" : "pauses"} of a second or more, never counted against you` });
   return out;
 }
 
@@ -199,6 +246,7 @@ export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
   return {
     number: Math.min(3, Math.max(1, rep.attempt)) as 1 | 2 | 3,
     coachNote: coachNote(rep),
+    notJudged: notJudgedLine(rep, o.notice),
     trySaying: rep.rewrite?.text,
     delta: deltaChip(o.delta),
     wins: worked ? wins(rep) : undefined,
@@ -207,7 +255,7 @@ export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
     highlightCaption: caption(rep),
     details: {
       rows: rows(rep),
-      footnote: rep.ai ? "" : "The other checks, like answering first and saying what you decided, turn on once you add an AI key or a local model.",
+      footnote: rep.ai ? "" : "Only the timing checks ran on this answer. Answering first, saying what you decided and story fit need an AI engine: your own key or the local AI, in Settings under AI.",
     },
   };
 }

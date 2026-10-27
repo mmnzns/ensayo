@@ -1,7 +1,7 @@
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import { useActions } from "../../data/real";
-import { MATCH_LABEL, STAGE_LABEL } from "./format";
+import { matchText, STAGE_LABEL } from "./format";
 import { ADD_KINDS, groupClaims, numberIn } from "./claimsLog";
 import { AppHeader, AppTabs, ErrorLine, MatchChip, useRun, withFeatured, type Featured } from "./parts";
 
@@ -90,7 +90,7 @@ function Said({ app, now }: Featured) {
               {differs && !isEditing && g.differs && (
                 <button type="button" className="e-btn e-btn-white e-btn-sm" disabled={busy} onClick={() => void run(() => actions.markClaimCurrent(app.id, (g.differs as { id: string }).id))}>{num ? `It's ${num} now` : "Mark as updated"}</button>
               )}
-              {!differs && <MatchChip status={g.status} text={MATCH_LABEL[g.status]} />}{" "}
+              {!differs && <MatchChip status={g.status} text={matchText(g.status, live.map((c) => c.stage_label))} />}{" "}
               <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label="Edit" onClick={() => { setEditing(isEditing ? null : g.subject); setError(""); }}>{isEditing ? "Done" : "Edit"}</button>
             </div>
           );

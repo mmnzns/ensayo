@@ -48,13 +48,14 @@ export function resultsOfSession(habits: Habit[], detail: SessionDetail, history
     applicationId: view.applicationId ?? "",
     stageLabel: STAGE_LABELS[view.stage] ?? view.stage,
     focusHabitId: view.focusHabitId,
+    focusIsYours: view.focusIsYours,
     targetSeconds: view.targetSeconds,
     chartMaxSeconds: view.chartMaxSeconds,
     questions: view.questions,
     fixes: view.fixes,
     bestAnswer: view.best
       ? { question: view.best.question, attempt: view.best.attempt, pointAtSeconds: view.best.pointAtSeconds, note: view.best.note, spoken: view.best.spoken }
-      : { question: "", attempt: 1, pointAtSeconds: 0, note: "", spoken: "" },
+      : { question: "", attempt: 1, pointAtSeconds: null, note: "", spoken: "" },
     ...(view.best ? { bestFrom: { sessionId: view.best.sessionId, n: view.best.n } } : {}),
     nextTime: view.nextTime,
     totals: view.totals,

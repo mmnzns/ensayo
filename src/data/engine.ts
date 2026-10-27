@@ -5,6 +5,9 @@ import type { EngineStatus } from "./types";
 
 export const TIMING_ONLY: EngineStatus = { label: "Timing only", kind: "timing", offline: false };
 
+/** What timing only checks and what it leaves out (the rules in src-tauri/src/metrics run the length, filler, number and stop checks). */
+export const TIMING_ONLY_MISSING = "Without an AI engine, Ensayo checks length, filler words, the stop and whether you said a number from your stories. It can't judge whether you answered the question first, said what you decided or picked a story that fits.";
+
 /** "claude-sonnet-5-5" reads "Claude Sonnet 5.5"; anything else is left to the provider's name. */
 export function modelLabel(modelId: string): string | null {
   const m = /^claude-([a-z]+)-(\d+)-(\d+)$/.exec(modelId.trim());

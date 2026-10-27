@@ -42,7 +42,7 @@ describe("results of one finished session", () => {
     const r = resultsOfSession(habits, detail, [], ["clean_stop"], new Date())!;
     expect(r.drill.kind).toBe("seconds");
     expect(r.drill.focusHabitId).toBe("clean_stop");
-    expect(r.drill.questions).toEqual([{ id: "q1", firstTry: 31, bestTry: 4 }]);
+    expect(r.drill.questions).toMatchObject([{ id: "q1", firstTry: 31, bestTry: 4 }]);
     expect(r.drill.fixes).toEqual({ stuck: 1, of: 1 });
     expect(r.drill.stageLabel).toBe("Hiring manager");
     expect(r.drill.bestFrom).toEqual({ sessionId: "ses_fake", n: 3 });
@@ -53,7 +53,7 @@ describe("results of one finished session", () => {
     const detail = await practised();
     const r = resultsOfSession(habits, detail, [], ["numbers"], new Date())!;
     expect(r.drill.kind).toBe("flags");
-    expect(r.drill.questions[0]).toEqual({ id: "q1", firstTry: 1, bestTry: 1 });
+    expect(r.drill.questions[0]).toMatchObject({ id: "q1", firstTry: 1, bestTry: 1 });
   });
 
   it("has nothing to show for a session with no scored answers", () => {

@@ -28,11 +28,15 @@ const text = (r: FullRep) => r.metrics.sentences.map((s) => s.text).join(" ");
 const passed = (r: FullRep, id: string) => r.metrics.checks.find((c) => c.id === id)?.passed === true;
 const applies = (r: FullRep, id: string) => r.metrics.checks.find((c) => c.id === id)?.passed != null;
 
+/** What a timing-only answer was and was not checked on, so a clean line is never read as a clean answer. */
+export const TIMING_ONLY_CLEAN = "Clean on the timing checks: length, filler words, the number and the stop. Answering first, saying what you decided and story fit were not judged, because no AI engine checked this answer.";
+
 /** The line under a question: the coach's note when there is one, else the plainest thing the measuring found. */
 function noteFor(r: FullRep): string {
   if (r.note) return r.note;
   const miss = r.metrics.checks.find((c) => c.passed === false);
-  return miss?.evidence || "Nothing needed fixing here.";
+  if (miss?.evidence) return miss.evidence;
+  return r.ai ? "Every check that applied came out clean." : TIMING_ONLY_CLEAN;
 }
 
 export interface LiveDebrief {
@@ -74,7 +78,9 @@ export function debriefOfSession(habits: Habit[], detail: SessionDetail, quality
 
   const view = drillView(habits, main.map((r) => summaryOfFull(r, detail.session)), [], []);
   const weakest = main.find((r) => r.fix) ?? main[0];
-  const summary = weakest?.fix && weakest.note ? weakest.note : main.length ? "Every answer held up on what Ensayo can measure." : "";
+  const fixLine = weakest?.fix ? weakest.note || weakest.metrics.checks.find((c) => c.id === weakest.fix)?.evidence || "" : "";
+  const timingOnly = main.length > 0 && main.some((r) => !r.ai);
+  const summary = fixLine || (main.length === 0 ? "" : timingOnly ? TIMING_ONLY_CLEAN : "Every answer came out clean on every check that applied.");
 
   const data: MockDebriefData = {
     applicationId: detail.session.application_id ?? "",
@@ -84,6 +90,8 @@ export function debriefOfSession(habits: Habit[], detail: SessionDetail, quality
     summary,
     followUps: { held: held.length, of: heldOf.length },
     averageAnswerSeconds: average,
+    ...(main.length ? { averageWindow: main[0].metrics.window } : {}),
+    timingOnly,
     numbers: { said: proofs.filter((r) => passed(r, "proof")).length, of: proofs.length },
     // Inside an application every scored answer was compared with what was said before; outside one nothing was.
     flags: detail.session.application_id ? flagsOfReps(reps) : [],

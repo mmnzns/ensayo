@@ -7,7 +7,7 @@ import type { HabitProgress } from "../../data/screens/settings";
 import { passRate, shortDate, youLabel } from "./format";
 import { useActions, useRepHistory } from "../../data/real";
 import { liveAvailable } from "../../practice/live";
-import { progressData } from "../../practice/habits";
+import { GRADUATION_OF, GRADUATION_PASSES, HABIT_MEASURE, progressData } from "../../practice/habits";
 import { useState } from "react";
 import { go } from "../../ui/router";
 import { plainError } from "../../data/actions";
@@ -37,7 +37,10 @@ function LastTen({ results }: { results: boolean[] }) {
   );
 }
 
-const retryText = (r?: [number, number]) => (r ? `${r[0]} of ${r[1]}` : "n/a");
+const retryText = (r?: [number, number]) => (r ? `${r[0]} of ${r[1]}` : "No retries yet");
+
+/** The number beside a habit's bar: passes out of the answers it applied to, or plainly none yet (never an empty 0%). */
+export const passText = (results: boolean[] | undefined): string => (results && results.length > 0 ? `${results.filter(Boolean).length} of ${results.length}` : "No answers yet");
 
 export default function ProgressHabits() {
   const store = useStore();
@@ -98,12 +101,12 @@ export default function ProgressHabits() {
       </div>
       {cards.length > 0 && (
         <>
-          <span className="e-label" style={{ marginBottom: "-14px" }}>Ready for each target?</span>
+          <span className="e-label" style={{ marginBottom: "-14px" }}>What's done for each target</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
             {cards.map((c) => {
               const active = c.target.id === store.activeTarget?.id;
               return (
-                <section key={c.target.id} className="e-card" aria-label={`Ready for ${c.target.name}`} style={{ display: "flex", flexDirection: "column", gap: "12px", ...(active ? { boxShadow: "inset 0 0 0 2px var(--e-primary)" } : {}) }}>
+                <section key={c.target.id} className="e-card" aria-label={`Done for ${c.target.name}`} style={{ display: "flex", flexDirection: "column", gap: "12px", ...(active ? { boxShadow: "inset 0 0 0 2px var(--e-primary)" } : {}) }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <TargetMark target={c.target} size={12} />
                     <span className="e-h2" style={{ flex: "1" }}>{c.target.name}</span>
@@ -156,7 +159,7 @@ export default function ProgressHabits() {
       <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "0", padding: "8px 28px" }}>
         <div className="e-rowline" style={{ padding: "14px 0" }}>
           <span className="e-h3" style={{ flex: "1" }}>All habits</span>
-          <span className="e-small" style={{ width: "200px" }}>right first time</span>
+          <span className="e-small" style={{ width: "260px" }}>passed on the first try</span>
           <span className="e-small" style={{ width: "120px", textAlign: "right" }}>fix stuck on retry</span>
         </div>
         {rows.map(({ habit, progress }, i) => {
@@ -164,15 +167,23 @@ export default function ProgressHabits() {
           return (
             <div key={habit.id} className="e-rowline" style={{ padding: "14px 0", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
               <span style={{ flex: "1", display: "flex", alignItems: "center", gap: "10px" }}>
-                <span>
-                  {youLabel(habit.label)}
-                  {progress?.note ? <span className="e-small"> · {progress.note}</span> : null}
+                <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <span>
+                    {youLabel(habit.label)}
+                    {progress?.note ? <span className="e-small"> · {progress.note}</span> : null}
+                  </span>
+                  <span className="e-small">{HABIT_MEASURE[habit.id] ?? habit.blurb ?? ""}</span>
                 </span>
-                {graduated ? <span className="e-badge" style={{ background: "#FFE7B8", color: "#7A4A12" }}>Graduated</span> : null}
+                {graduated ? <span className="e-badge" style={{ background: "#FFE7B8", color: "#7A4A12" }} title={`Passed ${GRADUATION_PASSES} or more of the last ${GRADUATION_OF} first tries`}>{`Graduated · ${GRADUATION_PASSES}+ of last ${GRADUATION_OF}`}</span> : null}
               </span>
-              <div className="e-bar" style={{ width: "200px" }} role="img" aria-label={progress ? `Right first time in ${Math.round(passRate(progress.results) * 100)} percent of recent answers` : "No answers yet"}>
-                <span style={{ width: `${Math.round((progress ? passRate(progress.results) : 0) * 100)}%` }} />
-              </div>
+              <span style={{ width: "260px", display: "flex", alignItems: "center", gap: "10px" }}>
+                {progress && progress.results.length > 0 ? (
+                  <div className="e-bar" style={{ flex: "1" }} role="img" aria-label={`Passed on the first try in ${passText(progress.results)} recent answers`}>
+                    <span style={{ width: `${Math.round(passRate(progress.results) * 100)}%` }} />
+                  </div>
+                ) : null}
+                <span className="e-meta" style={{ whiteSpace: "nowrap" }}>{passText(progress?.results)}</span>
+              </span>
               <span className="e-meta" style={{ width: "120px", textAlign: "right" }}>{retryText(progress?.retry)}</span>
             </div>
           );

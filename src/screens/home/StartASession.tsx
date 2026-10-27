@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { daysUntil, useStore } from "../../data/store";
+import { FOCUS_HINT, followUpHint } from "./state";
 import type { Mode, StageId } from "../../data/types";
 import { practiceTarget } from "../../practice/applied";
 import { useApplicationExtras } from "../../practice/extras";
@@ -265,6 +266,7 @@ export default function StartASession() {
             Follow-up questions
           </label>
         </div>
+        <span className="e-small" style={{ marginTop: "-8px" }}>{followUpHint(store.engine.kind, mock)}</span>
         {focusHabit && (
           <div className="e-soft" style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 20px" }}>
             <span className="e-dot" aria-hidden="true" />
@@ -273,6 +275,9 @@ export default function StartASession() {
             </span>
             <Link to="8-1-settings-you" className="e-small">Change</Link>
           </div>
+        )}
+        {focusHabit && (
+          <span className="e-small" style={{ marginTop: "-8px" }}>{FOCUS_HINT}</span>
         )}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
           <Link to="2-1-home" className="e-btn e-btn-ghost">Cancel</Link>

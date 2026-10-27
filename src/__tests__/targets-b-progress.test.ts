@@ -86,9 +86,9 @@ describe("ready for each target", () => {
 
   it("counts lead stories: the pinned ones, else the first three it uses, never the hidden", () => {
     const pinned = { ...b2c, pinnedStoryIds: ["s1", "s3"] };
-    expect(targetReadiness(pinned, input()).lines[1]).toMatchObject({ ok: false, detail: "1 of 2" });
+    expect(targetReadiness(pinned, input()).lines[1]).toMatchObject({ ok: false, detail: "1 of 2 · verified means every number in the story is checked by you" });
     expect(leadStories({ pinnedStoryIds: [], hiddenStoryIds: ["s1"] }, stories).map((s) => s.id)).toEqual(["s2", "s3", "s4"]);
-    expect(targetReadiness({ ...b2c, pinnedStoryIds: ["s1", "s2"] }, input()).lines[1]).toMatchObject({ ok: true, detail: "2 of 2" });
+    expect(targetReadiness({ ...b2c, pinnedStoryIds: ["s1", "s2"] }, input()).lines[1]).toMatchObject({ ok: true, detail: "2 of 2 · verified means every number in the story is checked by you" });
     expect(targetReadiness(b2c, input({ stories: [] })).lines[1]).toMatchObject({ ok: false, title: "No lead stories yet" });
   });
 
@@ -111,7 +111,7 @@ describe("ready for each target", () => {
     const closed = app({ id: "a4", targetId: "tg_b2c", status: "closed", analysis });
     const reps = [rep({ question_type: "tell_me_about_yourself", target_id: "tg_b2c" })];
     const r = targetReadiness(b2c, input({ applications: [a, closed], reps }));
-    expect(r.lines[3]).toEqual({ id: "gaps", ok: false, title: "2 open gaps", detail: "SQL for cohort analysis, push at scale" });
+    expect(r.lines[3]).toEqual({ id: "gaps", ok: false, title: "2 open gaps", detail: "things the posting asks for that no story covers: SQL for cohort analysis, push at scale" });
     expect(r.action).toEqual({ kind: "gap", label: "Practice a gap", primary: false, applicationId: "a3" });
     expect(presetFor(r.action)).toEqual({ mode: "drill", source: "application", applicationId: "a3" });
     expect(presetFor({ kind: "pitch", label: "", primary: true })).toEqual({ mode: "drill", source: "stage", stage: "recruiter" });
@@ -120,6 +120,6 @@ describe("ready for each target", () => {
   it("says where the gaps came from when there are many", () => {
     const analysis = { ...mockStore.applications[0].analysis!, gaps: ["a", "b", "c"] };
     const r = targetReadiness(b2b, input({ applications: [app({ id: "a5", company: "Ledgerline", targetId: "tg_b2b", analysis })] }));
-    expect(r.lines[3].detail).toBe("from Ledgerline");
+    expect(r.lines[3].detail).toBe("things the postings from Ledgerline ask for that no story covers");
   });
 });

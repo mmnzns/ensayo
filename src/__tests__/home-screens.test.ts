@@ -30,7 +30,7 @@ describe("home screens", () => {
     expect(html).toContain("Hiring manager · Friday, 2:00 PM");
     expect(html).toContain("In 2 days");
     expect(html).toContain("Practice this stage");
-    expect(html).toContain("7 of your last 10");
+    expect(html).toContain("Passed 7 of your last 10 first tries");
     expect(html).toContain("4 days in a row");
   });
 

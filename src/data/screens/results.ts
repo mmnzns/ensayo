@@ -28,6 +28,8 @@ export interface DrillQuestionResult {
   /** Seconds to the point on the first try and on the best try. */
   firstTry: number;
   bestTry: number;
+  /** How many tries the question got. */
+  tries?: number;
 }
 
 export interface DrillResultsData {
@@ -39,6 +41,8 @@ export interface DrillResultsData {
   stageLabel: string;
   /** The habit this session worked on; its label comes from store.habits. */
   focusHabitId: HabitId;
+  /** False when the app picked the most missed habit because the chosen focus did not come up. Default true. */
+  focusIsYours?: boolean;
   /** Target for the chart, in seconds. */
   targetSeconds: number;
   /** Right edge of the chart, in seconds. */
@@ -48,13 +52,15 @@ export interface DrillResultsData {
   bestAnswer: {
     question: string;
     attempt: number;
-    pointAtSeconds: number;
-    /** Finishes the sentence "Attempt 3. Point at 0:05, ...". */
+    /** Null when the point time was not measured; the screen then leaves it out. */
+    pointAtSeconds: number | null;
+    /** Why this answer was picked, after "Attempt 3. Point at 0:05.". */
     note: string;
     /** What Listen reads aloud. */
     spoken: string;
   };
-  nextTime: { habitId: HabitId; keptGoingSeconds: number; advice: string };
+  /** The habit to carry, what the session showed about it ("Missed on 3 of 5 first tries"), and what to do. */
+  nextTime: { habitId: HabitId; evidence: string; advice: string };
   totals: { answers: number; followUps: number; costCents: number };
 }
 
@@ -100,6 +106,10 @@ export interface MockDebriefData {
   summary: string;
   followUps: { held: number; of: number };
   averageAnswerSeconds: number;
+  /** The stage's answer window the average is read against. */
+  averageWindow?: { min_s: number; max_s: number };
+  /** True when at least one answer was checked on timing only (no AI engine), so the tiles say what was not judged. */
+  timingOnly?: boolean;
   numbers: { said: number; of: number };
   flags: ConsistencyFlag[];
   /** False when nothing was checked against earlier answers (no application), so "All matched" would be a lie. Default true. */
@@ -168,12 +178,12 @@ export const resultsData: ResultsData = {
       question: "Tell me about a time you improved a metric you owned.",
       attempt: 3,
       pointAtSeconds: 5,
-      note: "stopped right after the result",
+      note: "Picked because it missed the fewest checks: 6 of 6 passed. You stopped right after the result and said your number.",
       spoken: "Activation. I took seven-day activation from thirty-one to forty-four percent in one quarter by rebuilding the first-week trigger and testing it every week.",
     },
     nextTime: {
       habitId: "clean_stop",
-      keptGoingSeconds: 14,
+      evidence: "You kept going 14 seconds on average after your number. Under 15 is a clean stop.",
       advice: "Try ending on the number.",
     },
     totals: { answers: 12, followUps: 2, costCents: 6 },

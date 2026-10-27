@@ -19,8 +19,8 @@ export const streak: Streak = { daysInARow: 5, answers: 58, questions: 23, follo
 
 /** The focus cards on Home (the state before today's session). */
 export const homeHabitStats: HabitStat[] = [
-  { id: "to_the_point", firstTry: [7, 10], note: "One more good one and it graduates." },
-  { id: "clean_stop", firstTry: [4, 10], retry: [3, 4], note: "Fixes stick on the second try 3 out of 4 times." },
+  { id: "to_the_point", firstTry: [7, 10], note: "Passed on 7 of your last 10 first tries. 8 of 10 and it graduates." },
+  { id: "clean_stop", firstTry: [4, 10], retry: [3, 4], note: "Passed on 4 of your last 10 first tries. 8 of 10 and it graduates. Fixes held on the second try 3 of 4 times." },
 ];
 
 import type { Target, You } from "../types";

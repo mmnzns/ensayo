@@ -1,4 +1,5 @@
 import { daysUntil, greeting, useStore } from "../../data/store";
+import { TIMING_ONLY_MISSING } from "../../data/engine";
 import { nextDated } from "../../practice/applied";
 import { practiceTargetFor } from "../../practice/sessionTarget";
 import AppShell from "../../ui/AppShell";
@@ -71,7 +72,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
         <section className="e-soft" role="status" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 16px", padding: "14px 20px" }}>
           <span className="e-badge">Offline</span>
           <span className="e-meta" style={{ flex: "1 1 360px" }}>
-            Practice still works. Without an engine Ensayo can judge timing, length and filler words, but not whether you answered the question or said your numbers.
+            {`Practice still works. ${TIMING_ONLY_MISSING}`}
           </span>
         </section>
       )}

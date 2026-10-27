@@ -378,8 +378,15 @@ export async function stopAndFinish() {
 
 const NOTICES: Record<string, string> = {
   clarifying: "That sounded like a question back to the interviewer, not an answer. Answer it directly this time.",
-  not_an_answer: "That didn't sound like an answer to this question. Try again.",
+  not_an_answer: "That didn't sound like an answer to this question.",
 };
+
+/** What was heard, cut to its first dozen words, and what an answer needs. Shown on screen only: transcript text is never logged. */
+export function notAnAnswerNotice(heard: string | null): string {
+  const words = (heard ?? "").trim().split(/\s+/).filter(Boolean);
+  const quote = words.length ? ` Heard: "${words.slice(0, 12).join(" ")}${words.length > 12 ? "..." : ""}".` : "";
+  return `${NOTICES.not_an_answer}${quote} An answer speaks to what was asked: say your answer first, then back it up. Try again.`;
+}
 
 async function apply(out: RepOutcome) {
   if (out.outcome === "clarifying") {
@@ -404,7 +411,7 @@ async function apply(out: RepOutcome) {
     return;
   }
   if (out.outcome === "not_an_answer") {
-    set({ phase: "notice", notice: NOTICES.not_an_answer, sessionId: out.session_id, recordingPath: null, restartOffered: false });
+    set({ phase: "notice", notice: notAnAnswerNotice(out.transcript_text), sessionId: out.session_id, recordingPath: null, restartOffered: false });
     return;
   }
   if (out.outcome === "didnt_catch" || !out.rep) {

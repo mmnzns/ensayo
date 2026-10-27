@@ -19,6 +19,9 @@ const OTHER = "Other model…";
 const pick = (options: string[], value: string | undefined) => (value && options.includes(value) ? value : options[0]);
 
 /** In the app the screen is driven by the real settings; in the browser preview it stays the mock below. */
+/** What a session loses when it reaches the cap and switches to timing only. */
+export const CAP_HINT = "If a session would go over, the rest of it is timing only: no coach note, no Try saying line, and no check of answering first or saying what you decided. Length, fillers, the number and the stop are still checked.";
+
 export default function SettingsAi() {
   return isApp() ? <SettingsAiLive /> : <SettingsAiMock />;
 }
@@ -160,7 +163,7 @@ function SettingsAiMock() {
             {kind === "key" && (
               <div className="e-rowline" style={{ borderBottom: "none" }}>
                 <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-                  Spending cap per session<span className="e-small">Ensayo switches to timing only if a session would go over.</span>
+                  Spending cap per session<span className="e-small">{CAP_HINT}</span>
                 </span>
                 <select className="e-input" style={{ width: "240px" }} aria-label="Spending cap" value={cap} onChange={(e) => setCap(e.target.value)}>
                   {ai.spendingCaps.map((c) => (
@@ -248,7 +251,7 @@ function SettingsAiBody({ view }: { view: AiView }) {
             {kind === "key" && (
               <div className="e-rowline" style={{ borderBottom: "none" }}>
                 <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-                  Spending cap per session<span className="e-small">Ensayo switches to timing only if a session would go over.</span>
+                  Spending cap per session<span className="e-small">{CAP_HINT}</span>
                 </span>
                 <select className="e-input" style={{ width: "240px" }} aria-label="Spending cap" value={capLabel(settings.cost_cap_usd)} onChange={(e) => change({ ...st, settings: withCap(settings, e.target.value) })}>
                   {capOptions(settings.cost_cap_usd).map((c) => (

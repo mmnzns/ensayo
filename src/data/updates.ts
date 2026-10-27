@@ -127,7 +127,7 @@ export async function install(bridge: UpdateBridge | null) {
     await bridge.install(); // the app restarts before this returns
     set({ phase: { state: "restarting" } });
   } catch (e) {
-    set({ phase: { state: "error", message: errorText(e) } });
+    set({ phase: { state: "error", message: errorText(e, "The update didn't install. Try again in a moment.") } });
   }
 }
 
@@ -140,15 +140,15 @@ export async function checkNow(bridge: UpdateBridge | null) {
     found(p);
     set({ check: p ? { state: "found", version: p.version } : { state: "up-to-date" } });
   } catch (e) {
-    set({ check: { state: "offline", message: errorText(e) } });
+    set({ check: { state: "offline", message: errorText(e, "The update check failed. Check your connection and try again.") } });
   }
 }
 
 /** Tauri commands reject with the message string. */
-function errorText(e: unknown): string {
+function errorText(e: unknown, fallback: string): string {
   if (typeof e === "string" && e) return e;
   if (e instanceof Error && e.message) return e.message;
-  return "Something went wrong. Try again in a moment.";
+  return fallback;
 }
 
 /** Whether the banner shows: an update is pending and Later wasn't clicked for it (or it is installing). */

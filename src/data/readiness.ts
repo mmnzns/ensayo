@@ -94,7 +94,7 @@ export function targetReadiness(target: Target, input: ReadinessInput): Readines
   const leadLine: ReadinessLine =
     lead.length === 0
       ? { id: "stories", ok: false, title: "No lead stories yet", detail: "pin up to three to put them first" }
-      : { id: "stories", ok: verified === lead.length, title: "Lead stories verified", detail: `${verified} of ${lead.length}` };
+      : { id: "stories", ok: verified === lead.length, title: "Lead stories verified", detail: `${verified} of ${lead.length} · verified means every number in the story is checked by you` };
 
   // The last Mock, and how many of the must-say points of this target's open applications have been said in a Mock.
   const mocks = mine.filter((r) => r.mode === "mock");
@@ -115,8 +115,8 @@ export function targetReadiness(target: Target, input: ReadinessInput): Readines
   const companies = [...new Set(gapList.map((g) => g.app.company))];
   const gaps: ReadinessLine =
     gapList.length === 0
-      ? { id: "gaps", ok: true, title: "No open gaps", detail: "" }
-      : { id: "gaps", ok: false, title: `${gapList.length} open ${gapList.length === 1 ? "gap" : "gaps"}`, detail: names.length <= 2 ? names.join(", ") : `from ${companies.join(", ")}` };
+      ? { id: "gaps", ok: true, title: "No open gaps", detail: open.some((a) => a.analysis) ? "every need the postings list has a story" : "no posting read yet to compare" }
+      : { id: "gaps", ok: false, title: `${gapList.length} open ${gapList.length === 1 ? "gap" : "gaps"}`, detail: names.length <= 2 ? `things the posting asks for that no story covers: ${names.join(", ")}` : `things the postings from ${companies.join(", ")} ask for that no story covers` };
 
   const action: ReadinessAction =
     pitchCount === 0 || gapList.length === 0

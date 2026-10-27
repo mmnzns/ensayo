@@ -116,7 +116,7 @@ describe("Check for updates", () => {
     await checkNow(bridge({ check: () => Promise.reject("Couldn't reach the update server. Check your internet connection.") }));
     expect(checkText(updateSnapshot().check)).toBe("Couldn't reach the update server. Check your internet connection.");
     await checkNow(bridge({ check: () => Promise.reject(new Error("")) }));
-    expect(checkText(updateSnapshot().check)).toBe("Something went wrong. Try again in a moment.");
+    expect(checkText(updateSnapshot().check)).toBe("The update check failed. Check your connection and try again.");
   });
 });
 

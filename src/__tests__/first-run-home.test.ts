@@ -44,7 +44,8 @@ describe("which Home", () => {
   });
 
   it("counts a habit in plain words, even with no answers", () => {
-    expect(habitCount(7, 10)).toBe("7 of your last 10");
+    expect(habitCount(7, 10)).toBe("Passed 7 of your last 10 first tries");
+    expect(habitCount(1, 1)).toBe("Passed 1 of your last 1 first try");
     expect(habitCount(0, 0)).toBe("No answers yet");
   });
 });

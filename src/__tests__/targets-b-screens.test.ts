@@ -122,7 +122,7 @@ describe("progress and sessions by target", () => {
   it("progress has the target filter, a card per target, and habits named as across all targets", () => {
     const text = strip(render("7-1-progress-habits"));
     expect(text).toContain("All targets");
-    expect(text).toContain("Ready for each target?");
+    expect(text).toContain("What's done for each target");
     expect(text).toContain("Practicing now");
     expect(text).toContain("Your habits · across all targets");
     expect(text).toContain("How you deliver goes with you to every job.");

@@ -35,6 +35,8 @@ export interface DetailRow {
   /** The check this row shows, when it is one the user can label (a rep in the app). */
   id?: string;
   label: string;
+  /** What the row looks at, in one plain line (and the line it has to clear, when it is a number). */
+  measures?: string;
   state: "yes" | "notyet" | "info";
   note: string;
 }
@@ -46,11 +48,15 @@ export interface DeltaChip {
   fromSeconds?: number;
   toSeconds?: number;
   caption?: string;
+  /** False when the change is not an improvement, so it is not drawn as a win. Missing in the sample data: read as true. */
+  improved?: boolean;
 }
 
 export interface PracticeAttempt {
   number: 1 | 2 | 3;
   coachNote: string;
+  /** For a timing-only answer: what was not judged and why, said on the main card. */
+  notJudged?: string;
   /** The one line to say instead. Missing when everything worked. */
   trySaying?: string;
   delta?: DeltaChip;
@@ -145,7 +151,7 @@ export const practiceData: PracticeData = {
       number: 2,
       coachNote: `Every decision was "we". Say what you decided.`,
       trySaying: "I decided the fix was the handoff from email to the bank-linking screen, and I picked seven-day activation to prove it.",
-      delta: { label: "fixed", fromSeconds: 41, toSeconds: 6, caption: "point landed" },
+      delta: { label: "Point landed", fromSeconds: 41, toSeconds: 6, caption: "Better than your previous attempt", improved: true },
       durationSeconds: 48,
       transcript: [
         { tone: "normal", text: "I moved seven-day activation from 31 to 44 percent by fixing what happened after signup." },
@@ -181,7 +187,7 @@ export const practiceData: PracticeData = {
     {
       number: 3,
       coachNote: "You led with the 44 percent, said what you decided, and stopped right after the result.",
-      delta: { label: "that's the one" },
+      delta: { label: "Every check clean this time", caption: "Better than your previous attempt", improved: true },
       wins: [`Point at ${clock(5)}`, `"I decided" said twice`, `${clock(64)} long`],
       closing: "Real interviewers usually push on an answer this clean. Want to see how you hold up?",
       durationSeconds: 64,

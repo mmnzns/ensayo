@@ -138,14 +138,24 @@ export function answersText(n: number): string {
   return n <= 0 ? "Not yet" : n === 1 ? "1 answer" : `${n} answers`;
 }
 
+/** Each status says what it was compared with. On the resume a line is compared with your stories. */
 export const MATCH_LABEL: Record<ClaimMatch, string> = {
   matches: "Matches your stories",
-  differs: "Differs",
+  differs: "Differs from your stories",
   not_in_bank: "Not in your stories",
-  consistent: "Consistent",
-  updated: "Updated",
-  said_once: "Said once",
+  consistent: "Same every time it came up",
+  updated: "Updated, the newest one counts",
+  said_once: "Said once, nothing to compare yet",
 };
+
+/** A group's status in "What you've said", naming where else it was said: "Same as the Resume and Recruiter call". */
+export function matchText(status: ClaimMatch, places: string[]): string {
+  const named = [...new Set(places.filter(Boolean))];
+  const list = named.length <= 1 ? (named[0] ?? "") : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  if (status === "consistent" && named.length > 1) return `Same in the ${list}`;
+  if (status === "said_once" && named.length === 1) return `Said once, in the ${list}. Nothing to compare yet`;
+  return MATCH_LABEL[status];
+}
 
 /** Bold segments: "so **this** word" into parts. */
 export function boldParts(text: string): { text: string; bold: boolean }[] {

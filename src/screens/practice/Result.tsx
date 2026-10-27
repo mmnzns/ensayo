@@ -22,6 +22,10 @@ export interface ResultOptions {
   showKeyHint: boolean;
 }
 
+/** What "That note was wrong" does (storage label_rep): the answer is copied into the eval folder on this computer, its
+ *  audio kept, so the checks can be tested against it. Progress still counts the answer. */
+export const WRONG_SAVED = "Saved on this computer with this answer and its audio, so the checks can be tested against it. Your progress still counts it.";
+
 const wrongButton = { background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--e-muted)", textDecoration: "underline", fontFamily: "inherit" } as const;
 
 function TranscriptLineView({ line, last }: { line: TranscriptLine; last: boolean }) {
@@ -63,7 +67,10 @@ function DetailsRowView({ row, label }: { row: DetailRow; label?: { labels: Labe
   return (
     <div className="e-rowline" style={{ padding: "12px 0" }}>
       {mark}
-      <span style={{ flex: "1" }}>{row.label}</span>
+      <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+        <span>{row.label}</span>
+        {row.measures && <span className="e-small">{row.measures}</span>}
+      </span>
       <span className="e-small">{row.note}</span>
       {label && row.id && <LabelChips id={row.id} labels={label.labels} set={label.set} />}
     </div>
@@ -193,11 +200,16 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   }
 
   const delta = attempt.delta;
-  const deltaText = delta ? (delta.fromSeconds != null && delta.toSeconds != null ? `${delta.label} · ${delta.fromSeconds}s → ${delta.toSeconds}s` : delta.label) : "";
+  const deltaText = delta ? (delta.fromSeconds != null && delta.toSeconds != null ? `${delta.label}: ${delta.fromSeconds}s → ${delta.toSeconds}s` : delta.label) : "";
+  // A change that is not an improvement is said plainly, not drawn as a win.
+  const deltaStyle = delta?.improved === false ? { className: "e-h3", style: { fontSize: "21px", color: "var(--e-ink)" } } : { className: "e-win", style: { fontSize: "21px" } };
   const lastLine = attempt.transcript.length - 1;
 
   const wrongLink = wrong ? (
-    <span className="e-small" role="status">Thanks, noted</span>
+    <span className="e-small" role="status" style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "baseline" }}>
+      {WRONG_SAVED}
+      {live && <button type="button" className="e-small" style={wrongButton} onClick={() => void markWrong(false)}>Undo</button>}
+    </span>
   ) : (
     <button type="button" className="e-small" style={wrongButton} onClick={() => (live ? void markWrong(true) : setMockWrong(true))}>That note was wrong</button>
   );
@@ -206,7 +218,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
     <FocusShell>
       <div className="e-wrap">
         <SessionHeader session={session} endTo={endTo} onEnd={onEnd} />
-        {live && state.notice && (
+        {live && state.notice && !attempt.notJudged && (
           <div className="e-soft" role="status">
             <span className="e-meta" style={{ color: "var(--e-ink)" }}>{state.notice}</span>
           </div>
@@ -231,11 +243,11 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
                 <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${maxTries}`}</span>
                 {delta.caption ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
-                    <span className="e-win" style={{ fontSize: "21px" }}>{deltaText}</span>
+                    <span {...deltaStyle}>{deltaText}</span>
                     <span className="e-small">{delta.caption}</span>
                   </div>
                 ) : (
-                  <span className="e-win" style={{ fontSize: "21px" }}>{deltaText}</span>
+                  <span {...deltaStyle}>{deltaText}</span>
                 )}
               </div>
             ) : (
@@ -244,6 +256,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
               <span className="e-label">Coach's note</span>
               <p className="e-hand" style={{ margin: "0", fontSize: `${handSize}px` }}>{attempt.coachNote}</p>
+              {attempt.notJudged && <p className="e-meta" style={{ margin: "6px 0 0" }}>{attempt.notJudged}</p>}
             </div>
             {saidBefore.length > 0 && (
               <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

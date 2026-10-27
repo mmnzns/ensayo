@@ -9,6 +9,7 @@ import { pickResumePath } from "../../ui/pickFile";
 import { fileNameOf } from "../settings/targetForms";
 import { bytesOf, isResumeFile, outcomeNotices } from "./forms";
 import { AppHeader, AppTabs, ErrorLine, MatchChip, Notice, useRun, withFeatured, type Featured } from "./parts";
+import Working from "./Working";
 
 /** What a line on the resume is about, in the words a person uses, and the backend's name for it. */
 const LINE_KINDS = [
@@ -43,6 +44,8 @@ function ResumeTab({ app, now }: Featured) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const [adding, setAdding] = useState<{ kind: string; subject: string; value: string } | null>(null);
+  // True while the resume is being read (Read it, Read it again, pasted text), so the bar and clock show.
+  const [reading, setReading] = useState(false);
   const [which, setWhich] = useState<Record<string, { open: boolean; pick?: "resume" | "story" }>>({});
 
   const attached = !!resume;
@@ -98,13 +101,24 @@ function ResumeTab({ app, now }: Featured) {
     });
   };
   const readIt = async () => {
-    const out = await fileRun.run(() => actions.readResume(app.id));
-    if (out) setNotices(outcomeNotices(out));
+    setReading(true);
+    try {
+      const out = await fileRun.run(() => actions.readResume(app.id));
+      if (out) setNotices(outcomeNotices(out));
+    } finally {
+      setReading(false);
+    }
   };
-  const pasteIt = () =>
-    attempt((yes) => actions.pasteResumeText(app.id, paste, yes, true), { text: `${app.company} already has a resume attached. Use this text in its place?`, yes: "Use this text" }, (out) => {
-      if (out.attach?.status === "attached") setPaste("");
-    });
+  const pasteIt = async () => {
+    setReading(true);
+    try {
+      await attempt((yes) => actions.pasteResumeText(app.id, paste, yes, true), { text: `${app.company} already has a resume attached. Use this text in its place?`, yes: "Use this text" }, (out) => {
+        if (out.attach?.status === "attached") setPaste("");
+      });
+    } finally {
+      setReading(false);
+    }
+  };
   const useOther = () =>
     attempt((yes) => actions.useResumeFrom(app.id, otherId, yes, false), { text: `${app.company} already has a resume attached. Replace it with the one from the other application?`, yes: "Replace it" });
   const noResume = () => attempt((yes) => actions.setNoResume(app.id, yes), { text: "Take the resume off? The lines read from it go too. The file itself isn't touched.", yes: "Take it off" });
@@ -158,9 +172,10 @@ function ResumeTab({ app, now }: Featured) {
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={fileRun.busy} onClick={() => void open()}>Open</button>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChooser(true)}>Replace</button>
+                <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={fileRun.busy} onClick={() => setChooser(true)}>Replace</button>
                 {!unread && !needsPaste && <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={fileRun.busy} onClick={() => void readIt()}>Read it again</button>}
               </div>
+              {reading && <Working steps={["resume"]} current="resume" kind={store.engine.kind} />}
               {opened && !fileRun.error && <span className="e-small" role="status">{`Opened ${resume.fileName} in your viewer.`}</span>}
               {unread && (
                 <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>

@@ -253,7 +253,8 @@ export interface Application {
 export interface SessionSummary {
   id: string;
   when: string;
-  group: "This week" | "Last week";
+  /** "This week", "Last week", or the month ("September 2026") for anything older. */
+  group: string;
   mode: Mode;
   title: string;
   headline: string;
