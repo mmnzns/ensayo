@@ -56,8 +56,20 @@ fn to_check(id: &str, v: &Verdict) -> Option<Check> {
         "fail" => Some(false),
         _ => return None,
     };
-    let evidence = if !v.quote.trim().is_empty() { format!("\"{}\"", v.quote.trim()) } else { String::new() };
+    let evidence = verdict_evidence(v);
     Some(Check { id: id.to_string(), passed, evidence, sentences: v.sentences.clone(), seconds: None })
+}
+
+/// The quote the model pointed at, then its reason in plain words, so a check never shows a bare quote or nothing.
+pub(crate) fn verdict_evidence(v: &Verdict) -> String {
+    let quote = v.quote.trim();
+    let reason = v.reason.trim().replace('\u{2014}', ",");
+    match (quote.is_empty(), reason.is_empty()) {
+        (false, false) => format!("\"{quote}\" {reason}"),
+        (false, true) => format!("\"{quote}\""),
+        (true, false) => reason,
+        (true, true) => String::new(),
+    }
 }
 
 fn secs(ms: u64) -> f64 {
@@ -73,7 +85,7 @@ fn time_to_point(score: &ScoreAnswer, m: &Metrics) -> Option<Check> {
     let idx = score.first_answer_sentence?;
     let s = m.sentences.iter().find(|s| s.index == idx)?;
     let t = s.end_ms.saturating_sub(answer_start(m));
-    Some(Check { id: "time_to_point".into(), passed: Some(t < 10_000), evidence: format!("Your point landed at {:.0} seconds.", secs(t)), sentences: vec![idx], seconds: Some(t / 1000) })
+    Some(Check { id: "time_to_point".into(), passed: Some(t < 10_000), evidence: format!("Your point landed at {:.0} seconds. Under 10 seconds passes.", secs(t)), sentences: vec![idx], seconds: Some(t / 1000) })
 }
 
 /// Time spoken after the sentence that stated the proof, not counting a closing bridge ("That is the kind of problem
@@ -105,8 +117,12 @@ fn proof(score: &ScoreAnswer, m: &Metrics, bank: &[Number]) -> Option<Check> {
     let passed = verdict.result == "pass" && (bank.is_empty() || score.numbers_said.iter().any(|n| !n.not_in_bank));
     let evidence = match score.numbers_said.iter().find(|n| n.not_in_bank && !bank.is_empty()) {
         Some(n) if !passed => format!("You said {}, which is not in your stories. Check it.", n.text),
-        _ if passed => "A result came up.".to_string(),
-        _ => "No number or result from your stories came up.".to_string(),
+        _ if passed => match score.numbers_said.first() {
+            Some(n) => format!("You said {}.", n.text),
+            None if !verdict.quote.trim().is_empty() => format!("You gave the result: \"{}\".", verdict.quote.trim()),
+            None => "You gave a result in words.".to_string(),
+        },
+        _ => crate::metrics::no_number_evidence(bank),
     };
     Some(Check { id: "proof".into(), passed: Some(passed), evidence, sentences: landed, seconds: None })
 }
@@ -128,7 +144,7 @@ pub fn merge(score: &ScoreAnswer, m: &Metrics, active: &[&str], bank: &[Number])
         out.push(Check {
             id: "clean_stop".into(),
             passed: t.map(|t| t < timing::TAIL_PASS_SECONDS * 1000),
-            evidence: t.map(|t| format!("You kept going for {:.0} seconds after the number.", secs(t))).unwrap_or_else(|| "No number to measure from.".into()),
+            evidence: crate::metrics::tail_evidence(t, score.proof_landed_sentence.and_then(|i| score.numbers_said.iter().rev().find(|n| n.sentence <= i)).map(|n| n.text.as_str())),
             sentences: score.proof_landed_sentence.into_iter().collect(),
             seconds: t.map(|t| t / 1000),
         });

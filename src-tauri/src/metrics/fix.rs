@@ -74,7 +74,15 @@ pub fn fixed_label(id: &str) -> &'static str {
         "jd_fit" => "Used the posting's words",
         "commitment" => "Led with full-time",
         "builder_operator" => "Answered builder or operator",
-        _ => "Fixed",
+        "proof" => "Said the number",
+        "clean_stop" => "Stopped after the number",
+        "c1_consistent" => "Matched what you said before",
+        "f1_answer_push" => "Answered the follow-up first",
+        "f2_new_specific" => "Added something new",
+        "f3_consistent" => "Kept your numbers the same",
+        "f4_short" => "Kept the follow-up short",
+        "f5_held_position" => "Held your position",
+        _ => "Fixed this time",
     }
 }
 
@@ -103,7 +111,11 @@ pub fn delta(prev: &Metrics, cur: &Metrics, check: &str) -> Option<Delta> {
             ..blank
         }),
         "fillers" => Some(Delta { label: "Filler words".into(), from_count: Some(prev.fillers.count), to_count: Some(cur.fillers.count), ..blank }),
-        "proof" => Some(Delta { label: if improved { "Said the number this time".into() } else { "Still no number".into() }, ..blank }),
+        "proof" => {
+            let said = cur.proof.matched.iter().map(|n| n.raw.clone()).collect::<Vec<_>>().join(", ");
+            let label = if improved && !said.is_empty() { format!("Said {said} this time") } else if improved { "Said the number this time".into() } else { "Still no number from your story".into() };
+            Some(Delta { label, ..blank })
+        }
         "time_to_point" => {
             let seconds = |m: &Metrics| m.checks.iter().find(|c| c.id == "time_to_point").and_then(|c| c.seconds);
             match (seconds(prev), seconds(cur)) {

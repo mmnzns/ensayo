@@ -312,7 +312,7 @@ mod tests {
         let llm = Scripted::new(vec![Ok("here you go"), Ok("{}")]);
         let err = run(&llm, TYPICAL, false).unwrap_err();
         assert!(matches!(err, CallError::Invalid(_)), "{err:?}");
-        assert!(err.notice().contains("timing only"));
+        assert!(err.notice().contains("measured checks only"));
     }
 
     #[test]

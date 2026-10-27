@@ -118,7 +118,7 @@ fn failure_notice(e: &CallError) -> String {
     let reason = match e {
         CallError::Unavailable(m) | CallError::Failed(m) => m.clone(),
         CallError::Invalid(_) => "The AI's reply couldn't be read.".to_string(),
-        CallError::CapReached => "This session reached its spending limit.".to_string(),
+        CallError::CapReached { .. } => e.cap_words(),
     };
     format!("{reason} The posting was read by keywords only, and the questions come from the general set.")
 }

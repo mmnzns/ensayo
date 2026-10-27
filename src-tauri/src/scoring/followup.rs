@@ -144,8 +144,7 @@ fn verdict_check(id: &str, v: &Verdict, seconds: Option<u64>) -> Option<Check> {
         "fail" => Some(false),
         _ => return None,
     };
-    let evidence = if v.quote.trim().is_empty() { String::new() } else { format!("\"{}\"", v.quote.trim()) };
-    Some(Check { id: id.to_string(), passed, evidence, sentences: v.sentences.clone(), seconds })
+    Some(Check { id: id.to_string(), passed, evidence: super::criteria::verdict_evidence(v), sentences: v.sentences.clone(), seconds })
 }
 
 /// F4 is code: the follow-up should take under half the time the first answer took.
@@ -154,7 +153,7 @@ pub fn f4_short(follow_ms: u64, first_ms: u64) -> Check {
     Check {
         id: "f4_short".into(),
         passed: Some(pass),
-        evidence: format!("{} seconds against {} for the first answer.", follow_ms / 1000, first_ms / 1000),
+        evidence: format!("{} seconds, against {} for the first answer. A follow-up answer passes under half the first, so under {} seconds.", follow_ms / 1000, first_ms / 1000, first_ms / 2000),
         sentences: vec![],
         seconds: Some(follow_ms / 1000),
     }

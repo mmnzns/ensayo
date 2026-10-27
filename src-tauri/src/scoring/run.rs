@@ -18,17 +18,28 @@ pub enum CallError {
     Failed(String),
     /// The model answered twice without valid JSON for the schema.
     Invalid(String),
-    /// The session's estimated cost reached the cap set in Settings.
-    CapReached,
+    /// The session's estimated cost reached the cap set in Settings: what it had spent, and the cap, in US dollars.
+    CapReached { spent: f64, cap: f64 },
 }
+
+/// What a rep keeps when the AI can't judge it, and what it loses.
+const TIMING_ONLY: &str = "This answer got the measured checks only: the number, the stop, the length and filler words. Answering first, ownership and story fit weren't judged, and there's no coach note.";
 
 impl CallError {
     /// A plain-words line for the screen when the rep falls back to timing only.
     pub fn notice(&self) -> String {
         match self {
-            CallError::Unavailable(m) | CallError::Failed(m) => format!("{m} This answer was checked for timing only."),
-            CallError::Invalid(_) => "The AI's reply could not be read, so this answer was checked for timing only.".to_string(),
-            CallError::CapReached => "This session reached its spending limit, so the rest of it is checked for timing only. You can change the limit in Settings.".to_string(),
+            CallError::Unavailable(m) | CallError::Failed(m) => format!("{m} {TIMING_ONLY}"),
+            CallError::Invalid(_) => format!("The AI answered twice in a shape Ensayo couldn't read. {TIMING_ONLY} Try the next answer; if it keeps happening, choose another model in Settings › AI."),
+            CallError::CapReached { .. } => format!("{} {TIMING_ONLY} The rest of this session works the same way.", self.cap_words()),
+        }
+    }
+
+    /// How much of the limit the session spent, and where to raise it. The spend is an estimate.
+    pub fn cap_words(&self) -> String {
+        match self {
+            CallError::CapReached { spent, cap } => format!("This session has spent about ${spent:.2} of its ${cap:.2} limit, and the next AI step would go over it. Raise the limit in Settings › AI."),
+            _ => String::new(),
         }
     }
 }
@@ -48,7 +59,7 @@ impl Budget {
 
     fn check(&self) -> Result<(), CallError> {
         if self.cap_usd > 0.0 && self.spend.would_exceed(self.cap_usd) {
-            Err(CallError::CapReached)
+            Err(CallError::CapReached { spent: self.spend.usd, cap: self.cap_usd })
         } else {
             Ok(())
         }
@@ -264,7 +275,7 @@ mod tests {
         let err = call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap_err();
         assert!(matches!(err, CallError::Invalid(_)), "{err:?}");
         assert_eq!(llm.calls(), 2);
-        assert!(err.notice().contains("timing only"));
+        assert!(err.notice().contains("measured checks only") && err.notice().contains("Settings › AI"));
     }
 
     #[test]
@@ -273,7 +284,7 @@ mod tests {
         let err = call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap_err();
         assert_eq!(err, CallError::Unavailable("Claude didn't accept the API key. Check it in Settings › AI.".into()));
         assert_eq!(llm.calls(), 1);
-        assert!(err.notice().ends_with("This answer was checked for timing only."));
+        assert!(err.notice().contains("Answering first, ownership and story fit weren't judged"));
     }
 
     #[test]
@@ -281,7 +292,7 @@ mod tests {
         let llm = Scripted::new(vec![Ok(GOOD)]);
         let mut b = Budget::new(Provider::Claude, 0.25);
         b.spend.usd = 0.30;
-        assert_eq!(call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut b).unwrap_err(), CallError::CapReached);
+        assert_eq!(call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut b).unwrap_err(), CallError::CapReached { spent: 0.30, cap: 0.25 });
         assert_eq!(llm.calls(), 0);
         let mut free = Budget::new(Provider::Claude, 0.0);
         free.spend.usd = 99.0;

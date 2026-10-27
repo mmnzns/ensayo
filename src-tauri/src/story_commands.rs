@@ -14,7 +14,7 @@ fn story_message(e: &CallError) -> String {
     match e {
         CallError::Unavailable(m) | CallError::Failed(m) => m.clone(),
         CallError::Invalid(_) => "The AI's reply couldn't be read this time. Try Read it again, or fill it in yourself.".into(),
-        CallError::CapReached => "This reached the spending limit set in Settings. Change the limit there, or fill it in yourself.".into(),
+        CallError::CapReached { .. } => format!("{} Or fill it in yourself.", e.cap_words()),
     }
 }
 
@@ -40,7 +40,7 @@ mod story_message_tests {
 
     #[test]
     fn a_failed_read_never_talks_about_timing() {
-        for e in [CallError::Invalid("x".into()), CallError::CapReached, CallError::Failed("The provider is busy.".into())] {
+        for e in [CallError::Invalid("x".into()), CallError::CapReached { spent: 1.02, cap: 1.0 }, CallError::Failed("The provider is busy.".into())] {
             let m = story_message(&e);
             assert!(!m.contains("timing"), "{m}");
             assert!(!m.contains('\u{2014}'), "no em dashes: {m}");

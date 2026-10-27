@@ -1242,7 +1242,7 @@ mod tests {
         let rep = out.rep.unwrap();
         assert_eq!(rep.rep.fix.as_deref(), Some("clean_stop"));
         assert!(rep.rep.note.is_none() && rep.rep.ai.is_none());
-        assert!(out.notice.unwrap().contains("checked for timing only"));
+        assert!(out.notice.unwrap().contains("measured checks only"));
     }
 
     #[test]
@@ -1559,7 +1559,7 @@ mod tests {
         let rep = out.rep.unwrap();
         assert_eq!(rep.rep.fix.as_deref(), Some("clean_stop"), "the first note stands");
         assert!(rep.rep.note.is_some());
-        assert!(out.notice.unwrap().contains("compare this answer with what you said before"));
+        assert!(out.notice.unwrap().contains("wasn't compared with what you said in earlier stages"));
         assert!(saved_claims(&storage, &id).is_empty());
     }
 

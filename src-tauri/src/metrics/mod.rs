@@ -91,6 +91,46 @@ fn raws(numbers: &[Number]) -> String {
     numbers.iter().map(|n| n.raw.clone()).collect::<Vec<_>>().join(", ")
 }
 
+/// The proof line when no number came up: the story's own numbers when there are some, so the next try knows what
+/// to say.
+pub fn no_number_evidence(bank: &[Number]) -> String {
+    if bank.is_empty() {
+        return "You didn't say a number. One number for what changed makes the result real.".to_string();
+    }
+    let mut shown: Vec<&str> = Vec::new();
+    for n in bank {
+        if !shown.contains(&n.raw.as_str()) {
+            shown.push(&n.raw);
+        }
+    }
+    let list = shown.iter().take(4).copied().collect::<Vec<_>>().join(", ");
+    format!("Your story's numbers are {list}. You didn't say any of them.")
+}
+
+/// The clean-stop line: how long after which number, against the limit.
+pub fn tail_evidence(tail_ms: Option<u64>, after: Option<&str>) -> String {
+    match tail_ms {
+        Some(t) => {
+            let what = after.map(|a| format!("you said {a}")).unwrap_or_else(|| "your number".to_string());
+            let verdict = if t < timing::TAIL_PASS_SECONDS * 1000 { "a clean stop" } else { "too long" };
+            format!("You kept going for {} seconds after {what}. Under {} seconds is a clean stop, so this is {verdict}.", t / 1000, timing::TAIL_PASS_SECONDS)
+        }
+        None => "Not measured: no number was said, so there was nothing to stop after.".to_string(),
+    }
+}
+
+fn filler_breakdown(items: &[fillers::Filler]) -> String {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for f in items {
+        match counts.iter_mut().find(|(t, _)| *t == f.text) {
+            Some(c) => c.1 += 1,
+            None => counts.push((f.text.clone(), 1)),
+        }
+    }
+    counts.sort_by_key(|c| std::cmp::Reverse(c.1));
+    counts.iter().take(3).map(|(t, n)| format!("\"{t}\" {n}")).collect::<Vec<_>>().join(", ")
+}
+
 pub fn compute(input: Inputs) -> Metrics {
     let first = sentences::split(&input.words);
     let restart_at = clean::restart_at(&first);
@@ -122,30 +162,35 @@ pub fn compute(input: Inputs) -> Metrics {
         } else if !unbanked.is_empty() {
             format!("You said {}, which is not in your stories. Check it.", raws(&unbanked))
         } else {
-            "No number or result from your stories came up.".to_string()
+            no_number_evidence(&input.bank)
         };
         checks.push(Check { id: "proof".into(), passed: Some(!proof.matched.is_empty()), evidence: proof_evidence, sentences: proof.landed_sentence.into_iter().collect(), seconds: None });
         checks.push(Check {
             id: "clean_stop".into(),
             passed: proof.tail_ms.map(|t| t < timing::TAIL_PASS_SECONDS * 1000),
-            evidence: match proof.tail_ms {
-                Some(t) => format!("You kept going for {} seconds after the number.", t / 1000),
-                None => "No number to measure from.".into(),
-            },
+            evidence: tail_evidence(proof.tail_ms, proof.matched.last().map(|n| n.raw.as_str())),
             sentences: proof.landed_sentence.into_iter().collect(),
             seconds: proof.tail_ms.map(|t| t / 1000),
         });
         checks.push(Check {
             id: "length".into(),
             passed: Some(length != Length::Long),
-            evidence: format!("{} against a window of {} to {} seconds.", minutes_seconds(speaking_ms), window.min_s, window.max_s),
+            evidence: match length {
+                Length::Long => format!("{} spoken, {} seconds over the {} to {} second window for this question.", minutes_seconds(speaking_ms), (speaking_ms / 1000).saturating_sub(window.max_s), window.min_s, window.max_s),
+                Length::Short => format!("{} spoken, under the {} to {} second window. Short is fine if you answered and gave the result.", minutes_seconds(speaking_ms), window.min_s, window.max_s),
+                _ => format!("{} spoken, inside the {} to {} second window for this question.", minutes_seconds(speaking_ms), window.min_s, window.max_s),
+            },
             sentences: vec![],
             seconds: Some(speaking_ms / 1000),
         });
         checks.push(Check {
             id: "fillers".into(),
             passed: Some(filler_rate < timing::FILLERS_PASS_PER_MINUTE),
-            evidence: format!("{} filler words, {:.1} a minute.", items.len(), filler_rate),
+            evidence: if items.is_empty() {
+                format!("No filler words. Under {:.0} a minute passes.", timing::FILLERS_PASS_PER_MINUTE)
+            } else {
+                format!("{} filler words ({}), {:.1} a minute. Under {:.0} a minute passes.", items.len(), filler_breakdown(&items), filler_rate, timing::FILLERS_PASS_PER_MINUTE)
+            },
             sentences: vec![],
             seconds: None,
         });
@@ -172,6 +217,21 @@ pub fn compute(input: Inputs) -> Metrics {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_lines_name_the_numbers_and_the_limits() {
+        let bank = numbers::extract("activation went from 31% to 44%, about $1.2M");
+        let none = no_number_evidence(&bank);
+        assert!(none.contains("31%") && none.contains("44%") && none.contains("didn't say any of them"), "{none}");
+        assert!(no_number_evidence(&[]).contains("You didn't say a number"));
+        let long = tail_evidence(Some(22_000), Some("44%"));
+        assert!(long.contains("22 seconds after you said 44%") && long.contains("Under 15 seconds") && long.contains("too long"), "{long}");
+        assert!(tail_evidence(Some(4_000), Some("44%")).contains("a clean stop"));
+        assert!(tail_evidence(None, None).starts_with("Not measured"));
+        for line in [none, long] {
+            assert!(!line.contains('\u{2014}'));
+        }
+    }
+
     use super::*;
 
     /// A long answer: a number in the first sentence, then ninety slow words with three "um" and a full stop every 30.
