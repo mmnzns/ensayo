@@ -665,6 +665,11 @@ pub fn pattern_claims(text: &str) -> Vec<ResumeClaim> {
                 !date_tokens[k] && w.chars().next().is_some_and(|c| c.is_ascii_digit()) && !w.split_once('-').is_some_and(|(a, b)| a.chars().all(|c| c.is_ascii_digit()) && b.chars().next().is_some_and(|c| c.is_alphabetic())) && year_token(w).is_none()
             })
             .collect();
+        // A contact line (an email on it, or a phone-shaped number) is not a claim.
+        let phone = toks.iter().any(|w| w.chars().filter(char::is_ascii_digit).count() >= 7 && w.chars().all(|c| c.is_ascii_digit() || "+-.()".contains(c)));
+        if t.contains('@') || phone {
+            continue;
+        }
         if let (Some(&first), Some(&last)) = (numeric.first(), numeric.last()) {
             let value = toks[first..=last].join(" ").trim_end_matches(['.', ',', ';', ':', ')']).trim_start_matches('(').to_string();
             out.push(ResumeClaim { rid: String::new(), kind: "proof_number".into(), subject: t.chars().take(80).collect(), value, quote: t.to_string() });
@@ -831,16 +836,18 @@ pub fn read_resume(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageRes
     Ok(ReadResult { status: "read".into(), source: source.into(), notice, changed, kept, claims: added + kept_claims.len(), must_say_state: state.to_string() })
 }
 
+const NOT_IN_BANK: &str = "No story in your bank has this number. Add it to a story so you can back it up when asked.";
+
 /// What the Resume tab shows for one resume number against the story bank. A mismatch is only called when the story it
 /// differs from is there and its numbers are ticked as checked; anything else is "not in your stories", never a ruling.
 pub fn bank_status(check: Option<&BankCheck>, stories: &[Story]) -> (String, Option<String>) {
-    let Some(check) = check else { return ("not_in_bank".into(), Some("Not in your stories.".into())) };
+    let Some(check) = check else { return ("not_in_bank".into(), Some(NOT_IN_BANK.into())) };
     let story = check.story_id.as_deref().and_then(|id| stories.iter().find(|s| s.id == id));
     match (check.result.as_str(), story) {
-        ("matches", Some(_)) => ("matches".into(), Some(if check.note.is_empty() { "Matches your stories.".into() } else { check.note.clone() })),
-        ("differs", Some(s)) if s.verified => ("differs".into(), Some(check.note.clone())),
-        ("differs", Some(_)) => ("not_in_bank".into(), Some("A story says something different, but you haven't checked its numbers yet, so it isn't compared.".into())),
-        _ => ("not_in_bank".into(), Some(if check.note.is_empty() { "Not in your stories.".into() } else { check.note.clone() })),
+        ("matches", Some(s)) => ("matches".into(), Some(if check.note.is_empty() { format!("Matches \"{}\".", s.title) } else { check.note.clone() })),
+        ("differs", Some(s)) if s.verified => ("differs".into(), Some(if check.note.is_empty() { format!("\"{}\" has a different number for this.", s.title) } else { check.note.clone() })),
+        ("differs", Some(s)) => ("not_in_bank".into(), Some(format!("\"{}\" may say something different, but its numbers aren't marked as checked yet, so it isn't compared. Check them on that story.", s.title))),
+        _ => ("not_in_bank".into(), Some(if check.note.is_empty() { NOT_IN_BANK.into() } else { check.note.clone() })),
     }
 }
 
@@ -880,6 +887,14 @@ pub fn record_must_say(storage: &Storage, id: &str, said_ids: &[String]) -> Stor
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_contact_line_is_not_read_as_a_claim() {
+        let claims = pattern_claims("Vancouver, BC | +1-778-555-0100 | name@example.com\nRaised activation from 31% to 44% in two quarters.");
+        assert_eq!(claims.len(), 1, "{claims:?}");
+        assert!(claims[0].value.contains("31%"));
+        assert!(pattern_claims("Call me on 604.555.0100 any time").is_empty());
+    }
+
     use super::*;
     use crate::ai::providers::{AiError, Provider};
     use crate::scoring::run::testing::Scripted;
@@ -1412,7 +1427,7 @@ mod tests {
         assert!(note.unwrap().contains("3 steps to 1"));
         let (st, note) = bank_status(Some(&check("differs", Some("st_onboarding"))), &unverified);
         assert_eq!(st, "not_in_bank", "a story the user has not ticked as checked is not a ruling");
-        assert!(note.unwrap().contains("haven't checked"));
+        assert!(note.unwrap().contains("aren't marked as checked yet"));
         assert_eq!(bank_status(Some(&check("differs", Some("st_gone"))), &verified).0, "not_in_bank", "the story is gone");
         assert_eq!(bank_status(Some(&check("matches", Some("st_onboarding"))), &verified).0, "matches");
         assert_eq!(bank_status(Some(&check("matches", Some("st_gone"))), &verified).0, "not_in_bank");

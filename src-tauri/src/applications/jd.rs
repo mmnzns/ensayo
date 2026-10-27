@@ -321,6 +321,8 @@ pub struct KeywordRead {
     /// Great Eight ids with the words that matched, strongest first (at most three).
     pub priorities: Vec<(String, Vec<String>, usize)>,
     pub startup: bool,
+    /// The posting's words that made it read as a startup ("founder-led").
+    pub startup_word: Option<String>,
     pub summary: String,
 }
 
@@ -432,7 +434,7 @@ pub fn keyword_read(jd: &str, _stories: &[Story]) -> KeywordRead {
         .collect();
     priorities.sort_by(|a, b| b.2.cmp(&a.2));
     priorities.truncate(3);
-    KeywordRead { tools: tools.into_iter().map(|t| t.1).collect(), phrases: repeated_phrases(jd), priorities, startup: STARTUP_WORDS.iter().any(|w| lower.contains(w)), summary: first_sentences(jd) }
+    KeywordRead { tools: tools.into_iter().map(|t| t.1).collect(), phrases: repeated_phrases(jd), priorities, startup: STARTUP_WORDS.iter().any(|w| lower.contains(w)), startup_word: STARTUP_WORDS.iter().find(|w| lower.contains(*w)).map(|w| w.to_string()), summary: first_sentences(jd) }
 }
 
 fn story_text(stories: &[Story]) -> String {
@@ -464,7 +466,7 @@ fn keyword_reading(rec: &AppRecord, jd: &str, stories: &[Story], target_role: &s
         .collect();
     let mut evidence = if k.tools.is_empty() { "Read by keywords only. The posting names no tools I know.".to_string() } else { format!("Read by keywords only. Tools the posting names: {}.", k.tools.join(", ")) };
     if k.startup {
-        evidence.push_str(" It reads like an early-stage, founder-led company.");
+        evidence.push_str(&format!(" It reads like an early-stage company: the posting says \"{}\".", k.startup_word.as_deref().unwrap_or("early stage")));
     }
     let derived = DerivedAnalysis {
         summary: k.summary.clone(),
@@ -496,7 +498,7 @@ fn keyword_reading(rec: &AppRecord, jd: &str, stories: &[Story], target_role: &s
                 commitment_check: q.commitment_check,
                 builder_operator_check: q.builder_operator_check,
                 best_story_id: story,
-                why: if touches.is_empty() { "A common question at this stage.".into() } else { format!("Touches what the posting stresses: {}.", touches.join(", ")) },
+                why: if touches.is_empty() { format!("Often asked at the {} stage. The posting's keywords didn't point to a priority for it.", stage.stage.replace('_', " ")) } else { format!("Touches what the posting stresses: {}.", touches.join(", ")) },
                 requirement: None,
                 source: "bank".into(),
                 edited_by_user: false,
@@ -561,19 +563,19 @@ fn changes(old: Option<&DerivedAnalysis>, new: &DerivedAnalysis) -> Vec<String> 
     let Some(o) = old else { return vec!["Read the posting.".to_string()] };
     let mut out = Vec::new();
     if o.summary != new.summary {
-        out.push("The summary changed.".to_string());
+        out.push("The summary of the role was rewritten from this reading.".to_string());
     }
     if o.priorities != new.priorities {
-        out.push("What they likely need changed.".to_string());
+        out.push(format!("What they likely need is now: {}.", new.priorities.iter().map(|p| p.title.as_str()).collect::<Vec<_>>().join(", ")));
     }
     if o.beliefs != new.beliefs {
-        out.push("The three things they need to believe changed.".to_string());
+        out.push("The three things they need to believe were rewritten. See them on the Overview.".to_string());
     }
     if o.gaps != new.gaps {
-        out.push("What they ask for and your stories don't mention changed.".to_string());
+        out.push(format!("Things they ask for that your stories don't cover: {} now, {} before.", new.gaps.len(), o.gaps.len()));
     }
     if o.echo != new.echo {
-        out.push("Their words worth echoing changed.".to_string());
+        out.push(format!("Their words worth echoing are now: {}.", new.echo.iter().take(5).map(|e| format!("\"{e}\"")).collect::<Vec<_>>().join(", ")));
     }
     out
 }
@@ -707,9 +709,10 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
     let mut changed = changes(old.as_ref().map(|o| &o.derived), &derived);
     let old_questions = storage.load_application_part::<QuestionsFile>(id, "questions.json")?;
     let had_questions = old_questions.as_ref().is_some_and(|q| !q.questions.is_empty());
+    let old_count = old_questions.as_ref().map_or(0, |q| q.questions.len());
     let (qfile, kept_questions) = merge_questions(&rec, old_questions, reading.questions, &reading.prompt, reading.engine);
     if had_questions {
-        changed.push("The prepared questions were replaced.".to_string());
+        changed.push(format!("The prepared questions were replaced: {} before, {} now.", old_count, qfile.questions.len()));
     }
     kept.extend(kept_questions);
     let edited_paths: Vec<String> = old.as_ref().map(|o| o.edited_by_user.clone()).unwrap_or_default();
@@ -720,7 +723,8 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
             a.startup = true;
             Ok(())
         })?;
-        changed.push("Marked this application as a startup, because the posting reads like one.".to_string());
+        let why = if file.derived.stage_evidence.trim().is_empty() { "the posting reads like an early-stage company".to_string() } else { format!("of this in the posting: {}", file.derived.stage_evidence.trim()) };
+        changed.push(format!("Marked this application as a startup, because {why}. Turn it off in Edit details if that's wrong."));
     }
     storage.save_application_part(id, "analysis.json", &file)?;
     storage.save_application_part(id, "questions.json", &qfile)?;
