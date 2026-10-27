@@ -56,10 +56,17 @@ function ResumeTab({ app, now }: Featured) {
   const needsPaste = !!resume?.needs_paste;
 
   /** Runs a resume command. When it says a resume is already there (or lines would go), asks first and runs it again
-   *  with the yes. Otherwise says what happened in plain words. */
-  const attempt = async (send: (yes: boolean) => Promise<ResumeOutcome>, ask: { text: string; yes: string }, after?: (out: ResumeOutcome) => void) => {
+   *  with the yes. Otherwise says what happened in plain words. `reads` shows the bar and clock while it runs, the
+   *  second run after a yes included. */
+  const attempt = async (send: (yes: boolean) => Promise<ResumeOutcome>, ask: { text: string; yes: string }, after?: (out: ResumeOutcome) => void, reads = false) => {
     const go = async (yes: boolean): Promise<void> => {
-      const out = await fileRun.run(() => send(yes));
+      if (reads) setReading(true);
+      let out: ResumeOutcome | undefined;
+      try {
+        out = await fileRun.run(() => send(yes));
+      } finally {
+        if (reads) setReading(false);
+      }
       if (!out) return;
       if (out.attach?.status === "needs_confirm" && !yes) {
         setConfirm({ ...ask, go: () => go(true) });
@@ -109,16 +116,15 @@ function ResumeTab({ app, now }: Featured) {
       setReading(false);
     }
   };
-  const pasteIt = async () => {
-    setReading(true);
-    try {
-      await attempt((yes) => actions.pasteResumeText(app.id, paste, yes, true), { text: `${app.company} already has a resume attached. Use this text in its place?`, yes: "Use this text" }, (out) => {
+  const pasteIt = () =>
+    attempt(
+      (yes) => actions.pasteResumeText(app.id, paste, yes, true),
+      { text: `${app.company} already has a resume attached. Use this text in its place?`, yes: "Use this text" },
+      (out) => {
         if (out.attach?.status === "attached") setPaste("");
-      });
-    } finally {
-      setReading(false);
-    }
-  };
+      },
+      true,
+    );
   const useOther = () =>
     attempt((yes) => actions.useResumeFrom(app.id, otherId, yes, false), { text: `${app.company} already has a resume attached. Replace it with the one from the other application?`, yes: "Replace it" });
   const noResume = () => attempt((yes) => actions.setNoResume(app.id, yes), { text: "Take the resume off? The lines read from it go too. The file itself isn't touched.", yes: "Take it off" });
