@@ -7,6 +7,7 @@ import type { AppBundle, JdOutcome, ResumeOutcome } from "../../data/application
 import { isApp, useActions } from "../../data/real";
 import { withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
+import Working, { type WorkStep } from "./Working";
 import type { ApplicationStatus, StageId } from "../../data/types";
 import { STAGE_LABEL, STATUSES, STATUS_LABEL } from "./format";
 import { pickResumePath } from "../../ui/pickFile";
@@ -76,6 +77,7 @@ export default function NewApplication() {
   const [fileError, setFileError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const { busy, error, run, setError } = useRun();
+  const [step, setStep] = useState<WorkStep>("save");
   const pasting = useRun();
 
   /** The stages follow the target until the person changes the list themselves. */
@@ -149,6 +151,7 @@ export default function NewApplication() {
   const save = () =>
     run(async () => {
       if (!company.trim()) throw new Error("Write the company name first.");
+      setStep("save");
       const bundle: AppBundle = await actions.createApplication(
         {
           company,
@@ -166,12 +169,14 @@ export default function NewApplication() {
       const id = bundle.application.id;
       const result: Saved = { id, company: bundle.application.company, analysis: null, resume: null, notes: [] };
       if (posting.trim()) {
+        setStep("posting");
         try {
           result.analysis = await actions.analyseJd(id);
         } catch (e) {
           result.notes.push(`The posting is saved, but it wasn't read: ${plainError(e)}`);
         }
       }
+      if (choice !== "none") setStep("resume");
       try {
         if (choice === "attach" && filePath) result.resume = await actions.attachResume(id, filePath, false, true);
         else if (choice === "attach" && file) result.resume = await actions.attachResumeBytes(id, file.name, await bytesOf(file), false, true);
@@ -443,10 +448,21 @@ export default function NewApplication() {
         </section>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "12px" }}>
+        {busy && (
+          <div style={{ flex: "1 1 100%" }}>
+            <Working steps={workSteps(Boolean(posting.trim()), choice)} current={step} kind={store.engine.kind} />
+          </div>
+        )}
         <ErrorLine error={error} />
         <Link to="6-1-applications" className="e-btn e-btn-ghost">Cancel</Link>
         <button type="button" className="e-btn e-btn-primary e-btn-big" disabled={busy} onClick={() => void save()}>{busy ? "Saving and reading" : "Save and read both"}</button>
       </div>
     </AppShell>
   );
+}
+
+/** The steps a save runs, in order: always the save, then the posting when one was pasted, then the resume unless
+ * the user said they sent none. */
+export function workSteps(hasPosting: boolean, resumeChoice: ResumeChoice): WorkStep[] {
+  return ["save", ...(hasPosting ? (["posting"] as const) : []), ...(resumeChoice !== "none" ? (["resume"] as const) : [])];
 }
