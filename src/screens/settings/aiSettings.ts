@@ -148,6 +148,7 @@ export const withWriting = (s: AiSettings, option: string): AiSettings => ({ ...
 const CAPS: [string, number][] = [
   ["None", 0],
   ["25 cents", 0.25],
+  ["50 cents", 0.5],
   ["1 dollar", 1],
   ["5 dollars", 5],
 ];

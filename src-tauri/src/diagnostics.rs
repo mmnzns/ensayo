@@ -222,7 +222,7 @@ mod tests {
         // Nothing downloaded: the line names this computer's default.
         let default = crate::speech::models::find(crate::speech::models::DEFAULT_MODEL).unwrap();
         assert!(out.contains(&format!("Speech model: {} ({}), files missing. Voice detection: missing", default.name, default.id)), "{out}");
-        assert!(out.contains("Feedback engine: claude (fast claude-haiku-5-5, strong claude-sonnet-5-5), API key saved"), "{out}");
+        assert!(out.contains("Feedback engine: claude (fast claude-sonnet-5-5, strong claude-sonnet-5-5), API key saved"), "{out}");
         assert!(out.contains("Built-in AI: qwen3.5-4b not downloaded, helper found"), "{out}");
         assert!(out.contains("Data folder: ready"), "{out}");
         assert!(out.contains("Free disk space: 120 GB"), "{out}");

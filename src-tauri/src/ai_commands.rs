@@ -23,13 +23,15 @@ type Cmd<T> = std::result::Result<T, String>;
 /// and classifies (most calls), the strong one words the note and reads postings and resumes.
 pub fn default_models(p: Provider) -> (&'static str, &'static str) {
     match p {
-        Provider::Claude => ("claude-haiku-5-5", "claude-sonnet-5-5"),
-        Provider::OpenAi => ("gpt-5.4-mini", "gpt-6-sol"),
+        // Middle models for the per-answer work too (decided 2026-10-27): the judgement is the point of a key, and a
+        // session on Sonnet is still cents. Haiku and the smaller ones stay in the list for anyone who wants cheaper.
+        Provider::Claude => ("claude-sonnet-5-5", "claude-sonnet-5-5"),
+        Provider::OpenAi => ("gpt-6-luna", "gpt-6-sol"),
         Provider::Gemini => ("gemini-3.8-flash", "gemini-3.1-pro-preview"),
         Provider::Groq => ("openai/gpt-oss-120b", "openai/gpt-oss-120b"),
         Provider::Cerebras => ("gpt-oss-120b", "gpt-oss-120b"),
         Provider::Mistral => ("mistral-small-latest", "mistral-medium-latest"),
-        Provider::OpenRouter => ("anthropic/claude-haiku-5.5", "anthropic/claude-sonnet-5.5"),
+        Provider::OpenRouter => ("anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5"),
         Provider::Compatible => ("", ""),
     }
 }
@@ -290,9 +292,9 @@ mod tests {
     #[test]
     fn defaults_fill_in_the_fast_and_strong_models_and_the_providers_address() {
         let r = resolve(&s("claude"), |_| Some("k".into())).unwrap().unwrap();
-        assert_eq!((r.fast.as_str(), r.strong.as_str()), ("claude-haiku-5-5", "claude-sonnet-5-5"));
+        assert_eq!((r.fast.as_str(), r.strong.as_str()), ("claude-sonnet-5-5", "claude-sonnet-5-5"));
         assert_eq!(r.base, "https://api.anthropic.com/v1");
-        assert_eq!(r.cap_usd, 0.0, "AiSettings::default has no cap; saved settings carry 0.25 by serde default");
+        assert_eq!(r.cap_usd, 0.0, "AiSettings::default has no cap; saved settings carry 1.0 by serde default");
     }
 
     #[test]

@@ -28,8 +28,11 @@ pub struct AiSettings {
     pub cost_cap_usd: f64,
 }
 
+/// 1 dollar. On a middle model (Sonnet 5.5, GPT-6 Luna) an answer costs a few cents, a follow-up and each "Again" as
+/// much again, so a five-question session with follow-ups and retries can reach 50 cents to a dollar; a Mock debrief
+/// and a thinking model's reasoning add more. The cap is there to stop a runaway, not to cut a normal session short.
 fn default_cap() -> f64 {
-    0.25
+    1.0
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -125,7 +128,7 @@ mod tests {
         assert_eq!(back.ai.as_ref().unwrap().provider, "claude");
         assert_eq!(back.ai.unwrap().cost_cap_usd, 1.0);
         let partial: LocalSettings = serde_json::from_str(r#"{"ai": {"provider": "openai"}}"#).unwrap();
-        assert_eq!(partial.ai.unwrap().cost_cap_usd, 0.25);
+        assert_eq!(partial.ai.unwrap().cost_cap_usd, 1.0);
     }
 
     #[test]

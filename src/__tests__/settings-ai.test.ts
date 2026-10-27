@@ -169,9 +169,9 @@ describe("spending cap", () => {
     expect(capLabel(5)).toBe("5 dollars");
   });
 
-  it("lists the four options, and adds an unusual saved cap so it shows", () => {
-    expect(capOptions(0.25)).toEqual(["None", "25 cents", "1 dollar", "5 dollars"]);
-    expect(capOptions(2)).toEqual(["None", "25 cents", "1 dollar", "5 dollars", "2 dollars"]);
+  it("lists the five options, and adds an unusual saved cap so it shows", () => {
+    expect(capOptions(0.25)).toEqual(["None", "25 cents", "50 cents", "1 dollar", "5 dollars"]);
+    expect(capOptions(2)).toEqual(["None", "25 cents", "50 cents", "1 dollar", "5 dollars", "2 dollars"]);
     expect(capLabel(2)).toBe("2 dollars");
     expect(capValue("2 dollars")).toBe(2);
   });
