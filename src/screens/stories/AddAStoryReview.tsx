@@ -5,6 +5,7 @@ import { startQuickDrill } from "../../practice/quick";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
+import { FIELD_HELP } from "./fieldHelp";
 import Numbers, { type NumberRow } from "./Numbers";
 import { draftToReview, storyFromReview } from "./parseDraft";
 import { getParsedDraft, isBlankReview, isFromSetup, pasteDraft, setFromSetup, setParsedDraft } from "./selection";
@@ -99,21 +100,25 @@ export default function AddAStoryReview() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
           <div className="e-field">
             <label htmlFor="t">Title</label>
+            <span className="e-meta">{FIELD_HELP.title}</span>
             <input id="t" className="e-input" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="e-field">
             <label htmlFor="c">Company</label>
+            <span className="e-meta">{FIELD_HELP.company}</span>
             <input id="c" className="e-input" value={company} onChange={(e) => setCompany(e.target.value)} />
           </div>
         </div>
         <div className="e-field">
           <label htmlFor="h">
-            Headline <span style={{ fontWeight: "400", color: "var(--e-muted)" }}>· the first sentence you'd say</span>
+            Headline
           </label>
+          <span className="e-meta">{FIELD_HELP.headline}</span>
           <textarea id="h" className="e-input" rows={2} value={headline} onChange={(e) => setHeadline(e.target.value)} />
         </div>
         <div className="e-field">
           <label htmlFor="ctx">What was going on</label>
+          <span className="e-meta">{FIELD_HELP.context}</span>
           <textarea id="ctx" className="e-input" rows={2} value={context} onChange={(e) => setContext(e.target.value)} />
         </div>
         <div className="e-field" style={approachMissing ? { background: "var(--e-highlight)", borderRadius: "16px", padding: "18px" } : undefined}>
@@ -121,11 +126,13 @@ export default function AddAStoryReview() {
             <label htmlFor="ap" style={{ flex: "1" }}>What you noticed and decided</label>
             {approachMissing && <span className="e-badge" style={{ background: "var(--e-surface)" }}>Missing</span>}
           </div>
+          <span className="e-meta">{FIELD_HELP.approach}</span>
           {approachMissing && <span className="e-meta" style={{ color: "var(--e-warn-ink)" }}>{blank ? missingNotes.approachBlank : missingNotes.approach}</span>}
           <textarea id="ap" className="e-input" rows={2} placeholder="I noticed... so I decided... and I picked ... to prove it." value={approach} onChange={(e) => setApproach(e.target.value)} />
         </div>
         <div className="e-field">
           <label htmlFor="ac">What you did</label>
+          <span className="e-meta">{FIELD_HELP.action}</span>
           <textarea id="ac" className="e-input" rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
         </div>
         <div className="e-field" style={ownershipMissing ? { border: "1.5px dashed var(--e-line)", borderRadius: "16px", padding: "16px" } : undefined}>
@@ -133,10 +140,12 @@ export default function AddAStoryReview() {
             <label htmlFor="ow" style={{ flex: "1" }}>What you owned</label>
             {ownershipMissing && <span className="e-badge">Missing</span>}
           </div>
+          <span className="e-meta">{FIELD_HELP.ownership}</span>
           <input id="ow" className="e-input" placeholder="What was yours, and who else helped?" value={ownership} onChange={(e) => setOwnership(e.target.value)} />
         </div>
         <div className="e-field">
           <label htmlFor="r">What changed</label>
+          <span className="e-meta">{FIELD_HELP.result}</span>
           <textarea id="r" className="e-input" rows={2} value={result} onChange={(e) => setResult(e.target.value)} />
         </div>
       </section>
@@ -145,12 +154,14 @@ export default function AddAStoryReview() {
           <span className="e-h3">Numbers</span>
           <span className="e-small">{numbers.length === 0 ? "None yet" : blank ? "Added by you" : "All found in your text"}</span>
         </div>
+        <span className="e-meta" style={{ paddingBottom: "6px" }}>{FIELD_HELP.numbers}</span>
         <Numbers rows={numbers} setRows={setNumbers} />
         <span className="e-small">Tick each once you're sure it's right. Ensayo will flag it if you ever say a different number.</span>
       </section>
       <section className="e-card" style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
         <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: "10px" }}>
           <span className="e-h3">Good for questions about</span>
+          <span className="e-meta">{FIELD_HELP.goodFor}</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
             {goodFor.map((g) => (
               <button key={g} type="button" className="e-chip e-chip-on" aria-pressed="true" title="Click to remove" onClick={() => setGoodFor(goodFor.filter((x) => x !== g))}>{g}</button>

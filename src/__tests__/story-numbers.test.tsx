@@ -24,3 +24,13 @@ describe("Story numbers", () => {
     expect(count(html, 'aria-label="What the number is"')).toBe(1);
   });
 });
+
+describe("Story field help", () => {
+  it("has a plain line for every part, with no em dashes", async () => {
+    const { FIELD_HELP } = await import("../screens/stories/fieldHelp");
+    for (const [field, line] of Object.entries(FIELD_HELP)) {
+      expect(line.length, field).toBeGreaterThan(10);
+      expect(line, field).not.toContain("—");
+    }
+  });
+});

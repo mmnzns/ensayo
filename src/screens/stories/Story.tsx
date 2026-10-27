@@ -7,6 +7,7 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import { BRANCH_LABELS, CORE_BRANCHES, numberText } from "./helpers";
+import { FIELD_HELP } from "./fieldHelp";
 import Numbers, { type NumberRow } from "./Numbers";
 import { chosenStory } from "./selection";
 import StoryTabs from "./StoryTabs";
@@ -29,7 +30,7 @@ export default function Story() {
   return <StoryEditor key={story.id} story={story} />;
 }
 
-function Field({ id, label, missing, children }: { id: string; label: string; missing?: boolean; children: ReactNode }) {
+function Field({ id, label, help, missing, children }: { id: string; label: string; help?: string; missing?: boolean; children: ReactNode }) {
   return (
     <div className="e-field">
       {missing ? (
@@ -40,6 +41,7 @@ function Field({ id, label, missing, children }: { id: string; label: string; mi
       ) : (
         <label htmlFor={id}>{label}</label>
       )}
+      {help && <span className="e-meta">{help}</span>}
       {children}
     </div>
   );
@@ -139,29 +141,30 @@ function StoryEditor({ story }: { story: StoryType }) {
       <StoryTabs story={story} current="story" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
         <section className="e-card" style={{ flex: "999 1 520px", minWidth: "0", display: "flex", flexDirection: "column", gap: "20px" }}>
-          <Field id="h" label="Headline">
+          <Field id="h" help={FIELD_HELP.headline} label="Headline">
             <textarea id="h" className="e-input" rows={2} value={headline} onChange={(e) => edited(setHeadline)(e.target.value)} />
           </Field>
-          <Field id="ctx" label="What was going on">
+          <Field id="ctx" help={FIELD_HELP.context} label="What was going on">
             <textarea id="ctx" className="e-input" rows={2} value={context} onChange={(e) => edited(setContext)(e.target.value)} />
           </Field>
-          <Field id="ap" label="What you noticed and decided" missing={approach.trim() === ""}>
+          <Field id="ap" help={FIELD_HELP.approach} label="What you noticed and decided" missing={approach.trim() === ""}>
             <textarea id="ap" className="e-input" rows={3} placeholder="I noticed... so I decided... and I picked ... to prove it." value={approach} onChange={(e) => edited(setApproach)(e.target.value)} />
           </Field>
-          <Field id="ac" label="What you did">
+          <Field id="ac" help={FIELD_HELP.action} label="What you did">
             <textarea id="ac" className="e-input" rows={3} value={action} onChange={(e) => edited(setAction)(e.target.value)} />
           </Field>
-          <Field id="ow" label="What you owned" missing={ownership.trim() === ""}>
+          <Field id="ow" help={FIELD_HELP.ownership} label="What you owned" missing={ownership.trim() === ""}>
             <textarea id="ow" className="e-input" rows={2} placeholder="What was yours, and who else helped?" value={ownership} onChange={(e) => edited(setOwnership)(e.target.value)} />
           </Field>
-          <Field id="r" label="What changed">
+          <Field id="r" help={FIELD_HELP.result} label="What changed">
             <textarea id="r" className="e-input" rows={2} value={result} onChange={(e) => edited(setResult)(e.target.value)} />
           </Field>
-          <Field id="sc" label="Scale">
+          <Field id="sc" help={FIELD_HELP.scale} label="Scale">
             <input id="sc" className="e-input" value={scale} onChange={(e) => edited(setScale)(e.target.value)} />
           </Field>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             <span style={{ fontSize: "14px", fontWeight: "600" }}>Numbers</span>
+            <span className="e-meta">{FIELD_HELP.numbers}</span>
             <Numbers rows={numbers} setRows={setNumbers} lastBorder onEdit={() => setSaved(false)} />
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", borderTop: "1px solid var(--e-line)", paddingTop: "16px" }}>
