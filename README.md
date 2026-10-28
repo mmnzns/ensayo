@@ -9,6 +9,7 @@ Code lives here, outside Google Drive: `~/Developer/Ensayo` (Mac), `C:\Dev\Ensay
 - **Working on it:** `CLAUDE.md` (setup, commands, rules). Plans per milestone are in `docs/plans/`.
 - **Releasing it:** `docs/RELEASE.md`.
 - **Third-party code and models:** `THIRD_PARTY_NOTICES.md`.
+- **License:** MIT, see `LICENSE`.
 
 ```bash
 npm install

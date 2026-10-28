@@ -3,6 +3,7 @@ name = "ensayo"
 version = "0.1.4"
 description = "Interview rehearsal app"
 authors = ["Miguel Monzones"]
+license = "MIT"
 edition = "2024"
 default-run = "ensayo"
 
