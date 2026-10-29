@@ -7,6 +7,7 @@
     "targets": ["nsis"],
     "publisher": "Craft Concepts Digital",
     "homepage": "https://github.com/mmnzns/ensayo",
+    "copyright": "© 2026 Miguel Monzones. MIT License.",
     "shortDescription": "Interview practice that stays on your computer",
     "windows": {
       "webviewInstallMode": { "type": "embedBootstrapper", "silent": true },
