@@ -1,170 +1,154 @@
-//! Speech engines behind one small trait. Each call gets one chunk of speech (16 kHz mono) and returns
-//! words with times relative to that chunk; `transcribe::transcribe_with` places them on the recording clock.
+//! Speech models through the shared engine (`voice-engine-stt`). The engine loads a model and turns one chunk of speech
+//! (16 kHz mono) into words with times relative to that chunk; what Ensayo keeps is which chunks to send
+//! (`vad::shape`), the recording clock (`transcribe::transcribe_with`), the label stored with a transcript and the
+//! words the person sees when something goes wrong.
 
-use super::models::{EngineKind, ModelInfo};
-use super::words::{clean, Word};
+use super::models;
+use super::vad::{Shape, RATE};
 use std::path::Path;
+use voice_engine_models::catalog::{Kind, ModelInfo};
+use voice_engine_stt::{LoadOptions, SpeechError, Transcriber};
 
-#[derive(Debug, Clone, Default)]
-pub struct ChunkResult {
-    pub words: Vec<Word>,
-    /// Language the engine detected, when it does detection (Whisper).
-    pub language: Option<String>,
-}
-
-pub trait Engine: Send {
-    /// `language`: ISO 639-1 code, or None to let the engine decide.
-    fn transcribe(&mut self, samples: &[f32], language: Option<&str>) -> Result<ChunkResult, String>;
+/// A loaded speech model with what Ensayo needs next to it.
+pub struct Loaded {
+    pub t: Box<dyn Transcriber>,
     /// Short label stored with the transcript ("Parakeet", "Whisper Large Turbo").
-    fn label(&self) -> &str;
-    /// How speech is cut into chunks for this engine.
-    fn chunking(&self) -> super::vad::Shape;
+    pub label: String,
+    /// How speech is cut into chunks for this model.
+    pub shape: Shape,
 }
 
-pub fn load(model: &ModelInfo, dir: &Path, use_gpu: bool) -> Result<Box<dyn Engine>, String> {
-    match model.engine {
-        EngineKind::Parakeet | EngineKind::ParakeetUnified | EngineKind::Nemotron => Ok(Box::new(ParakeetEngine::load(dir, model.name, model.engine)?)),
-        EngineKind::Whisper => Ok(Box::new(WhisperEngine::load(&dir.join(model.files[0].name), model.name, use_gpu)?)),
-        EngineKind::Llm => Err(format!("{} is not a speech model", model.name)),
+/// Ask for the graphics card only where the model has a path; anything else reports a false fallback.
+pub fn gpu_for(kind: Kind, setting_on: bool, card: bool) -> bool {
+    setting_on
+        && match kind {
+            Kind::Whisper => cfg!(target_os = "macos"),
+            Kind::Parakeet => cfg!(windows) && card,
+            _ => false,
+        }
+}
+
+/// How speech is cut for `model`: a model that takes only so many seconds at once never gets a longer chunk (the
+/// engine refuses it), and a model that has no limit gets Whisper's window.
+pub fn shape_for(model: &ModelInfo) -> Shape {
+    match model.chunk_secs {
+        None => Shape::whisper(),
+        Some(secs) => Shape { max_len: secs as usize * RATE, ..Shape::parakeet() },
     }
 }
 
-/// Speech threads (three quarters of the cores on Windows, all on the Mac).
-fn threads() -> usize {
-    super::whisper::threads()
+pub fn load(model_id: &str, dir: &Path, gpu: bool) -> Result<Loaded, String> {
+    let label = models::label(model_id);
+    let model = models::speech_model(model_id).ok_or_else(|| format!("Ensayo doesn't know the speech model \"{model_id}\". Pick one again in Settings › Speech."))?;
+    let t = voice_engine_stt::load(model, dir, LoadOptions { gpu, threads: None }).map_err(|e| load_message(&label, &e))?;
+    Ok(Loaded { t, label, shape: shape_for(model) })
 }
 
-/// The NVIDIA models: Parakeet TDT (v2, v3, Ultra), Parakeet Unified and Nemotron. Same chunking, same
-/// timestamps; they differ only in how they load and decode.
-enum NvidiaModel {
-    Tdt(parakeet_rs::ParakeetTDT),
-    Unified(parakeet_rs::ParakeetUnified),
-    /// With the language prompts the model accepts ("en-US", "fr-FR"...).
-    Nemotron(Box<parakeet_rs::Nemotron>, Vec<&'static str>),
-}
-
-pub struct ParakeetEngine {
-    model: NvidiaModel,
-    label: String,
-}
-
-impl ParakeetEngine {
-    pub fn load(dir: &Path, label: &str, kind: EngineKind) -> Result<Self, String> {
-        let config = parakeet_rs::ExecutionConfig::new().with_intra_threads(threads());
-        let failed = |e: parakeet_rs::Error| format!("couldn't load the speech model: {e}");
-        let model = match kind {
-            EngineKind::ParakeetUnified => NvidiaModel::Unified(parakeet_rs::ParakeetUnified::from_pretrained(dir, Some(config)).map_err(failed)?),
-            EngineKind::Nemotron => {
-                let handle = parakeet_rs::NemotronHandle::from_pretrained(dir, Some(config)).map_err(failed)?;
-                NvidiaModel::Nemotron(Box::new(parakeet_rs::Nemotron::from_shared(&handle)), handle.available_languages())
-            }
-            _ => NvidiaModel::Tdt(parakeet_rs::ParakeetTDT::from_pretrained(dir, Some(config)).map_err(failed)?),
-        };
-        Ok(ParakeetEngine { model, label: label.into() })
+/// Words for the person when a model won't load. `name` is the model's name; the engine's own text never reaches
+/// the screen, and it never carries anything the person said.
+pub fn load_message(name: &str, e: &SpeechError) -> String {
+    match e {
+        SpeechError::ModelMissing => format!("The speech model {name} is missing from this computer. Download it again in Settings › Speech."),
+        SpeechError::BadModel => format!("The speech model {name} couldn't be read, so it may be damaged. Delete it and download it again in Settings › Speech."),
+        SpeechError::OutOfMemory => format!("There isn't enough memory to load the speech model {name}. Close some other apps, or pick a smaller speech model in Settings › Speech."),
+        other => format!("Couldn't load the speech model {name}: {other}"),
     }
+}
 
-    /// Nemotron takes a language hint ("fr" → its "fr-FR" prompt); unknown or none means it detects.
-    fn set_language(&mut self, language: Option<&str>) {
-        if let NvidiaModel::Nemotron(m, langs) = &mut self.model {
-            if langs.is_empty() {
-                return; // the English-only variant takes no prompt
-            }
-            let locale = language.and_then(|code| langs.iter().copied().find(|l| l.split('-').next() == Some(code)));
-            let _ = m.set_target_lang(locale.unwrap_or("auto"));
+/// Words for a chunk that fails to transcribe.
+pub fn transcribe_message(e: &SpeechError) -> String {
+    match e {
+        SpeechError::OutOfMemory => "There wasn't enough memory to transcribe this answer. Close some other apps and try again.".to_string(),
+        other => format!("Transcription failed: {other}"),
+    }
+}
+
+/// Words for a failure of voice detection.
+pub fn vad_message(e: &SpeechError) -> String {
+    match e {
+        SpeechError::ModelMissing | SpeechError::BadModel => "The voice detection model is missing or damaged. Download it again in Settings › Speech.".to_string(),
+        other => format!("Voice detection failed: {other}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use voice_engine_models::catalog;
+
+    /// What `gpu_for` must say on this computer for a model kind, with the setting on and a card or not.
+    fn expected(kind: Kind, card: bool) -> bool {
+        match kind {
+            Kind::Whisper => cfg!(target_os = "macos"),
+            Kind::Parakeet => cfg!(windows) && card,
+            _ => false,
         }
     }
-}
 
-impl ParakeetEngine {
-    /// Half a second of silence on both sides: Parakeet often returns nothing for audio that starts or
-    /// ends right on speech (seen on real calls).
-    fn run(&mut self, samples: &[f32]) -> Result<Vec<Word>, String> {
-        use parakeet_rs::Transcriber;
-        const PAD: usize = 8_000;
-        let mut audio = vec![0.0f32; PAD];
-        audio.extend_from_slice(samples);
-        audio.extend(std::iter::repeat_n(0.0, PAD));
-        let mode = Some(parakeet_rs::TimestampMode::Words);
-        let result = match &mut self.model {
-            NvidiaModel::Tdt(m) => m.transcribe_samples(audio, 16_000, 1, mode),
-            NvidiaModel::Unified(m) => m.transcribe_samples(audio, 16_000, 1, mode),
-            NvidiaModel::Nemotron(m, _) => m.transcribe_audio_with_timestamps(&audio, mode),
-        }
-        .map_err(|e| format!("transcription failed: {e}"))?;
-        let len_ms = samples.len() as u64 * 1000 / 16_000;
-        let shift = |t: f32| ((t.max(0.0) * 1000.0) as u64).saturating_sub(500).min(len_ms);
-        let words = result.tokens.into_iter().map(|t| Word { text: t.text, start_ms: shift(t.start), end_ms: shift(t.end.max(t.start)) }).collect();
-        Ok(clean(words))
-    }
-}
-
-impl Engine for ParakeetEngine {
-    /// Parakeet sometimes stops decoding partway through a chunk (seen when a chunk starts mid-sentence).
-    /// The chunk is all speech by construction, so when output ends well before the audio does, the rest is
-    /// transcribed again from where it stopped.
-    fn transcribe(&mut self, samples: &[f32], language: Option<&str>) -> Result<ChunkResult, String> {
-        self.set_language(language);
-        let total_ms = samples.len() as u64 * 1000 / 16_000;
-        let mut words: Vec<Word> = vec![];
-        let mut from_ms = 0u64;
-        for _ in 0..8 {
-            let from = (from_ms * 16) as usize;
-            let mut got = self.run(&samples[from..])?;
-            got.iter_mut().for_each(|w| {
-                w.start_ms += from_ms;
-                w.end_ms += from_ms;
-            });
-            let reached = got.last().map(|w| w.end_ms).unwrap_or(from_ms);
-            let progressed = reached > from_ms + 500;
-            words.extend(got);
-            if !progressed || total_ms.saturating_sub(reached) < RESUME_GAP_MS {
-                break;
+    #[test]
+    fn the_graphics_card_is_asked_for_only_where_the_model_has_a_path_to_it() {
+        for kind in [Kind::Whisper, Kind::Parakeet, Kind::ParakeetUnified, Kind::Nemotron] {
+            for card in [false, true] {
+                assert_eq!(gpu_for(kind, true, card), expected(kind, card), "{kind:?}, card {card}");
             }
-            from_ms = reached;
         }
-        Ok(ChunkResult { words, language: None })
+        // The table, for this computer.
+        assert_eq!(gpu_for(Kind::Whisper, true, false), cfg!(target_os = "macos"), "Whisper: Metal on the Mac only");
+        assert_eq!(gpu_for(Kind::Parakeet, true, true), cfg!(windows), "Parakeet TDT: DirectML on Windows with a card");
+        assert!(!gpu_for(Kind::Parakeet, true, false), "Parakeet without a card");
+        assert!(!gpu_for(Kind::ParakeetUnified, true, true) && !gpu_for(Kind::Nemotron, true, true), "no path for Unified or Nemotron");
     }
 
-    fn label(&self) -> &str {
-        &self.label
+    #[test]
+    fn every_model_runs_on_the_processor_when_the_setting_is_off() {
+        for kind in [Kind::Whisper, Kind::Parakeet, Kind::ParakeetUnified, Kind::Nemotron, Kind::Vad, Kind::Llm] {
+            for card in [false, true] {
+                assert!(!gpu_for(kind, false, card), "{kind:?}, card {card}");
+            }
+        }
     }
 
-    fn chunking(&self) -> super::vad::Shape {
-        super::vad::Shape::parakeet()
-    }
-}
-
-/// Audio left after the last word that counts as "decoding stopped early".
-const RESUME_GAP_MS: u64 = 2_000;
-
-pub struct WhisperEngine {
-    // The state holds ~400 MB of buffers; one per engine, reused for every chunk.
-    state: whisper_rs::WhisperState,
-    _ctx: whisper_rs::WhisperContext,
-    label: String,
-}
-
-impl WhisperEngine {
-    pub fn load(file: &Path, label: &str, use_gpu: bool) -> Result<Self, String> {
-        // Flash attention only pays off on Metal; on CPU it costs 10-15%.
-        let p = super::whisper::context_params(use_gpu, cfg!(target_os = "macos") && use_gpu);
-        let ctx = whisper_rs::WhisperContext::new_with_params(file, p).map_err(|e| format!("couldn't load the speech model: {e}"))?;
-        let state = ctx.create_state().map_err(|e| format!("couldn't load the speech model: {e}"))?;
-        Ok(WhisperEngine { state, _ctx: ctx, label: label.into() })
-    }
-}
-
-impl Engine for WhisperEngine {
-    fn transcribe(&mut self, samples: &[f32], language: Option<&str>) -> Result<ChunkResult, String> {
-        let (words, language) = super::whisper::transcribe_words(&mut self.state, samples, language)?;
-        Ok(ChunkResult { words, language })
+    #[test]
+    fn parakeet_means_the_tdt_models_and_unified_and_nemotron_are_their_own_kinds() {
+        for id in ["parakeet-v2", "parakeet-v3", "parakeet-ultra"] {
+            assert_eq!(catalog::find(id).unwrap().kind, Kind::Parakeet, "{id}");
+        }
+        assert_eq!(catalog::find("parakeet-unified-en").unwrap().kind, Kind::ParakeetUnified);
+        assert_eq!(catalog::find("nemotron-3.5").unwrap().kind, Kind::Nemotron);
     }
 
-    fn label(&self) -> &str {
-        &self.label
+    #[test]
+    fn a_model_with_a_chunk_limit_gets_parakeets_shape_and_the_others_get_whispers() {
+        let parakeet = Shape::parakeet();
+        let got = shape_for(catalog::find("parakeet-ultra").unwrap());
+        assert_eq!((got.max_len, got.join_gap, got.pad, got.pack_gap), (parakeet.max_len, parakeet.join_gap, parakeet.pad, 0));
+        let whisper = Shape::whisper();
+        let got = shape_for(catalog::find("whisper-turbo").unwrap());
+        assert_eq!((got.max_len, got.join_gap, got.pad, got.pack_gap), (whisper.max_len, whisper.join_gap, whisper.pad, whisper.pack_gap));
     }
 
-    fn chunking(&self) -> super::vad::Shape {
-        super::vad::Shape::whisper()
+    #[test]
+    fn no_chunk_is_longer_than_the_model_takes_in_one_call() {
+        for m in catalog::speech() {
+            if let Some(secs) = m.chunk_secs {
+                assert!(shape_for(m).max_len <= secs as usize * RATE, "{}", m.id);
+            }
+        }
+    }
+
+    #[test]
+    fn a_model_that_will_not_load_is_named_with_what_to_do_and_the_engines_text_stays_out() {
+        for e in [SpeechError::ModelMissing, SpeechError::BadModel, SpeechError::OutOfMemory] {
+            let m = load_message("Whisper Large Turbo", &e);
+            assert!(m.contains("Whisper Large Turbo") && m.contains("Settings"), "{m}");
+        }
+        assert!(load_message("X", &SpeechError::OutOfMemory).contains("memory"));
+        assert!(load_message("X", &SpeechError::BadModel).contains("damaged"));
+    }
+
+    #[test]
+    fn an_unknown_model_id_is_a_plain_error() {
+        let e = load("nope", Path::new("/nonexistent"), false).err().unwrap();
+        assert!(e.contains("doesn't know the speech model") && e.contains("Settings"), "{e}");
     }
 }

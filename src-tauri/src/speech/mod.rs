@@ -1,10 +1,9 @@
-//! Speech to text: the model catalog and downloads, voice detection, engines that return words, and the file pipeline.
+//! Speech to text: the models Ensayo offers, voice detection, the engine's models that return words, and the file pipeline.
+//! The models, their files and their downloads belong to the shared engine; see `models_store`.
 
-pub mod download;
 pub mod engine;
 pub mod loaded;
 pub mod models;
 pub mod transcribe;
 pub mod vad;
-pub mod whisper;
 pub mod words;

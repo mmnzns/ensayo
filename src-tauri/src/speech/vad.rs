@@ -132,44 +132,19 @@ fn data_offset(b: &[u8]) -> Option<usize> {
     None
 }
 
-/// Silero speech detection through whisper.cpp's VAD.
-pub struct Vad {
-    ctx: whisper_rs::WhisperVadContext,
+/// Where the speech is, by the engine's Silero detector (always on the processor). `vad_dir` is the voice detection
+/// model's folder in the shared store. Raw spans: `shape` pads, joins and cuts them for the model in use.
+pub fn detect(vad_dir: &Path, samples: &[f32]) -> Result<Vec<Span>, String> {
+    let spans = voice_engine_stt::vad::detect(vad_dir, samples).map_err(|e| super::engine::vad_message(&e))?;
+    Ok(spans_from_ms(&spans, samples.len()))
 }
 
-impl Vad {
-    pub fn load(model: &Path) -> Result<Self, String> {
-        let mut p = whisper_rs::WhisperVadContextParams::new();
-        // More threads make VAD much slower: 16 threads measured 9-13 s vs 0.3-0.5 s.
-        p.set_n_threads(4);
-        p.set_use_gpu(false);
-        let ctx = whisper_rs::WhisperVadContext::new(&model.to_string_lossy(), p).map_err(|e| format!("couldn't load voice detection: {e}"))?;
-        Ok(Vad { ctx })
-    }
-
-    /// Raw speech spans in samples.
-    pub fn detect(&mut self, samples: &[f32]) -> Result<Vec<Span>, String> {
-        if samples.is_empty() {
-            return Ok(vec![]);
-        }
-        let mut params = whisper_rs::WhisperVadParams::new();
-        params.set_threshold(0.5);
-        params.set_min_speech_duration(250);
-        params.set_min_silence_duration(300);
-        params.set_speech_pad(0);
-        let segs = self.ctx.segments_from_samples(params, samples).map_err(|e| format!("voice detection failed: {e}"))?;
-        let mut out = vec![];
-        for i in 0..segs.num_segments() {
-            let (Some(t0), Some(t1)) = (segs.get_segment_start_timestamp(i), segs.get_segment_end_timestamp(i)) else { continue };
-            // whisper.cpp reports centiseconds.
-            let start = ((t0 as f64 / 100.0) * RATE as f64) as usize;
-            let end = (((t1 as f64 / 100.0) * RATE as f64) as usize).min(samples.len());
-            if end > start {
-                out.push(Span { start, end });
-            }
-        }
-        Ok(out)
-    }
+/// The engine reports milliseconds; the pipeline works in samples.
+fn spans_from_ms(ms: &[(u64, u64)], len: usize) -> Vec<Span> {
+    ms.iter()
+        .map(|&(a, b)| Span { start: a as usize * RATE / 1000, end: (b as usize * RATE / 1000).min(len) })
+        .filter(|s| s.end > s.start)
+        .collect()
 }
 
 #[cfg(test)]
@@ -242,16 +217,27 @@ mod tests {
         assert_eq!(s[1], -0.5);
     }
 
-    /// `ENSAYO_SMOKE_WAV=<16 kHz mono wav> cargo test vad_smoke -- --ignored --nocapture` (the VAD model must be downloaded).
+    #[test]
+    fn the_engines_millisecond_spans_become_sample_spans_inside_the_track() {
+        let got = spans_from_ms(&[(1_000, 2_500), (9_000, 10_500), (11_000, 11_000)], 10 * RATE);
+        assert_eq!(got, vec![sp(1.0, 2.5), sp(9.0, 10.0)], "clamped to the track, empty ones dropped");
+    }
+
+    #[test]
+    fn a_parakeet_chunk_is_never_longer_than_the_engine_takes_in_one_call() {
+        assert!(Shape::parakeet().max_len <= 40 * RATE);
+    }
+
+    /// `ENSAYO_SMOKE_WAV=<16 kHz mono wav> cargo test --release vad_smoke -- --ignored --nocapture` (the voice
+    /// detection model must be in the shared models folder).
     #[test]
     #[ignore]
     fn vad_smoke() {
         let wav = std::path::PathBuf::from(std::env::var("ENSAYO_SMOKE_WAV").unwrap());
-        let model = crate::paths::models_dir().join("vad/ggml-silero-v6.2.0.bin");
-        let mut vad = Vad::load(&model).unwrap();
+        let dir = crate::models_store::store().unwrap().model_dir(super::super::models::VAD);
         let samples = read_track(&wav).unwrap();
         let t = std::time::Instant::now();
-        let raw = vad.detect(&samples).unwrap();
+        let raw = detect(&dir, &samples).unwrap();
         let spans = shape(&raw, &samples, Shape::default());
         let speech: usize = spans.iter().map(|s| s.len()).sum();
         eprintln!(

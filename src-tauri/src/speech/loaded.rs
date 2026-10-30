@@ -3,14 +3,16 @@
 //! recorded (`warm`), so even the first answer of a session doesn't wait for it, and let go after a while unused so
 //! about a gigabyte of memory isn't held all day by an app left open.
 
-use super::engine::{self, Engine};
-use super::models::{self, ModelInfo};
+use super::engine::{self, Loaded};
+use super::models;
 use super::transcribe::{self, Transcript};
-use super::vad::{self, Vad};
-use crate::paths;
+use super::vad;
+use crate::models_store;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, Once};
 use std::time::{Duration, Instant};
+use voice_engine_models::{ModelHandle, StoreError};
+use voice_engine_stt::SpeechBackend;
 
 /// Unused this long, the model is let go; the next answer loads it again (about a second).
 const IDLE: Duration = Duration::from_secs(10 * 60);
@@ -48,15 +50,30 @@ impl<T> Kept<T> {
         self.slot = None;
     }
 
+    /// What is loaded, whatever its key.
+    pub fn peek(&self) -> Option<&T> {
+        self.slot.as_ref().map(|(_, v, _)| v)
+    }
+
+    pub fn holds(&self, key: &str) -> bool {
+        matches!(&self.slot, Some((k, _, _)) if k == key)
+    }
+
     #[cfg(test)]
     pub fn key(&self) -> Option<&str> {
         self.slot.as_ref().map(|(k, _, _)| k.as_str())
     }
 }
 
+/// The loaded model, the voice detection model's folder, and a hold on both model folders for as long as they are
+/// loaded: no other app can erase them meanwhile, and on Windows their files can't be deleted. Fields drop in order,
+/// so the model lets go of its files before the holds are released.
 struct Speech {
-    engine: Box<dyn Engine>,
-    vad: Vad,
+    model: Loaded,
+    vad_dir: PathBuf,
+    backend: SpeechBackend,
+    _model_hold: ModelHandle,
+    _vad_hold: ModelHandle,
 }
 
 static LOADED: Mutex<Kept<Speech>> = Mutex::new(Kept::new());
@@ -66,19 +83,31 @@ fn lock() -> std::sync::MutexGuard<'static, Kept<Speech>> {
     LOADED.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Where the model and the voice detection model are; the key includes the folder, so a model that moved (downloaded
-/// after Talaan's copy was used, say) is loaded from its new place.
-fn locate(model_id: &str) -> Result<(&'static ModelInfo, PathBuf, PathBuf), String> {
-    let m = models::find(model_id).ok_or_else(|| format!("Ensayo doesn't know the speech model \"{model_id}\". Pick one again in Settings › Speech."))?;
-    let store = models::ModelStore::new(paths::models_dir(), true);
-    let dir = store.locate(m).dir().ok_or_else(|| format!("The speech model {} isn't downloaded yet. Download it in Settings › Speech.", m.name))?.to_path_buf();
-    let vad_dir = store.locate(&models::VAD).dir().ok_or_else(|| "The voice detection model isn't downloaded yet. Download it in Settings › Speech.".to_string())?.to_path_buf();
-    Ok((m, dir, vad_dir.join(models::VAD.files[0].name)))
+/// Words for a model that can't be held: it isn't completely on this computer.
+fn hold_message(name: &str, e: &StoreError) -> String {
+    match e {
+        StoreError::NotInstalled(_) => format!("The speech model {name} isn't downloaded yet. Download it in Settings › Speech."),
+        StoreError::UnknownModel(id) => format!("Ensayo doesn't know the speech model \"{id}\". Pick one again in Settings › Speech."),
+        _ => format!("Ensayo couldn't open the speech model {name}. Close other apps that use speech models and try again."),
+    }
 }
 
-fn load(m: &ModelInfo, dir: &Path, vad: &Path) -> Result<Speech, String> {
+fn load(model_id: &str) -> Result<Speech, String> {
     let _t = crate::logging::Timer::new("load_speech_model");
-    Ok(Speech { engine: engine::load(m, dir, cfg!(target_os = "macos"))?, vad: Vad::load(vad)? })
+    let store = models_store::store()?;
+    let name = models::label(model_id);
+    let info = models::speech_model(model_id).ok_or_else(|| format!("Ensayo doesn't know the speech model \"{model_id}\". Pick one again in Settings › Speech."))?;
+    let model_hold = store.hold(model_id).map_err(|e| hold_message(&name, &e))?;
+    let vad_hold = store.hold(models::VAD).map_err(|e| match e {
+        StoreError::NotInstalled(_) => "The voice detection model isn't downloaded yet. Download it in Settings › Speech.".to_string(),
+        e => hold_message("voice detection", &e),
+    })?;
+    // Task 5: the graphics-card setting and `voice_engine_stt::discrete_card()` replace these two.
+    let gpu = engine::gpu_for(info.kind, true, false);
+    let model = engine::load(model_id, model_hold.dir(), gpu)?;
+    let backend = model.t.backend();
+    log::info!("speech model {model_id} loaded on {}{}", backend.backend, if backend.fell_back { " (the graphics card was not used)" } else { "" });
+    Ok(Speech { model, vad_dir: vad_hold.dir().to_path_buf(), backend, _model_hold: model_hold, _vad_hold: vad_hold })
 }
 
 /// Checks once a minute whether the model has been unused for `IDLE`.
@@ -92,10 +121,8 @@ fn watch_idle() {
 }
 
 fn with_speech<R>(model_id: &str, f: impl FnOnce(&mut Speech) -> R) -> Result<R, String> {
-    let (m, dir, vad) = locate(model_id)?;
-    let key = format!("{}|{}", m.id, dir.display());
     watch_idle();
-    lock().with(&key, Instant::now(), || load(m, &dir, &vad), f)
+    lock().with(model_id, Instant::now(), || load(model_id), f)
 }
 
 /// Loads the model now (while an answer is being recorded), so the transcript doesn't wait for it.
@@ -103,16 +130,28 @@ pub fn warm(model_id: &str) -> Result<(), String> {
     with_speech(model_id, |_| ())
 }
 
+/// Where the loaded model runs and whether the graphics card was refused (Task 5 tells the person once).
+#[allow(dead_code)]
+pub fn backend() -> Option<SpeechBackend> {
+    lock().peek().map(|s| s.backend.clone())
+}
+
 /// One recorded answer to a transcript, with the model kept loaded for the next one.
 pub fn transcribe_wav(wav: &Path, model_id: &str) -> Result<Transcript, String> {
     let samples = vad::read_track(wav).map_err(|e| format!("Couldn't read the recording: {e}"))?;
     with_speech(model_id, |s| {
-        let spans = s.vad.detect(&samples)?;
-        transcribe::transcribe_with(s.engine.as_mut(), &samples, &spans)
+        let spans = vad::detect(&s.vad_dir, &samples)?;
+        transcribe::transcribe_with(&mut s.model, &samples, &spans)
     })?
 }
 
-/// Lets go of the model now, before its files are deleted (Windows won't delete a file a model holds open).
+/// True while `model_id` is the model that is loaded.
+pub fn is_loaded(model_id: &str) -> bool {
+    lock().holds(model_id)
+}
+
+/// Lets go of the model now, and its holds on the model folders, before its files are deleted (Windows won't delete a
+/// file a model holds open).
 pub fn unload() {
     lock().clear();
 }
@@ -183,6 +222,13 @@ mod tests {
             println!("{answer} answer: {} words in {:.2}s ({})", out.words.len(), t.elapsed().as_secs_f64(), out.engine);
         }
         unload();
+    }
+
+    #[test]
+    fn a_model_that_is_not_downloaded_is_named_with_where_to_get_it() {
+        let m = hold_message("Whisper Large Turbo", &StoreError::NotInstalled("whisper-turbo".into()));
+        assert!(m.contains("Whisper Large Turbo") && m.contains("isn't downloaded yet") && m.contains("Settings › Speech"), "{m}");
+        assert!(hold_message("X", &StoreError::UnknownModel("nope".into())).contains("\"nope\""));
     }
 
     #[test]
