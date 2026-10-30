@@ -45,6 +45,7 @@ ensayo-llm-protocol = { path = "llm-protocol" }
 tauri-plugin-opener = "2.7.2"
 tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-window-state = "2"
 pdf-extract = "0.12.1"
 docx-rs = "0.4.22"
 # Backup and restore. Deflate through flate2 (pure Rust miniz_oxide): no C toolchain, no extra codecs.
@@ -65,6 +66,9 @@ block2 = "0.6.2"
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", features = ["windows-native"] }
 winreg = "0.56.0"
+# In-process system voices (Windows.Media.SpeechSynthesis, the OneCore voices) and the free-disk question; the version is
+# the one tauri already builds.
+windows = { version = "0.62", features = ["Foundation", "Foundation_Collections", "Media_Core", "Media_Playback", "Media_SpeechSynthesis", "Storage_Streams", "Win32_System_Com", "Win32_Storage_FileSystem"] }
 # macOS already keeps one copy of an app running; Windows starts another on every Start-menu click.
 tauri-plugin-single-instance = "2"
 

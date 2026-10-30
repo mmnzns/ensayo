@@ -17,7 +17,18 @@ export function getStoredTheme(): ThemeMode {
   }
 }
 
+/** Make the native window (title bar) match: Light and Dark force one, Auto hands it back to the system. Only in the app. */
+function syncWindow(mode: ThemeMode): void {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+  import("@tauri-apps/api/window")
+    .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(mode === "auto" ? null : mode))
+    .catch(() => {
+      // The title bar just keeps its current look.
+    });
+}
+
 function show(mode: ThemeMode): void {
+  syncWindow(mode);
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   if (mode === "auto") root.removeAttribute("data-theme");
