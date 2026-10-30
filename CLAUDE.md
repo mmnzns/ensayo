@@ -42,7 +42,7 @@ npm run build                                      # type-check + build frontend
 sh scripts/build-signed-debug.sh                   # Mac: signed debug .app, for real microphone permission
 sh scripts/build-llm-helper.sh                     # builds the ensayo-llm helper (built-in local AI); tauri dev/build run it first
 powershell -File scripts/build-llm-helper.ps1       # Windows: the same
-cargo test --manifest-path src-tauri/Cargo.toml --workspace   # all members: app, ensayo-llm, ensayo-llm-protocol
+cargo test --manifest-path src-tauri/Cargo.toml --workspace   # all members: app, ensayo-llm
 # Real model through the real helper (needs the helper built and a GGUF, or the model downloaded in Settings):
 ENSAYO_LLM_MODEL=<qwen gguf> cargo test --release --manifest-path src-tauri/Cargo.toml local_ai_smoke -- --ignored --nocapture
 ENSAYO_SMOKE_WAV=<16 kHz mono wav> ENSAYO_SMOKE_MODEL=whisper-turbo cargo test --manifest-path src-tauri/Cargo.toml smoke_real_model -- --ignored --nocapture
@@ -63,7 +63,7 @@ Windows: dot-source `scripts/cpu-baseline.ps1` before release builds (whisper.cp
 - **Claude-launched dev builds on Windows** save settings in Claude's sandbox folder. Test settings and data from a normally launched app.
 - One design for Mac and Windows; platform-neutral words ("this computer", "your system's secure key storage").
 - A "Delete all Ensayo data" button removes models, data, settings, logs and saved keys (M10).
-- **Never link llama.cpp into the app.** The built-in local AI is the `ensayo-llm` helper (`src-tauri/llm`, protocol in `src-tauri/llm-protocol`) because whisper.cpp and llama.cpp each bundle ggml; a crash or out-of-memory in the model also never takes the app down. The app side is `src-tauri/src/ai/local.rs`. v0 ships the processor and Metal builds only (no Windows GPU helper).
+- **Never link llama.cpp into the app.** The built-in local AI is the `ensayo-llm` helper (`src-tauri/llm`, which is the engine's helper in three lines) because whisper.cpp and llama.cpp each bundle ggml; a crash or out-of-memory in the model also never takes the app down. The app side is `src-tauri/src/ai/local.rs`. v0 ships the processor and Metal builds only (no Windows GPU helper).
 - Dependencies are optimized even in debug builds (`[profile.dev.package."*"]`), or whisper.cpp is 10x slower.
 
 ## Architecture (after M0)

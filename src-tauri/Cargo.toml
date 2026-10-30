@@ -11,10 +11,10 @@ default-run = "ensayo"
 name = "ensayo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-# The built-in local AI runs in its own helper process (llm/, protocol in llm-protocol/): llama.cpp and whisper.cpp each
+# The built-in local AI runs in its own helper process (llm/, the engine's helper): llama.cpp and whisper.cpp each
 # bundle ggml and must never share a process. `cargo test` at this folder tests every member.
 [workspace]
-members = [".", "llm", "llm-protocol"]
+members = [".", "llm"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -32,16 +32,16 @@ cpal = "0.18.2"
 rtrb = "0.4.0"
 rubato = "5.0.1"
 hound = "3.5.1"
-whisper-rs = "0.16.0"
-parakeet-rs = "0.3.8"
-# parakeet-rs 0.3.8 does not build against ort 2.0.0-rc.14; keep rc.13 until it does (same pin as Talaan).
-ort = { version = "=2.0.0-rc.13", default-features = false }
+# Speech, the model folder and the AI helper client come from the shared engine; every engine crate uses one tag.
+voice-engine-protocol = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.2" }
+voice-engine-stt = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.2" }
+voice-engine-models = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.2" }
+voice-engine-client = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.2" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 sha2 = "0.10.9"
 tokio = { version = "1", features = ["rt", "time", "macros"] }
 keyring = "3.6.3"
 jsonschema = { version = "0.30", default-features = false }
-ensayo-llm-protocol = { path = "llm-protocol" }
 tauri-plugin-opener = "2.7.2"
 tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
@@ -56,13 +56,14 @@ tiny_http = "0.12.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3.6.3", features = ["apple-native"] }
-whisper-rs = { version = "0.16.0", features = ["metal"] }
 objc2 = "0.6.5"
 objc2-av-foundation = "0.3.2"
 objc2-foundation = "0.3.2"
 block2 = "0.6.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
+# DirectML runs Parakeet on a discrete graphics card.
+voice-engine-stt = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.2", features = ["directml"] }
 keyring = { version = "3.6.3", features = ["windows-native"] }
 winreg = "0.56.0"
 # macOS already keeps one copy of an app running; Windows starts another on every Start-menu click.

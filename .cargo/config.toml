@@ -1,6 +1,17 @@
 [env]
 # cmake-rs strips /O flags from CMAKE_<LANG>_FLAGS_RELEASE under the Visual Studio generator, so whisper.cpp (and
-# llama.cpp in the talaan-llm helper) built at /Od in release on Windows: ~10x slower. The CMake-based -sys crates
+# llama.cpp in the ensayo-llm helper) built at /Od in release on Windows: ~10x slower. The CMake-based -sys crates
 # forward CMAKE_* env vars as defines, which stops the override. -O2/-DNDEBUG work for cl, clang-cl and clang.
-CMAKE_C_FLAGS_RELEASE = "-O2 -DNDEBUG"
-CMAKE_CXX_FLAGS_RELEASE = "-O2 -DNDEBUG"
+# The rest is the engine's block: one portable x86-64 baseline (no CPU-specific code), macOS 11 as the floor.
+GGML_NATIVE = { value = "OFF", force = true }
+GGML_AVX = { value = "ON", force = true }
+GGML_AVX2 = { value = "ON", force = true }
+GGML_FMA = { value = "ON", force = true }
+GGML_F16C = { value = "ON", force = true }
+GGML_BMI2 = { value = "ON", force = true }
+MACOSX_DEPLOYMENT_TARGET = { value = "11.0", force = true }
+CMAKE_C_FLAGS_RELEASE = { value = "-O2 -DNDEBUG", force = true }
+CMAKE_CXX_FLAGS_RELEASE = { value = "-O2 -DNDEBUG", force = true }
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+avx2,+fma,+f16c,+bmi2"]

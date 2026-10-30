@@ -1,16 +1,15 @@
 [package]
 name = "ensayo-llm"
 version = "0.1.4"
-description = "Ensayo's built-in local AI helper: runs llama.cpp in its own process"
+description = "Ensayo's built-in local AI helper: the engine's llama.cpp helper, in its own process"
 edition = "2024"
 license = "MIT"
 publish = false
 
 [dependencies]
-ensayo-llm-protocol = { path = "../llm-protocol" }
-serde_json = "1"
-llama-cpp-2 = { version = "=0.1.159", default-features = false, features = ["common"] }
+voice-engine-llm = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.2" }
+voice-engine-protocol = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.2" }
 
-# The Mac build runs the model on the Apple GPU (Metal). Windows is the processor build only in v0.
-[target.'cfg(target_os = "macos")'.dependencies]
-llama-cpp-2 = { version = "=0.1.159", default-features = false, features = ["metal", "common"] }
+[features]
+# Windows graphics-card build of the helper (shipped next to the processor one).
+vulkan = ["voice-engine-llm/vulkan"]
