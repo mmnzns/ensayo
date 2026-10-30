@@ -1,10 +1,12 @@
 //! The interviewer's voice, second engine: the computer's own speech, run as a child process the backend can stop.
 //!
 //! The app's browser engine (speechSynthesis) does not speak in every webview, so Ensayo falls back to the system:
-//! macOS `say`, Windows PowerShell with System.Speech. The text being read is never put inside a shell string or inside
-//! a script. macOS gets it on stdin; Windows gets it in an environment variable that a fixed script reads. Every
-//! child is started with `std::process::Command` and explicit arguments, so a question containing quotes, semicolons,
-//! `$()` or backticks stays plain text.
+//! macOS `say`; Windows speaks in this process through Windows.Media.SpeechSynthesis (the voices Narrator and the
+//! Settings voice list use, more than System.Speech sees), with PowerShell and System.Speech only as the fallback when
+//! that cannot start. The text being read is never put inside a shell string or inside a script. macOS gets it on
+//! stdin; Windows hands it straight to the speech API, and the PowerShell fallback gets it in an environment variable
+//! that a fixed script reads. Every child is started with `std::process::Command` and explicit arguments, so a
+//! question containing quotes, semicolons, `$()` or backticks stays plain text.
 //!
 //! One voice at a time: starting a line stops the one before it, and the child is killed when the app exits.
 
@@ -60,6 +62,33 @@ pub fn valid_voice_id(id: &str) -> bool {
 pub fn say_wpm(rate: f64) -> u32 {
     let r = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
     (SAY_BASE_WPM * r).round().clamp(80.0, 400.0) as u32
+}
+
+/// Windows.Media.SpeechSynthesis `SpeakingRate` from the same multiplier. The API takes a multiplier too (0.5 to 6,
+/// 1 is normal), so it passes straight through; past 3 nobody can follow a question.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub fn winrt_speaking_rate(rate: f64) -> f64 {
+    if rate.is_finite() && rate > 0.0 { rate.clamp(0.5, 3.0) } else { 1.0 }
+}
+
+/// Which voice to speak with. `saved` is what Settings stored: an id from the old engine or from this one. An exact
+/// match wins, then the same name ignoring case, then the old System.Speech names ("Microsoft David Desktop") against
+/// the new ones ("Microsoft David"). None means no match, so the caller keeps the system's default voice.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub fn resolve_voice<'a>(saved: &str, voices: &'a [NativeVoice]) -> Option<&'a NativeVoice> {
+    let wanted = saved.trim();
+    if wanted.is_empty() {
+        return None;
+    }
+    let plain = |s: &str| -> String {
+        let t = s.trim().to_lowercase();
+        t.strip_suffix(" desktop").map(str::to_string).unwrap_or(t)
+    };
+    voices
+        .iter()
+        .find(|v| v.id == wanted)
+        .or_else(|| voices.iter().find(|v| v.id.eq_ignore_ascii_case(wanted) || v.name.eq_ignore_ascii_case(wanted)))
+        .or_else(|| voices.iter().find(|v| plain(&v.name) == plain(wanted)))
 }
 
 /// System.Speech rate (-10 to 10) from the same multiplier: Slower is about -2, Faster about +2.
@@ -166,6 +195,8 @@ fn kill(mut child: Child) {
 
 /// Stops the line being read, if any. Also what the app calls when it exits.
 pub fn stop() {
+    #[cfg(target_os = "windows")]
+    winrt::stop();
     let taken = slot().take();
     if let Some((_, child)) = taken {
         kill(child);
@@ -239,6 +270,12 @@ fn list_voices() -> Result<Vec<NativeVoice>, String> {
     if cfg!(target_os = "macos") {
         Ok(parse_say_voices(&capture(&say_voices_spec())?))
     } else if cfg!(target_os = "windows") {
+        #[cfg(target_os = "windows")]
+        match winrt::voices() {
+            Ok(v) if !v.is_empty() => return Ok(v),
+            Ok(_) => log::warn!("the Windows speech API listed no voices; asking PowerShell"),
+            Err(e) => log::warn!("the Windows speech API did not start ({e}); asking PowerShell"),
+        }
         Ok(parse_powershell_voices(&capture(&powershell_voices_spec())?))
     } else {
         Ok(vec![])
@@ -252,9 +289,183 @@ fn speak(text: &str, voice_id: &str, rate: f64) -> Result<Outcome, String> {
     if cfg!(target_os = "macos") {
         run(&say_spec(text, voice_id, rate))
     } else if cfg!(target_os = "windows") {
+        #[cfg(target_os = "windows")]
+        match winrt::speak(text, voice_id, rate) {
+            Ok(outcome) => return Ok(outcome),
+            Err(e) => log::warn!("the Windows speech API could not read the line ({e}); using PowerShell"),
+        }
         run(&powershell_spec(text, voice_id, rate))
     } else {
         Err("This computer has no system voice Ensayo can use.".to_string())
+    }
+}
+
+// ---------- Windows: in-process speech ----------
+
+#[cfg(target_os = "windows")]
+mod winrt {
+    use super::{clean_text, resolve_voice, valid_voice_id, winrt_speaking_rate, NativeVoice, Outcome};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::mpsc::{channel, Sender};
+    use std::sync::{Mutex, MutexGuard, Once};
+    use windows::core::{Error, Interface, Ref, HSTRING};
+    use windows::Foundation::TypedEventHandler;
+    use windows::Media::Core::MediaSource;
+    use windows::Media::Playback::{MediaPlayer, MediaPlayerFailedEventArgs};
+    use windows::Media::SpeechSynthesis::{SpeechSynthesizer, VoiceInformation};
+    use windows::Storage::Streams::IRandomAccessStream;
+    use windows::Win32::System::Com::CoIncrementMTAUsage;
+
+    /// Why a line ended, as the player reports it.
+    enum Ended {
+        Finished,
+        Stopped,
+        Failed(String),
+    }
+
+    type Line = (u64, Sender<Ended>, MediaPlayer);
+
+    /// The line being read: its number, the way to wake its waiter, and its player.
+    static CURRENT: Mutex<Option<Line>> = Mutex::new(None);
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+
+    fn slot() -> MutexGuard<'static, Option<Line>> {
+        CURRENT.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn text(e: Error) -> String {
+        e.message()
+    }
+
+    /// Makes this process's threads usable for WinRT calls (the multithreaded apartment), once.
+    fn init() {
+        static ONCE: Once = Once::new();
+        // Failing only means the apartment was already set up another way, which works too.
+        ONCE.call_once(|| {
+            let _ = unsafe { CoIncrementMTAUsage() };
+        });
+    }
+
+    fn installed() -> Result<Vec<VoiceInformation>, String> {
+        init();
+        Ok(SpeechSynthesizer::AllVoices().map_err(text)?.into_iter().collect())
+    }
+
+    fn as_native(v: &VoiceInformation) -> Option<NativeVoice> {
+        let name = v.DisplayName().ok()?.to_string();
+        let language = v.Language().map(|l| l.to_string()).unwrap_or_default();
+        valid_voice_id(&name).then(|| NativeVoice { id: name.clone(), name, language })
+    }
+
+    /// The installed voices, named as the Settings voice list names them, each once.
+    pub fn voices() -> Result<Vec<NativeVoice>, String> {
+        let mut out: Vec<NativeVoice> = Vec::new();
+        for v in installed()? {
+            if let Some(n) = as_native(&v) {
+                if !out.iter().any(|o| o.id == n.id) {
+                    out.push(n);
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    pub fn stop() {
+        let taken = slot().take();
+        if let Some((_, wake, player)) = taken {
+            let _ = wake.send(Ended::Stopped);
+            let _ = player.Pause();
+            let _ = player.Close();
+        }
+    }
+
+    /// Makes the speech, plays it, and waits until it ends or is stopped. Err when the API could not start or make
+    /// the speech, so the caller can try PowerShell.
+    pub fn speak(line: &str, voice_id: &str, rate: f64) -> Result<Outcome, String> {
+        stop();
+        init();
+        let synth = SpeechSynthesizer::new().map_err(text)?;
+        if valid_voice_id(voice_id) {
+            let all = installed()?;
+            let known: Vec<(NativeVoice, &VoiceInformation)> = all.iter().filter_map(|v| as_native(v).map(|n| (n, v))).collect();
+            let names: Vec<NativeVoice> = known.iter().map(|(n, _)| n.clone()).collect();
+            // An id nothing matches (a voice from another computer or engine) keeps the default voice.
+            if let Some(found) = resolve_voice(voice_id, &names) {
+                if let Some((_, info)) = known.iter().find(|(n, _)| n.id == found.id) {
+                    let _ = synth.SetVoice(*info);
+                }
+            }
+        }
+        if let Ok(options) = synth.Options() {
+            let _ = options.SetSpeakingRate(winrt_speaking_rate(rate));
+        }
+        let stream = synth.SynthesizeTextToStreamAsync(&HSTRING::from(clean_text(line))).map_err(text)?.join().map_err(text)?;
+        let content_type = stream.ContentType().map_err(text)?;
+        let source = MediaSource::CreateFromStream(&stream.cast::<IRandomAccessStream>().map_err(text)?, &content_type).map_err(text)?;
+
+        let (wake, waiter) = channel::<Ended>();
+        let player = MediaPlayer::new().map_err(text)?;
+        let on_end = wake.clone();
+        player
+            .MediaEnded(&TypedEventHandler::new(move |_, _| {
+                let _ = on_end.send(Ended::Finished);
+                Ok(())
+            }))
+            .map_err(text)?;
+        let on_fail = wake.clone();
+        player
+            .MediaFailed(&TypedEventHandler::new(move |_, args: Ref<MediaPlayerFailedEventArgs>| {
+                let why = args.as_ref().and_then(|a| a.ErrorMessage().ok()).map(|m| m.to_string()).unwrap_or_default();
+                let _ = on_fail.send(Ended::Failed(why));
+                Ok(())
+            }))
+            .map_err(text)?;
+        player.SetSource(&source).map_err(text)?;
+
+        let mine = NEXT.fetch_add(1, Ordering::SeqCst);
+        {
+            let mut s = slot();
+            if let Some((_, old_wake, old)) = s.take() {
+                let _ = old_wake.send(Ended::Stopped);
+                let _ = old.Close();
+            }
+            *s = Some((mine, wake, player.clone()));
+        }
+        player.Play().map_err(text)?;
+        let ended = waiter.recv().unwrap_or(Ended::Stopped);
+        {
+            let mut s = slot();
+            if s.as_ref().is_some_and(|(n, _, _)| *n == mine) {
+                *s = None;
+            }
+        }
+        let _ = player.Close();
+        match ended {
+            Ended::Finished => Ok(Outcome::Finished),
+            Ended::Stopped => Ok(Outcome::Stopped),
+            Ended::Failed(why) => Err(format!("playback failed: {why}")),
+        }
+    }
+
+    /// Lists the voices and reads one short line three ways. By hand:
+    /// `cargo test --manifest-path src-tauri/Cargo.toml winrt_voices_smoke -- --ignored --nocapture`
+    #[cfg(test)]
+    #[test]
+    #[ignore]
+    fn winrt_voices_smoke() {
+        let t = std::time::Instant::now();
+        let v = voices().expect("the Windows speech API starts");
+        eprintln!("{} voices in {:?}", v.len(), t.elapsed());
+        for n in &v {
+            eprintln!("  {} ({})", n.id, n.language);
+        }
+        assert!(!v.is_empty());
+        let first_voice = v[0].id.clone();
+        for (label, id) in [("default voice", String::new()), ("first listed voice", first_voice), ("old System.Speech id", "Microsoft Zira Desktop".to_string())] {
+            let t = std::time::Instant::now();
+            let outcome = speak("Tell me about a time you changed your mind.", &id, 1.0).expect("it speaks");
+            eprintln!("{label}: {outcome:?}, {:?} from start to end of the line", t.elapsed());
+        }
     }
 }
 
@@ -361,6 +572,44 @@ mod tests {
     }
 
     #[test]
+    fn windows_speaking_rate_follows_the_setting() {
+        assert_eq!(winrt_speaking_rate(1.0), 1.0);
+        assert_eq!(winrt_speaking_rate(0.85), 0.85);
+        assert_eq!(winrt_speaking_rate(1.2), 1.2);
+        assert_eq!(winrt_speaking_rate(f64::NAN), 1.0);
+        assert_eq!(winrt_speaking_rate(-2.0), 1.0);
+        assert_eq!(winrt_speaking_rate(0.01), 0.5);
+        assert_eq!(winrt_speaking_rate(50.0), 3.0);
+    }
+
+    fn voice(name: &str) -> NativeVoice {
+        NativeVoice { id: name.into(), name: name.into(), language: "en-US".into() }
+    }
+
+    #[test]
+    fn a_saved_voice_resolves_across_engines_or_falls_back_to_the_default() {
+        let list = [voice("Microsoft David"), voice("Microsoft Zira"), voice("Microsoft Aria Online (Natural)")];
+        let pick = |saved: &str| resolve_voice(saved, &list).map(|v| v.id.as_str());
+        assert_eq!(pick("Microsoft Zira"), Some("Microsoft Zira"));
+        assert_eq!(pick("microsoft zira"), Some("Microsoft Zira"));
+        // Ids saved by the System.Speech engine.
+        assert_eq!(pick("Microsoft Zira Desktop"), Some("Microsoft Zira"));
+        assert_eq!(pick("  Microsoft David Desktop "), Some("Microsoft David"));
+        // Gone, or never on this computer: the default voice.
+        assert_eq!(pick("Microsoft Hazel Desktop"), None);
+        assert_eq!(pick(""), None);
+        assert_eq!(pick("Samantha"), None);
+        assert_eq!(resolve_voice("Microsoft David", &[]), None);
+    }
+
+    #[test]
+    fn an_exact_voice_id_beats_a_looser_match() {
+        let list = [voice("Microsoft Zira Desktop"), voice("Microsoft Zira")];
+        assert_eq!(resolve_voice("Microsoft Zira", &list).map(|v| v.id.as_str()), Some("Microsoft Zira"));
+        assert_eq!(resolve_voice("Microsoft Zira Desktop", &list).map(|v| v.id.as_str()), Some("Microsoft Zira Desktop"));
+    }
+
+    #[test]
     fn the_fixed_scripts_hold_no_text_placeholder() {
         for script in [POWERSHELL_SPEAK, POWERSHELL_LIST] {
             assert!(!script.contains("{}") && !script.contains("{0}"));
@@ -401,11 +650,26 @@ Alex                en_US    # again\n";
         assert!(parse_powershell_voices("").is_empty());
     }
 
-    #[cfg(unix)]
+    /// Real child processes. Windows has no cat, false, true or sleep, so it uses `findstr`, `cmd` and `ping`.
     mod running {
         use super::*;
         use std::sync::Mutex;
         use std::time::Instant;
+
+        /// Echoes stdin to nowhere and ends when stdin closes.
+        fn cat() -> Spec {
+            if cfg!(windows) { spec("findstr", &["^"], Some("")) } else { spec("cat", &[], Some("")) }
+        }
+        fn exits(code: &str) -> Spec {
+            if cfg!(windows) { spec("cmd", &["/C", &format!("exit {code}")], None) } else { spec(if code == "0" { "true" } else { "false" }, &[], None) }
+        }
+        /// A child that stays alive for about 30 seconds unless it is killed.
+        fn sleeper() -> Spec {
+            if cfg!(windows) { spec("ping", &["-n", "31", "127.0.0.1"], None) } else { spec("sleep", &["30"], None) }
+        }
+        fn with_stdin(text: &str) -> Spec {
+            Spec { stdin: Some(text.into()), ..cat() }
+        }
 
         // The current line is one shared slot, so these run one at a time.
         static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
@@ -417,20 +681,20 @@ Alex                en_US    # again\n";
         #[test]
         fn a_line_that_ends_is_finished() {
             let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-            assert_eq!(run(&spec("cat", &[], Some("some text"))), Ok(Outcome::Finished));
+            assert_eq!(run(&with_stdin("some text")), Ok(Outcome::Finished));
         }
 
         #[test]
         fn a_failing_or_missing_program_is_an_error_so_the_caller_can_fall_back() {
             let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-            assert!(run(&spec("false", &[], None)).is_err());
+            assert!(run(&exits("1")).is_err());
             assert!(run(&spec("ensayo-no-such-program", &[], None)).is_err());
         }
 
         #[test]
         fn stop_kills_the_child_and_ends_the_wait() {
             let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-            let waiter = std::thread::spawn(|| run(&spec("sleep", &["30"], None)));
+            let waiter = std::thread::spawn(|| run(&sleeper()));
             std::thread::sleep(Duration::from_millis(300));
             let t = Instant::now();
             stop();
@@ -442,20 +706,20 @@ Alex                en_US    # again\n";
         #[test]
         fn the_next_line_stops_the_one_before() {
             let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-            let first = std::thread::spawn(|| run(&spec("sleep", &["30"], None)));
+            let first = std::thread::spawn(|| run(&sleeper()));
             std::thread::sleep(Duration::from_millis(300));
-            assert_eq!(run(&spec("true", &[], None)), Ok(Outcome::Finished));
+            assert_eq!(run(&exits("0")), Ok(Outcome::Finished));
             assert_eq!(first.join().unwrap(), Ok(Outcome::Stopped));
         }
 
         #[test]
         fn hostile_text_on_stdin_is_just_text() {
             let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-            // `cat` echoes nothing anywhere useful; the point is that nothing is interpreted and the child ends cleanly.
+            // the reader echoes nothing anywhere useful; the point is that nothing is interpreted and the child ends cleanly.
             let marker = std::env::temp_dir().join("ensayo-voice-hostile-marker");
             let _ = std::fs::remove_file(&marker);
-            let text = format!("$(touch {m}) `touch {m}` ; touch {m}", m = marker.display());
-            assert_eq!(run(&spec("cat", &[], Some(&text))), Ok(Outcome::Finished));
+            let text = format!("$(touch {m}) `touch {m}` ; touch {m} & echo hi > {m} | echo %PATH%", m = marker.display());
+            assert_eq!(run(&with_stdin(&text)), Ok(Outcome::Finished));
             assert!(!marker.exists());
         }
     }
