@@ -110,14 +110,14 @@ export interface SpeechModelStatus {
   id: string;
   name: string;
   size_mb: number;
-  state: "ready" | "on_this_computer" | "missing";
+  state: "ready" | "on_this_computer" | "missing" | "partial" | "downloading" | "downloading_elsewhere";
 }
 
 export type SpeechPlan =
   | { kind: "ready"; modelId: string; name: string; fromOtherApp: boolean }
   | { kind: "download"; modelId: string; name: string; sizeMb: number; onlyVoiceDetection: boolean };
 
-const here = (m: SpeechModelStatus) => m.state !== "missing";
+const here = (m: SpeechModelStatus) => m.state === "ready" || m.state === "on_this_computer";
 
 /**
  * What the Speech step should offer. `models` are in Ensayo's order of preference (the first one here is used, the same

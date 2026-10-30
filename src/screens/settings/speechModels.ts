@@ -22,11 +22,13 @@ export interface SpeechModelEntry {
   note: string;
   languages: string;
   size_mb: number;
-  /** "ready" is Ensayo's own copy, "on_this_computer" one another app downloaded. */
-  state: "ready" | "on_this_computer" | "missing";
+  /** "ready" is Ensayo's own copy, "on_this_computer" one another app downloaded. "partial" is an interrupted download, "downloading" one running here and "downloading_elsewhere" one another app is running; none of those three can be used yet. */
+  state: "ready" | "on_this_computer" | "missing" | "partial" | "downloading" | "downloading_elsewhere";
+  /** How much is on disk, for "partial" and the two "downloading" states. */
+  fraction?: number;
 }
 
-const here = (m: SpeechModelEntry) => m.state !== "missing";
+const here = (m: SpeechModelEntry) => m.state === "ready" || m.state === "on_this_computer";
 
 /** The models a session tries, in order: the one chosen in Settings, then Ensayo's usual order. */
 export function candidateModels(preferred: string): string[] {
@@ -53,7 +55,7 @@ export function modelRows(models: SpeechModelEntry[], inUseId: string): ModelRow
   return models.map((m) => {
     const inUse = m.id === inUseId;
     const status = inUse ? "In use" : m.state === "on_this_computer" ? "Found, from another app on this computer" : m.state === "ready" ? "Downloaded" : "Not downloaded";
-    return { ...m, inUse, status, canUse: here(m) && !inUse, canDownload: m.state === "missing" };
+    return { ...m, inUse, status, canUse: here(m) && !inUse, canDownload: m.state === "missing" || m.state === "partial" };
   });
 }
 

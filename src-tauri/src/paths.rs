@@ -9,6 +9,9 @@ pub fn app_local() -> PathBuf {
     dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")).join(BUNDLE_ID)
 }
 
+/// Ensayo's own models folder from before the shared one: it only means the LEGACY place now. At start-up the models in
+/// it move to the shared folder (`models_store`), leaving hard links behind; "Delete all data" still clears it. New
+/// code asks `models_store::store()` where a model is.
 pub fn models_dir() -> PathBuf {
     app_local().join("models")
 }

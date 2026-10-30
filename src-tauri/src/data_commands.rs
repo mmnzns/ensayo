@@ -203,20 +203,35 @@ pub async fn move_data_folder(folder: PathBuf) -> Cmd<&'static str> {
     .await
 }
 
-/// Delete all Ensayo data: what Ensayo wrote in the data folder, saved keys, answer audio, Ensayo's own speech models
-/// and the machine-local settings. Models other apps downloaded are never touched.
+/// Ensayo lets go of every model it uses. The first problem is reported in words; the rest are still attempted.
+fn release_models(store: &voice_engine_models::SharedStore) -> Cmd<()> {
+    store.release_all().map_err(|e| format!("Couldn't remove Ensayo's models ({}). Close other apps that use them and try again.", e.kind()))
+}
+
+/// Delete all Ensayo data: what Ensayo wrote in the data folder, saved keys, answer audio, the models only Ensayo uses
+/// and the machine-local settings. A model another app also uses stays for that app.
 #[tauri::command]
 pub async fn delete_all_data() -> Cmd<()> {
     blocking(|| {
         // The built-in local AI holds its model file open (Windows will not delete it then); so may the speech model.
         crate::ai::local::stop_shared();
         crate::speech::loaded::unload();
+        // Ensayo stops using its models; each is erased unless another app uses it or has it open.
+        // A problem here is reported at the end, after everything else has been removed.
+        let models = match crate::models_store::store() {
+            Ok(store) => release_models(store),
+            Err(e) => {
+                log::warn!("{e}");
+                Ok(())
+            }
+        };
         if let Ok(storage) = open_storage() {
             storage.delete_all().map_err(plain)?;
         }
         crate::keys::clear_all();
         // The log folder goes too, and nothing writes it again until Ensayo restarts.
         crate::logging::remove_all_in(&paths::logs_dir())?;
+        // The old models folder only holds hard links and leftovers after the move to the shared folder.
         for dir in [paths::audio_dir(), paths::trash_dir(), paths::models_dir()] {
             match std::fs::remove_dir_all(&dir) {
                 Ok(()) => {}
@@ -225,10 +240,11 @@ pub async fn delete_all_data() -> Cmd<()> {
             }
         }
         match std::fs::remove_file(paths::settings_file()) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(format!("Couldn't remove the settings file: {e}")),
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("Couldn't remove the settings file: {e}")),
         }
+        models
     })
     .await
 }
@@ -245,6 +261,25 @@ mod tests {
 
     fn story(id: &str) -> Story {
         Story { id: id.into(), title: id.into(), employer: "".into(), best_for: vec![], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec![], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None, angles: vec![] }
+    }
+
+    #[test]
+    fn delete_all_releases_ensayos_models_and_keeps_the_ones_another_app_uses() {
+        use voice_engine_models::{catalog, App, SharedStore};
+        let dir = tempfile::tempdir().unwrap();
+        let mine = SharedStore::open_at(App::Ensayo, dir.path().to_path_buf()).unwrap();
+        let talaan = SharedStore::open_at(App::Talaan, dir.path().to_path_buf()).unwrap();
+        for id in ["whisper-tiny", "whisper-base"] {
+            for f in catalog::find(id).unwrap().files {
+                std::fs::create_dir_all(mine.model_dir(id)).unwrap();
+                std::fs::File::create(mine.model_dir(id).join(f.name)).unwrap().set_len(f.size).unwrap();
+            }
+            mine.use_model(id).unwrap();
+        }
+        talaan.use_model("whisper-base").unwrap();
+        release_models(&mine).unwrap();
+        assert!(!mine.model_dir("whisper-tiny").exists(), "only Ensayo used it");
+        assert!(mine.model_dir("whisper-base").exists(), "Talaan still uses it");
     }
 
     #[test]

@@ -13,6 +13,7 @@ mod diagnostics;
 pub mod eval;
 pub mod keys;
 mod local_ai_commands;
+mod models_store;
 mod mock_commands;
 mod native_voice;
 pub mod metrics;
@@ -30,6 +31,29 @@ pub mod scoring;
 mod speech;
 mod update_commands;
 pub mod update_notice;
+
+/// The models Ensayo already knows it uses at start: the default speech model, voice detection, and the local AI model
+/// when the built-in AI is the feedback engine. (The speech model picked in Settings is the window's; it says so with
+/// `use_speech_model`. `move_in` also marks every model it adopts from Ensayo's own old folder.)
+fn models_in_use() -> Vec<String> {
+    let mut used = vec![speech::models::DEFAULT_MODEL.to_string(), speech::models::VAD.to_string()];
+    let ai = storage::settings::load(&paths::settings_file()).ai.unwrap_or_default();
+    if ai.provider.trim() == ai_commands::LOCAL {
+        used.push(ai::local_models::choose(&ai.fast_model).info.id.to_string());
+    }
+    used
+}
+
+/// Moves Ensayo's older models into the shared folder and clears what no app uses, off the main thread (hashing and
+/// renaming can take a while). Every command that touches models waits for it.
+fn start_up_models() {
+    let used = models_in_use();
+    models_store::begin_start_up();
+    tauri::async_runtime::spawn_blocking(move || {
+        let used: Vec<&str> = used.iter().map(String::as_str).collect();
+        models_store::start_up(&used);
+    });
+}
 
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -53,6 +77,7 @@ pub fn run() {
         .setup(|app| {
             logging::init();
             log::info!("Ensayo {} started on {} {} ({})", env!("CARGO_PKG_VERSION"), diagnostics::os_name(), diagnostics::os_version(), std::env::consts::ARCH);
+            start_up_models();
             update_commands::setup(app.handle());
             update_commands::check_at_launch(app.handle());
             Ok(())
@@ -62,6 +87,9 @@ pub fn run() {
             commands::model_status,
             commands::speech_models,
             commands::download_model,
+            commands::cancel_model_download,
+            commands::use_speech_model,
+            commands::delete_model,
             commands::mic_permission,
             commands::request_mic_permission,
             commands::open_mic_settings,

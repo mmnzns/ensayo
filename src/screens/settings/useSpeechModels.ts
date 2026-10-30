@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { downloadErrorLine } from "../first-run/setup";
 import { readPrefs, updateSpeech } from "./prefs";
+import { noteSpeechModelUse } from "./speechUse";
 import { inUseModel, type SpeechModelEntry } from "./speechModels";
 
 /** The speech models on this computer, which one a session uses, and downloading another. Same commands and
@@ -54,6 +55,7 @@ export function useSpeechModels() {
   const use = (id: string) => {
     updateSpeech({ model: id });
     setPreferred(id);
+    noteSpeechModelUse(id);
   };
 
   return { models, inUseId: models ? inUseModel(models, preferred) : "", downloadingId, fraction, error, download, use };

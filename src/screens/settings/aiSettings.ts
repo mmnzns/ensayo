@@ -219,7 +219,8 @@ export interface LocalModel {
   size_mb: number;
   recommended: boolean;
   /** "ready", "on_this_computer" (a copy Talaan downloaded, used where it is) or "missing". */
-  state: "ready" | "on_this_computer" | "missing";
+  state: "ready" | "on_this_computer" | "missing" | "partial" | "downloading" | "downloading_elsewhere";
+  fraction?: number;
 }
 
 /** What `local_ai_status` returns. */

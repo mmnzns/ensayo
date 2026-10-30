@@ -55,7 +55,7 @@ export function aiCheck(view: AiView, local: LocalAiView | null, test: TestOutco
   if (s.provider === "local") {
     const m = localModelOf(local, s);
     if (local && !local.helper_found) return fix("The built-in local AI can't start, because part of the app is missing. Reinstall Ensayo, or choose another engine.");
-    if (!m || m.state === "missing") return fix("The built-in local AI needs its model. Download it in Settings, AI.", "Download it");
+    if (!m || (m.state !== "ready" && m.state !== "on_this_computer")) return fix("The built-in local AI needs its model. Download it in Settings, AI.", "Download it");
     return { ...base, detail: `${m.name} is ready on this computer.`, state: "ready" };
   }
   if (kind === "key" && !view.providers.find((p) => p.id === s.provider)?.has_key) return fix(`There is no ${name} API key saved yet.`, "Add a key");

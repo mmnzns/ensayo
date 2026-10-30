@@ -1,60 +1,29 @@
 //! The built-in local AI models (GGUF files run by the `ensayo-llm` helper): the catalog, where each one lives on this
 //! computer, and what Settings shows about it. Same two models Talaan picked by a bake-off on a Mac: Qwen3.5 4B is the
-//! recommended one, 9B is an optional larger size. Files download with the speech models' downloader into
-//! `<models>/llm/<id>/`, and a copy Talaan already downloaded is used read-only ("On this computer").
+//! recommended one, 9B is an optional larger size. They live in the shared models folder like the speech models
+//! (`models_store`), so a copy another Craft Concepts app downloaded is used in place.
 
-use crate::paths;
-use crate::speech::models::{EngineKind, Location, ModelFile, ModelInfo, ModelStore};
+use crate::models_store;
+use crate::speech::models::Offered;
 use serde::Serialize;
 use std::path::PathBuf;
+use voice_engine_models::{catalog, SharedStore, Status};
 
+/// A local AI model as Settings words it, plus whether it is the one most people should use. Files, sizes, download
+/// addresses and licence are the engine's catalog entry with the same id.
 #[derive(Debug)]
 pub struct LocalModel {
-    pub info: ModelInfo,
-    /// The model's own licence, for Settings and THIRD_PARTY_NOTICES.md.
-    pub licence: &'static str,
+    pub info: Offered,
     pub recommended: bool,
 }
 
 pub static CATALOG: &[LocalModel] = &[
     LocalModel {
-        info: ModelInfo {
-            id: "qwen3.5-4b",
-            name: "Qwen3.5 4B",
-            maker: "Qwen",
-            note: "Recommended. Small and quick enough for a laptop, and good at judging an answer.",
-            engine: EngineKind::Llm,
-            languages: "Many languages",
-            speed: 3,
-            accuracy: 2,
-            files: &[ModelFile {
-                name: "Qwen3.5-4B-Q4_K_M.gguf",
-                url: "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
-                size: 2_740_937_888,
-                sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
-            }],
-        },
-        licence: "Apache-2.0",
+        info: Offered { id: "qwen3.5-4b", name: "Qwen3.5 4B", maker: "Qwen", note: "Recommended. Small and quick enough for a laptop, and good at judging an answer." },
         recommended: true,
     },
     LocalModel {
-        info: ModelInfo {
-            id: "qwen3.5-9b",
-            name: "Qwen3.5 9B",
-            maker: "Qwen",
-            note: "Larger. A little more thorough; needs 16 GB of memory and takes about twice as long.",
-            engine: EngineKind::Llm,
-            languages: "Many languages",
-            speed: 2,
-            accuracy: 3,
-            files: &[ModelFile {
-                name: "Qwen3.5-9B-Q4_K_M.gguf",
-                url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
-                size: 5_680_522_464,
-                sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
-            }],
-        },
-        licence: "Apache-2.0",
+        info: Offered { id: "qwen3.5-9b", name: "Qwen3.5 9B", maker: "Qwen", note: "Larger. A little more thorough; needs 16 GB of memory and takes about twice as long." },
         recommended: false,
     },
 ];
@@ -74,24 +43,22 @@ pub fn choose(setting: &str) -> &'static LocalModel {
     find(setting.trim()).unwrap_or_else(recommended)
 }
 
-/// Ensayo's models folder for the built-in AI (`<models>/llm`), with Talaan's copies readable.
-pub fn store() -> ModelStore {
-    ModelStore::new(paths::models_dir().join("llm"), true)
-}
-
-/// Ensayo's own folder only (what a download writes to); never Talaan's.
-pub fn own_store() -> ModelStore {
-    ModelStore::new(paths::models_dir().join("llm"), false)
-}
-
 impl LocalModel {
-    /// The GGUF file to hand the helper, wherever it was found.
-    pub fn file_in(&self, loc: &Location) -> Option<PathBuf> {
-        loc.dir().map(|d| d.join(self.info.files[0].name))
+    /// The engine's catalog entry: the file, its size and where it comes from.
+    pub fn engine(&self) -> &'static catalog::ModelInfo {
+        catalog::find(self.info.id).expect("every local AI model is in the engine's catalog")
+    }
+
+    /// The GGUF file to hand the helper, when the model is on this computer.
+    pub fn file_in(&self, status: &Status) -> Option<PathBuf> {
+        match status {
+            Status::Installed { dir, .. } => Some(dir.join(self.engine().files[0].name)),
+            _ => None,
+        }
     }
 
     pub fn size_mb(&self) -> u64 {
-        self.info.size() / 1_000_000
+        self.engine().size() / 1_000_000
     }
 }
 
@@ -105,30 +72,30 @@ pub struct LocalAiStatus {
     pub licence: &'static str,
     pub size_mb: u64,
     pub recommended: bool,
-    /// "ready" (Ensayo's copy), "on_this_computer" (one Talaan downloaded, used in place) or "missing".
+    /// "ready" (Ensayo uses it), "on_this_computer" (there, from another app), "missing", "partial" (an interrupted
+    /// download), "downloading" (here) or "downloading_elsewhere" (another app is fetching it).
     pub state: &'static str,
+    /// How much is on disk, for "partial" and the two "downloading" states.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f32>,
 }
 
-pub fn state_of(loc: &Location) -> &'static str {
-    match loc {
-        Location::Own(_) => "ready",
-        Location::OnThisComputer(_) => "on_this_computer",
-        Location::Missing => "missing",
-    }
-}
-
-pub fn status_in(store: &ModelStore) -> Vec<LocalAiStatus> {
+pub fn status_in(store: &SharedStore) -> Vec<LocalAiStatus> {
     CATALOG
         .iter()
-        .map(|m| LocalAiStatus {
-            id: m.info.id,
-            name: m.info.name,
-            maker: m.info.maker,
-            note: m.info.note,
-            licence: m.licence,
-            size_mb: m.size_mb(),
-            recommended: m.recommended,
-            state: state_of(&store.locate(&m.info)),
+        .map(|m| {
+            let status = store.status(m.info.id);
+            LocalAiStatus {
+                id: m.info.id,
+                name: m.info.name,
+                maker: m.info.maker,
+                note: m.info.note,
+                licence: m.engine().licence.spdx,
+                size_mb: m.size_mb(),
+                recommended: m.recommended,
+                state: models_store::state_name(&status),
+                fraction: models_store::fraction_of(&status),
+            }
         })
         .collect()
 }
@@ -136,12 +103,15 @@ pub fn status_in(store: &ModelStore) -> Vec<LocalAiStatus> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use voice_engine_models::{App, Kind};
 
     fn sparse(path: &std::path::Path, size: u64) {
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let f = fs::File::create(path).unwrap();
-        f.set_len(size).unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::File::create(path).unwrap().set_len(size).unwrap();
+    }
+
+    fn temp_store(app: App, dir: &std::path::Path) -> SharedStore {
+        SharedStore::open_at(app, dir.to_path_buf()).unwrap()
     }
 
     #[test]
@@ -149,16 +119,13 @@ mod tests {
         assert_eq!(CATALOG.len(), 2);
         assert_eq!(CATALOG.iter().filter(|m| m.recommended).count(), 1);
         assert_eq!(recommended().info.id, "qwen3.5-4b");
-        assert!(CATALOG[1].info.size() > CATALOG[0].info.size());
+        assert!(CATALOG[1].engine().size() > CATALOG[0].engine().size());
         for m in CATALOG {
-            assert_eq!(m.info.engine, EngineKind::Llm);
-            assert!(!m.info.engine.is_speech());
-            assert_eq!(m.info.files.len(), 1);
-            let f = &m.info.files[0];
-            assert!(f.name.ends_with(".gguf"));
-            assert_eq!(f.sha256.len(), 64);
-            assert!(f.url.starts_with("https://") && f.url.ends_with(f.name));
-            assert_eq!(m.licence, "Apache-2.0");
+            let e = m.engine();
+            assert_eq!(e.kind, Kind::Llm, "{}", m.info.id);
+            assert_eq!(e.files.len(), 1);
+            assert!(e.files[0].name.ends_with(".gguf"));
+            assert_eq!(e.licence.spdx, "Apache-2.0");
         }
     }
 
@@ -171,52 +138,39 @@ mod tests {
     }
 
     #[test]
-    fn ensayos_own_copy_lives_under_models_llm_and_talaans_is_found_read_only() {
+    fn the_file_for_the_helper_is_in_the_models_folder_and_only_when_the_model_is_complete() {
         let data = tempfile::tempdir().unwrap();
-        let talaan = tempfile::tempdir().unwrap();
+        let store = temp_store(App::Ensayo, data.path());
         let m = recommended();
-        let file = m.info.files[0].name;
-        let root = data.path().join("models").join("llm");
-        let mut store = ModelStore { root: root.clone(), talaan_root: Some(talaan.path().to_path_buf()), reuse: true };
-        assert_eq!(store.locate(&m.info), Location::Missing);
-        assert_eq!(m.file_in(&Location::Missing), None);
-        assert_eq!(state_of(&Location::Missing), "missing");
-
-        // Talaan keeps it at <its models>/<id>/<file>.
-        sparse(&talaan.path().join(m.info.id).join(file), m.info.files[0].size);
-        let found = store.locate(&m.info);
-        assert_eq!(found, Location::OnThisComputer(talaan.path().join(m.info.id)));
-        assert_eq!(state_of(&found), "on_this_computer");
-        assert_eq!(m.file_in(&found), Some(talaan.path().join(m.info.id).join(file)));
-        store.reuse = false;
-        assert_eq!(store.locate(&m.info), Location::Missing, "downloads never count Talaan's copy");
-
-        // Ensayo's own copy wins once there is one.
-        sparse(&root.join(m.info.id).join(file), m.info.files[0].size);
-        store.reuse = true;
-        let own = store.locate(&m.info);
-        assert_eq!(own, Location::Own(root.join(m.info.id)));
-        assert_eq!(state_of(&own), "ready");
-        assert_eq!(store.own_dir(&m.info), root.join(m.info.id));
+        let file = m.engine().files[0].name;
+        assert_eq!(m.file_in(&store.status(m.info.id)), None);
+        sparse(&data.path().join(m.info.id).join(file), 1000);
+        assert_eq!(m.file_in(&store.status(m.info.id)), None, "a wrong-sized file is not a model");
+        sparse(&data.path().join(m.info.id).join(file), m.engine().files[0].size);
+        assert_eq!(m.file_in(&store.status(m.info.id)), Some(data.path().join(m.info.id).join(file)));
     }
 
     #[test]
-    fn a_half_downloaded_or_wrong_sized_file_is_not_a_model() {
+    fn a_copy_another_app_downloaded_is_on_this_computer_until_ensayo_uses_it() {
         let data = tempfile::tempdir().unwrap();
+        let ensayo = temp_store(App::Ensayo, data.path());
+        let talaan = temp_store(App::Talaan, data.path());
         let m = recommended();
-        let store = ModelStore { root: data.path().to_path_buf(), talaan_root: None, reuse: true };
-        sparse(&data.path().join(m.info.id).join(m.info.files[0].name), 1000);
-        assert_eq!(store.locate(&m.info), Location::Missing);
-        fs::write(data.path().join(m.info.id).join(format!("{}.part", m.info.files[0].name)), b"x").unwrap();
-        assert_eq!(store.locate(&m.info), Location::Missing);
+        sparse(&data.path().join(m.info.id).join(m.engine().files[0].name), m.engine().files[0].size);
+        talaan.use_model(m.info.id).unwrap();
+        assert_eq!(status_in(&ensayo)[0].state, "on_this_computer");
+        assert!(m.file_in(&ensayo.status(m.info.id)).is_some(), "usable in place");
+        ensayo.use_model(m.info.id).unwrap();
+        assert_eq!(status_in(&ensayo)[0].state, "ready");
     }
 
     #[test]
     fn the_status_lists_every_model_with_name_size_licence_and_state() {
         let data = tempfile::tempdir().unwrap();
-        let store = ModelStore { root: data.path().to_path_buf(), talaan_root: None, reuse: true };
+        let store = temp_store(App::Ensayo, data.path());
         let m = &CATALOG[1];
-        sparse(&data.path().join(m.info.id).join(m.info.files[0].name), m.info.files[0].size);
+        sparse(&data.path().join(m.info.id).join(m.engine().files[0].name), m.engine().files[0].size);
+        store.use_model(m.info.id).unwrap();
         let s = status_in(&store);
         assert_eq!(s.len(), 2);
         assert_eq!((s[0].id, s[0].state, s[0].recommended), ("qwen3.5-4b", "missing", true));
@@ -224,6 +178,19 @@ mod tests {
         assert_eq!(s[0].size_mb, 2740);
         assert_eq!(s[0].licence, "Apache-2.0");
         let json = serde_json::to_value(&s[0]).unwrap();
-        assert!(json["name"] == "Qwen3.5 4B" && json["size_mb"] == 2740);
+        assert!(json["name"] == "Qwen3.5 4B" && json["size_mb"] == 2740 && json.get("fraction").is_none());
+    }
+
+    #[test]
+    fn a_half_downloaded_model_is_partial_with_how_much_is_there() {
+        let data = tempfile::tempdir().unwrap();
+        let store = temp_store(App::Ensayo, data.path());
+        let m = recommended();
+        let f = &m.engine().files[0];
+        sparse(&data.path().join(m.info.id).join(format!("{}.part", f.name)), f.size / 2);
+        let s = &status_in(&store)[0];
+        assert_eq!(s.state, "partial");
+        assert!((s.fraction.unwrap() - 0.5).abs() < 0.01);
+        assert!(m.file_in(&store.status(m.info.id)).is_none());
     }
 }

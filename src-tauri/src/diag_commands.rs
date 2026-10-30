@@ -3,9 +3,9 @@
 
 use crate::diagnostics::{self, Inputs, LOG_LINES};
 use crate::redact::Redactor;
-use crate::speech::models::ModelStore;
 use crate::storage::settings;
-use crate::{ai::local, ai::local_models, data_commands, keys, logging, paths, speech::models};
+use crate::{ai::local, ai::local_models, data_commands, keys, logging, models_store, paths, speech::models};
+use voice_engine_models::{App, SharedStore};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
@@ -21,8 +21,10 @@ pub fn diagnostics_text(speech_model: Option<&str>) -> String {
     let secrets: Vec<String> = keys::ACCOUNTS.iter().filter_map(|a| keys::get(a)).collect();
     let data_state = data_commands::status_for(&data_commands::data_folder(), &paths::default_data_dir(), &crate::storage::lock::machine_name(), chrono::Utc::now()).state;
     let tail = logging::read_tail(&paths::logs_dir(), LOG_LINES);
-    let speech_store = ModelStore::new(paths::models_dir(), true);
-    let local_ai = local_models::status_in(&local_models::store());
+    // Looking at the models folder never changes it, and works even when the folder couldn't be opened for writing.
+    let root = models_store::store().map(|s| s.root().to_path_buf()).unwrap_or_else(|_| SharedStore::default_dir().unwrap_or_default());
+    let speech_store = SharedStore::read_only(App::Ensayo, root);
+    let local_ai = local_models::status_in(&speech_store);
     let version = env!("CARGO_PKG_VERSION");
     diagnostics::build(
         &Inputs {
@@ -31,7 +33,7 @@ pub fn diagnostics_text(speech_model: Option<&str>) -> String {
             os_version: &diagnostics::os_version(),
             arch: std::env::consts::ARCH,
             settings: &saved,
-            speech_choice: speech_model.filter(|m| models::find(m).is_some()),
+            speech_choice: speech_model.filter(|m| models::speech_model(m).is_some()),
             speech_store: &speech_store,
             local_ai: &local_ai,
             helper_found: local::helper_path().exists(),

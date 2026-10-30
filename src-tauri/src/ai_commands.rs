@@ -8,14 +8,15 @@ use crate::ai::local;
 use crate::ai::local_models::{self, LocalModel};
 use crate::ai::providers::{catalog, compatible_base, default_base, list_models, recommended_model, AiError, Provider};
 use crate::keys;
+use crate::models_store;
 use crate::paths;
 use crate::scoring::run::Budget;
-use crate::speech::models::Location;
 use crate::storage::settings::{self, AiSettings};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use voice_engine_models::Status;
 
 type Cmd<T> = std::result::Result<T, String>;
 
@@ -117,10 +118,10 @@ impl Engine {
 }
 
 /// `resolve`, plus the built-in local AI (provider "local"): it needs no key but needs its model on this computer,
-/// Ensayo's own copy or one Talaan downloaded. `locate` finds a model (the real one reads the models folder).
+/// in the shared models folder (Ensayo's or another app's copy). `locate` finds a model (the real one asks the store).
 /// The model is named by `fast_model` (empty, or anything that is not a local model id, means the recommended one);
 /// Fast and Strong tasks use the same model.
-pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, locate: impl Fn(&LocalModel) -> Location) -> Result<Option<Engine>, String> {
+pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, locate: impl Fn(&LocalModel) -> Status) -> Result<Option<Engine>, String> {
     if s.provider.trim() != LOCAL {
         return resolve(s, key_of).map(|r| r.map(Engine::Cloud));
     }
@@ -132,8 +133,13 @@ pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, l
 /// The saved settings with the key looked up in the system's key storage.
 pub fn resolved_from_disk() -> Result<Option<Engine>, String> {
     let saved = settings::load(&paths::settings_file());
-    let store = local_models::store();
-    resolve_engine(&saved.ai.unwrap_or_default(), keys::get, |m| store.locate(&m.info))
+    let store = models_store::store()?;
+    let engine = resolve_engine(&saved.ai.unwrap_or_default(), keys::get, |m| store.status(m.info.id));
+    // Ensayo is using the model it just found: another app's Delete must leave it alone.
+    if let Ok(Some(Engine::Local(l))) = &engine {
+        let _ = store.use_model(l.id);
+    }
+    engine
 }
 
 /// What each session has spent so far, kept in memory for the life of the app.
@@ -317,12 +323,12 @@ mod tests {
         assert_eq!(resolve(&a, no_keys).unwrap().unwrap().base, "http://localhost:1234/v1");
     }
 
-    fn found(m: &LocalModel) -> Location {
-        Location::Own(PathBuf::from("/models/llm").join(m.info.id))
+    fn found(m: &LocalModel) -> Status {
+        Status::Installed { dir: PathBuf::from("/models").join(m.info.id), users: vec![voice_engine_models::App::Ensayo], used_by_me: true }
     }
 
-    fn not_found(_: &LocalModel) -> Location {
-        Location::Missing
+    fn not_found(_: &LocalModel) -> Status {
+        Status::Missing
     }
 
     #[test]
@@ -335,11 +341,14 @@ mod tests {
     fn the_local_engine_needs_no_key_and_runs_the_model_where_it_was_found() {
         let Some(Engine::Local(l)) = resolve_engine(&s("local"), no_keys, found).unwrap() else { panic!("expected the local engine") };
         assert_eq!((l.id, l.name), ("qwen3.5-4b", "Qwen3.5 4B"));
-        assert_eq!(l.file, PathBuf::from("/models/llm/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"));
-        // A copy Talaan downloaded counts too.
-        let talaan = |m: &LocalModel| Location::OnThisComputer(PathBuf::from("/talaan/models").join(m.info.id));
-        let Some(Engine::Local(l)) = resolve_engine(&s("local"), no_keys, talaan).unwrap() else { panic!() };
-        assert_eq!(l.file, PathBuf::from("/talaan/models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"));
+        assert_eq!(l.file, PathBuf::from("/models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"));
+        // A copy another app downloaded counts too.
+        let other = |m: &LocalModel| Status::Installed { dir: PathBuf::from("/shared").join(m.info.id), users: vec![voice_engine_models::App::Talaan], used_by_me: false };
+        let Some(Engine::Local(l)) = resolve_engine(&s("local"), no_keys, other).unwrap() else { panic!() };
+        assert_eq!(l.file, PathBuf::from("/shared/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"));
+        // A half-finished download is not a model.
+        let half = |_: &LocalModel| Status::Partial { fraction: 0.5, bytes: 1, cancelled: false };
+        assert!(resolve_engine(&s("local"), no_keys, half).is_err());
     }
 
     #[test]
@@ -353,7 +362,7 @@ mod tests {
         assert_eq!(l.id, "qwen3.5-4b");
         // Only the chosen model has to be there.
         a.fast_model = "qwen3.5-9b".into();
-        assert!(resolve_engine(&a, no_keys, |m| if m.recommended { found(m) } else { Location::Missing }).is_err());
+        assert!(resolve_engine(&a, no_keys, |m| if m.recommended { found(m) } else { Status::Missing }).is_err());
     }
 
     #[test]

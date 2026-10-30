@@ -7,8 +7,9 @@ use crate::ai::local_models::{self, LocalAiStatus};
 use crate::ai_commands::default_models;
 use crate::ai::providers::Provider;
 use crate::redact::Redactor;
-use crate::speech::models::{self, Location, ModelStore};
+use crate::speech::models;
 use crate::storage::settings::LocalSettings;
+use voice_engine_models::{SharedStore, Status};
 
 /// How many log lines the block carries.
 pub const LOG_LINES: usize = 60;
@@ -22,7 +23,8 @@ pub struct Inputs<'a> {
     pub settings: &'a LocalSettings,
     /// The speech model picked in Settings (the window knows it); None means the first one on this computer.
     pub speech_choice: Option<&'a str>,
-    pub speech_store: &'a ModelStore,
+    /// A read-only view of the shared models folder (`SharedStore::read_only`): looking never changes it.
+    pub speech_store: &'a SharedStore,
     pub local_ai: &'a [LocalAiStatus],
     pub helper_found: bool,
     /// "ready", "missing", "other_machine" or "stale_lock".
@@ -41,16 +43,35 @@ fn safe_model(name: &str) -> String {
 }
 
 fn speech_line(i: &Inputs) -> String {
-    let chosen = i.speech_choice.and_then(models::find).filter(|m| m.engine.is_speech());
-    let by_order = || models::speech_in_order().find(|m| i.speech_store.locate(m) != Location::Missing);
-    let Some(m) = chosen.or_else(by_order).or_else(|| models::find(models::DEFAULT_MODEL)) else { return "Speech model: none".into() };
-    let state = match i.speech_store.locate(m) {
-        Location::Own(_) => "files present",
-        Location::OnThisComputer(_) => "files present (another app's copy)",
-        Location::Missing => "files missing",
+    let chosen = i.speech_choice.filter(|m| models::speech_model(m).is_some());
+    let by_order = || models::speech_in_order().map(|m| m.id).find(|id| matches!(i.speech_store.status(id), Status::Installed { .. }));
+    let id = chosen.or_else(by_order).unwrap_or(models::DEFAULT_MODEL);
+    let state = match i.speech_store.status(id) {
+        Status::Installed { used_by_me: true, .. } => "files present",
+        Status::Installed { used_by_me: false, .. } => "files present (another app's copy)",
+        Status::Partial { .. } => "download unfinished",
+        Status::Downloading { .. } => "downloading",
+        Status::Missing => "files missing",
     };
-    let vad = if i.speech_store.locate(&models::VAD) == Location::Missing { "missing" } else { "present" };
-    format!("Speech model: {} ({}), {state}. Voice detection: {vad}", m.name, m.id)
+    let vad = if matches!(i.speech_store.status(models::VAD), Status::Installed { .. }) { "present" } else { "missing" };
+    format!("Speech model: {} ({id}), {state}. Voice detection: {vad}", models::label(id))
+}
+
+/// Where the shared models folder is, what is installed in it and which apps use each model.
+fn models_lines(i: &Inputs) -> Vec<String> {
+    let installed: Vec<String> = i
+        .speech_store
+        .list()
+        .into_iter()
+        .filter_map(|(m, status)| match status {
+            Status::Installed { users, .. } => {
+                let apps: Vec<String> = users.iter().map(|a| format!("{a:?}")).collect();
+                Some(if apps.is_empty() { m.id.to_string() } else { format!("{} ({})", m.id, apps.join(", ")) })
+            }
+            _ => None,
+        })
+        .collect();
+    vec![format!("Models folder: {}", i.speech_store.root().display()), format!("Models installed: {}", if installed.is_empty() { "none".to_string() } else { installed.join(", ") })]
 }
 
 fn engine_line(i: &Inputs) -> String {
@@ -102,10 +123,9 @@ pub fn build(i: &Inputs, redactor: &Redactor) -> String {
         format!("Ensayo {}", i.app_version),
         format!("System: {} {} ({})", i.os, i.os_version, i.arch).replace("  ", " "),
         speech_line(i),
-        engine_line(i),
-        builtin_line(i),
-        data_line(i.data_state),
     ];
+    lines.extend(models_lines(i));
+    lines.extend([engine_line(i), builtin_line(i), data_line(i.data_state)]);
     if let Some(mb) = i.free_disk_mb {
         lines.push(format!("Free disk space: {}", size_text(mb)));
     }
@@ -198,16 +218,20 @@ mod tests {
 
     struct Fixture {
         settings: LocalSettings,
-        store: ModelStore,
+        store: SharedStore,
         local: Vec<LocalAiStatus>,
         tail: Vec<String>,
     }
 
     fn fixture(ai: AiSettings, tail: Vec<String>) -> (tempfile::TempDir, Fixture) {
         let dir = tempfile::tempdir().unwrap();
-        let store = ModelStore { root: dir.path().join("models"), talaan_root: None, reuse: false };
-        let local = local_models::status_in(&ModelStore { root: dir.path().join("models").join("llm"), talaan_root: None, reuse: false });
+        let store = SharedStore::open_at(voice_engine_models::App::Ensayo, dir.path().join("models")).unwrap();
+        let local = local_models::status_in(&store);
         (dir, Fixture { settings: LocalSettings { ai: Some(ai), ..Default::default() }, store, local, tail })
+    }
+
+    fn dir_of(d: &tempfile::TempDir) -> std::path::PathBuf {
+        d.path().join("models")
     }
 
     fn inputs<'a>(f: &'a Fixture, data_state: &'a str, choice: Option<&'a str>) -> Inputs<'a> {
@@ -222,6 +246,7 @@ mod tests {
         // Nothing downloaded: the line names this computer's default.
         let default = crate::speech::models::find(crate::speech::models::DEFAULT_MODEL).unwrap();
         assert!(out.contains(&format!("Speech model: {} ({}), files missing. Voice detection: missing", default.name, default.id)), "{out}");
+        assert!(out.contains("Models folder: ") && out.contains("Models installed: none"), "{out}");
         assert!(out.contains("Feedback engine: claude (fast claude-sonnet-5-5, strong claude-sonnet-5-5), API key saved"), "{out}");
         assert!(out.contains("Built-in AI: qwen3.5-4b not downloaded, helper found"), "{out}");
         assert!(out.contains("Data folder: ready"), "{out}");
@@ -258,15 +283,22 @@ mod tests {
         let out = build(&inputs(&f, "ready", Some("whisper-tiny")), &redactor());
         assert!(out.contains("Whisper Tiny") || out.contains("(whisper-tiny)"), "{out}");
         // A model that is on disk is "in use" when nothing is chosen.
-        let tiny = models::find("whisper-tiny").unwrap();
-        let own = f.store.own_dir(tiny);
+        let tiny = models::speech_model("whisper-tiny").unwrap();
+        let own = f.store.model_dir(tiny.id);
         std::fs::create_dir_all(&own).unwrap();
         for file in tiny.files {
             let h = std::fs::File::create(own.join(file.name)).unwrap();
             h.set_len(file.size).unwrap();
         }
         let out = build(&inputs(&f, "ready", None), &redactor());
-        assert!(out.contains("(whisper-tiny), files present"), "{out}");
+        assert!(out.contains("(whisper-tiny), files present (another app's copy)"), "installed but not yet marked as Ensayo's: {out}");
+        assert!(out.contains("Models installed: whisper-tiny"), "{out}");
+        // Used by Ensayo and Talaan: both are named.
+        f.store.use_model("whisper-tiny").unwrap();
+        voice_engine_models::SharedStore::open_at(voice_engine_models::App::Talaan, dir_of(&d)).unwrap().use_model("whisper-tiny").unwrap();
+        let out = build(&inputs(&f, "ready", None), &redactor());
+        assert!(out.contains("(whisper-tiny), files present."), "{out}");
+        assert!(out.contains("Models installed: whisper-tiny (Talaan, Ensayo)") || out.contains("Models installed: whisper-tiny (Ensayo, Talaan)"), "{out}");
         drop(d);
     }
 

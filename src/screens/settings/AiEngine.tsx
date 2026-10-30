@@ -131,7 +131,7 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
             <span className="e-h3" style={{ fontSize: "15px" }}>{m.name}</span>
             <span className="e-small">{formatSize(m.size_mb)} · {m.licence} licence · made by {m.maker}</span>
           </span>
-          {m.state !== "missing" ? (
+          {m.state === "ready" || m.state === "on_this_computer" ? (
             <span className="e-badge e-badge-ok">{localModelLine(m)}</span>
           ) : (
             !downloading && <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => ai.download(m.id)}>Download</button>
@@ -149,7 +149,7 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
             </div>
           </div>
         )}
-        {m.state === "missing" && !downloading && <span className="e-meta">{localModelLine(m)}. Until then you'll get timing notes only.</span>}
+        {m.state !== "ready" && m.state !== "on_this_computer" && !downloading && <span className="e-meta">{localModelLine(m)}. Until then you'll get timing notes only.</span>}
       </div>
       {status.models.length > 1 && (
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>

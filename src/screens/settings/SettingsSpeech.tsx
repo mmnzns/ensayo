@@ -46,7 +46,7 @@ function SpeechLive() {
           </div>
           {rows.map((m, i) => {
             const busy = downloadingId === m.id;
-            const have = m.state !== "missing";
+            const have = m.state === "ready" || m.state === "on_this_computer";
             return (
               <div key={m.id} className="e-rowline" style={{ padding: "12px 0", flexWrap: "wrap", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
                 {m.inUse ? <span className="e-dot" aria-hidden="true" /> : <span style={ring(have ? "var(--e-muted)" : "var(--e-line)")} />}
