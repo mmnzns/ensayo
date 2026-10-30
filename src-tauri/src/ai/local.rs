@@ -473,7 +473,8 @@ mod tests {
         assert_eq!(ai.complete(&fast()).unwrap().text, "fine");
     }
 
-    /// Unix-only fakes: shell scripts that need state (a log, a counter) the plain fake cannot keep.
+    /// Unix-only fakes: shell scripts that keep state (a request log, a run counter, a pid file) and use `kill -0`, which a
+    /// cmd script cannot do reliably. The plain fake above covers the same helper flow on Windows.
     #[cfg(unix)]
     mod sh {
         use super::*;

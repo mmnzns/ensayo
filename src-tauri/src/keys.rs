@@ -65,6 +65,15 @@ mod tests {
     }
 
     #[test]
+    fn the_windows_uninstaller_pops_every_result_and_leaves_keys_and_data_alone_during_an_update() {
+        let hook = include_str!("../windows/hooks.nsh");
+        let post = &hook[hook.find("NSIS_HOOK_POSTUNINSTALL").unwrap()..];
+        assert_eq!(post.matches("nsExec::Exec").count(), post.matches("Pop $0").count(), "an unpopped result is left on the NSIS stack");
+        let guard = post.find("$UpdateMode <> 1").expect("an update (/UPDATE) must skip the deletion");
+        assert!(guard < post.find("nsExec::Exec").unwrap() && guard < post.find("RMDir").unwrap());
+    }
+
+    #[test]
     fn the_service_name_is_ensayos_own_so_other_apps_keys_are_never_read() {
         assert_eq!(SERVICE, "Ensayo");
     }

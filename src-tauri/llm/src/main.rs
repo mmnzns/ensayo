@@ -98,7 +98,46 @@ fn load<'a>(llama: &LlamaBackend, loaded: &'a mut Option<Loaded>, path: &str) ->
 }
 
 fn threads() -> i32 {
-    std::thread::available_parallelism().map(|n| n.get() as i32).unwrap_or(4).clamp(2, 8)
+    let logical = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    thread_count(logical, physical_cores())
+}
+
+/// llama.cpp threads. Mac: all the cores, 2 to 8. Windows: the processor build is limited by memory bandwidth and the
+/// math units a core's two hardware threads share, so the physical cores (at most 8) are the right count; without
+/// that figure, half the logical threads (a core usually has two).
+fn thread_count(logical: usize, physical: Option<usize>) -> i32 {
+    let n = if cfg!(target_os = "windows") { physical.filter(|p| *p > 0).unwrap_or(logical / 2) } else { logical };
+    n.clamp(2, 8) as i32
+}
+
+/// Physical core count on Windows, from the processor-core entries of GetLogicalProcessorInformationEx.
+#[cfg(target_os = "windows")]
+fn physical_cores() -> Option<usize> {
+    use windows::Win32::System::SystemInformation::{GetLogicalProcessorInformationEx, RelationProcessorCore, SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX};
+    let mut bytes = 0u32;
+    // The first call fails on purpose and says how big the answer is.
+    unsafe { let _ = GetLogicalProcessorInformationEx(RelationProcessorCore, None, &mut bytes); }
+    if bytes == 0 {
+        return None;
+    }
+    let mut buf = vec![0u8; bytes as usize];
+    unsafe { GetLogicalProcessorInformationEx(RelationProcessorCore, Some(buf.as_mut_ptr() as *mut SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX), &mut bytes) }.ok()?;
+    // Entries are variable length: each starts with its own size.
+    let (mut at, mut cores) = (0usize, 0usize);
+    while at + 8 <= bytes as usize {
+        let size = u32::from_ne_bytes(buf[at + 4..at + 8].try_into().ok()?) as usize;
+        if size == 0 {
+            break;
+        }
+        cores += 1;
+        at += size;
+    }
+    (cores > 0).then_some(cores)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn physical_cores() -> Option<usize> {
+    None
 }
 
 fn context_params(n_ctx: u32) -> LlamaContextParams {
@@ -198,6 +237,26 @@ mod tests {
     #[test]
     fn threads_stay_between_two_and_eight() {
         assert!((2..=8).contains(&threads()));
+    }
+
+    #[test]
+    fn the_thread_count_follows_the_system() {
+        if cfg!(target_os = "windows") {
+            assert_eq!(thread_count(16, Some(8)), 8);
+            assert_eq!(thread_count(16, Some(12)), 8);
+            assert_eq!(thread_count(8, Some(4)), 4);
+            assert_eq!(thread_count(4, Some(2)), 2);
+            assert_eq!(thread_count(2, Some(1)), 2);
+            // No core figure: half the logical threads.
+            assert_eq!(thread_count(12, None), 6);
+            assert_eq!(thread_count(32, None), 8);
+            assert_eq!(thread_count(2, None), 2);
+        } else {
+            assert_eq!(thread_count(10, None), 8);
+            assert_eq!(thread_count(10, Some(4)), 8);
+            assert_eq!(thread_count(4, None), 4);
+            assert_eq!(thread_count(1, None), 2);
+        }
     }
 
     #[test]

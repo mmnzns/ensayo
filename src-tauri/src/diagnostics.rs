@@ -122,6 +122,7 @@ pub fn build(i: &Inputs, redactor: &Redactor) -> String {
 // ---------- reading this computer ----------
 
 /// "macOS 15.1" style version from `sw_vers -productVersion`.
+#[cfg_attr(target_os = "windows", allow(dead_code))]
 pub fn parse_mac_version(out: &str) -> String {
     out.trim().to_string()
 }
@@ -132,7 +133,23 @@ pub fn parse_windows_version(out: &str) -> String {
     out.split("Version").nth(1).map(|v| v.trim().trim_end_matches(']').trim().to_string()).unwrap_or_default()
 }
 
+/// "11 24H2, build 26100.4652" from the registry's version facts. The registry's ProductName still says Windows 10 on
+/// Windows 11, so 11 is decided from the build number (22000 and up). `display_version` is "24H2" (empty on old builds)
+/// and `ubr` the update revision.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub fn windows_version_text(display_version: &str, build: u32, ubr: Option<u32>) -> String {
+    let major = if build >= 22000 { "11" } else { "10" };
+    let release = display_version.trim();
+    let release = if release.is_empty() { String::new() } else { format!(" {release}") };
+    let build = match ubr {
+        Some(u) => format!("{build}.{u}"),
+        None => build.to_string(),
+    };
+    format!("{major}{release}, build {build}")
+}
+
 /// Free megabytes on the volume, from POSIX `df -Pk <path>` output (second line, fourth column in KB).
+#[cfg_attr(target_os = "windows", allow(dead_code))]
 pub fn parse_df_free_mb(out: &str) -> Option<u64> {
     let line = out.lines().nth(1)?;
     let kb: u64 = line.split_whitespace().nth(3)?.parse().ok()?;
@@ -164,12 +181,25 @@ pub fn os_version() -> String {
     #[cfg(target_os = "macos")]
     return run("sw_vers", &["-productVersion"]).map(|o| parse_mac_version(&o)).unwrap_or_default();
     #[cfg(target_os = "windows")]
-    return run("cmd", &["/C", "ver"]).map(|o| parse_windows_version(&o)).unwrap_or_default();
+    return windows_registry_version().or_else(|| run("cmd", &["/C", "ver"]).map(|o| parse_windows_version(&o))).unwrap_or_default();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     String::new()
 }
 
-/// Free space on the volume holding `dir`. Mac and Linux ask `df`; on Windows it is left out (no light way to ask).
+/// The real Windows version from the registry (HKLM, readable without rights): "11 24H2, build 26100.4652".
+#[cfg(target_os = "windows")]
+fn windows_registry_version() -> Option<String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+    let key = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion").ok()?;
+    let build: u32 = key.get_value::<String, _>("CurrentBuildNumber").ok()?.trim().parse().ok()?;
+    // Windows 10 before 20H2 has ReleaseId only; DisplayVersion is the name people know.
+    let display = key.get_value::<String, _>("DisplayVersion").or_else(|_| key.get_value::<String, _>("ReleaseId")).unwrap_or_default();
+    let ubr = key.get_value::<u32, _>("UBR").ok();
+    Some(windows_version_text(&display, build, ubr))
+}
+
+/// Free space on the volume holding `dir`: Mac and Linux ask `df`, Windows asks GetDiskFreeSpaceExW.
 pub fn free_disk_mb(dir: &std::path::Path) -> Option<u64> {
     #[cfg(not(target_os = "windows"))]
     {
@@ -178,8 +208,14 @@ pub fn free_disk_mb(dir: &std::path::Path) -> Option<u64> {
     }
     #[cfg(target_os = "windows")]
     {
-        let _ = dir;
-        None
+        use windows::core::HSTRING;
+        use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+        // The folder may not exist yet on a first run; its nearest existing parent is on the same volume.
+        let probe = dir.ancestors().find(|p| p.exists())?;
+        let mut available = 0u64;
+        // The first figure is what this user may use, which is what a download needs.
+        unsafe { GetDiskFreeSpaceExW(&HSTRING::from(probe.as_os_str()), Some(&mut available), None, None) }.ok()?;
+        Some(available / (1024 * 1024))
     }
 }
 
@@ -301,11 +337,27 @@ mod tests {
         assert!(!out.contains("REALLYSECRET") && out.contains("[key]"), "{out}");
     }
 
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn this_computer_reports_its_windows_version_and_free_disk() {
+        let v = os_version();
+        assert!(v.starts_with("10") || v.starts_with("11"), "{v}");
+        assert!(v.contains("build"), "{v}");
+        let dir = tempfile::tempdir().unwrap();
+        assert!(free_disk_mb(dir.path()).is_some_and(|mb| mb > 0));
+        // A folder that does not exist yet is asked about through its parent.
+        assert!(free_disk_mb(&dir.path().join("not").join("yet")).is_some());
+    }
+
     #[test]
     fn the_system_commands_output_is_read_into_versions_and_free_space() {
         assert_eq!(parse_mac_version("15.1\n"), "15.1");
         assert_eq!(parse_windows_version("\r\nMicrosoft Windows [Version 10.0.22631.4037]\r\n"), "10.0.22631.4037");
         assert_eq!(parse_windows_version("garbage"), "");
+        assert_eq!(windows_version_text("24H2", 26100, Some(4652)), "11 24H2, build 26100.4652");
+        assert_eq!(windows_version_text("24H2", 26100, None), "11 24H2, build 26100");
+        assert_eq!(windows_version_text("", 22000, Some(1)), "11, build 22000.1");
+        assert_eq!(windows_version_text(" 22H2 ", 19045, Some(5011)), "10 22H2, build 19045.5011");
         let df = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk3s5 971350180 500000000 125829120 81% /System/Volumes/Data\n";
         assert_eq!(parse_df_free_mb(df), Some(122880));
         assert_eq!(parse_df_free_mb("nonsense"), None);
