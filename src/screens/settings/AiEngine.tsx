@@ -17,11 +17,9 @@ import {
   isLocalAddress,
   localEngineOf,
   localDeletedLine,
-  localFetchLabel,
   localModelHere,
   localModelLine,
   localModelOf,
-  localProgressLine,
   modelChoices,
   serverFor,
   shownModel,
@@ -39,8 +37,8 @@ import {
   type LocalAiView,
   type ProviderInfo,
 } from "./aiSettings";
-import { formatSize } from "./format";
-import { deleteQuestion } from "./speechModels";
+import SpeechModelList from "./SpeechModelList";
+import { modelRows, type SpeechModelEntry } from "./speechModels";
 import { CheckIcon } from "./parts";
 
 export type TestState = { sig: string; status: "testing" | "ok" | "bad" | "empty"; line: string };
@@ -172,12 +170,10 @@ export function useLocalAi(active: boolean) {
 
 type LocalAi = ReturnType<typeof useLocalAi>;
 
-const percent = (fraction: number) => Math.round(Math.min(1, Math.max(0, fraction || 0)) * 100);
-
-/** The built-in local AI: which model, where it stands, and the download. Nothing here needs a key. */
+/** The built-in local AI: the models and where each stands, listed like the speech models (the recommended one first, the rest behind "Show all models"). Nothing here needs a key. */
 export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenState; change: (next: AiScreenState) => void }) {
   const { status, busy, error } = ai;
-  const [sizeOpen, setSizeOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const m = localModelOf(status, st.settings);
 
   if (status && !status.helper_found) {
@@ -194,67 +190,28 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
       </span>
     );
   }
-  const downloading = busy?.id === m.id || m.state === "downloading";
-  const progress = busy?.id === m.id ? busy.fraction : (m.fraction ?? 0);
   const here = localModelHere(m);
-  const fetchLabel = localFetchLabel(m);
-  const showSizes = status.models.length > 1 && (sizeOpen || !m.recommended);
+  const entries: SpeechModelEntry[] = [...status.models].sort((a, b) => Number(b.recommended) - Number(a.recommended)).map((x) => ({ ...x, languages: "" }));
+  // Only a model that is on this computer can be "in use"; one still to download is the choice, not yet the engine.
+  const rows = modelRows(entries, here ? m.id : "", busy?.id ?? null);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-          <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span className="e-h3" style={{ fontSize: "15px" }}>{m.name}</span>
-            <span className="e-small">{formatSize(m.size_mb)} · {m.licence} licence · made by {m.maker}</span>
-          </span>
-          {here ? (
-            <span className="e-badge e-badge-ok">{localModelLine(m)}</span>
-          ) : (
-            fetchLabel && !downloading && <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={!!busy} onClick={() => ai.download(m.id)}>{fetchLabel}</button>
-          )}
-        </div>
-        <span className="e-small">{m.note}</span>
-        {downloading && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <div className="e-bar" role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(progress)}>
-              <span style={{ width: `${percent(progress)}%` }} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-              <span className="e-meta" role="status">{localProgressLine(progress)}</span>
-              <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={ai.cancel}>Cancel</button>
-            </div>
-          </div>
-        )}
-        {!here && !downloading && <span className="e-meta">{localModelLine(m)}. Until then you'll get timing notes only.</span>}
-        {here && ai.confirming !== m.id && (
-          <span>
-            <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={!!busy} onClick={() => ai.askDelete(m.id)}>Delete</button>
-          </span>
-        )}
-        {here && ai.confirming === m.id && (
-          <span role="alertdialog" aria-label={`Delete ${m.name}`} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <span className="e-small" style={{ color: "var(--e-ink)" }}>{deleteQuestion(m.name)}</span>
-            <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => ai.remove(m.id)}>Delete</button>
-            <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => ai.askDelete(null)}>Keep it</button>
-          </span>
-        )}
+      <div className="e-soft" style={{ display: "flex", flexDirection: "column", padding: "4px 16px" }}>
+        <SpeechModelList
+          rows={rows}
+          fraction={busy?.fraction ?? 0}
+          busy={!!busy}
+          showAll={showAll}
+          confirmId={ai.confirming}
+          onShowAll={setShowAll}
+          onUse={(id) => change({ ...st, settings: withLocalModel(status, st.settings, id) })}
+          onFetch={(id) => ai.download(id)}
+          onCancel={ai.cancel}
+          onAskDelete={ai.askDelete}
+          onDelete={(id) => ai.remove(id)}
+        />
       </div>
-      {status.models.length > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          {showSizes ? (
-            <>
-              <label htmlFor="ls" className="e-small">Model</label>
-              <select id="ls" className="e-input" style={{ width: "320px" }} disabled={!!busy} value={m.id} onChange={(e) => change({ ...st, settings: withLocalModel(status, st.settings, e.target.value) })}>
-                {status.models.map((x) => (
-                  <option key={x.id} value={x.id}>{`${x.name} · ${formatSize(x.size_mb)}${x.recommended ? " (recommended)" : ""}`}</option>
-                ))}
-              </select>
-            </>
-          ) : (
-            <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setSizeOpen(true)}>Show all models</button>
-          )}
-        </div>
-      )}
+      {!here && !rows.some((r) => r.downloadingHere) && <span className="e-meta">{localModelLine(m)}. Until a model is downloaded and in use, you'll get timing notes only.</span>}
       <span className="e-meta">
         No key needed, and nothing you say leaves this computer. A small model like this is good for judging your answers and reading your stories. It is weaker at follow-up questions, so if the follow-up drill matters to you, use a cloud key instead.
       </span>

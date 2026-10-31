@@ -21,11 +21,9 @@ import {
   withDetectedServer,
   type AiScreenState,
   type DetectedServer,
-  localFetchLabel,
   localModelHere,
   localModelLine,
   localModelOf,
-  localProgressLine,
   modelChoices,
   modelFromChoice,
   privacySetup,
@@ -315,10 +313,7 @@ describe("the built-in local AI", () => {
     expect(localModelLine(model("a", { state: "downloading_elsewhere" }))).toBe("Another Craft Concepts app is downloading it");
   });
 
-  it("offers Download, Resume or nothing, and Delete only for a model that is complete here", () => {
-    expect(localFetchLabel(model("a", { state: "missing" }))).toBe("Download");
-    expect(localFetchLabel(model("a", { state: "partial" }))).toBe("Resume");
-    for (const state of ["ready", "on_this_computer", "downloading", "downloading_elsewhere"] as const) expect(localFetchLabel(model("a", { state }))).toBeNull();
+  it("counts a model as here only when it is complete on this computer", () => {
     expect(localModelHere(model("a", { state: "ready" }))).toBe(true);
     expect(localModelHere(model("a", { state: "on_this_computer" }))).toBe(true);
     for (const state of ["missing", "partial", "downloading", "downloading_elsewhere"] as const) expect(localModelHere(model("a", { state }))).toBe(false);
@@ -328,14 +323,6 @@ describe("the built-in local AI", () => {
     expect(localDeletedLine("Qwen3.5 4B", "erased")).toBe("Qwen3.5 4B is deleted from this computer.");
     expect(localDeletedLine("Qwen3.5 4B", "kept")).toContain("stays on this computer");
     expect(localDeletedLine("Qwen3.5 4B", "not_using")).toBe("Ensayo wasn't using Qwen3.5 4B.");
-  });
-
-  it("words the progress as a whole percent that never runs backwards or past 100", () => {
-    expect(localProgressLine(0)).toBe("Downloading… 0%");
-    expect(localProgressLine(0.426)).toBe("Downloading… 43%");
-    expect(localProgressLine(1.4)).toBe("Downloading… 100%");
-    expect(localProgressLine(-1)).toBe("Downloading… 0%");
-    expect(localProgressLine(Number.NaN)).toBe("Downloading… 0%");
   });
 });
 

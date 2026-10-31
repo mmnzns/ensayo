@@ -310,9 +310,6 @@ export function localModelLine(m: LocalModel): string {
 /** On this computer completely, so it can be used and deleted. */
 export const localModelHere = (m: LocalModel): boolean => m.state === "ready" || m.state === "on_this_computer";
 
-/** The button that fetches a model: "Download" for nothing on disk, "Resume" for an interrupted download, none when it is here or being fetched. */
-export const localFetchLabel = (m: LocalModel): "Download" | "Resume" | null => (m.state === "missing" ? "Download" : m.state === "partial" ? "Resume" : null);
-
 /** What the person is told after Delete: "erased", "kept" (another app still uses it) or "not_using". */
 export function localDeletedLine(name: string, result: string): string {
   return result === "kept"
@@ -320,11 +317,6 @@ export function localDeletedLine(name: string, result: string): string {
     : result === "erased"
       ? `${name} is deleted from this computer.`
       : `Ensayo wasn't using ${name}.`;
-}
-
-export function localProgressLine(fraction: number): string {
-  const f = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
-  return `Downloading… ${Math.round(f * 100)}%`;
 }
 
 // ---------- What leaves this computer ----------

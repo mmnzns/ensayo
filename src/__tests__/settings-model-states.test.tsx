@@ -76,16 +76,18 @@ const localModel = (id: string, over: Partial<LocalModel> = {}): LocalModel => (
 const settings = { provider: "local", fast_model: "", strong_model: "", base_url: "", cost_cap_usd: 1 };
 const st: AiScreenState = { kind: "local", cloudId: "claude", settings };
 
-function panel(m: LocalModel, over: Record<string, unknown> = {}) {
-  const status: LocalAiView = { models: [m], selected: m.id, helper_found: true };
+function panel(models: LocalModel | LocalModel[], over: Record<string, unknown> = {}, saved = "") {
+  const list = Array.isArray(models) ? models : [models];
+  const status: LocalAiView = { models: list, selected: list[0].id, helper_found: true };
   const ai = { status, busy: null, error: "", notice: "", confirming: null, askDelete: no, download: no, cancel: no, remove: no, ...over };
-  return renderToString(<BuiltInPanel ai={ai as never} st={st} change={no} />);
+  return renderToString(<BuiltInPanel ai={ai as never} st={{ ...st, settings: { ...settings, fast_model: saved } }} change={no} />);
 }
 
 describe("the built-in local AI panel", () => {
   it("offers Download for a missing model", () => {
     const html = panel(localModel("a"));
     expect(html).toContain(">Download<");
+    expect(html).toContain("Not downloaded");
     expect(html).not.toContain("Delete");
   });
 
@@ -93,13 +95,15 @@ describe("the built-in local AI panel", () => {
     const html = panel(localModel("a", { state: "partial", fraction: 0.4 }));
     expect(html).toContain(">Resume<");
     expect(html).toContain("Partly downloaded, 40%");
+    expect(html).toContain('aria-valuenow="40"');
   });
 
   it("shows progress and Cancel while it downloads here", () => {
     const html = panel(localModel("a", { state: "downloading", fraction: 0.2 }), { busy: { id: "a", fraction: 0.6 } });
     expect(html).toContain("Cancel");
-    expect(html).toContain("Downloading… 60%");
+    expect(html).toContain("Downloading, 60%");
     expect(html).not.toContain(">Resume<");
+    expect(html).not.toContain(">Download<");
   });
 
   it("says another app is downloading it and nothing to press", () => {
@@ -107,6 +111,7 @@ describe("the built-in local AI panel", () => {
     expect(html).toContain("Another Craft Concepts app is downloading it");
     expect(html).not.toContain(">Download<");
     expect(html).not.toContain(">Resume<");
+    expect(html).not.toContain("Cancel");
   });
 
   it("shows Delete for a model that is here, and the question before it goes", () => {
@@ -118,6 +123,38 @@ describe("the built-in local AI panel", () => {
 
   it("says what a delete did", () => {
     expect(panel(localModel("a"), { notice: "Model a is deleted from this computer." })).toContain("is deleted from this computer.");
+  });
+
+  const two = [localModel("small", { state: "ready" }), localModel("big", { recommended: false, state: "ready" })];
+
+  it("lists the recommended model first and keeps the others behind Show all models, with no dropdown", () => {
+    const html = panel([localModel("big", { recommended: false }), localModel("small")]);
+    expect(html).toContain("Show all models");
+    expect(html).toContain("1 more");
+    expect(html).toContain("Model small");
+    expect(html).not.toContain("Model big");
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain("<option");
+  });
+
+  it("puts the recommended model first even when the backend lists it second", () => {
+    const html = panel([localModel("big", { recommended: false, state: "ready" }), localModel("small", { state: "ready" })], {}, "big");
+    expect(html.indexOf("Model small")).toBeGreaterThan(-1);
+    expect(html.indexOf("Model small")).toBeLessThan(html.indexOf("Model big"));
+  });
+
+  it("marks the chosen model In use and offers Use on the other one that is here", () => {
+    const html = panel(two, {}, "big");
+    expect(html).toContain("In use");
+    expect(html.match(/>Use</g)).toHaveLength(1);
+    expect(html.match(/>Delete</g)).toHaveLength(2);
+  });
+
+  it("says the AI is timing-only until the chosen model is downloaded", () => {
+    const html = panel(localModel("a"));
+    expect(html).toContain("timing notes only");
+    expect(html).not.toContain("In use");
+    expect(panel(localModel("a", { state: "ready" }))).not.toContain("timing notes only");
   });
 });
 
