@@ -14,6 +14,9 @@ import {
   kindOfProvider,
   localEngineFor,
   localEngineOf,
+  localDeletedLine,
+  localFetchLabel,
+  localModelHere,
   localModelLine,
   localModelOf,
   localProgressLine,
@@ -301,6 +304,24 @@ describe("the built-in local AI", () => {
     expect(localModelLine(model("a", { state: "ready" }))).toBe("Ready");
     expect(localModelLine(model("a", { state: "on_this_computer" }))).toBe("Found on this computer");
     expect(localModelLine(model("a", { state: "missing" }))).toBe("Download the model to use it");
+    expect(localModelLine(model("a", { state: "partial", fraction: 0.4 }))).toBe("Partly downloaded, 40%");
+    expect(localModelLine(model("a", { state: "downloading", fraction: 0.25 }))).toBe("Downloading, 25%");
+    expect(localModelLine(model("a", { state: "downloading_elsewhere" }))).toBe("Another Craft Concepts app is downloading it");
+  });
+
+  it("offers Download, Resume or nothing, and Delete only for a model that is complete here", () => {
+    expect(localFetchLabel(model("a", { state: "missing" }))).toBe("Download");
+    expect(localFetchLabel(model("a", { state: "partial" }))).toBe("Resume");
+    for (const state of ["ready", "on_this_computer", "downloading", "downloading_elsewhere"] as const) expect(localFetchLabel(model("a", { state }))).toBeNull();
+    expect(localModelHere(model("a", { state: "ready" }))).toBe(true);
+    expect(localModelHere(model("a", { state: "on_this_computer" }))).toBe(true);
+    for (const state of ["missing", "partial", "downloading", "downloading_elsewhere"] as const) expect(localModelHere(model("a", { state }))).toBe(false);
+  });
+
+  it("says what a delete did", () => {
+    expect(localDeletedLine("Qwen3.5 4B", "erased")).toBe("Qwen3.5 4B is deleted from this computer.");
+    expect(localDeletedLine("Qwen3.5 4B", "kept")).toContain("stays on this computer");
+    expect(localDeletedLine("Qwen3.5 4B", "not_using")).toBe("Ensayo wasn't using Qwen3.5 4B.");
   });
 
   it("words the progress as a whole percent that never runs backwards or past 100", () => {

@@ -42,9 +42,29 @@ pub static OFFERED: &[Offered] = &[
 /// kept every "um" and "uh" (bench_real_models, two voices).
 pub const DEFAULT_MODEL: &str = if cfg!(target_os = "windows") { "parakeet-ultra" } else { "whisper-turbo" };
 
-/// The speech models in the order Settings lists them: this computer's default first, then Ensayo's order.
+/// The speech models Ensayo recommends, in the order Settings lists them: this computer's default first, then
+/// Ensayo's order.
 pub fn speech_in_order() -> impl Iterator<Item = &'static Offered> {
     find(DEFAULT_MODEL).into_iter().chain(OFFERED.iter().filter(|m| m.id != DEFAULT_MODEL))
+}
+
+/// One speech model as Settings lists it.
+#[derive(Debug, PartialEq)]
+pub struct Listed {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub maker: &'static str,
+    pub note: &'static str,
+    /// One of Ensayo's own picks; the others sit behind "Show all models".
+    pub recommended: bool,
+}
+
+/// Every speech model the engine has: Ensayo's picks first, in its order, then the rest in the engine's order. Ensayo's
+/// own name and note go with its picks; the others carry the engine's.
+pub fn speech_list() -> Vec<Listed> {
+    let picks = speech_in_order().map(|o| Listed { id: o.id, name: o.name, maker: o.maker, note: o.note, recommended: true });
+    let rest = catalog::speech().filter(|m| find(m.id).is_none()).map(|m| Listed { id: m.id, name: m.name, maker: m.maker, note: m.note, recommended: false });
+    picks.chain(rest).collect()
 }
 
 /// A model Ensayo offers (never the voice detection model).
@@ -74,6 +94,32 @@ mod tests {
         assert_eq!(order[0], expected);
         assert_eq!(order.len(), OFFERED.len(), "every offered model, once");
         assert!(!order.contains(&VAD));
+    }
+
+    #[test]
+    fn the_list_has_every_speech_model_once_with_ensayos_twelve_first_and_recommended() {
+        let list = speech_list();
+        let ids: Vec<&str> = list.iter().map(|m| m.id).collect();
+        let unique: std::collections::HashSet<_> = ids.iter().collect();
+        assert_eq!(unique.len(), ids.len(), "each model once");
+        assert_eq!(ids.len(), catalog::speech().count(), "every speech model the engine has");
+        assert_eq!(OFFERED.len(), 12);
+        assert!(list[..12].iter().all(|m| m.recommended) && list[12..].iter().all(|m| !m.recommended));
+        assert_eq!(list[0].id, DEFAULT_MODEL);
+        let picks: Vec<&str> = speech_in_order().map(|o| o.id).collect();
+        assert_eq!(ids[..12], picks[..], "Ensayo's order first");
+        assert!(!ids.contains(&VAD) && !ids.contains(&"diarization") && !ids.contains(&"search") && !ids.contains(&"qwen3.5-4b"));
+        assert!(ids.contains(&"whisper-turbo-full"), "a model Ensayo doesn't word is still offered");
+    }
+
+    #[test]
+    fn ensayos_words_go_with_its_picks_and_the_engines_with_the_rest() {
+        let list = speech_list();
+        let turbo = list.iter().find(|m| m.id == "whisper-turbo").unwrap();
+        assert_eq!((turbo.name, turbo.note), ("Whisper Large Turbo", "Most accurate. 99 languages, including Filipino."));
+        let other = list.iter().find(|m| m.id == "whisper-medium-en").unwrap();
+        let engine = catalog::find("whisper-medium-en").unwrap();
+        assert_eq!((other.name, other.maker, other.note), (engine.name, engine.maker, engine.note));
     }
 
     #[test]

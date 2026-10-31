@@ -26,6 +26,10 @@ pub static CATALOG: &[LocalModel] = &[
         info: Offered { id: "qwen3.5-9b", name: "Qwen3.5 9B", maker: "Qwen", note: "Larger. A little more thorough; needs 16 GB of memory and takes about twice as long." },
         recommended: false,
     },
+    LocalModel {
+        info: Offered { id: "granite-4.2-3b", name: "Granite 4.2 3B", maker: "IBM", note: "Smaller and lighter than Qwen. A choice for an older computer; its notes are a little less thorough." },
+        recommended: false,
+    },
 ];
 
 /// The model most people should use.
@@ -115,11 +119,13 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_has_one_recommended_small_model_and_one_larger() {
-        assert_eq!(CATALOG.len(), 2);
+    fn the_catalog_has_the_recommended_small_model_then_the_larger_one_then_granite() {
+        let ids: Vec<&str> = CATALOG.iter().map(|m| m.info.id).collect();
+        assert_eq!(ids, ["qwen3.5-4b", "qwen3.5-9b", "granite-4.2-3b"]);
         assert_eq!(CATALOG.iter().filter(|m| m.recommended).count(), 1);
         assert_eq!(recommended().info.id, "qwen3.5-4b");
         assert!(CATALOG[1].engine().size() > CATALOG[0].engine().size());
+        assert!(CATALOG[2].engine().size() < CATALOG[0].engine().size(), "Granite is the lighter download");
         for m in CATALOG {
             let e = m.engine();
             assert_eq!(e.kind, Kind::Llm, "{}", m.info.id);
@@ -172,7 +178,8 @@ mod tests {
         sparse(&data.path().join(m.info.id).join(m.engine().files[0].name), m.engine().files[0].size);
         store.use_model(m.info.id).unwrap();
         let s = status_in(&store);
-        assert_eq!(s.len(), 2);
+        assert_eq!(s.len(), 3);
+        assert_eq!(s[2].state, "missing");
         assert_eq!((s[0].id, s[0].state, s[0].recommended), ("qwen3.5-4b", "missing", true));
         assert_eq!((s[1].id, s[1].state), ("qwen3.5-9b", "ready"));
         assert_eq!(s[0].size_mb, 2740);

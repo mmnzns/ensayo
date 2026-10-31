@@ -22,6 +22,8 @@ export interface SpeechModelEntry {
   note: string;
   languages: string;
   size_mb: number;
+  /** One of Ensayo's own picks. The rest sit behind "Show all models". */
+  recommended?: boolean;
   /** "ready" is Ensayo's own copy, "on_this_computer" one another app downloaded. "partial" is an interrupted download, "downloading" one running here and "downloading_elsewhere" one another app is running; none of those three can be used yet. */
   state: "ready" | "on_this_computer" | "missing" | "partial" | "downloading" | "downloading_elsewhere";
   /** How much is on disk, for "partial" and the two "downloading" states. */
@@ -48,15 +50,69 @@ export interface ModelRow extends SpeechModelEntry {
   inUse: boolean;
   status: string;
   canUse: boolean;
-  canDownload: boolean;
+  /** "Download" for a model with nothing on disk, "Resume" for an interrupted one; null when neither applies. */
+  fetch: "Download" | "Resume" | null;
+  /** Another Craft Concepts app is downloading it: Ensayo waits for it. */
+  elsewhere: boolean;
+  /** Downloading here (this app's own download, running now). */
+  downloadingHere: boolean;
+  /** Completely on this computer, so it can be deleted. */
+  canDelete: boolean;
 }
 
-export function modelRows(models: SpeechModelEntry[], inUseId: string): ModelRow[] {
+const percentOf = (fraction: number | undefined) => progressPercent(fraction ?? 0);
+
+/** `downloadingId` is the model this window is downloading now; the backend also says "downloading" for a download that is running here. */
+export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadingId: string | null = null): ModelRow[] {
   return models.map((m) => {
     const inUse = m.id === inUseId;
-    const status = inUse ? "In use" : m.state === "on_this_computer" ? "Found, from another app on this computer" : m.state === "ready" ? "Downloaded" : "Not downloaded";
-    return { ...m, inUse, status, canUse: here(m) && !inUse, canDownload: m.state === "missing" || m.state === "partial" };
+    const downloadingHere = m.state === "downloading" || m.id === downloadingId;
+    const elsewhere = m.state === "downloading_elsewhere";
+    const status = inUse
+      ? "In use"
+      : downloadingHere
+        ? "Downloading"
+        : elsewhere
+          ? "Another Craft Concepts app is downloading it"
+          : m.state === "partial"
+            ? `Partly downloaded, ${percentOf(m.fraction)}%`
+            : m.state === "on_this_computer"
+              ? "Found, from another app on this computer"
+              : m.state === "ready"
+                ? "Downloaded"
+                : "Not downloaded";
+    return {
+      ...m,
+      inUse,
+      status,
+      canUse: here(m) && !inUse,
+      fetch: downloadingHere || elsewhere ? null : m.state === "missing" ? "Download" : m.state === "partial" ? "Resume" : null,
+      elsewhere,
+      downloadingHere,
+      canDelete: here(m),
+    };
   });
+}
+
+/** The rows to list: Ensayo's picks, and with `showAll` the rest too. A model that is on this computer, in use or being
+ *  fetched is never hidden, so Delete and Cancel stay in reach. */
+export function visibleRows(rows: ModelRow[], showAll: boolean): ModelRow[] {
+  return showAll ? rows : rows.filter((r) => r.recommended !== false || r.inUse || r.canDelete || r.downloadingHere || r.elsewhere || r.state === "partial");
+}
+
+/** How many models "Show all models" would add. */
+export const hiddenCount = (rows: ModelRow[]): number => rows.length - visibleRows(rows, false).length;
+
+/** The question before a model is deleted. */
+export const deleteQuestion = (name: string): string => `Delete ${name}? Other Craft Concepts apps that use it keep it.`;
+
+/** What the person is told after Delete: the backend says "erased", "kept" (another app still uses it) or "not_using". */
+export function deletedLine(name: string, result: string): string {
+  return result === "kept"
+    ? `${name} is no longer used by Ensayo. Another Craft Concepts app still uses it, so it stays on this computer.`
+    : result === "erased"
+      ? `${name} is deleted from this computer.`
+      : `Ensayo wasn't using ${name}.`;
 }
 
 /** Megabytes of speech models on this computer, counting the ones another app downloaded. */

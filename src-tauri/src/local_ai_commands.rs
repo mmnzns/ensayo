@@ -97,7 +97,7 @@ mod tests {
         let v = view_with("", &store, true);
         assert_eq!(v.selected, "qwen3.5-4b");
         assert!(v.helper_found);
-        assert_eq!(v.models.len(), 2);
+        assert_eq!(v.models.len(), 3);
         assert!(v.models.iter().all(|m| m.state == "missing"));
         assert_eq!(view_with("qwen3.5-9b", &store, false).selected, "qwen3.5-9b");
         assert!(!view_with("qwen3.5-9b", &store, false).helper_found);

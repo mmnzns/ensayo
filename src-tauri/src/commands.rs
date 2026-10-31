@@ -64,19 +64,22 @@ pub struct SpeechModelEntry {
     note: &'static str,
     languages: &'static str,
     size_mb: u64,
+    /// One of Ensayo's own picks; Settings shows the rest behind "Show all models".
+    recommended: bool,
     /// The same states as `ModelStatus`.
     state: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     fraction: Option<f32>,
 }
 
-/// Every model Ensayo offers for turning speech into text, in the order Settings lists them, with its state.
+/// Every speech model the engine has, Ensayo's picks first, in the order Settings lists them, with its state.
 pub fn speech_model_list(store: &SharedStore) -> Vec<SpeechModelEntry> {
-    models::speech_in_order()
+    models::speech_list()
+        .into_iter()
         .filter_map(|o| {
             let m = models::speech_model(o.id)?;
             let status = store.status(o.id);
-            Some(SpeechModelEntry { id: o.id, name: o.name, maker: o.maker, note: o.note, languages: m.languages, size_mb: m.size() / 1_000_000, state: models_store::state_name(&status), fraction: models_store::fraction_of(&status) })
+            Some(SpeechModelEntry { id: o.id, name: o.name, maker: o.maker, note: o.note, languages: m.languages, size_mb: m.size() / 1_000_000, recommended: o.recommended, state: models_store::state_name(&status), fraction: models_store::fraction_of(&status) })
         })
         .collect()
 }
@@ -313,13 +316,17 @@ mod tests {
     }
 
     #[test]
-    fn the_speech_list_has_every_offered_model_and_nothing_else() {
+    fn the_speech_list_has_every_speech_model_with_ensayos_picks_first_and_nothing_else() {
         let (_d, store) = temp_store();
         let list = speech_model_list(&store);
         assert_eq!(list[0].id, models::DEFAULT_MODEL, "this computer's recommended model comes first");
         assert!(list.iter().all(|m| m.state == "missing"), "an empty folder has nothing");
         assert!(list.iter().all(|m| m.id != "vad"), "voice detection is not a model to pick");
-        assert_eq!(list.len(), models::OFFERED.len());
+        assert_eq!(list.len(), catalog::speech().count());
+        assert_eq!(list.iter().filter(|m| m.recommended).count(), models::OFFERED.len());
+        assert!(list[..models::OFFERED.len()].iter().all(|m| m.recommended), "the picks come first");
+        let json = serde_json::to_value(&list[0]).unwrap();
+        assert_eq!(json["recommended"], true);
         assert!(list.iter().all(|m| m.size_mb > 10 && !m.languages.is_empty()));
     }
 

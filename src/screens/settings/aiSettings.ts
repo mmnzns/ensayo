@@ -218,7 +218,7 @@ export interface LocalModel {
   licence: string;
   size_mb: number;
   recommended: boolean;
-  /** "ready", "on_this_computer" (a copy Talaan downloaded, used where it is) or "missing". */
+  /** "ready" (Ensayo uses it), "on_this_computer" (a copy another app downloaded, used where it is), "missing", "partial" (an interrupted download), "downloading" (here) or "downloading_elsewhere" (another app is fetching it). */
   state: "ready" | "on_this_computer" | "missing" | "partial" | "downloading" | "downloading_elsewhere";
   fraction?: number;
 }
@@ -244,7 +244,36 @@ export function withLocalModel(status: LocalAiView, s: AiSettings, id: string): 
 }
 
 export function localModelLine(m: LocalModel): string {
-  return m.state === "ready" ? "Ready" : m.state === "on_this_computer" ? "Found on this computer" : "Download the model to use it";
+  const percent = Math.round(Math.min(1, Math.max(0, m.fraction ?? 0)) * 100);
+  switch (m.state) {
+    case "ready":
+      return "Ready";
+    case "on_this_computer":
+      return "Found on this computer";
+    case "partial":
+      return `Partly downloaded, ${percent}%`;
+    case "downloading":
+      return `Downloading, ${percent}%`;
+    case "downloading_elsewhere":
+      return "Another Craft Concepts app is downloading it";
+    default:
+      return "Download the model to use it";
+  }
+}
+
+/** On this computer completely, so it can be used and deleted. */
+export const localModelHere = (m: LocalModel): boolean => m.state === "ready" || m.state === "on_this_computer";
+
+/** The button that fetches a model: "Download" for nothing on disk, "Resume" for an interrupted download, none when it is here or being fetched. */
+export const localFetchLabel = (m: LocalModel): "Download" | "Resume" | null => (m.state === "missing" ? "Download" : m.state === "partial" ? "Resume" : null);
+
+/** What the person is told after Delete: "erased", "kept" (another app still uses it) or "not_using". */
+export function localDeletedLine(name: string, result: string): string {
+  return result === "kept"
+    ? `${name} is no longer used by Ensayo. Another Craft Concepts app still uses it, so it stays on this computer.`
+    : result === "erased"
+      ? `${name} is deleted from this computer.`
+      : `Ensayo wasn't using ${name}.`;
 }
 
 export function localProgressLine(fraction: number): string {

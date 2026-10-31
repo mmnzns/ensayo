@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SPEECH_MODELS } from "../practice/api";
-import { candidateModels, inUseModel, modelRows, modelsSize, progressPercent, speechOrder, type SpeechModelEntry } from "../screens/settings/speechModels";
+import { candidateModels, deleteQuestion, deletedLine, hiddenCount, inUseModel, modelRows, modelsSize, progressPercent, speechOrder, visibleRows, type SpeechModelEntry } from "../screens/settings/speechModels";
 
 const entry = (id: string, state: SpeechModelEntry["state"], size_mb = 100): SpeechModelEntry => ({ id, name: id, maker: "OpenAI", note: "", languages: "", size_mb, state });
 
@@ -41,8 +41,8 @@ describe("the model list", () => {
     const rows = modelRows(list, "whisper-turbo");
     expect(rows.map((r) => r.status)).toEqual(["In use", "Found, from another app on this computer", "Not downloaded"]);
     expect(rows[0].inUse).toBe(true);
-    expect(rows[1]).toMatchObject({ canUse: true, canDownload: false });
-    expect(rows[2]).toMatchObject({ canUse: false, canDownload: true });
+    expect(rows[1]).toMatchObject({ canUse: true, fetch: null, canDelete: true });
+    expect(rows[2]).toMatchObject({ canUse: false, fetch: "Download", canDelete: false });
   });
 
   it("an own copy that is not in use can be picked", () => {
@@ -61,5 +61,64 @@ describe("the model list", () => {
     expect(progressPercent(2)).toBe(100);
     expect(progressPercent(-1)).toBe(0);
     expect(progressPercent(Number.NaN)).toBe(0);
+  });
+});
+
+describe("a model that is partly downloaded, being fetched, or being fetched by another app", () => {
+  const partial = { ...entry("whisper-small", "partial"), fraction: 0.4 };
+  const elsewhere = { ...entry("parakeet-v3", "downloading_elsewhere"), fraction: 0.5 };
+  const here = { ...entry("whisper-base", "downloading"), fraction: 0.25 };
+
+  it("offers Resume for an interrupted download and says how much is there", () => {
+    const [row] = modelRows([partial], "");
+    expect(row).toMatchObject({ fetch: "Resume", status: "Partly downloaded, 40%", canUse: false, canDelete: false });
+  });
+
+  it("waits, with no button, for a download another Craft Concepts app is running", () => {
+    const [row] = modelRows([elsewhere], "");
+    expect(row).toMatchObject({ fetch: null, elsewhere: true, status: "Another Craft Concepts app is downloading it", canUse: false, canDelete: false });
+  });
+
+  it("shows a download running here as downloading, from the backend state or from this window's own download", () => {
+    expect(modelRows([here], "")[0]).toMatchObject({ downloadingHere: true, fetch: null, status: "Downloading" });
+    const [row] = modelRows([entry("whisper-base", "missing")], "", "whisper-base");
+    expect(row).toMatchObject({ downloadingHere: true, fetch: null });
+  });
+
+  it("is never counted as on this computer until it is complete", () => {
+    expect(modelsSize([partial, elsewhere, here])).toBe(0);
+    expect(inUseModel([partial, elsewhere, here], "whisper-small")).toBe("");
+  });
+});
+
+describe("recommended models first, the rest behind Show all models", () => {
+  const rec = (id: string, state: SpeechModelEntry["state"] = "missing") => ({ ...entry(id, state), recommended: true });
+  const more = (id: string, state: SpeechModelEntry["state"] = "missing") => ({ ...entry(id, state), recommended: false });
+  const list = [rec("whisper-turbo", "ready"), rec("parakeet-v3"), more("whisper-medium-en"), more("whisper-tiny-en", "on_this_computer"), more("whisper-base-en", "partial")];
+
+  it("lists only the picks, and any other model that is here or half downloaded, until Show all models", () => {
+    const rows = modelRows(list, "whisper-turbo");
+    expect(visibleRows(rows, false).map((r) => r.id)).toEqual(["whisper-turbo", "parakeet-v3", "whisper-tiny-en", "whisper-base-en"]);
+    expect(hiddenCount(rows)).toBe(1);
+  });
+
+  it("lists everything, in the order given, when asked", () => {
+    expect(visibleRows(modelRows(list, ""), true).map((r) => r.id)).toEqual(list.map((m) => m.id));
+  });
+
+  it("treats a backend that sends no recommended flag as every model being a pick", () => {
+    expect(visibleRows(modelRows([entry("a", "missing")], ""), false)).toHaveLength(1);
+  });
+});
+
+describe("deleting a model", () => {
+  it("asks in plain words that name the model and say other apps keep it", () => {
+    expect(deleteQuestion("Whisper Large Turbo")).toBe("Delete Whisper Large Turbo? Other Craft Concepts apps that use it keep it.");
+  });
+
+  it("says what happened for each answer", () => {
+    expect(deletedLine("Whisper Small", "erased")).toBe("Whisper Small is deleted from this computer.");
+    expect(deletedLine("Whisper Small", "kept")).toContain("Another Craft Concepts app still uses it");
+    expect(deletedLine("Whisper Small", "not_using")).toBe("Ensayo wasn't using Whisper Small.");
   });
 });

@@ -14,6 +14,9 @@ import {
   initialState,
   isLocalAddress,
   localEngineOf,
+  localDeletedLine,
+  localFetchLabel,
+  localModelHere,
   localModelLine,
   localModelOf,
   localProgressLine,
@@ -32,6 +35,7 @@ import {
   type ProviderInfo,
 } from "./aiSettings";
 import { formatSize } from "./format";
+import { deleteQuestion } from "./speechModels";
 import { CheckIcon } from "./parts";
 
 export type TestState = { sig: string; status: "testing" | "ok" | "bad" | "empty"; line: string };
@@ -53,6 +57,9 @@ export function useLocalAi(active: boolean) {
   const [status, setStatus] = useState<LocalAiView | null>(null);
   const [busy, setBusy] = useState<{ id: string; fraction: number } | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  /** The model whose Delete question is open. */
+  const [confirming, askDelete] = useState<string | null>(null);
   const cancelled = useRef(false);
 
   const refresh = () => invoke<LocalAiView>("local_ai_status").then(setStatus, (e) => setError(explainTestError(e)));
@@ -76,6 +83,7 @@ export function useLocalAi(active: boolean) {
   const download = (id: string) => {
     cancelled.current = false;
     setError("");
+    setNotice("");
     setBusy({ id, fraction: 0 });
     invoke("download_local_ai", { id }).then(
       () => {
@@ -85,7 +93,7 @@ export function useLocalAi(active: boolean) {
       },
       (e) => {
         setBusy(null);
-        setError(cancelled.current ? "Download stopped. Press Download to pick up where it left off." : explainTestError(e));
+        setError(cancelled.current ? "Download stopped. Press Resume to pick up where it left off." : explainTestError(e));
         void refresh();
       },
     );
@@ -94,7 +102,24 @@ export function useLocalAi(active: boolean) {
     cancelled.current = true;
     invoke("cancel_local_ai_download").catch((e) => setError(explainTestError(e)));
   };
-  return { status, busy, error, download, cancel };
+  /** Deletes a model from this computer. Another Craft Concepts app that uses it keeps it. */
+  const remove = (id: string) => {
+    askDelete(null);
+    setError("");
+    const name = status?.models.find((m) => m.id === id)?.name ?? "The model";
+    invoke<{ result: string }>("delete_model", { id }).then(
+      (r) => {
+        setNotice(localDeletedLine(name, r.result));
+        void refresh();
+        announceAiChange();
+      },
+      (e) => {
+        setError(explainTestError(e));
+        void refresh();
+      },
+    );
+  };
+  return { status, busy, error, notice, confirming, askDelete, download, cancel, remove };
 }
 
 type LocalAi = ReturnType<typeof useLocalAi>;
@@ -121,7 +146,10 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
       </span>
     );
   }
-  const downloading = busy?.id === m.id;
+  const downloading = busy?.id === m.id || m.state === "downloading";
+  const progress = busy?.id === m.id ? busy.fraction : (m.fraction ?? 0);
+  const here = localModelHere(m);
+  const fetchLabel = localFetchLabel(m);
   const showSizes = status.models.length > 1 && (sizeOpen || !m.recommended);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -131,31 +159,43 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
             <span className="e-h3" style={{ fontSize: "15px" }}>{m.name}</span>
             <span className="e-small">{formatSize(m.size_mb)} · {m.licence} licence · made by {m.maker}</span>
           </span>
-          {m.state === "ready" || m.state === "on_this_computer" ? (
+          {here ? (
             <span className="e-badge e-badge-ok">{localModelLine(m)}</span>
           ) : (
-            !downloading && <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => ai.download(m.id)}>Download</button>
+            fetchLabel && !downloading && <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={!!busy} onClick={() => ai.download(m.id)}>{fetchLabel}</button>
           )}
         </div>
         <span className="e-small">{m.note}</span>
-        {downloading && busy && (
+        {downloading && (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <div className="e-bar" role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(busy.fraction)}>
-              <span style={{ width: `${percent(busy.fraction)}%` }} />
+            <div className="e-bar" role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(progress)}>
+              <span style={{ width: `${percent(progress)}%` }} />
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-              <span className="e-meta" role="status">{localProgressLine(busy.fraction)}</span>
+              <span className="e-meta" role="status">{localProgressLine(progress)}</span>
               <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={ai.cancel}>Cancel</button>
             </div>
           </div>
         )}
-        {m.state !== "ready" && m.state !== "on_this_computer" && !downloading && <span className="e-meta">{localModelLine(m)}. Until then you'll get timing notes only.</span>}
+        {!here && !downloading && <span className="e-meta">{localModelLine(m)}. Until then you'll get timing notes only.</span>}
+        {here && ai.confirming !== m.id && (
+          <span>
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={!!busy} onClick={() => ai.askDelete(m.id)}>Delete</button>
+          </span>
+        )}
+        {here && ai.confirming === m.id && (
+          <span role="alertdialog" aria-label={`Delete ${m.name}`} style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span className="e-small" style={{ color: "var(--e-ink)" }}>{deleteQuestion(m.name)}</span>
+            <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => ai.remove(m.id)}>Delete</button>
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => ai.askDelete(null)}>Keep it</button>
+          </span>
+        )}
       </div>
       {status.models.length > 1 && (
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           {showSizes ? (
             <>
-              <label htmlFor="ls" className="e-small">Size</label>
+              <label htmlFor="ls" className="e-small">Model</label>
               <select id="ls" className="e-input" style={{ width: "320px" }} disabled={!!busy} value={m.id} onChange={(e) => change({ ...st, settings: withLocalModel(status, st.settings, e.target.value) })}>
                 {status.models.map((x) => (
                   <option key={x.id} value={x.id}>{`${x.name} · ${formatSize(x.size_mb)}${x.recommended ? " (recommended)" : ""}`}</option>
@@ -163,7 +203,7 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
               </select>
             </>
           ) : (
-            <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setSizeOpen(true)}>Other size</button>
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setSizeOpen(true)}>Show all models</button>
           )}
         </div>
       )}
@@ -173,6 +213,7 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
       {error && (
         <span className="e-meta" role="status" style={{ color: "var(--e-ink)" }}>{error}</span>
       )}
+      {ai.notice && !error && <span className="e-meta" role="status">{ai.notice}</span>}
     </div>
   );
 }
