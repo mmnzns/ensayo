@@ -59,9 +59,9 @@ jobs:
   # unused, which is a known cost. Same tag in `engine-ref` and after the @.
   helpers:
     if: github.event_name == 'push'
-    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.2.2
+    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.2.3
     with:
-      engine-ref: v0.2.2
+      engine-ref: v0.2.3
       helpers: "llm,llm-vulkan"
       llm-name: ensayo-llm
 

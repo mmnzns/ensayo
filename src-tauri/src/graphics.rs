@@ -107,7 +107,7 @@ pub async fn graphics_card() -> Result<GraphicsCard, String> {
 }
 
 /// Turns the card on or off. What is loaded is let go so the next load uses the new value, and turning it on again
-/// forgets that it failed before.
+/// tries the card again with the engine's `retry_gpu()` on the live AI client, not a new client.
 #[tauri::command]
 pub async fn set_graphics_card(on: bool) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -116,10 +116,11 @@ pub async fn set_graphics_card(on: bool) -> Result<(), String> {
         s.gpu = Some(on);
         settings::save(&path, &s).map_err(|e| e.to_string())?;
         crate::speech::loaded::unload();
-        crate::ai::local::stop_shared();
         if on {
             set_speech_card_failed(false);
-            crate::ai::local::forget_card_failure();
+            crate::ai::local::card_turned_on();
+        } else {
+            crate::ai::local::card_turned_off();
         }
         Ok(())
     })

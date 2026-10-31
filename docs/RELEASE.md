@@ -3,14 +3,14 @@
 1. Update `version` in `src-tauri/tauri.conf.json` (and `package.json`, `src-tauri/Cargo.toml`) to the same number.
 2. `git tag v0.2.0 && git push origin v0.2.0`. The **Release** workflow makes a draft release in this repo, then builds the Windows installer and the Apple silicon Mac disk image (no Intel build: ONNX Runtime has no Intel Mac binaries), signs the updater packages, and uploads everything. When both builds are done it adds `latest.json`.
 3. Open the draft on the repo's Releases page, install the files on a clean user account, run through `INSTALL.md`, then publish by hand. Publishing is what makes the update visible to installed copies.
-4. Before tagging, check that the engine tag is the same in `src-tauri/Cargo.toml` (the `voice-engine-*` dependencies), `src-tauri/llm/Cargo.toml` and `.github/workflows/release.yml` (the `@v0.2.2` and `engine-ref`). See "The AI helpers" below.
+4. Before tagging, check that the engine tag is the same in `src-tauri/Cargo.toml` (the `voice-engine-*` dependencies), `src-tauri/llm/Cargo.toml` and `.github/workflows/release.yml` (the `@v0.2.3` and `engine-ref`). See "The AI helpers" below.
 5. A dry run without a tag: Actions, **Release**, **Run workflow** (builds the installers and keeps them as artifacts; needs the signing secrets).
 
 ## The AI helpers
 
 The built-in local AI runs in a helper program next to the app (`ensayo-llm`, plus `ensayo-llm-vulkan` on Windows for the graphics card). In a release they are **not** built by Ensayo's jobs:
 
-- The `helpers` job in `release.yml` calls voice-engine's reusable workflow (`mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.2.2`, `engine-ref: v0.2.2`, `helpers: "llm,llm-vulkan"`, `llm-name: ensayo-llm`). It builds with the engine's own `.cargo/config.toml` (CPU baseline: AVX2 on x64, macOS 11), which Ensayo's workspace cannot do for a git dependency.
+- The `helpers` job in `release.yml` calls voice-engine's reusable workflow (`mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.2.3`, `engine-ref: v0.2.3`, `helpers: "llm,llm-vulkan"`, `llm-name: ensayo-llm`). It builds with the engine's own `.cargo/config.toml` (CPU baseline: AVX2 on x64, macOS 11), which Ensayo's workspace cannot do for a git dependency.
 - **The engine tag must match `Cargo.toml`.** The `@tag`, `engine-ref` and the `voice-engine-*` tags in `src-tauri/Cargo.toml` and `src-tauri/llm/Cargo.toml` move together, otherwise the helper and the app speak different protocol versions and the app shows "could not start".
 - The Windows and Mac jobs download `helpers-<triple>` into `src-tauri/binaries`, check each file against `SHA256SUMS`, and (Mac) `chmod +x` it: artifacts lose the executable bit. `SHA256SUMS` and `build-info.txt` (engine commit, rustc, llama.cpp and whisper.cpp versions) sit next to the sidecars; Tauri only bundles what `externalBin` lists. The workflow always builds three targets; the Windows ARM64 helper is not used (no ARM64 Windows installer yet), a known cost.
 - The release jobs pass `--config` so `beforeBuildCommand` is just `npm run build`. Without that, `scripts/build-llm-helper.*` would run and overwrite the engine-built helpers with a local build. Dev, `ci.yml` and the **Release** workflow's `test-build` do use those scripts and build the helper from Ensayo's own workspace.

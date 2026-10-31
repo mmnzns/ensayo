@@ -244,7 +244,8 @@ impl Llm for LocalLlm {
 
 /// The client (and through it the helper and its loaded model) is shared by every answer, so a second answer does not
 /// load the model again. It is built for one graphics-card state; changing the setting stops it (`stop_shared`).
-static SHARED: Mutex<Option<(PathBuf, Arc<LlmClient>)>> = Mutex::new(None);
+/// The card helper the client was built with is kept beside it: the engine fixes it when the client is made.
+static SHARED: Mutex<Option<(PathBuf, Arc<LlmClient>, Option<PathBuf>)>> = Mutex::new(None);
 
 /// A handle that answers with `model_path` through the shared client for this helper. Another model replaces the
 /// loaded one inside the helper; another helper path (never in practice) replaces the client. Blocks the first time on
@@ -255,14 +256,14 @@ pub fn shared(exe: &Path, model_path: &Path, model_name: &str) -> LocalLlm {
 
 fn shared_with(exe: &Path, model_path: &Path, model_name: &str, card: &Card, hold: bool) -> LocalLlm {
     let mut slot = SHARED.lock().unwrap_or_else(|e| e.into_inner());
-    let client = match slot.as_ref().filter(|(path, _)| path == exe) {
-        Some((_, client)) => client.clone(),
+    let client = match slot.as_ref().filter(|(path, _, _)| path == exe) {
+        Some((_, client, _)) => client.clone(),
         None => {
-            if let Some((_, old)) = slot.take() {
+            if let Some((_, old, _)) = slot.take() {
                 old.shutdown();
             }
             let client = Arc::new(new_client(exe, card));
-            *slot = Some((exe.to_path_buf(), client.clone()));
+            *slot = Some((exe.to_path_buf(), client.clone(), card.vulkan.clone()));
             client
         }
     };
@@ -273,15 +274,39 @@ fn shared_with(exe: &Path, model_path: &Path, model_name: &str, card: &Card, hol
 /// go of the model's folder.
 pub fn stop_shared() {
     let taken = SHARED.lock().unwrap_or_else(|e| e.into_inner()).take();
-    if let Some((_, client)) = taken {
+    if let Some((_, client, _)) = taken {
         client.shutdown();
     }
     release_hold();
 }
 
+/// The person turned the graphics card off: the loaded model is let go so the next answer loads with the new value,
+/// and the helper stays for `card_turned_on`.
+pub fn card_turned_off() {
+    unload_shared();
+}
+
+/// The person turned the graphics card on (again): the card is tried again without a restart. A live client built for
+/// this card state gets `retry_gpu()` (it forgets the failure, stops a processor helper that took over, and the next
+/// answer starts on the card) and its loaded model is let go; a client built without the card helper (the setting was
+/// off then) can't gain one, so it is stopped and the next answer builds a new one. Call from a worker thread.
+pub fn card_turned_on() {
+    let wanted = vulkan_helper_path();
+    let live = SHARED.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, c, v)| (c.clone(), *v == wanted));
+    match live {
+        Some((client, true)) => {
+            client.retry_gpu();
+            unload_shared();
+        }
+        Some((_, false)) => stop_shared(),
+        None => {}
+    }
+    forget_card_failure();
+}
+
 /// Frees the loaded model's memory and its file now, but keeps the helper for the next answer (a model is being deleted).
 pub fn unload_shared() {
-    let client = SHARED.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, c)| c.clone());
+    let client = SHARED.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, c, _)| c.clone());
     if let Some(client) = client {
         if let Err(e) = client.unload() {
             log::warn!("local AI: could not unload the model: {e}");
