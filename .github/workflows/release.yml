@@ -57,14 +57,15 @@ jobs:
           gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" --draft --title "Ensayo $GITHUB_REF_NAME" --notes-file scripts/release-notes.md
 
-  # The engine's workflow builds all three targets (Mac, Windows x64, Windows ARM64); the Windows ARM64 helper goes
-  # unused, which is a known cost. Same tag in `engine-ref` and after the @.
+  # `targets` builds only what Ensayo ships (Mac Apple silicon and Windows x64); there is no Windows ARM64 installer yet,
+  # so that helper is skipped. Same tag in `engine-ref` and after the @.
   helpers:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.2.3
+    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.3.1
     with:
-      engine-ref: v0.2.3
+      engine-ref: v0.3.1
       helpers: "llm,llm-vulkan"
+      targets: "aarch64-apple-darwin,x86_64-pc-windows-msvc"
       llm-name: ensayo-llm
 
   windows:

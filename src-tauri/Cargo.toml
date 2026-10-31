@@ -33,10 +33,10 @@ rtrb = "0.4.0"
 rubato = "5.0.1"
 hound = "3.5.1"
 # Speech, the model folder and the AI helper client come from the shared engine; every engine crate uses one tag.
-voice-engine-protocol = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.3" }
-voice-engine-stt = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.3" }
-voice-engine-models = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.3" }
-voice-engine-client = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.3" }
+voice-engine-protocol = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.3.1" }
+voice-engine-stt = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.3.1" }
+voice-engine-models = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.3.1" }
+voice-engine-client = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.3.1" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 sha2 = "0.10.9"
 tokio = { version = "1", features = ["rt", "time", "macros"] }
@@ -64,7 +64,7 @@ block2 = "0.6.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # DirectML runs Parakeet on a discrete graphics card.
-voice-engine-stt = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.2.3", features = ["directml"] }
+voice-engine-stt = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.3.1", features = ["directml"] }
 keyring = { version = "3.6.3", features = ["windows-native"] }
 winreg = "0.56.0"
 # In-process system voices (Windows.Media.SpeechSynthesis, the OneCore voices) and the free-disk question; the version is
