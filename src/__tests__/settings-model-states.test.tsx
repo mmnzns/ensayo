@@ -1,7 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { BuiltInPanel } from "../screens/settings/AiEngine";
-import type { AiScreenState, LocalAiView, LocalModel } from "../screens/settings/aiSettings";
+import { BuiltInPanel, DetectedModels } from "../screens/settings/AiEngine";
+import type { AiScreenState, DetectedServer, LocalAiView, LocalModel } from "../screens/settings/aiSettings";
 import SpeechModelList, { type SpeechModelListProps } from "../screens/settings/SpeechModelList";
 import { modelRows, type SpeechModelEntry } from "../screens/settings/speechModels";
 
@@ -118,5 +118,37 @@ describe("the built-in local AI panel", () => {
 
   it("says what a delete did", () => {
     expect(panel(localModel("a"), { notice: "Model a is deleted from this computer." })).toContain("is deleted from this computer.");
+  });
+});
+
+describe("the Ollama and LM Studio screen", () => {
+  const server: DetectedServer = { kind: "ollama", base_url: "http://127.0.0.1:11434", api_base: "http://127.0.0.1:11434/v1", running: true, models: [{ id: "llama3.2:3b", context_length: 131072 }, { id: "phi4", context_length: null }] };
+  const show = (over: Partial<Parameters<typeof DetectedModels>[0]> = {}) =>
+    renderToString(<DetectedModels engineName="Ollama" server={server} looking={false} selected="" onPick={no} onLookAgain={no} {...over} />);
+
+  it("lists each model found with its context size, and Look again", () => {
+    const html = show();
+    expect(html).toContain("Ollama is running. Pick one of its 2 models:");
+    expect(html).toContain("llama3.2:3b · 128K context");
+    expect(html).toContain("phi4 · context size not given");
+    expect(html).toContain("Look again");
+  });
+
+  it("marks the model that is picked", () => {
+    const html = show({ selected: "phi4" });
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+  });
+
+  it("says it is looking, with no list and no Look again, while it looks", () => {
+    const html = show({ server: undefined, looking: true });
+    expect(html).toContain("Looking for Ollama on this computer…");
+    expect(html).not.toContain("Look again");
+  });
+
+  it("says what to do when the server isn't running", () => {
+    const html = show({ server: undefined });
+    expect(html).toContain("find Ollama running on this computer");
+    expect(html).toContain("Look again");
+    expect(html).not.toContain("aria-pressed");
   });
 });

@@ -9,6 +9,8 @@ import {
   LOCAL_ENGINES,
   OTHER_MODEL,
   announceAiChange,
+  contextLine,
+  detectedLine,
   cloudProviders,
   explainTestError,
   initialState,
@@ -21,8 +23,10 @@ import {
   localModelOf,
   localProgressLine,
   modelChoices,
+  serverFor,
   shownModel,
   testedLine,
+  withDetectedServer,
   withKind,
   withLocalModel,
   withLocalEngine,
@@ -31,6 +35,7 @@ import {
   withTypedModel,
   type AiScreenState,
   type AiView,
+  type DetectedServer,
   type LocalAiView,
   type ProviderInfo,
 } from "./aiSettings";
@@ -48,6 +53,49 @@ export function useAiView() {
     invoke<AiView>("ai_settings").then(setView, () => setFailed(true));
   }, []);
   return { view, failed };
+}
+
+/** Ollama and LM Studio running on this computer, looked for only while their settings are open (and again on request). */
+export function useLocalServers(active: boolean) {
+  const [servers, setServers] = useState<DetectedServer[] | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    let stale = false;
+    setLooking(true);
+    invoke<DetectedServer[]>("detect_local_servers").then(
+      (list) => !stale && (setServers(list), setLooking(false)),
+      () => !stale && (setServers([]), setLooking(false)),
+    );
+    return () => {
+      stale = true;
+    };
+  }, [active, round]);
+  return { servers, looking, lookAgain: () => setRound((n) => n + 1) };
+}
+
+/** What was found for the engine on screen: its models with their context sizes, each one a button that picks it. */
+export function DetectedModels({ engineName, server, looking, selected, onPick, onLookAgain }: { engineName: string; server: DetectedServer | undefined; looking: boolean; selected: string; onPick: (id: string) => void; onLookAgain: () => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <span className="e-meta" role="status">{detectedLine(engineName, server, looking)}</span>
+      {!looking && server && server.models.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {server.models.map((m) => (
+            <button key={m.id} type="button" className={selected === m.id ? "e-chip e-chip-on" : "e-chip"} aria-pressed={selected === m.id} style={{ alignSelf: "flex-start" }} onClick={() => onPick(m.id)}>
+              {`${m.id} · ${contextLine(m.context_length)}`}
+            </button>
+          ))}
+        </div>
+      )}
+      {!looking && (
+        <span>
+          <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={onLookAgain}>Look again</button>
+        </span>
+      )}
+    </div>
+  );
 }
 
 const fallbackProvider = (id: string): ProviderInfo => ({ id, name: id, models: [], fast_default: "", strong_default: "", has_key: false, needs_key: id !== "compatible", base_default: "" });
@@ -229,6 +277,9 @@ export function useAiEngine(view: AiView) {
   const [found, setFound] = useState<string[]>([]);
   const [problem, setProblem] = useState("");
   const local = useLocalAi(st.kind === "local");
+  // Ollama and LM Studio are looked for only while one of their screens is open.
+  const lookingFor = st.kind === "local" && st.settings.provider !== BUILT_IN;
+  const detect = useLocalServers(lookingFor);
 
   // Settings save a moment after the last change, and straight away if the screen is left first. The key is never kept here: it goes to the key store and the box empties.
   const latest = useRef(st.settings);
@@ -262,6 +313,14 @@ export function useAiEngine(view: AiView) {
   };
 
   const { kind, settings } = st;
+  const engineName = localEngineOf(settings).name;
+  // When the engine on screen is found running, its address is filled in (unless the person typed a different one).
+  useEffect(() => {
+    if (!lookingFor) return;
+    const next = withDetectedServer(st, detect.servers);
+    if (next !== st) change(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detect.servers, engineName, lookingFor]);
   const cloud = cloudProviders(providers);
   const provider = providers.find((p) => p.id === (kind === "local" ? "compatible" : st.cloudId)) ?? fallbackProvider(kind === "local" ? "compatible" : st.cloudId);
   const sig = `${settings.provider}|${settings.base_url}`;
@@ -341,14 +400,14 @@ export function useAiEngine(view: AiView) {
   /** The three engine cards. "On this computer" means the built-in local AI; Ollama and LM Studio stay in Settings. */
   const chooseKind = (next: AiKind) => moved(next === "local" ? withLocalEngine(withKind(st, "local", providers), "Built-in local AI") : withKind(st, next, providers));
 
-  return { st, providers, kind, settings, cloud, provider, hasKey, typedKey, typeKey, otherOpen, setOtherOpen, test, result, found, problem, local, change, moved, storeKey, removeKey, runTest, saveNow, clearTest, providerChange, chooseKind };
+  return { st, providers, kind, settings, cloud, provider, hasKey, typedKey, typeKey, otherOpen, setOtherOpen, test, result, found, problem, local, detect, change, moved, storeKey, removeKey, runTest, saveNow, clearTest, providerChange, chooseKind };
 }
 
 export type AiEngine = ReturnType<typeof useAiEngine>;
 
 /** The part of the engine form under the three cards: provider and model, the key and Test, or the built-in local AI. `guided` is the setup step, where "on this computer" means the built-in model. */
 export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: boolean }) {
-  const { st, kind, settings, cloud, provider, hasKey, typedKey, otherOpen, setOtherOpen, result, found, problem, local, change, moved } = ai;
+  const { st, kind, settings, cloud, provider, hasKey, typedKey, otherOpen, setOtherOpen, result, found, problem, local, detect, change, moved } = ai;
   const shown = shownModel(provider, settings);
   const choice = otherOpen ? OTHER_MODEL : shown.choice;
   const showTyped = choice === OTHER_MODEL;
@@ -445,6 +504,16 @@ export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: b
                     </div>
                   )}
                 </div>
+              )}
+              {kind === "local" && (
+                <DetectedModels
+                  engineName={engine.name}
+                  server={serverFor(detect.servers, engine)}
+                  looking={detect.looking}
+                  selected={settings.fast_model}
+                  onPick={(id) => change({ ...st, settings: withTypedModel(settings, id) })}
+                  onLookAgain={detect.lookAgain}
+                />
               )}
               {kind === "key" ? (
                 <div className="e-field">

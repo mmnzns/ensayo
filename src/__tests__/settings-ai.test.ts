@@ -14,7 +14,13 @@ import {
   kindOfProvider,
   localEngineFor,
   localEngineOf,
+  contextLine,
+  detectedLine,
   localDeletedLine,
+  serverFor,
+  withDetectedServer,
+  type AiScreenState,
+  type DetectedServer,
   localFetchLabel,
   localModelHere,
   localModelLine,
@@ -394,5 +400,57 @@ describe("test line", () => {
   it("falls back to a plain sentence for anything else", () => {
     expect(explainTestError(undefined)).toBe("That didn't work. Check it and try again.");
     expect(explainTestError("")).toBe("That didn't work. Check it and try again.");
+  });
+});
+
+describe("Ollama and LM Studio found on this computer", () => {
+  const ollama: DetectedServer = { kind: "ollama", base_url: "http://127.0.0.1:11434", api_base: "http://127.0.0.1:11434/v1", running: true, models: [{ id: "llama3.2:3b", context_length: 131072 }] };
+  const lmStudio: DetectedServer = { kind: "lm_studio", base_url: "http://127.0.0.1:1234", api_base: "http://127.0.0.1:1234/v1", running: true, models: [{ id: "qwen3-8b", context_length: 40960 }, { id: "tiny", context_length: null }] };
+  const onOllama = (base_url: string): AiScreenState => ({ kind: "local", cloudId: "claude", settings: { ...settings, provider: "compatible", base_url } });
+
+  it("matches each engine to its own server", () => {
+    expect(serverFor([ollama, lmStudio], localEngineFor("http://localhost:11434"))).toBe(ollama);
+    expect(serverFor([ollama, lmStudio], localEngineFor("http://localhost:1234"))).toBe(lmStudio);
+    expect(serverFor([lmStudio], localEngineFor("http://localhost:11434"))).toBeUndefined();
+    expect(serverFor(null, localEngineFor(""))).toBeUndefined();
+  });
+
+  it("fills in the found address when the address is empty or still the usual one", () => {
+    expect(withDetectedServer(onOllama(""), [ollama]).settings.base_url).toBe("http://127.0.0.1:11434");
+    expect(withDetectedServer(onOllama("http://localhost:11434"), [ollama]).settings.base_url).toBe("http://127.0.0.1:11434");
+    expect(withDetectedServer(onOllama("http://localhost:1234"), [ollama, lmStudio]).settings.base_url).toBe("http://127.0.0.1:1234");
+  });
+
+  it("leaves an address the person typed alone, and changes nothing when nothing was found or it already matches", () => {
+    const typed = onOllama("http://192.168.1.20:11434");
+    expect(withDetectedServer(typed, [ollama])).toBe(typed);
+    const same = onOllama("http://127.0.0.1:11434/");
+    expect(withDetectedServer(same, [ollama])).toBe(same);
+    const plain = onOllama("");
+    expect(withDetectedServer(plain, [])).toBe(plain);
+    expect(withDetectedServer(plain, null)).toBe(plain);
+  });
+
+  it("does nothing for the built-in engine or a cloud key", () => {
+    const builtIn: AiScreenState = { kind: "local", cloudId: "claude", settings: { ...settings, provider: "local" } };
+    expect(withDetectedServer(builtIn, [ollama])).toBe(builtIn);
+    const cloud: AiScreenState = { kind: "key", cloudId: "claude", settings };
+    expect(withDetectedServer(cloud, [ollama])).toBe(cloud);
+  });
+
+  it("says each context size in plain words", () => {
+    expect(contextLine(131072)).toBe("128K context");
+    expect(contextLine(40960)).toBe("40K context");
+    expect(contextLine(512)).toBe("512 context");
+    expect(contextLine(null)).toBe("context size not given");
+  });
+
+  it("says what was found, or what to do when nothing was", () => {
+    expect(detectedLine("Ollama", undefined, true)).toBe("Looking for Ollama on this computer…");
+    expect(detectedLine("Ollama", undefined, false)).toBe("Ensayo didn't find Ollama running on this computer. Start it and press Look again, or type its address.");
+    expect(detectedLine("Ollama", ollama, false)).toBe("Ollama is running. Pick one of its model:");
+    expect(detectedLine("LM Studio", lmStudio, false)).toBe("LM Studio is running. Pick one of its 2 models:");
+    expect(detectedLine("Ollama", { ...ollama, models: [] }, false)).toContain("has no models yet");
+    expect(detectedLine("Ollama", { ...ollama, running: false }, false)).toContain("couldn't read its list of models");
   });
 });

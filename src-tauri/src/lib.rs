@@ -202,6 +202,7 @@ pub fn run() {
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,
             local_ai_commands::stop_local_ai,
+            ai_commands::detect_local_servers,
             graphics::graphics_card,
             graphics::set_graphics_card,
             backup_commands::backup_data,

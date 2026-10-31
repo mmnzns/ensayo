@@ -267,6 +267,57 @@ pub async fn test_ai(provider: String, base_url: Option<String>, key: Option<Str
     .await
 }
 
+/// One model a local server offers, with the context size it says it has.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct DetectedModel {
+    pub id: String,
+    pub context_length: Option<u32>,
+}
+
+/// A local AI server (Ollama or LM Studio) found on this computer.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct DetectedServer {
+    /// "ollama" or "lm_studio".
+    pub kind: &'static str,
+    /// The address to type in Settings, such as `http://127.0.0.1:11434`.
+    pub base_url: String,
+    /// The same with `/v1`: where the chat requests go.
+    pub api_base: String,
+    /// False when something answers there but its model list couldn't be read.
+    pub running: bool,
+    pub models: Vec<DetectedModel>,
+}
+
+/// What the Settings screen needs from the engine's list of running servers.
+pub fn detected(servers: Vec<voice_engine_client::servers::LocalServer>) -> Vec<DetectedServer> {
+    use voice_engine_client::servers::{ServerKind, ServerState};
+    servers
+        .into_iter()
+        .map(|s| DetectedServer {
+            kind: match s.kind {
+                ServerKind::Ollama => "ollama",
+                ServerKind::LmStudio => "lm_studio",
+            },
+            running: s.state == ServerState::Running,
+            base_url: s.base_url,
+            api_base: s.api_base,
+            models: s.models.into_iter().map(|m| DetectedModel { id: m.id, context_length: m.context_length }).collect(),
+        })
+        .collect()
+}
+
+/// Looks for Ollama and LM Studio on this computer and lists their models. Settings › AI asks only when the person opens
+/// the Ollama or LM Studio screen: it connects to the two usual ports and gives up quickly on one that isn't there.
+/// Model names are the person's own, so none is logged.
+#[tauri::command]
+pub async fn detect_local_servers() -> Cmd<Vec<DetectedServer>> {
+    blocking(|| {
+        let _t = crate::logging::Timer::new("detect_local_servers");
+        Ok(detected(voice_engine_client::servers::detect()))
+    })
+    .await
+}
+
 #[tauri::command]
 pub fn session_cost(session_id: String) -> f64 {
     budgets().lock().unwrap_or_else(|e| e.into_inner()).get(&session_id).map(|b| b.spend.usd).unwrap_or(0.0)
@@ -275,6 +326,90 @@ pub fn session_cost(session_id: String) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use voice_engine_client::servers::{detect_at, Probe, ServerKind};
+
+    /// A server on this computer that answers each request with `answer(method, path)`, until the test ends.
+    fn fake_server(answer: fn(&str, &str) -> String) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                std::thread::spawn(move || {
+                    let mut head = Vec::new();
+                    let mut byte = [0u8; 1];
+                    while !head.ends_with(b"\r\n\r\n") && stream.read(&mut byte).map(|n| n > 0).unwrap_or(false) {
+                        head.push(byte[0]);
+                    }
+                    let head = String::from_utf8_lossy(&head).to_string();
+                    let mut first = head.lines().next().unwrap_or("").split(' ');
+                    let (method, path) = (first.next().unwrap_or(""), first.next().unwrap_or(""));
+                    let length = head.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").and_then(|v| v.trim().parse::<usize>().ok())).unwrap_or(0);
+                    let mut body = vec![0u8; length];
+                    let _ = stream.read_exact(&mut body);
+                    let text = answer(method, path);
+                    let _ = write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}", text.len());
+                });
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    fn ollama(_method: &str, path: &str) -> String {
+        match path {
+            "/api/tags" => r#"{"models":[{"name":"llama3.2:3b","size":2019393189}]}"#.into(),
+            "/api/show" => r#"{"model_info":{"general.architecture":"llama","llama.context_length":131072}}"#.into(),
+            _ => "{}".into(),
+        }
+    }
+
+    fn lm_studio(_method: &str, path: &str) -> String {
+        match path {
+            "/api/v0/models" => r#"{"data":[{"id":"qwen3-8b","type":"llm","max_context_length":40960},{"id":"embed","type":"embeddings","max_context_length":2048}]}"#.into(),
+            _ => "{}".into(),
+        }
+    }
+
+    #[test]
+    fn running_servers_come_back_with_their_models_and_context_sizes_and_the_ones_not_there_are_left_out() {
+        let gone = {
+            let l = TcpListener::bind("127.0.0.1:0").unwrap();
+            format!("http://{}", l.local_addr().unwrap())
+        };
+        let probes = [
+            Probe { kind: ServerKind::Ollama, base_url: fake_server(ollama) },
+            Probe { kind: ServerKind::LmStudio, base_url: fake_server(lm_studio) },
+            Probe { kind: ServerKind::LmStudio, base_url: gone },
+        ];
+        let found = detected(detect_at(&probes));
+        assert_eq!(found.len(), 2, "the one that isn't there is left out");
+        assert_eq!((found[0].kind, found[0].running), ("ollama", true));
+        assert_eq!(found[0].models, [DetectedModel { id: "llama3.2:3b".into(), context_length: Some(131_072) }]);
+        assert_eq!((found[1].kind, found[1].running), ("lm_studio", true));
+        assert_eq!(found[1].models, [DetectedModel { id: "qwen3-8b".into(), context_length: Some(40_960) }], "an embeddings model can't chat");
+        assert_eq!(found[0].api_base, format!("{}/v1", found[0].base_url));
+    }
+
+    #[test]
+    fn a_server_that_answers_with_something_else_is_listed_as_not_readable() {
+        let probes = [Probe { kind: ServerKind::Ollama, base_url: fake_server(|_, _| "not what we expect".into()) }];
+        let found = detected(detect_at(&probes));
+        assert_eq!(found.len(), 1);
+        assert!(!found[0].running && found[0].models.is_empty());
+    }
+
+    #[test]
+    fn the_answer_has_the_shape_the_screen_reads() {
+        let found = detected(detect_at(&[Probe { kind: ServerKind::Ollama, base_url: fake_server(ollama) }]));
+        let json = serde_json::to_value(&found).unwrap();
+        assert_eq!(json[0]["kind"], "ollama");
+        assert_eq!(json[0]["running"], true);
+        assert!(json[0]["api_base"].as_str().unwrap().ends_with("/v1"));
+        assert_eq!(json[0]["models"][0]["id"], "llama3.2:3b");
+        assert_eq!(json[0]["models"][0]["context_length"], 131_072);
+    }
 
     fn s(provider: &str) -> AiSettings {
         AiSettings { provider: provider.into(), ..Default::default() }

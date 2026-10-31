@@ -99,6 +99,52 @@ export function isLocalAddress(url: string): boolean {
   return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
 }
 
+// ---------- Ollama and LM Studio running on this computer ----------
+
+/** One model a local server offers (`detect_local_servers`). */
+export interface DetectedModel {
+  id: string;
+  context_length: number | null;
+}
+
+/** A server found running on this computer. `running` is false when something answers there but its model list could not be read. */
+export interface DetectedServer {
+  kind: "ollama" | "lm_studio";
+  base_url: string;
+  api_base: string;
+  running: boolean;
+  models: DetectedModel[];
+}
+
+/** The server that matches an engine in the list, if one was found. */
+export const serverFor = (servers: DetectedServer[] | null, engine: LocalEngine): DetectedServer | undefined =>
+  servers?.find((s) => s.kind === (engine.name === "LM Studio" ? "lm_studio" : "ollama"));
+
+/** The server's address goes into Settings when the address is still the usual one for the engine (or empty): an address the person typed is theirs. */
+export function withDetectedServer(state: AiScreenState, servers: DetectedServer[] | null): AiScreenState {
+  if (state.kind !== "local" || state.settings.provider !== COMPATIBLE) return state;
+  const engine = localEngineOf(state.settings);
+  const found = serverFor(servers, engine);
+  const current = state.settings.base_url.trim().replace(/\/+$/, "");
+  if (!found || found.base_url === current || (current !== "" && current !== engine.address)) return state;
+  return { ...state, settings: { ...state.settings, base_url: found.base_url } };
+}
+
+/** "128K context" for 131072; "context size not given" when the server doesn't say. */
+export function contextLine(tokens: number | null): string {
+  if (!tokens || tokens <= 0) return "context size not given";
+  return tokens >= 1024 ? `${Math.round(tokens / 1024)}K context` : `${tokens} context`;
+}
+
+/** What Settings says about the engine the person picked. */
+export function detectedLine(engineName: string, server: DetectedServer | undefined, looking: boolean): string {
+  if (looking) return `Looking for ${engineName} on this computer…`;
+  if (!server) return `Ensayo didn't find ${engineName} running on this computer. Start it and press Look again, or type its address.`;
+  if (!server.running) return `${engineName} is running, but Ensayo couldn't read its list of models. Check that it is up to date, or type a model name.`;
+  if (server.models.length === 0) return `${engineName} is running but has no models yet. Download one in ${engineName}, then press Look again.`;
+  return `${engineName} is running. Pick one of its ${server.models.length === 1 ? "model" : `${server.models.length} models`}:`;
+}
+
 // ---------- Model dropdown ----------
 
 const labelFor = (p: ProviderInfo, id: string) => (id === p.fast_default ? `${id}${RECOMMENDED}` : id);
