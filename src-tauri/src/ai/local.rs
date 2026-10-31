@@ -18,13 +18,39 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Once};
 use std::time::{Duration, Instant};
 use voice_engine_client::{EngineError, Limits, LlmClient, LlmConfig};
+use voice_engine_models::catalog::LlmInfo;
 use voice_engine_models::ModelHandle;
 use voice_engine_protocol::{Completion, JSON_OBJECT_SCHEMA};
 
 pub const HELPER: &str = "ensayo-llm";
 
-/// Context in tokens (prompt plus reply): room for a long job posting or resume and a full answer.
+/// The most context Ensayo ever asks for, in tokens (prompt plus reply): room for a long job posting or resume and a
+/// full answer. A computer with less memory gets less (`context_for`).
 pub const CONTEXT: u32 = 16_384;
+
+const GIB: u64 = 1 << 30;
+
+/// The context to ask for on a computer with `total_memory_bytes`: what the engine's catalog says fits, never above
+/// `CONTEXT`. Below 12 GiB counts as an 8 GB computer (an "8 GB" Mac reports a little under, and 12 GB is nearer 8 than
+/// 16), below 24 GiB as a 16 GB one, and the rest get the model's maximum. A prompt that no longer fits comes back as
+/// the engine's `PromptTooLong`, which `message` words.
+pub fn context_for(info: &LlmInfo, total_memory_bytes: u64) -> u32 {
+    let fits = if total_memory_bytes < 12 * GIB {
+        info.context_8gb
+    } else if total_memory_bytes < 24 * GIB {
+        info.context_16gb
+    } else {
+        info.context_max
+    };
+    fits.min(CONTEXT)
+}
+
+/// The context for `model_name` on this computer. A model with no catalog size gets `CONTEXT`; a computer that won't say
+/// how much memory it has gets the smallest tier (the safe one).
+fn context_here(model_name: &str) -> u32 {
+    let Some(info) = voice_engine_models::catalog::find(model_name).and_then(|m| m.llm.as_ref()) else { return CONTEXT };
+    context_for(info, crate::diagnostics::total_memory_bytes().unwrap_or(0))
+}
 /// Greedy decoding: the most repeatable scores, like temperature 0 on the cloud models.
 pub const TEMPERATURE: f32 = 0.0;
 
@@ -184,7 +210,7 @@ impl Llm for LocalLlm {
         // Fast and Strong share the one loaded model.
         let c = Completion {
             model_path: self.model_path.to_string_lossy().into_owned(),
-            n_ctx: CONTEXT,
+            n_ctx: context_here(&self.model_name),
             system: req.system.clone(),
             user: req.user.clone(),
             json_schema: req.json.then(|| JSON_OBJECT_SCHEMA.to_string()),
@@ -367,6 +393,44 @@ mod tests {
         match e {
             AiError::Unavailable(m) | AiError::Failed(m) => m,
         }
+    }
+
+    fn info(id: &str) -> &'static LlmInfo {
+        voice_engine_models::catalog::find(id).and_then(|m| m.llm.as_ref()).unwrap()
+    }
+
+    #[test]
+    fn the_context_follows_this_computers_memory_and_the_catalogs_sizes() {
+        let gb = |n: u64| n * GIB;
+        // Per model on 8, 16 and 32 GB, from the engine's catalog, capped at 16384.
+        for (id, want) in [("qwen3.5-4b", [16_384, 16_384, 16_384]), ("qwen3.5-9b", [4_096, 16_384, 16_384]), ("granite-4.2-3b", [16_384, 16_384, 16_384])] {
+            for (memory, want) in [8, 16, 32].into_iter().zip(want) {
+                assert_eq!(context_for(info(id), gb(memory)), want, "{id} on {memory} GB");
+            }
+        }
+        assert_eq!(info("qwen3.5-9b").context_8gb, 4_096, "the catalog still says the 9B needs a small context on 8 GB");
+    }
+
+    #[test]
+    fn the_memory_tiers_have_a_little_slack_and_never_pass_the_cap() {
+        let gb = |n: u64| n * GIB;
+        let nine = info("qwen3.5-9b");
+        assert_eq!(context_for(nine, gb(8) - 1), 4_096, "a little under 8 GB is still 8 GB");
+        assert_eq!(context_for(nine, gb(12) - 1), 4_096);
+        assert_eq!(context_for(nine, gb(12)), 16_384);
+        assert_eq!(context_for(nine, gb(24) - 1), 16_384);
+        assert_eq!(context_for(nine, 0), 4_096, "unknown memory is the smallest tier");
+        let small = LlmInfo { context_max: 8_192, context_8gb: 2_048, context_16gb: 4_096, ..*info("qwen3.5-4b") };
+        assert_eq!([context_for(&small, gb(8)), context_for(&small, gb(16)), context_for(&small, gb(64))], [2_048, 4_096, 8_192], "smaller catalog sizes are kept");
+    }
+
+    #[test]
+    fn a_prompt_that_no_longer_fits_says_how_much_room_there_is() {
+        let long = match message(&EngineError::PromptTooLong { prompt_tokens: 6_000, n_ctx: 4_096, max_tokens: 1_000 }) {
+            AiError::Failed(m) => m,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(long, "The text is too long for the built-in local AI (6000 tokens, room for 3096).");
     }
 
     #[test]

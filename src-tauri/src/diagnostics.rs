@@ -171,6 +171,25 @@ fn run(cmd: &str, args: &[&str]) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Whole bytes from a system command's output (`sysctl -n hw.memsize`, or PowerShell's `TotalPhysicalMemory`).
+pub fn parse_memory_bytes(out: &str) -> Option<u64> {
+    out.split_whitespace().next()?.parse().ok().filter(|b| *b > 0)
+}
+
+/// This computer's installed memory in bytes, asked once; None when the system won't say. Mac asks `sysctl`, Windows
+/// asks PowerShell, and nothing else is supported.
+pub fn total_memory_bytes() -> Option<u64> {
+    static MEMORY: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+    *MEMORY.get_or_init(|| {
+        #[cfg(target_os = "macos")]
+        return run("sysctl", &["-n", "hw.memsize"]).and_then(|o| parse_memory_bytes(&o));
+        #[cfg(target_os = "windows")]
+        return run("powershell", &["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"]).and_then(|o| parse_memory_bytes(&o));
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        None
+    })
+}
+
 pub fn os_name() -> &'static str {
     match std::env::consts::OS {
         "macos" => "macOS",
@@ -341,5 +360,8 @@ mod tests {
         let df = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk3s5 971350180 500000000 125829120 81% /System/Volumes/Data\n";
         assert_eq!(parse_df_free_mb(df), Some(122880));
         assert_eq!(parse_df_free_mb("nonsense"), None);
+        assert_eq!(parse_memory_bytes("17179869184\n"), Some(17_179_869_184));
+        assert_eq!(parse_memory_bytes("\r\n"), None);
+        assert_eq!(parse_memory_bytes("0"), None);
     }
 }
