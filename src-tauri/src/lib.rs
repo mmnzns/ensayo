@@ -32,6 +32,25 @@ pub mod scoring;
 mod speech;
 mod update_commands;
 pub mod update_notice;
+mod window_fit;
+
+/// Fit the main window to the screen it is on (see `window_fit`), then show it. Never leaves it hidden.
+fn show_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let Some(w) = app.get_webview_window("main") else { return };
+    if !w.is_maximized().unwrap_or(false) {
+        if let (Ok(Some(m)), Ok(pos), Ok(size)) = (w.current_monitor(), w.outer_position(), w.outer_size()) {
+            let a = m.work_area();
+            let rect = |x, y, w, h| window_fit::Rect { x, y, w, h };
+            let fitted = window_fit::fit_to_work_area(rect(pos.x, pos.y, size.width, size.height), rect(a.position.x, a.position.y, a.size.width, a.size.height));
+            // set_size is the inside of the window; the fitted size is the outside (title bar and borders included).
+            let frame = w.inner_size().map(|i| (size.width.saturating_sub(i.width), size.height.saturating_sub(i.height))).unwrap_or((0, 0));
+            let _ = w.set_size(tauri::PhysicalSize::new(fitted.w.saturating_sub(frame.0), fitted.h.saturating_sub(frame.1)));
+            let _ = w.set_position(tauri::PhysicalPosition::new(fitted.x, fitted.y));
+        }
+    }
+    let _ = w.show();
+}
 
 /// The models Ensayo already knows it uses at start: the default speech model, voice detection, and the local AI model
 /// when the built-in AI is the feedback engine. (The speech model picked in Settings is the window's; it says so with
@@ -74,6 +93,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        // Remembers size, position and maximized state. Visibility is left out: the window opens hidden (see
+        // tauri.conf.json) and is shown once it has been fitted to the screen.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE)
+                .build(),
+        )
         .manage(commands::RecorderState::default())
         .setup(|app| {
             logging::init();
@@ -81,6 +107,7 @@ pub fn run() {
             graphics::set_app(app.handle().clone());
             graphics::warm();
             start_up_models();
+            show_main_window(app.handle());
             update_commands::setup(app.handle());
             update_commands::check_at_launch(app.handle());
             Ok(())

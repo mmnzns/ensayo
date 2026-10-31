@@ -7,6 +7,9 @@ import { startErrorLogging } from "./data/diagnostics";
 import { readPrefs } from "./screens/settings/prefs";
 import { noteSpeechModelUse } from "./screens/settings/speechUse";
 
+// Lets the stylesheet style the scrollbars on Windows only (see ensayo.css).
+if (/Windows/.test(navigator.userAgent)) document.documentElement.dataset.os = "windows";
+
 // Errors in this window go to the app's log file (Settings › About › Show log folder).
 startErrorLogging();
 

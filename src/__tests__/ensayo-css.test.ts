@@ -14,6 +14,11 @@ describe("ensayo.css", () => {
     expect(css).toContain('[data-theme="light"]');
   });
 
+  it("styles Windows scrollbars from the tokens", () => {
+    expect(css).toContain('[data-os="windows"] ::-webkit-scrollbar-thumb');
+    expect(css).toContain("var(--e-muted)");
+  });
+
   it("loads nothing from the internet", () => {
     expect(css).not.toContain("http");
     expect(css).not.toContain("@import url");

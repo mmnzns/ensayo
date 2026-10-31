@@ -8,6 +8,7 @@ An interview rehearsal app for Mac and Windows. The app asks a question, you ans
 
 ## Build rules (follow exactly)
 
+0. **Sonnet does the heavy lifting (absolute rule).** If Sonnet can handle the development work, Sonnet does it: implementation, exploration, tests and builds run in Sonnet subagents. The main session only plans, briefs, reviews and commits. Opus only for prompt or rubric design and bugs that survive two attempts. The goal is lower token use.
 1. **Original work: built on the Talaan engine only.** Talaan is Miguel's own MIT code. Never paste, copy or translate code from Parlato or any other app. Other apps may be read to understand an approach, then Ensayo's own version is written.
 2. **Credit only libraries and models** that actually ship, in `THIRD_PARTY_NOTICES.md`. No credits for reference apps.
 3. **Prompts, the rubric, thresholds and the question bank** (`prompts/`, `questions/`) are drafted by Opus. Change none of them without Miguel. A test validates them against their schemas.

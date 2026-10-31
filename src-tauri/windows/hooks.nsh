@@ -20,14 +20,24 @@
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
+  ; An update runs the old uninstaller with /UPDATE ($UpdateMode = 1, set in Tauri's installer.nsi from the command
+  ; line). Keys and data must survive that, so only a real uninstall with the box ticked gets here.
   ${If} $DeleteAppDataCheckboxState = 1
+  ${AndIf} $UpdateMode <> 1
     nsExec::Exec 'cmdkey /delete:claude.Ensayo'
+    Pop $0
     nsExec::Exec 'cmdkey /delete:openai.Ensayo'
+    Pop $0
     nsExec::Exec 'cmdkey /delete:gemini.Ensayo'
+    Pop $0
     nsExec::Exec 'cmdkey /delete:groq.Ensayo'
+    Pop $0
     nsExec::Exec 'cmdkey /delete:cerebras.Ensayo'
+    Pop $0
     nsExec::Exec 'cmdkey /delete:mistral.Ensayo'
+    Pop $0
     nsExec::Exec 'cmdkey /delete:openrouter.Ensayo'
+    Pop $0
     nsExec::Exec 'cmdkey /delete:compatible.Ensayo'
     Pop $0
     RMDir /r "$LOCALAPPDATA\${BUNDLEID}"
