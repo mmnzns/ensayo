@@ -1,39 +1,39 @@
-# Windows checks: Ensayo on voice-engine v0.2.2
+# Live build checks: Ensayo on voice-engine v0.2.3, with every fix
 
-For the Windows chat, on the PC (C:\Dev\Ensayo). Report results to Miguel. Fix nothing in engine code. If the engine is at fault, note it on the Notion page "Voice Apps Engine Sync" › Still open, under "From Ensayo's move".
+For the live test on the PC, after the Windows chat's first round (2026-10-30). The build is the bundle: the engine move
+(now on v0.2.3), the QA fixes (0.1.5 and windows-polish), and the graphics-card helper built by the engine's workflow.
+Report results to Miguel. Fix nothing in engine code. If the engine is at fault, note it on the Notion page "Voice Apps
+Engine Sync" › Still open, under "From Ensayo's move".
 
-## Setup
+## Already passed (first round, branch engine-v0.2.2 at cfd1273)
 
-1. Back up `%LOCALAPPDATA%\com.craftconceptsdigital.ensayo` and Ensayo's data folder first.
-2. Make sure installed Ensayo 0.1.4 has Parakeet Ultra and Qwen 3.5 4B downloaded (download them in 0.1.4 if not).
-3. Fetch, then check out `engine-v0.2.2`.
-4. Install the Vulkan SDK if you want the local AI graphics-card helper built locally (`VULKAN_SDK` must be set). Otherwise `scripts\build-llm-helper.ps1` skips it.
-5. Run `cd src-tauri; cargo test --workspace`, then `npx tsc --noEmit` and `npm test -- --run`.
+Tests; the installer builds with the Vulkan helper; `Test-GgmlBaseline`; installed over 0.1.4 with all 6 models linked
+as the same files, nothing downloaded, 0 left for later.
+
+## Get the build
+
+GitHub, Actions, Release, Run workflow on branch `engine-v0.2.2`. When it finishes, download the `ensayo-Windows`
+artifact (the installer). The build still says 0.1.4; the version goes up at release.
 
 ## Checks
 
-1. **Build.** Run `npm run tauri build -- --bundles nsis`. To bundle the Vulkan helper as a release does, add the release `--config` described in docs/RELEASE.md. Check that `Test-GgmlBaseline` passes on the app's whisper.cpp cache (`-O2`, AVX2 baseline).
-2. **Install over 0.1.4.**
-   - Install the new build over the running 0.1.4, so the installer has to close `ensayo-llm.exe` (and `ensayo-llm-vulkan.exe` if one is running).
-   - The install must not fail on a locked helper.
-   - Keys and data must survive.
-3. **Model move-in.** On first launch the log shows the move report, with 0 left for later. Parakeet Ultra, voice detection and Qwen 3.5 4B must now be in `%LOCALAPPDATA%\Craft Concepts Digital\Models\<id>\`. Check:
-   - each is the same file as before (`fsutil file queryfileid`), not a copy;
-   - nothing was downloaded;
-   - the old paths still exist as hard links.
-4. **Graphics-card default.** Settings › Speech › "Use the graphics card" should be on and name the RTX 5070 Ti, not the Radeon. Then confirm:
-   - Parakeet Ultra reports DirectML on the RTX;
-   - its speed is at least the processor's 57x.
-5. **Local AI on the card.** With the Vulkan helper present and the switch on, score one rep with Qwen 3.5 4B. Compare the reply time with the processor's 4.96 s.
-6. **Fallback.** Force a card failure (`ENSAYO_GPU=fail` for a locally built helper; `VOICE_ENGINE_GPU=fail` for a CI-built one). Check two things:
-   - the one-time notice appears, and the reply still arrives on the processor;
-   - turning the switch off and on again clears it.
-7. **Switch off.** With the card switch off, speech and AI must run on the processor and show no notice.
-8. **Delete per model.** Delete Parakeet v3 if present, or another model no other app uses: it is erased. Delete one Talaan also uses: it is kept for Talaan.
-9. **Ollama and LM Studio.** If either is installed and running, its models and context sizes appear in Settings.
-10. **windows-polish items not yet checked by eye** (on branch `qa`):
-    - the dark title bar;
-    - the Windows scrollbars;
-    - a real 1366x768 screen;
-    - the 5 interviewer voices.
-11. **Do not** run Delete all data on real data.
+1. **Install over a running Ensayo.** Start the installed Ensayo, ask local AI one thing so its helper is running, then
+   run the new installer without quitting. It must close `ensayo-llm.exe` and `ensayo-llm-vulkan.exe` (no "file in
+   use"), and keys and data must survive. Quit Ensayo afterwards: no helper is left running.
+2. **Story read with local AI.** It failed on 0.1.4 (Qwen 3.5 4B's reply failed the schema twice). Run it again; it must
+   finish.
+3. **Graphics-card default.** Settings › Speech › "Use the graphics card" is on and names the RTX 5070 Ti, not the
+   Radeon. Parakeet Ultra runs on DirectML on the RTX (the log's backend and device), at least the processor's 57x.
+4. **Local AI on the card.** Score one rep with Qwen 3.5 4B. The reply comes from the Vulkan helper; compare its time
+   with the processor's 4.96 s.
+5. **Fallback.** Quit Ensayo, set `VOICE_ENGINE_GPU=fail` (this build's helpers read `VOICE_ENGINE_*`, not
+   `ENSAYO_*`), start it, score a rep. The one-time notice appears and the reply still arrives on the processor. Then
+   remove the variable, restart, and turn the switch off and on: the notice clears and the next reply is on the card
+   again (new in this build: the switch retries the card without a restart).
+6. **Switch off.** Speech and AI run on the processor, with no notice.
+7. **Delete per model.** Delete a model no other app uses: it is erased. Delete one Talaan or Parlato also uses: it is
+   kept for them.
+8. **Ollama and LM Studio.** If either is installed and running, its models and context sizes appear in Settings.
+9. **Windows look** (the windows-polish fixes): dark title bar, Windows scrollbars, a real 1366x768 screen (the window
+   fits and remembers its size and place), and the 5 interviewer voices.
+10. **Do not** run Delete all data on real data.
