@@ -16,7 +16,9 @@ name: Release
 # calls voice-engine's reusable workflow at the engine tag (keep it equal to the tag in src-tauri/Cargo.toml), and the
 # app jobs download its `helpers-<triple>` artifact into src-tauri/binaries. The app jobs pass `--config` with a
 # `beforeBuildCommand` that only builds the frontend, so scripts/build-llm-helper.* cannot overwrite those files.
-# Dev, ci.yml and test-build below still build the helper from this repo with scripts/build-llm-helper.*.
+# The manual run (workflow_dispatch) builds like a release: the `helpers` job runs too, and `test-build` downloads and
+# checks the same artifact and builds with the same release-only `--config`, so its Windows installer has the Vulkan
+# graphics-card helper. Only dev and ci.yml still build the helper from this repo with scripts/build-llm-helper.*.
 #
 # Secrets:
 #   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD   Ensayo's updater key (~/.tauri/ensayo.key; the password is empty)
@@ -58,7 +60,7 @@ jobs:
   # The engine's workflow builds all three targets (Mac, Windows x64, Windows ARM64); the Windows ARM64 helper goes
   # unused, which is a known cost. Same tag in `engine-ref` and after the @.
   helpers:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.2.3
     with:
       engine-ref: v0.2.3
@@ -225,9 +227,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/latest-json.mjs "$GITHUB_REF_NAME"
 
-  # Run by hand (Actions, Release, Run workflow) to check that both installers build, without making a release.
+  # Run by hand (Actions, Release, Run workflow) to check that both installers build, without making a release. It
+  # builds like the release jobs above (engine helpers, release-only --config), minus the draft and the upload.
   # Needs the signing secrets: the build makes updater signatures.
   test-build:
+    needs: helpers
     if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
@@ -249,13 +253,42 @@ jobs:
           workspaces: src-tauri
           key: test-build-${{ matrix.os }}
       - run: npm ci
-      # Same two steps as the release job: the helper script runs in its own process, because run in place it
-      # leaves the shell in another folder and the baseline script is then not found.
-      - name: Windows helper
+      # The AI helpers come from the engine's workflow (the `helpers` job), as in the release jobs. macos-latest is
+      # Apple silicon.
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ runner.os == 'Windows' && 'helpers-x86_64-pc-windows-msvc' || 'helpers-aarch64-apple-darwin' }}
+          path: src-tauri/binaries
+      - name: Check the helpers against SHA256SUMS
         if: runner.os == 'Windows'
-        env:
-          LIBCLANG_PATH: C:\Program Files\LLVM\bin
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-llm-helper.ps1
+        shell: pwsh
+        working-directory: src-tauri/binaries
+        run: |
+          foreach ($f in 'ensayo-llm-x86_64-pc-windows-msvc.exe', 'ensayo-llm-vulkan-x86_64-pc-windows-msvc.exe') {
+            if (-not (Test-Path $f)) { Write-Error "$f is missing from the helpers artifact"; exit 1 }
+          }
+          foreach ($line in (Get-Content SHA256SUMS | Where-Object { $_.Trim() })) {
+            $hash, $name = $line.Trim() -split '\s+\*?', 2
+            $got = (Get-FileHash $name -Algorithm SHA256).Hash
+            if ($got -ne $hash.ToUpper()) { Write-Error "checksum mismatch: $name"; exit 1 }
+          }
+          Get-Content build-info.txt
+      - name: Check the helper against SHA256SUMS and make it executable
+        if: runner.os == 'macOS'
+        working-directory: src-tauri/binaries
+        run: |
+          test -f "ensayo-llm-aarch64-apple-darwin" || { echo "::error::ensayo-llm-aarch64-apple-darwin is missing from the helpers artifact"; exit 1; }
+          shasum -a 256 -c SHA256SUMS
+          chmod +x ./*-apple-darwin
+          cat build-info.txt
+      # Release-only Tauri config, as in the windows release job: the frontend-only beforeBuildCommand and the Vulkan
+      # sidecar in externalBin.
+      - name: Release Tauri config
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan"]}}' |
+            Set-Content -Path "$env:RUNNER_TEMP/tauri.release.conf.json" -Encoding ascii
       - name: Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
@@ -264,12 +297,12 @@ jobs:
           LIBCLANG_PATH: C:\Program Files\LLVM\bin
         run: |
           . ./scripts/cpu-baseline.ps1
-          npm run tauri build -- --bundles nsis
-          $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
-          if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }
-      - name: Mac helper
-        if: runner.os == 'macOS'
-        run: sh scripts/build-llm-helper.sh
+          npm run tauri build -- --bundles nsis --config "$env:RUNNER_TEMP/tauri.release.conf.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $caches = @(Get-GgmlCaches src-tauri/target)
+          if ($caches.Count -eq 0) { Write-Error "no whisper.cpp build found to check"; exit 1 }
+          $bad = @($caches | ForEach-Object { Test-GgmlBaseline $_ })
+          if ($bad.Count -gt 0) { Write-Error "whisper.cpp was not built for the baseline: $bad"; exit 1 }
       - name: Signing certificate into a temporary keychain
         if: runner.os == 'macOS'
         uses: ./.github/actions/mac-signing
@@ -281,7 +314,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: npm run tauri build -- --bundles app,dmg
+        # --config: the frontend-only beforeBuildCommand, so scripts/build-llm-helper.sh cannot replace the downloaded helper.
+        run: npm run tauri build -- --bundles app,dmg --config '{"build":{"beforeBuildCommand":"npm run build"}}'
       - name: Check the Mac signature
         if: runner.os == 'macOS'
         env:
