@@ -1,7 +1,7 @@
-# Live build checks: Ensayo on voice-engine v0.2.3, with every fix
+# Live build checks: Ensayo on voice-engine v0.3.1, with every fix
 
 For the live test on the PC, after the Windows chat's first round (2026-10-30). The build is the bundle: the engine move
-(now on v0.2.3), the QA fixes (0.1.5 and windows-polish), and the graphics-card helper built by the engine's workflow.
+(now on v0.3.1), the QA fixes (0.1.5 and windows-polish), and the graphics-card helper built by the engine's workflow.
 Report results to Miguel. Fix nothing in engine code. If the engine is at fault, note it on the Notion page "Voice Apps
 Engine Sync" › Still open, under "From Ensayo's move".
 
@@ -28,8 +28,9 @@ artifact (the installer). The build still says 0.1.4; the version goes up at rel
    with the processor's 4.96 s.
 5. **Fallback.** Quit Ensayo, set `VOICE_ENGINE_GPU=fail` (this build's helpers read `VOICE_ENGINE_*`, not
    `ENSAYO_*`), start it, score a rep. The one-time notice appears and the reply still arrives on the processor. Then
-   remove the variable, restart, and turn the switch off and on: the notice clears and the next reply is on the card
-   again (new in this build: the switch retries the card without a restart).
+   remove the variable and restart: the failure is remembered, so the AI stays on the processor with no notice (by
+   design, the notice is only for a card that just failed). Turn the switch off and on: the next reply is on the card
+   again, without a restart.
 6. **Switch off.** Speech and AI run on the processor, with no notice.
 7. **Delete per model.** Delete a model no other app uses: it is erased. Delete one Talaan or Parlato also uses: it is
    kept for them.
