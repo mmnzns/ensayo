@@ -108,8 +108,12 @@ fn load(model_id: &str) -> Result<Speech, String> {
     let gpu = engine::gpu_for(info.kind, graphics::is_on() && !graphics::speech_card_failed(), graphics::card().is_some());
     let model = engine::load(model_id, model_hold.dir(), gpu)?;
     let backend = model.t.backend();
-    log::info!("speech model {model_id} loaded on {}{}", backend.backend, if backend.fell_back { " (the graphics card was not used)" } else { "" });
-    if backend.fell_back {
+    match backend.fallback {
+        Some(reason) => log::info!("speech model {model_id} loaded on {} (the graphics card was not used: {reason:?})", backend.backend),
+        None => log::info!("speech model {model_id} loaded on {}", backend.backend),
+    }
+    // Only a card that failed is not asked again; a model with no card path, or a build with no card, never was.
+    if graphics::card_failed(backend.fallback) {
         graphics::set_speech_card_failed(true);
     }
     Ok(Speech { model, vad_dir: vad_hold.dir().to_path_buf(), backend, _model_hold: model_hold, _vad_hold: vad_hold })
@@ -144,7 +148,7 @@ pub fn backend() -> Option<SpeechBackend> {
 
 /// When the loaded model was given the processor because the graphics card didn't work, the person is told (once per run).
 fn tell_if_card_failed() {
-    if backend().is_some_and(|b| b.fell_back) {
+    if backend().is_some_and(|b| graphics::card_failed(b.fallback)) {
         graphics::fell_back(graphics::SPEECH);
     }
 }

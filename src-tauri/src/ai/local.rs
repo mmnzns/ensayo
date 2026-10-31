@@ -115,13 +115,15 @@ pub struct Card {
     pub vulkan: Option<PathBuf>,
     /// The card's name, for the key that remembers a failure (a new card or driver gets a fresh try).
     pub name: Option<String>,
+    /// The card's driver version, when Windows says (None on a Mac): a driver update gets a fresh try too.
+    pub driver: Option<String>,
 }
 
 impl Card {
     /// The state for this computer now: the setting, the helper file and the card. Blocks like `graphics::card`.
     pub fn now() -> Card {
         let on = graphics::is_on();
-        Card { on, vulkan: if on { vulkan_helper_path() } else { None }, name: graphics::card().map(str::to_string) }
+        Card { on, vulkan: if on { vulkan_helper_path() } else { None }, name: graphics::card().map(str::to_string), driver: graphics::driver_version().map(str::to_string) }
     }
 
     /// Whether a request should ask for the card: Metal on a Mac, and on Windows only when there is a helper that has
@@ -131,7 +133,11 @@ impl Card {
     }
 
     fn key(&self) -> String {
-        format!("{}-{}", env!("CARGO_PKG_VERSION"), self.name.as_deref().unwrap_or("none"))
+        let base = format!("{}-{}", env!("CARGO_PKG_VERSION"), self.name.as_deref().unwrap_or("none"));
+        match (&self.name, &self.driver) {
+            (Some(_), Some(driver)) => format!("{base}-{driver}"),
+            _ => base,
+        }
     }
 }
 
@@ -184,7 +190,7 @@ const FAILED: &str = "The built-in local AI couldn't answer. Try again, or choos
 fn message(e: &EngineError) -> AiError {
     match e {
         EngineError::OutOfMemory => AiError::Failed(OUT_OF_MEMORY.into()),
-        EngineError::Crashed => AiError::Failed(CRASHED.into()),
+        EngineError::Crashed { .. } => AiError::Failed(CRASHED.into()),
         EngineError::CouldNotStart { .. } | EngineError::VersionMismatch { .. } => AiError::Failed(NO_START.into()),
         EngineError::TimedOut => AiError::Failed(TOO_SLOW.into()),
         EngineError::PromptTooLong { prompt_tokens, n_ctx, max_tokens } => {
@@ -223,11 +229,13 @@ impl Llm for LocalLlm {
         };
         let out = self.client.complete(c, &mut |_| {}).map_err(|e| {
             log::warn!("local AI: {e}");
+            if let EngineError::Crashed { exit_code, signal, detail } = &e {
+                // `detail` is the helper's stderr tail; the engine keeps user text out of it.
+                log::warn!("local AI helper crashed: exit_code={exit_code:?} signal={signal:?} detail={detail:?}");
+            }
             message(&e)
         })?;
-        if out.fell_back {
-            graphics::fell_back(graphics::AI);
-        }
+        graphics::note_fallback(graphics::AI, out.fallback);
         if self.hold {
             // The idle clock runs from the end of the answer, like the helper's.
             let _ = hold_model(&self.model_name);
@@ -404,7 +412,7 @@ mod tests {
         SERIAL.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    const NO_CARD: Card = Card { on: false, vulkan: None, name: None };
+    const NO_CARD: Card = Card { on: false, vulkan: None, name: None, driver: None };
 
     fn shared_in_test(exe: &Path, model: &str, name: &str) -> LocalLlm {
         shared_with(exe, Path::new(model), name, &NO_CARD, false)
@@ -477,7 +485,7 @@ mod tests {
             other => panic!("{e:?} should be a failure, not {other:?}"),
         };
         assert_eq!(failed(EngineError::OutOfMemory), OUT_OF_MEMORY);
-        assert_eq!(failed(EngineError::Crashed), CRASHED);
+        assert_eq!(failed(EngineError::Crashed { exit_code: Some(139), signal: None, detail: "x".into() }), CRASHED);
         assert_eq!(failed(EngineError::CouldNotStart { message: "no such file".into() }), NO_START);
         assert_eq!(failed(EngineError::VersionMismatch { helper: 1, app: 2 }), NO_START);
         assert_eq!(failed(EngineError::TimedOut), TOO_SLOW);
@@ -571,7 +579,7 @@ done
 
     #[test]
     fn the_card_is_asked_for_by_a_mac_when_on_and_by_windows_only_with_a_helper_for_it() {
-        let card = |on, vulkan: Option<&str>| Card { on, vulkan: vulkan.map(PathBuf::from), name: None };
+        let card = |on, vulkan: Option<&str>| Card { on, vulkan: vulkan.map(PathBuf::from), name: None, driver: None };
         assert_eq!(card(true, None).ask(), cfg!(target_os = "macos"), "no helper: Metal on the Mac, the processor elsewhere");
         assert_eq!(card(true, Some("/app/ensayo-llm-vulkan.exe")).ask(), true, "a card helper to ask");
         assert!(!card(false, Some("/app/ensayo-llm-vulkan.exe")).ask() && !card(false, None).ask(), "off is off");
@@ -579,8 +587,12 @@ done
 
     #[test]
     fn a_failed_card_is_remembered_per_app_version_and_card() {
-        let named = Card { on: true, vulkan: None, name: Some("NVIDIA GeForce RTX 4060".into()) };
-        assert_eq!(named.key(), format!("{}-NVIDIA GeForce RTX 4060", env!("CARGO_PKG_VERSION")));
+        let named = Card { on: true, vulkan: None, name: Some("NVIDIA GeForce RTX 4060".into()), driver: None };
+        assert_eq!(named.key(), format!("{}-NVIDIA GeForce RTX 4060", env!("CARGO_PKG_VERSION")), "no driver version: as before");
+        let updated = Card { driver: Some("32.0.15.6614".into()), ..named.clone() };
+        assert_eq!(updated.key(), format!("{}-NVIDIA GeForce RTX 4060-32.0.15.6614", env!("CARGO_PKG_VERSION")), "a driver update is a new key");
+        assert_ne!(updated.key(), named.key());
+        assert_eq!(Card { driver: Some("1.0".into()), ..NO_CARD }.key(), NO_CARD.key(), "no card: the driver does not matter");
         assert_eq!(NO_CARD.key(), format!("{}-none", env!("CARGO_PKG_VERSION")));
     }
 
@@ -588,7 +600,7 @@ done
     fn the_client_is_built_with_the_card_helper_and_the_failure_file() {
         let _s = serial();
         let exe = Path::new("/nonexistent/ensayo-llm");
-        let card = Card { on: true, vulkan: Some(PathBuf::from("/nonexistent/ensayo-llm-vulkan")), name: Some("RTX".into()) };
+        let card = Card { on: true, vulkan: Some(PathBuf::from("/nonexistent/ensayo-llm-vulkan")), name: Some("RTX".into()), driver: None };
         let ai = shared_with(exe, Path::new("/m.gguf"), "m", &card, false);
         assert_eq!(ai.gpu, card.ask());
         stop_shared();

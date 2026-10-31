@@ -80,7 +80,7 @@ mod tests {
 
     /// A transcript the way the engine returns one: a segment per word in Words mode.
     fn heard(words: Vec<Word>, language: Option<&str>) -> Heard {
-        let segments = words.into_iter().map(|w| Segment { start_ms: w.start_ms, end_ms: w.end_ms, text: w.text.clone(), words: vec![w] }).collect();
+        let segments = words.into_iter().map(|w| Segment { start_ms: w.start_ms, end_ms: w.end_ms, text: w.text.clone(), starts_word: true, words: vec![w] }).collect();
         Heard { segments, language: language.map(str::to_string), stopped_early_at_ms: None }
     }
 
@@ -94,7 +94,7 @@ mod tests {
     }
 
     fn backend() -> SpeechBackend {
-        SpeechBackend { backend: "cpu".into(), device: None, fell_back: false }
+        SpeechBackend { backend: "cpu".into(), device: None, fallback: None }
     }
 
     /// Says one word per chunk, at the start of the chunk, and remembers the options it was given.

@@ -12,17 +12,34 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter};
+use voice_engine_protocol::Fallback;
 
 /// What the notice says didn't get the card: "The graphics card didn't work for {what}".
 pub const SPEECH: &str = "speech to text";
 pub const AI: &str = "the built-in local AI";
 
-static CARD: OnceLock<Option<String>> = OnceLock::new();
+/// The card's name and its driver version, found together once.
+static CARD: OnceLock<Option<(String, Option<String>)>> = OnceLock::new();
+
+fn found() -> &'static Option<(String, Option<String>)> {
+    CARD.get_or_init(|| {
+        voice_engine_stt::discrete_card().map(|d| {
+            let driver = voice_engine_stt::driver_version(&d);
+            (d.name, driver)
+        })
+    })
+}
 
 /// The discrete graphics card's name, when the engine sees one (always None on a Mac). Blocks the first time it is asked
 /// (up to ten seconds on Windows), so never call it on the main thread.
 pub fn card() -> Option<&'static str> {
-    CARD.get_or_init(|| voice_engine_stt::discrete_card().map(|d| d.name)).as_deref()
+    found().as_ref().map(|(name, _)| name.as_str())
+}
+
+/// The card's driver version as Windows shows it ("32.0.15.6614"), found with the card and remembered. None on a Mac, in
+/// a build without DirectML, and when Windows doesn't say. Blocks like `card`.
+pub fn driver_version() -> Option<&'static str> {
+    found().as_ref().and_then(|(_, driver)| driver.as_deref())
 }
 
 /// Asks about the card in the background at start-up, so the first command that needs it doesn't wait.
@@ -71,6 +88,23 @@ pub fn set_app(app: AppHandle) {
 /// True the first time it is asked about `what` in this run of the app.
 fn first_time(told: &Mutex<Option<HashSet<&'static str>>>, what: &'static str) -> bool {
     told.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashSet::new).insert(what)
+}
+
+/// Whether the engine's `fallback` means the card itself failed (it did not start, or ran out of memory), the only
+/// reasons the person is told about. The others (no card path for the model, no card helper in this build, a failure
+/// remembered from before) are how this computer is set up, or were already told; they need no notice.
+pub fn card_failed(fallback: Option<Fallback>) -> bool {
+    matches!(fallback, Some(Fallback::CardFailed | Fallback::CardOutOfMemory))
+}
+
+/// What to do with the engine's `fallback` after work for `what`: the notice for a failed card, a line in the log for
+/// any other reason, nothing when the card ran (or was not asked for).
+pub fn note_fallback(what: &'static str, fallback: Option<Fallback>) {
+    match fallback {
+        None => {}
+        Some(f) if card_failed(Some(f)) => fell_back(what),
+        Some(reason) => log::info!("graphics card: not used for {what} ({reason:?}), no notice"),
+    }
 }
 
 /// The graphics card didn't work for `what` and the processor did the job: the window says so, once per run and per
@@ -131,6 +165,16 @@ pub async fn set_graphics_card(on: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_failed_card_or_one_out_of_memory_is_a_notice() {
+        assert!(card_failed(Some(Fallback::CardFailed)));
+        assert!(card_failed(Some(Fallback::CardOutOfMemory)));
+        for quiet in [Fallback::NoCardPath, Fallback::NoCardHelper, Fallback::RememberedFailure] {
+            assert!(!card_failed(Some(quiet)), "{quiet:?}");
+        }
+        assert!(!card_failed(None), "the card ran, or was not asked for");
+    }
 
     #[test]
     fn the_card_is_on_by_default_on_a_mac_and_on_windows_only_with_a_discrete_card() {
