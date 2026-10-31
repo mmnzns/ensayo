@@ -52,6 +52,10 @@ pub struct LocalSettings {
     /// How long answer audio is kept on this computer: "7", "30" (the default), "90", "forever" or "none".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_retention: Option<String>,
+    /// Use the graphics card for speech and the built-in local AI. None: the default (on for a Mac, on for Windows only
+    /// with a discrete card). Machine-local, since the card is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu: Option<bool>,
     /// Keys a newer Ensayo wrote. Kept so an older build does not delete them when it saves.
     #[serde(flatten)]
     pub other: Map<String, Value>,
@@ -137,6 +141,19 @@ mod tests {
         assert_eq!(back.ai.unwrap().cost_cap_usd, 1.0);
         let partial: LocalSettings = serde_json::from_str(r#"{"ai": {"provider": "openai"}}"#).unwrap();
         assert_eq!(partial.ai.unwrap().cost_cap_usd, 1.0);
+    }
+
+    #[test]
+    fn the_graphics_card_choice_is_unset_until_made_and_survives_a_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        assert_eq!(load(&path).gpu, None, "no file: the default");
+        save(&path, &LocalSettings::default()).unwrap();
+        assert!(!fs::read_to_string(&path).unwrap().contains("gpu"), "unset is not written");
+        for choice in [true, false] {
+            save(&path, &LocalSettings { gpu: Some(choice), ..Default::default() }).unwrap();
+            assert_eq!(load(&path).gpu, Some(choice));
+        }
     }
 
     #[test]

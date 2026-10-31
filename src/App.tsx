@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { DataProvider, useNeedsSetup, useTargetsNotePending } from "./data/real";
 import { UpgradeNoteDialog } from "./screens/first-run/UpgradeNote";
 import { manifest } from "./screens/manifest";
@@ -5,6 +6,7 @@ import M0Check from "./m0/M0Check";
 import NotFound from "./screens/NotFound";
 import { registry } from "./screens/registry";
 import { applyStoredTheme } from "./screens/settings/theme";
+import { listenForCardNotes } from "./ui/cardNote";
 import { useRoute } from "./ui/router";
 
 // Appearance (Settings › General): Auto unless the user chose Light or Dark.
@@ -33,6 +35,8 @@ function Routed() {
 }
 
 export default function App() {
+  // The backend says once when the graphics card didn't work and the processor was used instead.
+  useEffect(() => listenForCardNotes(), []);
   return (
     <DataProvider>
       <Routed />

@@ -4,7 +4,8 @@ import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import type { SpeechModel } from "../../data/screens/settings";
 import { formatSize } from "./format";
-import { KeyResult, SettingsLayout, useKeyTests, useLater } from "./parts";
+import { GRAPHICS_TITLE, graphicsHint, useGraphicsCard } from "./graphicsCard";
+import { KeyResult, SettingsLayout, ToggleRow, useKeyTests, useLater } from "./parts";
 import SpeechModelList from "./SpeechModelList";
 import { modelRows, modelsSize } from "./speechModels";
 import { useSpeechModels } from "./useSpeechModels";
@@ -18,6 +19,7 @@ export default function SettingsSpeech() {
 
 function SpeechLive() {
   const { models, inUseId, downloadingId, fraction, error, notice, download, cancel, remove, use } = useSpeechModels();
+  const graphics = useGraphicsCard();
   const [showAll, setShowAll] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const rows = modelRows(models ?? [], inUseId, downloadingId);
@@ -31,7 +33,7 @@ function SpeechLive() {
             <span className="e-h2">Speech to text</span>
             <span className="e-meta">How your answers become words. The model runs on this computer, works offline and keeps everything here.</span>
           </div>
-          <div className="e-rowline" style={{ borderBottom: "none" }}>
+          <div className="e-rowline" style={graphics.card ? undefined : { borderBottom: "none" }}>
             <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
               {models === null ? "Looking at what is on this computer…" : current ? "Model in use" : "No speech model yet"}
               <span className="e-small">
@@ -40,6 +42,8 @@ function SpeechLive() {
             </span>
             {current ? <span className="e-badge e-badge-ok">In use</span> : null}
           </div>
+          {graphics.card && <ToggleRow title={GRAPHICS_TITLE} hint={graphicsHint(graphics.card)} checked={graphics.card.on} onChange={graphics.set} last />}
+          {graphics.error ? <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{graphics.error}</span> : null}
           {error ? <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{error}</span> : null}
           {notice ? <span className="e-meta" role="status">{notice}</span> : null}
         </section>

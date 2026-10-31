@@ -11,6 +11,7 @@ mod data_commands;
 mod diag_commands;
 mod diagnostics;
 pub mod eval;
+mod graphics;
 pub mod keys;
 mod local_ai_commands;
 mod models_store;
@@ -77,6 +78,8 @@ pub fn run() {
         .setup(|app| {
             logging::init();
             log::info!("Ensayo {} started on {} {} ({})", env!("CARGO_PKG_VERSION"), diagnostics::os_name(), diagnostics::os_version(), std::env::consts::ARCH);
+            graphics::set_app(app.handle().clone());
+            graphics::warm();
             start_up_models();
             update_commands::setup(app.handle());
             update_commands::check_at_launch(app.handle());
@@ -199,6 +202,8 @@ pub fn run() {
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,
             local_ai_commands::stop_local_ai,
+            graphics::graphics_card,
+            graphics::set_graphics_card,
             backup_commands::backup_data,
             backup_commands::inspect_backup,
             backup_commands::restore_backup,

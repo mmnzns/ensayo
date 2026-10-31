@@ -7,6 +7,7 @@ use super::engine::{self, Loaded};
 use super::models;
 use super::transcribe::{self, Transcript};
 use super::vad;
+use crate::graphics;
 use crate::models_store;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, Once};
@@ -102,11 +103,15 @@ fn load(model_id: &str) -> Result<Speech, String> {
         StoreError::NotInstalled(_) => "The voice detection model isn't downloaded yet. Download it in Settings › Speech.".to_string(),
         e => hold_message("voice detection", &e),
     })?;
-    // Task 5: the graphics-card setting and `voice_engine_stt::discrete_card()` replace these two.
-    let gpu = engine::gpu_for(info.kind, true, false);
+    // The setting decides, and the engine's own answer about the card: a Windows computer without a discrete card never
+    // asks for it, and a card that failed once isn't asked again until the person turns it off and on.
+    let gpu = engine::gpu_for(info.kind, graphics::is_on() && !graphics::speech_card_failed(), graphics::card().is_some());
     let model = engine::load(model_id, model_hold.dir(), gpu)?;
     let backend = model.t.backend();
     log::info!("speech model {model_id} loaded on {}{}", backend.backend, if backend.fell_back { " (the graphics card was not used)" } else { "" });
+    if backend.fell_back {
+        graphics::set_speech_card_failed(true);
+    }
     Ok(Speech { model, vad_dir: vad_hold.dir().to_path_buf(), backend, _model_hold: model_hold, _vad_hold: vad_hold })
 }
 
@@ -127,22 +132,32 @@ fn with_speech<R>(model_id: &str, f: impl FnOnce(&mut Speech) -> R) -> Result<R,
 
 /// Loads the model now (while an answer is being recorded), so the transcript doesn't wait for it.
 pub fn warm(model_id: &str) -> Result<(), String> {
-    with_speech(model_id, |_| ())
+    with_speech(model_id, |_| ())?;
+    tell_if_card_failed();
+    Ok(())
 }
 
-/// Where the loaded model runs and whether the graphics card was refused (Task 5 tells the person once).
-#[allow(dead_code)]
+/// Where the loaded model runs and whether the graphics card was refused.
 pub fn backend() -> Option<SpeechBackend> {
     lock().peek().map(|s| s.backend.clone())
+}
+
+/// When the loaded model was given the processor because the graphics card didn't work, the person is told (once per run).
+fn tell_if_card_failed() {
+    if backend().is_some_and(|b| b.fell_back) {
+        graphics::fell_back(graphics::SPEECH);
+    }
 }
 
 /// One recorded answer to a transcript, with the model kept loaded for the next one.
 pub fn transcribe_wav(wav: &Path, model_id: &str) -> Result<Transcript, String> {
     let samples = vad::read_track(wav).map_err(|e| format!("Couldn't read the recording: {e}"))?;
-    with_speech(model_id, |s| {
+    let out = with_speech(model_id, |s| {
         let spans = vad::detect(&s.vad_dir, &samples)?;
         transcribe::transcribe_with(&mut s.model, &samples, &spans)
-    })?
+    })?;
+    tell_if_card_failed();
+    out
 }
 
 /// True while `model_id` is the model that is loaded.

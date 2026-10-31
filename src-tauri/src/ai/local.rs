@@ -9,10 +9,16 @@
 
 use super::llm::{Llm, LlmReply, LlmRequest};
 use super::providers::AiError;
+use crate::graphics;
+use crate::models_store;
+use crate::paths;
+use crate::speech::loaded::Kept;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, Once};
+use std::time::{Duration, Instant};
 use voice_engine_client::{EngineError, Limits, LlmClient, LlmConfig};
+use voice_engine_models::ModelHandle;
 use voice_engine_protocol::{Completion, JSON_OBJECT_SCHEMA};
 
 pub const HELPER: &str = "ensayo-llm";
@@ -27,27 +33,43 @@ pub fn helper_file() -> String {
     format!("{HELPER}{}", std::env::consts::EXE_SUFFIX)
 }
 
-/// Where the helper lives for an app binary at `exe`: next to it (in the app bundle, `Contents/MacOS/`; next to
-/// `Ensayo.exe` on Windows; in `target/<profile>/` during development). `cargo test` runs from `target/<profile>/deps`,
-/// so the folder above that is tried too.
+/// A helper `name` next to the app binary at `exe` (in the app bundle, `Contents/MacOS/`; next to `Ensayo.exe` on
+/// Windows; in `target/<profile>/` during development). `cargo test` runs from `target/<profile>/deps`, so the folder
+/// above that is tried too.
+fn find_beside(exe: &Path, name: &str) -> Option<PathBuf> {
+    let dir = exe.parent();
+    let beside = dir.map(|d| d.join(name)).filter(|b| b.exists());
+    if beside.is_some() {
+        return beside;
+    }
+    dir.filter(|d| d.file_name().is_some_and(|n| n == "deps")).and_then(|d| d.parent()).map(|up| up.join(name)).filter(|c| c.exists())
+}
+
+/// Where the helper lives for an app binary at `exe`; when it is nowhere, the plain spot beside the binary.
 pub fn helper_path_from(exe: &Path) -> PathBuf {
     let name = helper_file();
-    let dir = exe.parent();
-    let beside = dir.map(|d| d.join(&name));
-    if let Some(b) = beside.as_ref().filter(|b| b.exists()) {
-        return b.clone();
-    }
-    if let Some(up) = dir.filter(|d| d.file_name().is_some_and(|n| n == "deps")).and_then(|d| d.parent()) {
-        let candidate = up.join(&name);
-        if candidate.exists() {
-            return candidate;
-        }
-    }
-    beside.unwrap_or_else(|| PathBuf::from(name))
+    find_beside(exe, &name).unwrap_or_else(|| exe.parent().map(|d| d.join(&name)).unwrap_or_else(|| PathBuf::from(name)))
 }
 
 pub fn helper_path() -> PathBuf {
     std::env::current_exe().map(|e| helper_path_from(&e)).unwrap_or_else(|_| PathBuf::from(helper_file()))
+}
+
+/// The graphics-card helper's file name (`ensayo-llm-vulkan.exe`): the Windows build of the helper that runs on the
+/// card through Vulkan.
+pub const VULKAN_HELPER: &str = "ensayo-llm-vulkan";
+
+/// The Vulkan helper beside the app on Windows, or None (not Windows, or the file isn't there): the AI then runs on the
+/// processor helper.
+pub fn vulkan_helper_from(exe: &Path) -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    find_beside(exe, &format!("{VULKAN_HELPER}{}", std::env::consts::EXE_SUFFIX))
+}
+
+pub fn vulkan_helper_path() -> Option<PathBuf> {
+    std::env::current_exe().ok().and_then(|e| vulkan_helper_from(&e))
 }
 
 /// How long one whole answer may take, so nothing waits forever. The engine's own limits for starting the helper (60 s:
@@ -58,17 +80,53 @@ const TOTAL: Duration = Duration::from_secs(10 * 60);
 /// The helper exits by itself after this many idle seconds, freeing the model's memory.
 const IDLE_SECS: u64 = 120;
 
-/// Ask the helper for the graphics card: Metal on the Mac. (Windows has no graphics-card helper yet.)
-const GPU: bool = cfg!(target_os = "macos");
+/// What the client is told about the graphics card.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Card {
+    /// The setting is on.
+    pub on: bool,
+    /// The Windows graphics-card helper, when the setting is on and the file is there.
+    pub vulkan: Option<PathBuf>,
+    /// The card's name, for the key that remembers a failure (a new card or driver gets a fresh try).
+    pub name: Option<String>,
+}
 
-fn new_client(exe: &Path) -> LlmClient {
+impl Card {
+    /// The state for this computer now: the setting, the helper file and the card. Blocks like `graphics::card`.
+    pub fn now() -> Card {
+        let on = graphics::is_on();
+        Card { on, vulkan: if on { vulkan_helper_path() } else { None }, name: graphics::card().map(str::to_string) }
+    }
+
+    /// Whether a request should ask for the card: Metal on a Mac, and on Windows only when there is a helper that has
+    /// one. (A Windows build with no card helper asks for nothing, so it never reports a false fallback.)
+    pub fn ask(&self) -> bool {
+        self.on && (cfg!(target_os = "macos") || self.vulkan.is_some())
+    }
+
+    fn key(&self) -> String {
+        format!("{}-{}", env!("CARGO_PKG_VERSION"), self.name.as_deref().unwrap_or("none"))
+    }
+}
+
+/// A file remembering that the graphics card failed, so it isn't tried again on every start.
+fn failures_file() -> PathBuf {
+    paths::app_local().join("gpu-failures.json")
+}
+
+/// Forgets that the card failed (the person turned it on again): the next answer tries it.
+pub fn forget_card_failure() {
+    voice_engine_client::clear_gpu_failure(&failures_file());
+}
+
+fn new_client(exe: &Path, card: &Card) -> LlmClient {
     LlmClient::new(LlmConfig {
         cpu_helper: exe.to_path_buf(),
-        gpu_helper: None,
+        gpu_helper: card.vulkan.clone(),
         env: vec![],
         gpu_env: vec![],
-        gpu_failures: None,
-        gpu_key: String::new(),
+        gpu_failures: Some(failures_file()),
+        gpu_key: card.key(),
         idle_secs: Some(IDLE_SECS),
         limits: Limits { total: TOTAL, ..Limits::default() },
     })
@@ -81,6 +139,10 @@ pub struct LocalLlm {
     model_path: PathBuf,
     /// The catalog id, reported as the model that answered.
     model_name: String,
+    /// Ask for the graphics card (`Card::ask`).
+    gpu: bool,
+    /// Hold the model's folder while it is loaded, so no other app erases it mid-use. Off only in tests.
+    hold: bool,
 }
 
 const MISSING_HELPER: &str = "Ensayo couldn't start the built-in local AI because its helper program is missing or was blocked. Reinstall Ensayo, or choose another feedback engine in Settings › AI.";
@@ -114,6 +176,11 @@ impl Llm for LocalLlm {
             log::warn!("couldn't start the local AI helper: it is not where it should be");
             return Err(AiError::Unavailable(MISSING_HELPER.into()));
         }
+        // The model's folder is held for as long as the helper may have the model loaded.
+        let _busy = Busy::start();
+        if self.hold {
+            hold_model(&self.model_name)?;
+        }
         // Fast and Strong share the one loaded model.
         let c = Completion {
             model_path: self.model_path.to_string_lossy().into_owned(),
@@ -123,7 +190,7 @@ impl Llm for LocalLlm {
             json_schema: req.json.then(|| JSON_OBJECT_SCHEMA.to_string()),
             max_tokens: req.max_tokens,
             temperature: TEMPERATURE,
-            gpu: GPU,
+            gpu: self.gpu,
             thinking: false,
             thinking_budget: None,
             seed: None,
@@ -133,7 +200,11 @@ impl Llm for LocalLlm {
             message(&e)
         })?;
         if out.fell_back {
-            log::info!("local AI: the graphics card was not used, the processor answered");
+            graphics::fell_back(graphics::AI);
+        }
+        if self.hold {
+            // The idle clock runs from the end of the answer, like the helper's.
+            let _ = hold_model(&self.model_name);
         }
         let reply = out.value;
         if reply.text.trim().is_empty() {
@@ -146,12 +217,17 @@ impl Llm for LocalLlm {
 // ---------- the one shared client ----------
 
 /// The client (and through it the helper and its loaded model) is shared by every answer, so a second answer does not
-/// load the model again.
+/// load the model again. It is built for one graphics-card state; changing the setting stops it (`stop_shared`).
 static SHARED: Mutex<Option<(PathBuf, Arc<LlmClient>)>> = Mutex::new(None);
 
 /// A handle that answers with `model_path` through the shared client for this helper. Another model replaces the
-/// loaded one inside the helper; another helper path (never in practice) replaces the client.
+/// loaded one inside the helper; another helper path (never in practice) replaces the client. Blocks the first time on
+/// Windows (the graphics card is asked about), so call it from a worker thread.
 pub fn shared(exe: &Path, model_path: &Path, model_name: &str) -> LocalLlm {
+    shared_with(exe, model_path, model_name, &Card::now(), true)
+}
+
+fn shared_with(exe: &Path, model_path: &Path, model_name: &str, card: &Card, hold: bool) -> LocalLlm {
     let mut slot = SHARED.lock().unwrap_or_else(|e| e.into_inner());
     let client = match slot.as_ref().filter(|(path, _)| path == exe) {
         Some((_, client)) => client.clone(),
@@ -159,20 +235,22 @@ pub fn shared(exe: &Path, model_path: &Path, model_name: &str) -> LocalLlm {
             if let Some((_, old)) = slot.take() {
                 old.shutdown();
             }
-            let client = Arc::new(new_client(exe));
+            let client = Arc::new(new_client(exe, card));
             *slot = Some((exe.to_path_buf(), client.clone()));
             client
         }
     };
-    LocalLlm { client, exe: exe.to_path_buf(), model_path: model_path.to_path_buf(), model_name: model_name.to_string() }
+    LocalLlm { client, exe: exe.to_path_buf(), model_path: model_path.to_path_buf(), model_name: model_name.to_string(), gpu: card.ask(), hold }
 }
 
-/// Ends the shared helper now (the app is closing, the engine was switched, or the models are being deleted).
+/// Ends the shared helper now (the app is closing, the engine was switched, or the models are being deleted), and lets
+/// go of the model's folder.
 pub fn stop_shared() {
     let taken = SHARED.lock().unwrap_or_else(|e| e.into_inner()).take();
     if let Some((_, client)) = taken {
         client.shutdown();
     }
+    release_hold();
 }
 
 /// Frees the loaded model's memory and its file now, but keeps the helper for the next answer (a model is being deleted).
@@ -183,12 +261,103 @@ pub fn unload_shared() {
             log::warn!("local AI: could not unload the model: {e}");
         }
     }
+    release_hold();
+}
+
+// ---------- the hold on the model's folder ----------
+
+/// A hold on the folder of the model the helper has loaded: no other Craft Concepts app can erase it meanwhile (and on
+/// Windows its file can't be deleted under the helper). Let go when the model is unloaded, the helper stops, or the
+/// helper has been idle for as long as it keeps the model.
+static HELD: Mutex<Kept<ModelHandle>> = Mutex::new(Kept::new());
+/// Answers running now: an answer can take longer than the idle time, and must not lose its hold.
+static RUNNING: AtomicUsize = AtomicUsize::new(0);
+static WATCH: Once = Once::new();
+
+struct Busy;
+
+impl Busy {
+    fn start() -> Busy {
+        RUNNING.fetch_add(1, Ordering::SeqCst);
+        Busy
+    }
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        RUNNING.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn held() -> std::sync::MutexGuard<'static, Kept<ModelHandle>> {
+    HELD.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn release_hold() {
+    held().clear();
+}
+
+/// Words for a model that can't be held: it isn't completely on this computer, or another app has it locked.
+fn hold_text(e: &voice_engine_models::StoreError) -> String {
+    match e {
+        voice_engine_models::StoreError::NotInstalled(_) => NOT_DOWNLOADED.to_string(),
+        _ => "Ensayo couldn't open the built-in local AI's model. Close other apps that use it and try again.".to_string(),
+    }
+}
+
+fn hold_error(text: String) -> AiError {
+    if text == NOT_DOWNLOADED {
+        AiError::Unavailable(text)
+    } else {
+        AiError::Failed(text)
+    }
+}
+
+/// Holds `id`'s folder (replacing the hold on another model) and starts its idle clock over.
+fn hold_model(id: &str) -> Result<(), AiError> {
+    watch_idle();
+    let store = models_store::store().map_err(AiError::Failed)?;
+    held().with(id, Instant::now(), || store.hold(id).map_err(|e| hold_text(&e)), |_| ()).map_err(hold_error)
+}
+
+/// Checks twice a minute whether the helper has been idle long enough to have let the model go.
+fn watch_idle() {
+    WATCH.call_once(|| {
+        let _ = std::thread::Builder::new().name("local-ai-idle".into()).spawn(|| loop {
+            std::thread::sleep(Duration::from_secs(30));
+            release_hold_if_idle(Instant::now());
+        });
+    });
+}
+
+fn release_hold_if_idle(now: Instant) {
+    idle_release(&mut held(), now, RUNNING.load(Ordering::SeqCst));
+}
+
+/// Lets go of the hold when no answer is running and the helper has been idle for as long as it keeps the model.
+fn idle_release(kept: &mut Kept<ModelHandle>, now: Instant, running: usize) {
+    if running == 0 {
+        kept.release_if_idle(now, Duration::from_secs(IDLE_SECS));
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ai::llm::Tier;
+
+    /// The tests that start, stop or hold the one shared client take turns, since it is one per process.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    const NO_CARD: Card = Card { on: false, vulkan: None, name: None };
+
+    fn shared_in_test(exe: &Path, model: &str, name: &str) -> LocalLlm {
+        shared_with(exe, Path::new(model), name, &NO_CARD, false)
+    }
 
     fn request(json: bool, tier: Tier) -> LlmRequest {
         LlmRequest { system: "Be brief.".into(), user: "Classify this question.".into(), json, max_tokens: 200, tier }
@@ -202,7 +371,8 @@ mod tests {
 
     #[test]
     fn a_missing_helper_is_one_plain_unavailable_message() {
-        let ai = shared(Path::new("/nonexistent/ensayo-llm"), Path::new("/models/qwen.gguf"), "qwen3.5-4b");
+        let _s = serial();
+        let ai = shared_in_test(Path::new("/nonexistent/ensayo-llm"), "/models/qwen.gguf", "qwen3.5-4b");
         let e = ai.complete(&request(true, Tier::Fast)).unwrap_err();
         assert!(matches!(e, AiError::Unavailable(_)), "{e:?}");
         let m = text_of(e);
@@ -273,9 +443,10 @@ done
     #[cfg(unix)]
     #[test]
     fn a_reply_comes_back_with_its_token_counts_and_the_model_name_and_the_helper_is_reused() {
+        let _s = serial();
         let dir = tempfile::tempdir().unwrap();
         let exe = fake_helper(dir.path(), "first", false);
-        let ai = LocalLlm { client: Arc::new(new_client(&exe)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into() };
+        let ai = LocalLlm { client: Arc::new(new_client(&exe, &NO_CARD)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into(), gpu: false, hold: false };
         let r = ai.complete(&request(true, Tier::Fast)).unwrap();
         assert_eq!((r.text.as_str(), r.input_tokens, r.output_tokens, r.model.as_str()), ("first", 120, 7, "qwen3.5-4b"));
         assert_eq!(ai.complete(&request(false, Tier::Strong)).unwrap().text, "first", "both tiers use the same helper");
@@ -285,9 +456,10 @@ done
     #[cfg(unix)]
     #[test]
     fn an_empty_answer_is_an_error_not_a_blank_note() {
+        let _s = serial();
         let dir = tempfile::tempdir().unwrap();
         let exe = fake_helper(dir.path(), "", true);
-        let ai = LocalLlm { client: Arc::new(new_client(&exe)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into() };
+        let ai = LocalLlm { client: Arc::new(new_client(&exe, &NO_CARD)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into(), gpu: false, hold: false };
         let m = text_of(ai.complete(&request(true, Tier::Fast)).unwrap_err());
         assert!(m.contains("ran out of room"), "{m}");
         ai.client.shutdown();
@@ -309,24 +481,122 @@ done
     }
 
     #[test]
-    fn the_shared_client_is_reused_for_the_same_helper_and_replaced_for_another() {
+    fn the_card_is_asked_for_by_a_mac_when_on_and_by_windows_only_with_a_helper_for_it() {
+        let card = |on, vulkan: Option<&str>| Card { on, vulkan: vulkan.map(PathBuf::from), name: None };
+        assert_eq!(card(true, None).ask(), cfg!(target_os = "macos"), "no helper: Metal on the Mac, the processor elsewhere");
+        assert_eq!(card(true, Some("/app/ensayo-llm-vulkan.exe")).ask(), true, "a card helper to ask");
+        assert!(!card(false, Some("/app/ensayo-llm-vulkan.exe")).ask() && !card(false, None).ask(), "off is off");
+    }
+
+    #[test]
+    fn a_failed_card_is_remembered_per_app_version_and_card() {
+        let named = Card { on: true, vulkan: None, name: Some("NVIDIA GeForce RTX 4060".into()) };
+        assert_eq!(named.key(), format!("{}-NVIDIA GeForce RTX 4060", env!("CARGO_PKG_VERSION")));
+        assert_eq!(NO_CARD.key(), format!("{}-none", env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn the_client_is_built_with_the_card_helper_and_the_failure_file() {
+        let _s = serial();
         let exe = Path::new("/nonexistent/ensayo-llm");
-        let a = shared(exe, Path::new("/models/a.gguf"), "a");
-        let a2 = shared(exe, Path::new("/models/b.gguf"), "b");
+        let card = Card { on: true, vulkan: Some(PathBuf::from("/nonexistent/ensayo-llm-vulkan")), name: Some("RTX".into()) };
+        let ai = shared_with(exe, Path::new("/m.gguf"), "m", &card, false);
+        assert_eq!(ai.gpu, card.ask());
+        stop_shared();
+        assert!(failures_file().ends_with("gpu-failures.json"));
+    }
+
+    #[test]
+    fn the_card_helper_is_the_one_beside_the_app_on_windows_and_nothing_when_it_is_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join(format!("Ensayo{}", std::env::consts::EXE_SUFFIX));
+        assert_eq!(vulkan_helper_from(&exe), None, "missing: the processor helper");
+        let file = dir.path().join(format!("{VULKAN_HELPER}{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&file, b"").unwrap();
+        assert_eq!(vulkan_helper_from(&exe), if cfg!(windows) { Some(file) } else { None }, "only Windows has one");
+    }
+
+    fn install(store: &voice_engine_models::SharedStore, id: &str) {
+        for f in voice_engine_models::catalog::find(id).unwrap().files {
+            let path = store.model_dir(id).join(f.name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::File::create(path).unwrap().set_len(f.size).unwrap();
+        }
+    }
+
+    /// Holds the model the way `hold_model` does, but in a store of the test's own.
+    fn hold_in(store: &voice_engine_models::SharedStore, id: &str, now: Instant) {
+        held().with(id, now, || store.hold(id).map_err(|e| hold_text(&e)), |_| ()).unwrap();
+    }
+
+    #[test]
+    fn the_model_is_held_while_the_helper_has_it_and_let_go_on_unload_stop_idle_and_delete() {
+        let _s = serial();
+        use voice_engine_models::{App, Released, SharedStore};
+        let dir = tempfile::tempdir().unwrap();
+        let store = SharedStore::open_at(App::Ensayo, dir.path().to_path_buf()).unwrap();
+        let id = "granite-4.2-3b";
+        install(&store, id);
+        store.use_model(id).unwrap();
+        let erasable = |store: &SharedStore| {
+            let r = store.release(id).unwrap();
+            if r != Released::Erased {
+                store.use_model(id).unwrap();
+            }
+            r == Released::Erased
+        };
+        // Held: another app (or this one's Delete) can't erase it.
+        let t0 = Instant::now();
+        hold_in(&store, id, t0);
+        assert!(!erasable(&store), "held while loaded");
+        // Unload (also what Delete does first) lets go.
+        unload_shared();
+        assert!(held().peek().is_none());
+        hold_in(&store, id, t0);
+        stop_shared();
+        assert!(held().peek().is_none(), "stopping the helper lets go");
+        // Idle: kept for the helper's idle time and not past it, and never while an answer runs.
+        hold_in(&store, id, t0);
+        idle_release(&mut held(), t0 + Duration::from_secs(IDLE_SECS + 30), 1);
+        assert!(held().peek().is_some(), "an answer is running");
+        idle_release(&mut held(), t0 + Duration::from_secs(IDLE_SECS - 1), 0);
+        assert!(held().peek().is_some(), "not idle long enough");
+        idle_release(&mut held(), t0 + Duration::from_secs(IDLE_SECS + 1), 0);
+        assert!(held().peek().is_none(), "idle: the helper has let the model go");
+        assert!(erasable(&store), "and now it can be erased");
+    }
+
+    #[test]
+    fn a_model_that_is_not_on_this_computer_is_unavailable_not_failed() {
+        let _s = serial();
+        let dir = tempfile::tempdir().unwrap();
+        let store = voice_engine_models::SharedStore::open_at(voice_engine_models::App::Ensayo, dir.path().to_path_buf()).unwrap();
+        let text = held().with("qwen3.5-4b", Instant::now(), || store.hold("qwen3.5-4b").map_err(|e| hold_text(&e)), |_| ()).unwrap_err();
+        assert!(matches!(hold_error(text), AiError::Unavailable(m) if m == NOT_DOWNLOADED));
+        assert!(held().peek().is_none());
+    }
+
+    #[test]
+    fn the_shared_client_is_reused_for_the_same_helper_and_replaced_for_another() {
+        let _s = serial();
+        let exe = Path::new("/nonexistent/ensayo-llm");
+        let a = shared_in_test(exe, "/models/a.gguf", "a");
+        let a2 = shared_in_test(exe, "/models/b.gguf", "b");
         assert!(Arc::ptr_eq(&a.client, &a2.client), "another model uses the same client");
-        let b = shared(Path::new("/nonexistent/other-llm"), Path::new("/models/b.gguf"), "b");
+        let b = shared_in_test(Path::new("/nonexistent/other-llm"), "/models/b.gguf", "b");
         assert!(!Arc::ptr_eq(&a.client, &b.client));
         stop_shared();
-        let c = shared(Path::new("/nonexistent/other-llm"), Path::new("/models/b.gguf"), "b");
+        let c = shared_in_test(Path::new("/nonexistent/other-llm"), "/models/b.gguf", "b");
         assert!(!Arc::ptr_eq(&b.client, &c.client), "stopping forgets the old one");
         stop_shared();
     }
 
     #[test]
     fn unloading_with_no_helper_running_does_nothing_and_starts_none() {
+        let _s = serial();
         stop_shared();
         unload_shared();
-        let a = shared(Path::new("/nonexistent/ensayo-llm"), Path::new("/models/a.gguf"), "a");
+        let a = shared_in_test(Path::new("/nonexistent/ensayo-llm"), "/models/a.gguf", "a");
         unload_shared();
         drop(a);
         stop_shared();
@@ -350,7 +620,7 @@ done
         });
         let exe = helper_path();
         eprintln!("helper: {} exists={}\nmodel: {}", exe.display(), exe.exists(), model.display());
-        let ai = shared(&exe, &model, "smoke");
+        let ai = shared_with(&exe, &model, "smoke", &Card::now(), false);
         let t = std::time::Instant::now();
         let mut budget = Budget::new(Provider::Compatible, 0.0);
         let vars = Vars::new().set("question", "Have you done a behavioral implementation in Braze?");
