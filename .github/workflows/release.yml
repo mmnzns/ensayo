@@ -12,6 +12,12 @@ name: Release
 # Nothing here uses a paid certificate: the Mac is signed with the free self-signed one, Windows is unsigned, and
 # testers get one-time steps in INSTALL.md.
 #
+# The local AI helpers (ensayo-llm, and ensayo-llm-vulkan on Windows) are NOT built in the app jobs: the `helpers` job
+# calls voice-engine's reusable workflow at the engine tag (keep it equal to the tag in src-tauri/Cargo.toml), and the
+# app jobs download its `helpers-<triple>` artifact into src-tauri/binaries. The app jobs pass `--config` with a
+# `beforeBuildCommand` that only builds the frontend, so scripts/build-llm-helper.* cannot overwrite those files.
+# Dev, ci.yml and test-build below still build the helper from this repo with scripts/build-llm-helper.*.
+#
 # Secrets:
 #   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD   Ensayo's updater key (~/.tauri/ensayo.key; the password is empty)
 #   APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY   optional, Mac jobs
@@ -49,8 +55,18 @@ jobs:
           gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" --draft --title "Ensayo $GITHUB_REF_NAME" --notes-file scripts/release-notes.md
 
+  # The engine's workflow builds all three targets (Mac, Windows x64, Windows ARM64); the Windows ARM64 helper goes
+  # unused, which is a known cost. Same tag in `engine-ref` and after the @.
+  helpers:
+    if: github.event_name == 'push'
+    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.2.2
+    with:
+      engine-ref: v0.2.2
+      helpers: "llm,llm-vulkan"
+      llm-name: ensayo-llm
+
   windows:
-    needs: draft
+    needs: [draft, helpers]
     if: github.event_name == 'push'
     permissions:
       contents: write
@@ -69,10 +85,37 @@ jobs:
           workspaces: src-tauri
           key: release-windows
       - run: npm ci
-      # The built-in local AI helper must exist before the app builds (tauri.conf.json externalBin).
-      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-llm-helper.ps1
-      # Whisper and llama.cpp must be built for the AVX2 baseline, not this runner's CPU. The signing key makes the
-      # installer's .sig (tauri.conf.json: bundle.createUpdaterArtifacts).
+      # The AI helpers come from the engine's workflow (the `helpers` job): ensayo-llm-<triple>.exe and, on x64,
+      # ensayo-llm-vulkan-<triple>.exe, where Tauri's externalBin expects them.
+      - uses: actions/download-artifact@v4
+        with:
+          name: helpers-x86_64-pc-windows-msvc
+          path: src-tauri/binaries
+      - name: Check the helpers against SHA256SUMS
+        shell: pwsh
+        working-directory: src-tauri/binaries
+        run: |
+          foreach ($f in 'ensayo-llm-x86_64-pc-windows-msvc.exe', 'ensayo-llm-vulkan-x86_64-pc-windows-msvc.exe') {
+            if (-not (Test-Path $f)) { Write-Error "$f is missing from the helpers artifact"; exit 1 }
+          }
+          foreach ($line in (Get-Content SHA256SUMS | Where-Object { $_.Trim() })) {
+            $hash, $name = $line.Trim() -split '\s+\*?', 2
+            $got = (Get-FileHash $name -Algorithm SHA256).Hash
+            if ($got -ne $hash.ToUpper()) { Write-Error "checksum mismatch: $name"; exit 1 }
+          }
+          Get-Content build-info.txt
+      # Release-only Tauri config, passed with --config: (1) the frontend-only beforeBuildCommand, so the in-repo helper
+      # script cannot overwrite the helpers above; (2) the Vulkan sidecar in externalBin (the default config omits it so
+      # a build without the Vulkan SDK still bundles; this job has checked that the file exists). Arrays replace, so
+      # the processor helper is listed again.
+      - name: Release Tauri config
+        shell: pwsh
+        run: |
+          '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan"]}}' |
+            Set-Content -Path "$env:RUNNER_TEMP/tauri.release.conf.json" -Encoding ascii
+      # The app's own whisper.cpp must be built for the AVX2 baseline, not this runner's CPU. The signing key makes the
+      # installer's .sig (tauri.conf.json: bundle.createUpdaterArtifacts). The helpers are not built here, so only the
+      # app's whisper.cpp cache is left to check (Test-GgmlBaseline).
       - name: Build the installer
         shell: pwsh
         env:
@@ -80,9 +123,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           . ./scripts/cpu-baseline.ps1
-          npm run tauri build -- --bundles nsis
-          $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
-          if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }
+          npm run tauri build -- --bundles nsis --config "$env:RUNNER_TEMP/tauri.release.conf.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $caches = @(Get-GgmlCaches src-tauri/target)
+          if ($caches.Count -eq 0) { Write-Error "no whisper.cpp build found to check"; exit 1 }
+          $bad = @($caches | ForEach-Object { Test-GgmlBaseline $_ })
+          if ($bad.Count -gt 0) { Write-Error "whisper.cpp was not built for the baseline: $bad"; exit 1 }
       - name: Upload to the draft
         shell: bash
         env:
@@ -92,7 +138,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" --repo "$RELEASE_REPO" "$out/Ensayo_${v}_x64-setup.exe" "$out/Ensayo_${v}_x64-setup.exe.sig" --clobber
 
   macos:
-    needs: draft
+    needs: [draft, helpers]
     if: github.event_name == 'push'
     permissions:
       contents: write
@@ -117,8 +163,18 @@ jobs:
           workspaces: src-tauri
           key: release-${{ matrix.arch }}
       - run: npm ci
-      # Builds ensayo-llm for this runner's own architecture (the helper script uses the host triple).
-      - run: sh scripts/build-llm-helper.sh
+      # ensayo-llm-<triple> from the engine's workflow (the `helpers` job). Artifacts lose the executable bit.
+      - uses: actions/download-artifact@v4
+        with:
+          name: helpers-${{ matrix.target }}
+          path: src-tauri/binaries
+      - name: Check the helper against SHA256SUMS and make it executable
+        working-directory: src-tauri/binaries
+        run: |
+          test -f "ensayo-llm-${{ matrix.target }}" || { echo "::error::ensayo-llm-${{ matrix.target }} is missing from the helpers artifact"; exit 1; }
+          shasum -a 256 -c SHA256SUMS
+          chmod +x ./*-apple-darwin
+          cat build-info.txt
       # Tauri's own certificate import cannot trust a self-signed certificate; Talaan needed this step too (three
       # failed CI runs). So the certificate goes into a temporary keychain first and Tauri only gets the name.
       - name: Signing certificate into a temporary keychain
@@ -132,7 +188,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: npm run tauri build -- --target ${{ matrix.target }} --bundles app,dmg
+        # --config: the frontend-only beforeBuildCommand, so scripts/build-llm-helper.sh cannot replace the downloaded helper.
+        # Tauri signs the sidecar inside the .app with this identity; check-mac-signature.sh (codesign --deep --strict) covers it.
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles app,dmg --config '{"build":{"beforeBuildCommand":"npm run build"}}'
       - name: Check the Mac signature
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
