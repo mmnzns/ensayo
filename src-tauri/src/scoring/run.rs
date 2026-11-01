@@ -105,7 +105,7 @@ pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, b
     for attempt in 0..2 {
         budget.check()?;
         let user = if attempt == 0 { user.clone() } else { format!("{user}\n\nYour last reply was rejected: {last}. Return only one JSON object that matches the JSON Schema in the reply format: its field names, required fields and allowed values.") };
-        let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, max_tokens, tier: prompt.tier }).map_err(from_ai)?;
+        let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, schema: Some(prompt.schema.clone()), max_tokens, tier: prompt.tier }).map_err(from_ai)?;
         budget.spend.add_from(budget.provider, &reply);
         let mut value = match extract_json(&reply.text) {
             Ok(v) => v,
@@ -232,6 +232,14 @@ mod tests {
         assert_eq!(out.value["type"], "technical");
         assert_eq!(b.spend.calls, 1);
         assert_eq!(b.spend.input_tokens, 1000);
+    }
+
+    #[test]
+    fn every_request_carries_the_prompts_reply_schema() {
+        let llm = Scripted::new(vec![Ok(GOOD)]);
+        call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap();
+        let seen = llm.seen.lock().unwrap();
+        assert_eq!(seen[0].schema.as_ref(), Some(&get(PromptId::Classify).schema));
     }
 
     #[test]

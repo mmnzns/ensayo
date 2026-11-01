@@ -17,6 +17,9 @@ pub struct LlmRequest {
     pub user: String,
     /// Ask the provider for JSON output where it has a switch for it.
     pub json: bool,
+    /// The JSON Schema the reply must follow, when the caller has one. Only a provider that can enforce a schema
+    /// while it writes uses it (the local helper does); the others ignore it, and the caller validates either way.
+    pub schema: Option<serde_json::Value>,
     pub max_tokens: u32,
     pub tier: Tier,
 }

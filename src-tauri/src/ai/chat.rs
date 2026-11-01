@@ -401,7 +401,7 @@ mod tests {
     use std::sync::Mutex;
 
     fn request(json: bool, tier: Tier) -> LlmRequest {
-        LlmRequest { system: "Be brief.".into(), user: "Score this answer.".into(), json, max_tokens: 500, tier }
+        LlmRequest { system: "Be brief.".into(), user: "Score this answer.".into(), json, schema: None, max_tokens: 500, tier }
     }
 
     // ----- model settings table -----
@@ -565,7 +565,7 @@ mod tests {
 
     #[test]
     fn a_thinking_model_gets_room_to_think_on_top_of_the_reply() {
-        let req = LlmRequest { system: String::new(), user: "u".into(), json: true, max_tokens: 4000, tier: Tier::Strong };
+        let req = LlmRequest { system: String::new(), user: "u".into(), json: true, schema: None, max_tokens: 4000, tier: Tier::Strong };
         let sol = model_settings(Provider::OpenAi, "gpt-6-sol", Tier::Strong);
         assert!(sol.reasoning_effort.is_some());
         let w = openai_request(Provider::OpenAi, "https://api.openai.com/v1", "k", "gpt-6-sol", &req, &sol, true);

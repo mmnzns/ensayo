@@ -4,8 +4,12 @@
 //! where the helper is, the words the person reads for each of those, and the one shared client. The helper exits by
 //! itself after two idle minutes and whenever Ensayo closes (its stdin closes), and `stop_shared` ends it at once.
 //!
-//! Fast and Strong tasks run on the same loaded model (one model in memory). `json: true` constrains the reply to a
-//! JSON object with llama.cpp's grammar, so it always parses; the prompt still carries the schema the keys must follow.
+//! Fast and Strong tasks run on the same loaded model (one model in memory). `json: true` constrains the reply with
+//! llama.cpp's grammar: to the request's own JSON Schema when it has one (objects, required keys,
+//! `additionalProperties: false`, `enum`, `const` and array sizes are enforced while the model writes; other keywords
+//! such as `pattern` are not, so the caller still validates), and to any JSON object when it has none. A schema
+//! llama.cpp can't take (`BadSchema`) is retried once as any JSON object, so it never breaks a feature. The prompt
+//! still carries the schema as text.
 
 use super::llm::{Llm, LlmReply, LlmRequest};
 use super::providers::AiError;
@@ -202,6 +206,44 @@ fn message(e: &EngineError) -> AiError {
     }
 }
 
+/// The grammar to ask the engine for: the request's own reply schema when it has one, any JSON object when it asks for
+/// JSON without one, and none for free text.
+fn grammar_schema(req: &LlmRequest) -> Option<String> {
+    if !req.json {
+        return None;
+    }
+    Some(req.schema.as_ref().map(|s| s.to_string()).unwrap_or_else(|| JSON_OBJECT_SCHEMA.to_string()))
+}
+
+/// Asks with the request's grammar; when the engine says the reply's schema is not one it can take, asks once more for
+/// any JSON object (the caller's own validation then holds the reply to the schema). The log gets the kind only: the
+/// engine's detail can quote the schema.
+fn with_schema_fallback<T>(req: &LlmRequest, mut ask: impl FnMut(Option<String>) -> Result<T, EngineError>) -> Result<T, EngineError> {
+    match ask(grammar_schema(req)) {
+        Err(EngineError::BadSchema { .. }) if req.json && req.schema.is_some() => {
+            log::warn!("local AI: the reply schema was not accepted (BadSchema); retrying as any JSON object");
+            ask(Some(JSON_OBJECT_SCHEMA.to_string()))
+        }
+        other => other,
+    }
+}
+
+fn completion(model_path: String, n_ctx: u32, req: &LlmRequest, json_schema: Option<String>, gpu: bool) -> Completion {
+    Completion {
+        model_path,
+        n_ctx,
+        system: req.system.clone(),
+        user: req.user.clone(),
+        json_schema,
+        max_tokens: req.max_tokens,
+        temperature: TEMPERATURE,
+        gpu,
+        thinking: false,
+        thinking_budget: None,
+        seed: None,
+    }
+}
+
 impl Llm for LocalLlm {
     fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
         if !self.exe.exists() {
@@ -214,20 +256,14 @@ impl Llm for LocalLlm {
             hold_model(&self.model_name)?;
         }
         // Fast and Strong share the one loaded model.
-        let c = Completion {
-            model_path: self.model_path.to_string_lossy().into_owned(),
-            n_ctx: context_here(&self.model_name),
-            system: req.system.clone(),
-            user: req.user.clone(),
-            json_schema: req.json.then(|| JSON_OBJECT_SCHEMA.to_string()),
-            max_tokens: req.max_tokens,
-            temperature: TEMPERATURE,
-            gpu: self.gpu,
-            thinking: false,
-            thinking_budget: None,
-            seed: None,
+        let model_path = self.model_path.to_string_lossy().into_owned();
+        let n_ctx = context_here(&self.model_name);
+        let run = |json_schema: Option<String>| {
+            let c = completion(model_path.clone(), n_ctx, req, json_schema, self.gpu);
+            self.client.complete(c, &mut |_| {})
         };
-        let out = self.client.complete(c, &mut |_| {}).map_err(|e| {
+        let result = with_schema_fallback(req, run);
+        let out = result.map_err(|e| {
             log::warn!("local AI: {e}");
             if let EngineError::Crashed { exit_code, signal, detail } = &e {
                 // `detail` is the helper's stderr tail; the engine keeps user text out of it.
@@ -419,7 +455,56 @@ mod tests {
     }
 
     fn request(json: bool, tier: Tier) -> LlmRequest {
-        LlmRequest { system: "Be brief.".into(), user: "Classify this question.".into(), json, max_tokens: 200, tier }
+        LlmRequest { system: "Be brief.".into(), user: "Classify this question.".into(), json, schema: None, max_tokens: 200, tier }
+    }
+
+    fn with_schema(json: bool, schema: Option<serde_json::Value>) -> LlmRequest {
+        LlmRequest { schema, ..request(json, Tier::Fast) }
+    }
+
+    #[test]
+    fn a_request_with_a_schema_asks_the_engine_for_that_schema() {
+        let schema = serde_json::json!({"type": "object", "required": ["type"], "properties": {"type": {"enum": ["a", "b"]}}, "additionalProperties": false});
+        let req = with_schema(true, Some(schema.clone()));
+        let c = completion("/m.gguf".into(), 4096, &req, grammar_schema(&req), false);
+        let sent: serde_json::Value = serde_json::from_str(c.json_schema.as_deref().unwrap()).unwrap();
+        assert_eq!(sent, schema);
+    }
+
+    #[test]
+    fn a_request_without_a_schema_asks_for_any_json_object_and_free_text_for_none() {
+        let req = with_schema(true, None);
+        assert_eq!(completion("/m.gguf".into(), 4096, &req, grammar_schema(&req), false).json_schema.as_deref(), Some(JSON_OBJECT_SCHEMA));
+        // No JSON asked for: no grammar, even if a schema is carried.
+        let req = with_schema(false, Some(serde_json::json!({"type": "object"})));
+        assert_eq!(grammar_schema(&req), None);
+    }
+
+    #[test]
+    fn a_schema_the_engine_rejects_is_retried_once_as_any_json_object() {
+        let bad = || EngineError::BadSchema { detail: "x".into() };
+        let req = with_schema(true, Some(serde_json::json!({"type": "object", "properties": {"a": {"type": "string"}}})));
+        let mut sent: Vec<Option<String>> = vec![];
+        let out = with_schema_fallback(&req, |s| {
+            sent.push(s.clone());
+            if sent.len() == 1 { Err(bad()) } else { Ok(7) }
+        });
+        assert_eq!(out.unwrap(), 7);
+        assert_eq!(sent.len(), 2);
+        assert!(sent[0].as_deref().unwrap().contains("properties"));
+        assert_eq!(sent[1].as_deref(), Some(JSON_OBJECT_SCHEMA));
+        // Rejected again: one retry only, and the error comes back.
+        let mut n = 0;
+        let out: Result<(), _> = with_schema_fallback(&req, |_| { n += 1; Err(bad()) });
+        assert!(matches!(out, Err(EngineError::BadSchema { .. })));
+        assert_eq!(n, 2);
+        // Without a schema of its own there is nothing to fall back from; other errors are not retried.
+        let mut n = 0;
+        let _: Result<(), _> = with_schema_fallback(&with_schema(true, None), |_| { n += 1; Err(bad()) });
+        assert_eq!(n, 1);
+        let mut n = 0;
+        let _: Result<(), _> = with_schema_fallback(&req, |_| { n += 1; Err(EngineError::TimedOut) });
+        assert_eq!(n, 1);
     }
 
     fn text_of(e: AiError) -> String {
@@ -734,5 +819,109 @@ done
         call_json(&ai, get(PromptId::Classify), &vars, 400, &mut budget).unwrap();
         eprintln!("second call {:.1}s", t.elapsed().as_secs_f32());
         stop_shared();
+    }
+
+    /// The Qwen 3.5 4B file from the shared models folder, read-only: `ENSAYO_LLM_MODEL`, else the folder's own file.
+    /// Nothing here opens the shared store, so nothing is collected, moved or marked in that folder.
+    fn qwen_path() -> PathBuf {
+        if let Ok(p) = std::env::var("ENSAYO_LLM_MODEL") {
+            return PathBuf::from(p);
+        }
+        let home = PathBuf::from(std::env::var("HOME").expect("HOME"));
+        let p = home.join("Library/Application Support/Craft Concepts Digital/Models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf");
+        assert!(p.exists(), "set ENSAYO_LLM_MODEL to a Qwen 3.5 4B gguf");
+        p
+    }
+
+    /// Every one of the eleven reply schemas goes through the engine's grammar conversion with the real helper. The
+    /// helper converts the schema before it writes anything, so a tiny reply is enough; a `BadSchema` here is a schema
+    /// llama.cpp can't take (the app would fall back to any JSON object for it). Prints prompt ids and verdicts only.
+    /// `cargo test --release --manifest-path src-tauri/Cargo.toml every_reply_schema_is_accepted -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn every_reply_schema_is_accepted_by_the_engines_grammar() {
+        use crate::scoring::prompts::{get, PromptId};
+        let _s = serial();
+        let ai = shared_with(&helper_path(), &qwen_path(), "qwen3.5-4b", &NO_CARD, false);
+        let mut rejected = vec![];
+        for id in PromptId::ALL {
+            let prompt = get(id);
+            let req = LlmRequest { system: "Reply with a JSON object.".into(), user: "Synthetic.".into(), json: true, schema: Some(prompt.schema.clone()), max_tokens: 4, tier: prompt.tier };
+            let t = Instant::now();
+            let out = ai.client.complete(completion(ai.model_path.to_string_lossy().into_owned(), 2048, &req, grammar_schema(&req), false), &mut |_| {});
+            let verdict = match &out {
+                Err(EngineError::BadSchema { .. }) => {
+                    rejected.push(prompt.id.clone());
+                    "REJECTED (BadSchema)".to_string()
+                }
+                Ok(_) => "accepted".to_string(),
+                Err(e) => format!("accepted (stopped: {})", std::mem::discriminant(e) == std::mem::discriminant(&EngineError::TimedOut)),
+            };
+            eprintln!("{:<20} {verdict} ({:.1}s)", prompt.id, t.elapsed().as_secs_f32());
+        }
+        stop_shared();
+        assert!(rejected.is_empty(), "schemas the engine rejected: {rejected:?}");
+    }
+
+    /// Ensayo's own prompts with their real reply schema enforced while Qwen 3.5 4B writes, each reply held to
+    /// Ensayo's `validate` (inside `call_json`). The story, answers and posting are synthetic text written here. Prints
+    /// prompt id, pass/fail, key names and timing only, never reply text.
+    /// `cargo test --release --manifest-path src-tauri/Cargo.toml the_real_schema_holds -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn the_real_schema_holds_for_the_story_read_and_other_prompts_on_qwen() {
+        use crate::ai::providers::Provider;
+        use crate::scoring::prompts::{get, PromptId};
+        use crate::scoring::run::{call_json, Budget};
+        use crate::scoring::template::Vars;
+        let _s = serial();
+        let ai = shared_with(&helper_path(), &qwen_path(), "qwen3.5-4b", &NO_CARD, false);
+        let story = "At Fernwood Outdoors I ran the lifecycle team. Our seven-day activation sat at 31 percent and nobody agreed why. \
+            I noticed most drop-off happened after the first email, so I decided that a better first week would matter more than more sends, \
+            and I picked seven-day activation as the metric. I rebuilt the welcome flow into three short emails with one task each and added a \
+            reminder when the first task was not done. I owned the plan and the copy; Priya on engineering built the tracking. Seven-day \
+            activation went from 31 to 44 percent in two months, about 40 percent more activated users on a base of roughly 20,000 signups a month.";
+        let answer = "[1] (0.0s to 9.0s) I would start by checking what the customer already has in place, then I would propose a pilot with one team. \
+            [2] (9.0s to 20.0s) In the last pilot we cut setup time from two weeks to four days and the team kept using it.";
+        let synthetic = |name: &str| -> String {
+            match name {
+                "raw_story" => story.into(),
+                "employer_hint" => "Fernwood Outdoors".into(),
+                "question" | "original_question" => "Tell me about a time you improved a metric.".into(),
+                "target_role" | "role" => "Lifecycle marketing manager".into(),
+                "industry" => "retail".into(),
+                "company" => "Fernwood Outdoors".into(),
+                "stage" => "recruiter".into(),
+                "transcript" | "first_transcript" | "follow_up_transcript" | "mock_transcript" => answer.into(),
+                "clarification" => "Do you mean a recent project or any time in my career?".into(),
+                "follow_up_type" => "probe".into(),
+                "follow_up_question" => "What did you personally decide?".into(),
+                "question_type" => "behavioral".into(),
+                "jd_summary" | "jd_text" => "Own the lifecycle program for a retail brand: email, push and activation experiments.".into(),
+                _ => String::new(),
+            }
+        };
+        let cases: [(PromptId, u32); 6] = [(PromptId::ParseStory, 2500), (PromptId::Classify, 400), (PromptId::Clarify, 200), (PromptId::FollowUp, 400), (PromptId::ScoreFollowUp, 1500), (PromptId::Claims, 1500)];
+        let mut failed = vec![];
+        for (id, max_tokens) in cases {
+            let prompt = get(id);
+            let vars = prompt.inputs.iter().fold(Vars::new(), |v, n| v.set(n, synthetic(n)));
+            let mut budget = Budget::new(Provider::Compatible, 0.0);
+            let t = Instant::now();
+            let result = call_json(&ai, prompt, &vars, max_tokens, &mut budget);
+            let secs = t.elapsed().as_secs_f32();
+            match result {
+                Ok(called) => {
+                    let keys: Vec<&str> = called.value.as_object().map(|o| o.keys().map(|k| k.as_str()).collect()).unwrap_or_default();
+                    eprintln!("{:<20} PASS {secs:.1}s, {} in / {} out tokens, keys: {}", prompt.id, budget.spend.input_tokens, budget.spend.output_tokens, keys.join(","));
+                }
+                Err(_) => {
+                    eprintln!("{:<20} FAIL {secs:.1}s, {} out tokens", prompt.id, budget.spend.output_tokens);
+                    failed.push(prompt.id.clone());
+                }
+            }
+        }
+        stop_shared();
+        assert!(failed.is_empty(), "replies that failed Ensayo's validation: {failed:?}");
     }
 }
