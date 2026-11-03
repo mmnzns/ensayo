@@ -1,7 +1,7 @@
-# Live build checks: Ensayo on voice-engine v0.3.1, with every fix
+# Live build checks: Ensayo on voice-engine v0.3.3, with every fix
 
 For the live test on the PC, after the Windows chat's first round (2026-10-30). The build is the bundle: the engine move
-(now on v0.3.1), the QA fixes (0.1.5 and windows-polish), and the graphics-card helper built by the engine's workflow.
+(now on v0.3.3), the QA fixes (0.1.5 and windows-polish), and the graphics-card helper built by the engine's workflow.
 Report results to Miguel. Fix nothing in engine code. If the engine is at fault, note it on the Notion page "Voice Apps
 Engine Sync" › Still open, under "From Ensayo's move".
 

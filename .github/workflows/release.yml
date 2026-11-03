@@ -61,9 +61,9 @@ jobs:
   # so that helper is skipped. Same tag in `engine-ref` and after the @.
   helpers:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.3.1
+    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.3.3
     with:
-      engine-ref: v0.3.1
+      engine-ref: v0.3.3
       helpers: "llm,llm-vulkan"
       targets: "aarch64-apple-darwin,x86_64-pc-windows-msvc"
       llm-name: ensayo-llm
