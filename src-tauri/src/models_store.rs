@@ -241,6 +241,34 @@ mod tests {
         }
     }
 
+    /// The engine answers `Busy` ("kept for `collect`") when a lock on the model's `.use` file is held for an instant.
+    /// In the full test run another test's child process can hold one: it inherits the lock's file handle between its
+    /// fork and its exec. Such a hold is over in milliseconds, so a test that expects an erase asks again.
+    fn release_until_erased(store: &SharedStore, id: &str) -> Result<Deleted, String> {
+        let mut r = release(store, id);
+        for _ in 0..100 {
+            if r != Ok(Deleted { result: "kept" }) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            r = release(store, id);
+        }
+        r
+    }
+
+    /// `release_all`, then `collect` (what the next start does) until the models nobody uses are gone; see
+    /// `release_until_erased` for why one try can leave one behind.
+    fn release_all_until_erased(store: &SharedStore, ids: &[&str]) {
+        store.release_all().unwrap();
+        for _ in 0..100 {
+            if ids.iter().all(|id| !store.model_dir(id).exists()) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            store.collect().unwrap();
+        }
+    }
+
     fn temp_store(app: App) -> (tempfile::TempDir, SharedStore) {
         let dir = tempfile::tempdir().unwrap();
         let store = SharedStore::open_at(app, dir.path().to_path_buf()).unwrap();
@@ -382,7 +410,7 @@ mod tests {
         mine.use_model("whisper-tiny").unwrap();
         mine.use_model("whisper-base").unwrap();
         talaan.use_model("whisper-base").unwrap();
-        assert_eq!(release(&mine, "whisper-tiny"), Ok(Deleted { result: "erased" }));
+        assert_eq!(release_until_erased(&mine, "whisper-tiny"), Ok(Deleted { result: "erased" }));
         assert!(!mine.model_dir("whisper-tiny").exists());
         assert_eq!(release(&mine, "whisper-base"), Ok(Deleted { result: "kept" }));
         assert!(is_installed(&talaan.status("whisper-base")), "Talaan still has it");
@@ -399,7 +427,7 @@ mod tests {
             mine.use_model(id).unwrap();
         }
         talaan.use_model("whisper-base").unwrap();
-        mine.release_all().unwrap();
+        release_all_until_erased(&mine, &["whisper-tiny", "vad"]);
         assert!(!mine.model_dir("whisper-tiny").exists());
         assert!(!mine.model_dir("vad").exists());
         assert!(is_installed(&talaan.status("whisper-base")));
