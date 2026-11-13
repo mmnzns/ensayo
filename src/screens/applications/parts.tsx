@@ -1,4 +1,5 @@
 // Shared pieces for the application detail screens (6-3 to 6-8 and Questions): the header, the tab bar, the status menu.
+import { isStopped } from "../../ui/aiStop";
 import { createContext, useCallback, useContext, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -36,7 +37,8 @@ export function useRun() {
     try {
       return await fn();
     } catch (e) {
-      setError(plainError(e));
+      // Stop is not a failure: the screen stays as it was, with no banner.
+      if (!isStopped(e)) setError(plainError(e));
       return undefined;
     } finally {
       setBusy(false);

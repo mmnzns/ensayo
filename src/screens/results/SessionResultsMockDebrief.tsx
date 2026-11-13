@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Working from "../applications/Working";
+import { stopLocalAi } from "../../ui/aiStop";
 import { useStore } from "../../data/store";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
@@ -36,12 +38,11 @@ export default function SessionResultsMockDebrief() {
     );
   }
   if (state.status === "demo") return <Debrief d={screens.results.debrief} />;
-  const notice = state.judging ? "Reading how your own questions landed…" : state.judgeError;
-  return <Debrief d={state.debrief.data} notice={notice} saves />;
+  return <Debrief d={state.debrief.data} notice={state.judging ? null : state.judgeError} waiting={state.judging} saves />;
 }
 
 /** `saves`: a real Mock, where "X is right now" changes what the application remembers (and is left out where it cannot). The preview keeps its sample walk-through. */
-export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefData; notice?: string | null; saves?: boolean }) {
+export function Debrief({ d, notice = null, waiting = false, saves = false }: { d: MockDebriefData; notice?: string | null; waiting?: boolean; saves?: boolean }) {
   const store = useStore();
   const { applications } = store;
   const app = applications.find((a) => a.id === d.applicationId);
@@ -113,6 +114,7 @@ export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefDat
             )}
           </div>
         </section>
+        {waiting && <Working steps={["debrief"]} current="debrief" kind={store.engine.kind} onStop={() => void stopLocalAi()} />}
         {notice && (
           <div className="e-soft" role="status" style={{ padding: "14px 20px" }}>
             <span className="e-meta">{notice}</span>

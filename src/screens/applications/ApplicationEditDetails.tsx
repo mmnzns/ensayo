@@ -1,3 +1,5 @@
+import Working from "./Working";
+import { stopLocalAi } from "../../ui/aiStop";
 import { KEEP_DAYS } from "../../data/trash";
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
@@ -68,6 +70,7 @@ function EditDetails({ app, extras }: Featured) {
   const [nextKey, setNextKey] = useState(1);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [alsoPractice, setAlsoPractice] = useState(false);
+  const [rereading, setRereading] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<{ sessions: number } | null>(null);
 
   const setContact = (i: number, patch: Partial<Contact>) => setContacts(contacts.map((c, j) => (j === i ? { ...c, ...patch } : c)));
@@ -111,7 +114,14 @@ function EditDetails({ app, extras }: Featured) {
       });
       if (postingChanged) {
         const saved = await actions.savePosting(app.id, posting);
-        if (posting.trim() && (saved.has_analysis ? readAgain : true)) await actions.analyseJd(app.id);
+        if (posting.trim() && (saved.has_analysis ? readAgain : true)) {
+          setRereading(true);
+          try {
+            await actions.analyseJd(app.id);
+          } finally {
+            setRereading(false);
+          }
+        }
       }
       if (await saveStages(false)) go(overview);
     });
@@ -307,6 +317,11 @@ function EditDetails({ app, extras }: Featured) {
             <button type="button" className="e-btn e-btn-danger e-btn-sm" disabled={busy} onClick={() => void remove()}>{alsoPractice ? "Yes, delete it and its practice" : "Yes, delete it"}</button>
             <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => { setConfirmDelete(false); setError(""); }}>Keep it</button>
           </span>
+        )}
+        {busy && rereading && (
+          <div style={{ flex: "1 1 100%" }}>
+            <Working steps={["save", "posting"]} current="posting" kind={store.engine.kind} onStop={() => void stopLocalAi()} />
+          </div>
         )}
         <span style={{ flex: "1" }} />
         <ErrorLine error={error} />

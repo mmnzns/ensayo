@@ -1,19 +1,31 @@
-import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Working from "../applications/Working";
+import { stopLocalAi } from "../../ui/aiStop";
+import { readStory } from "./readStory";
 import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
-import { pasteDraft, setBlankReview, setFromSetup, setParseFailure, setParsedDraft, type ParsedDraft } from "./selection";
+import { pasteDraft, setBlankReview, setFromSetup, setParseFailure, setParsedDraft } from "./selection";
 
 export default function AddAStoryPaste() {
-  const { pasteSample } = useStore().screens.stories;
+  const store = useStore();
+  const { pasteSample } = store.screens.stories;
+  const engine = store.engine;
   const [raw, setRaw] = useState(pasteDraft.raw ?? pasteSample);
   const [company, setCompany] = useState(pasteDraft.company);
   const empty = raw.trim() === "";
 
   const [reading, setReading] = useState(false);
+  // False once the person left this screen, so a read that ends later does not pull them back to the review.
+  const here = useRef(true);
+  useEffect(() => {
+    here.current = true;
+    return () => {
+      here.current = false;
+    };
+  }, []);
   // Adding a story from here is never the setup step, whatever was left behind.
   useEffect(() => setFromSetup(false), []);
 
@@ -27,14 +39,9 @@ export default function AddAStoryPaste() {
     // In the app the engine reads the text; in the browser preview the sample parse is shown.
     if (isApp()) {
       setReading(true);
-      try {
-        setParsedDraft(await invoke<ParsedDraft>("parse_story", { raw, employerHint: company }));
-      } catch (e) {
-        setParseFailure(String(e));
-        setReading(false);
-        return go("stories-parse-error");
-      }
-      setReading(false);
+      await readStory(raw, company, { alive: () => here.current, setDraft: setParsedDraft, setFailure: setParseFailure, goTo: go });
+      if (here.current) setReading(false);
+      return;
     }
     go("5-3-add-a-story-review");
   };
@@ -70,8 +77,8 @@ export default function AddAStoryPaste() {
             <button type="button" className="e-btn e-btn-primary" onClick={() => void readIt()} disabled={empty || reading} style={empty || reading ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>{reading ? "Reading..." : "Read it"}</button>
             <Link to="5-1-stories" className="e-btn e-btn-ghost">Cancel</Link>
             {empty && <span className="e-small">Paste something first, or start blank.</span>}
-            {reading && <span className="e-small" role="status">Sorting your story into its parts. A local model can take a minute.</span>}
           </div>
+          {reading && <Working steps={["story"]} current="story" kind={engine.kind} onStop={() => void stopLocalAi()} />}
         </section>
         <aside className="e-card" style={{ flex: "1 1 280px", minWidth: "0", display: "flex", flexDirection: "column", gap: "14px" }}>
           <span className="e-h3">What to paste</span>

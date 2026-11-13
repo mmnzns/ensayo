@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { RepApi } from "../practice/api";
-import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute, practiceStory, rehearseQuestion, startStoryDrill, startQuestionDrill, ASKING_SCREEN, rescoreAfterCap, CAP_NOTICE_MARK } from "../practice/live";
+import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute, practiceStory, rehearseQuestion, startStoryDrill, startQuestionDrill, ASKING_SCREEN, rescoreAfterCap, CAP_NOTICE_MARK, noteMeasured, scoreWithAi, stoppedByUser, STOPPED_NOTICE_MARK } from "../practice/live";
 import { liveContextOf } from "../practice/quick";
 import { storyFit } from "../practice/questions";
 import type { FinishArgs, FullRep, RepOutcome } from "../practice/types";
@@ -509,5 +509,62 @@ describe("controls that start a session", () => {
     const fresh = { ...mockStore.stories[0], id: "new-one" };
     expect(startStoryDrill(fresh, ctx)).toBe(true);
     expect(startQuestionDrill("   ", ctx)).toBe(false);
+  });
+});
+
+const STOP_NOTICE = "You stopped the AI. This answer got the measured checks only.";
+
+describe("real progress and Stop", () => {
+  it("ticks the measured rows only when the backend said so, not on thinking", async () => {
+    let release: (o: RepOutcome) => void = () => {};
+    const a = fake([]);
+    a.api.finishRep = () => new Promise<RepOutcome>((r) => void (release = r));
+    setRepApi(a.api);
+    begin();
+    await beginRecording();
+    const done = stopAndFinish();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(getLive()).toMatchObject({ phase: "thinking", measured: null });
+    expect(getLive().thinkingSince).toEqual(expect.any(Number));
+    noteMeasured(87);
+    expect(getLive().measured).toBe(87);
+    // A second event does not move it, and an event outside a wait is ignored.
+    noteMeasured(5);
+    expect(getLive().measured).toBe(87);
+    release(scored(1, "length"));
+    await done;
+    expect(getLive().phase).toBe("result");
+    noteMeasured(9);
+    expect(getLive().measured).toBe(87);
+  });
+
+  it("a stopped answer shows its notice, and Score with AI judges it again without keeping a restart", async () => {
+    const stopped = { ...scored(1, "length"), notice: STOP_NOTICE };
+    const a = fake([stopped]);
+    setRepApi(a.api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    expect(STOPPED_NOTICE_MARK).toBe("You stopped the AI.");
+    expect(getLive()).toMatchObject({ phase: "result" });
+    expect(stoppedByUser()).toBe(true);
+    const run = scoreWithAi();
+    // The screen is waiting again at once, with the measured part already known.
+    expect(getLive()).toMatchObject({ phase: "thinking", measured: 0 });
+    await run;
+    expect(a.calls).toContain("rescore:false");
+    expect(getLive()).toMatchObject({ phase: "result", notice: null });
+    expect(stoppedByUser()).toBe(false);
+  });
+
+  it("offers Score with AI only for a stopped Drill answer", async () => {
+    const a = fake([scored(1, "length")]);
+    setRepApi(a.api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    expect(stoppedByUser()).toBe(false);
+    expect(await scoreWithAi()).toBe(false);
+    expect(a.calls.some((c) => c.startsWith("rescore"))).toBe(false);
   });
 });

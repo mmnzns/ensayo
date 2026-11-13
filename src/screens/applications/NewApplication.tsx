@@ -8,6 +8,7 @@ import { isApp, useActions } from "../../data/real";
 import { withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
 import Working, { type WorkStep } from "./Working";
+import { stopLocalAi } from "../../ui/aiStop";
 import type { ApplicationStatus, StageId } from "../../data/types";
 import { STAGE_LABEL, STATUSES, STATUS_LABEL } from "./format";
 import { pickResumePath } from "../../ui/pickFile";
@@ -450,7 +451,7 @@ export default function NewApplication() {
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "12px" }}>
         {busy && (
           <div style={{ flex: "1 1 100%" }}>
-            <Working steps={workSteps(Boolean(posting.trim()), choice)} current={step} kind={store.engine.kind} />
+            <Working steps={workSteps(Boolean(posting.trim()), choice)} current={step} kind={store.engine.kind} onStop={() => void stopLocalAi()} />
           </div>
         )}
         <ErrorLine error={error} />

@@ -1,5 +1,7 @@
 // Practice, thinking. Draft from Design/screens/html/3-3-practice-thinking.html. Moves on to the current result after about 2.5 seconds.
 import { useEffect, useState } from "react";
+import { stopLocalAi } from "../../ui/aiStop";
+import { elapsedLabel, elapsedSeconds, LONG_WAIT_TEXT, showStop, takingLonger, thinkingRows } from "./thinkingProgress";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
 import type { EngineStatus } from "../../data/types";
@@ -23,6 +25,8 @@ const tick = (
     </svg>
   </span>
 );
+
+const pending = <span style={{ width: "24px", height: "24px", borderRadius: "50%", boxShadow: "inset 0 0 0 3px var(--e-tint)", flex: "none", boxSizing: "border-box" }} aria-hidden="true" />;
 
 /** Who picks the fix and where, from the engine in Settings and whether it answered when the session started. Speech
  *  to text is always on this computer. */
@@ -85,6 +89,16 @@ export default function PracticeThinking() {
   const [asking, setAsking] = useState(false);
   const onEsc = () => (escDecision(atStake("thinking", live, failed)) === "ask" ? setAsking(true) : end());
   useKeys({ esc: onEsc });
+  // The clock runs from when the wait began, so it does not restart if this screen mounts again.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live || failed) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [live, failed]);
+  const seconds = elapsedSeconds(state.thinkingSince, now);
+  const rows = thinkingRows(live, state.measured);
+  const stoppable = showStop(store.engine.kind, live, state.aiReady, state.measured);
   const judge = live ? judgeLines(store.engine, state.aiReady) : { step: "Picking the one thing to fix", where: thinking.engine, footer: "Your audio stays on this computer. Only the text is checked." };
 
   return (
@@ -114,19 +128,28 @@ export default function PracticeThinking() {
               </div>
             </div>
           )}
-          <div style={{ display: failed ? "none" : "flex", flexDirection: "column", gap: "0" }}>
+          <div role="status" aria-live="polite" style={{ display: failed ? "none" : "flex", flexDirection: "column", gap: "0" }}>
             <div className="e-rowline">
-              {tick}
+              {rows.text ? tick : pending}
               {" "}<span style={{ flex: "1", fontSize: "16px" }}>Turning your answer into text</span>{" "}<span className="e-small">{live ? "On this computer" : thinking.speechWhere}</span>
             </div>
             <div className="e-rowline">
-              {tick}
+              {rows.timing ? tick : pending}
               {" "}<span style={{ flex: "1", fontSize: "16px" }}>Timing, length and filler words</span>{" "}<span className="e-small">On this computer</span>
             </div>
             <div className="e-rowline" style={{ borderBottom: "none" }}>
               <span className="e-think-spin" style={{ width: "24px", height: "24px", borderRadius: "50%", boxShadow: "inset 0 0 0 3px var(--e-tint)", borderTop: "3px solid var(--e-primary)", boxSizing: "border-box", flex: "none" }} aria-hidden="true" />{" "}<span style={{ flex: "1", fontSize: "16px", fontWeight: "600" }}>{judge.step}</span>{" "}<span className="e-small" style={{ maxWidth: "220px", textAlign: "right" }}>{judge.where}</span>
             </div>
+            {live && (
+              <div className="e-small" style={{ display: "flex", alignItems: "center", gap: "12px", paddingTop: "10px" }}>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{`${elapsedLabel(seconds)} so far`}</span>
+                {takingLonger(seconds) && <span>{LONG_WAIT_TEXT}</span>}
+              </div>
+            )}
           </div>
+          {stoppable && !failed && (
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => void stopLocalAi()}>Stop</button>
+          )}
         </div>
       </div>
       <div className="e-wrap" style={{ width: "100%" }}>

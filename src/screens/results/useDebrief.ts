@@ -5,6 +5,7 @@ import { debriefContext } from "../../practice/applied";
 import { askMockDebrief, liveAvailable, loadSessionDetail, recordMustSay } from "../../practice/live";
 import { useViewedSession } from "../../practice/viewing";
 import type { SessionDetail } from "../../practice/api";
+import { isStopped } from "../../ui/aiStop";
 
 export type DebriefState =
   | { status: "demo" }
@@ -46,7 +47,7 @@ export function useDebrief(): DebriefState {
         if (about && about.mustSay.length > 0) void recordMustSay(sessionId, app!.id, q.must_say_said.filter((m) => m.said).map((m) => m.id));
         if (!cancelled) setQuality({ id: sessionId, value: q, error: null, done: true });
       } catch (e) {
-        if (!cancelled) setQuality({ id: sessionId, value: null, error: e instanceof Error ? e.message : String(e), done: true });
+        if (!cancelled) setQuality({ id: sessionId, value: null, error: isStopped(e) ? null : e instanceof Error ? e.message : String(e), done: true });
       }
     })();
     return () => {

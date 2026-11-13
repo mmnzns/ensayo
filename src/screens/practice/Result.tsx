@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
 import { consistencyCheckOf, consistencySentences } from "../../practice/applied";
-import { anotherFollowUp, currentRep, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, requestFollowUp, savedLabels, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
+import { anotherFollowUp, currentRep, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, requestFollowUp, savedLabels, scoreWithAi, stoppedByUser, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { Kbd, SessionHeader } from "./parts";
-import { ASK, FOLLOW_UP, MAX_ATTEMPTS, nextAttempt, nextQuestion, RECORD, setAttempt } from "./practiceFlow";
+import { ASK, FOLLOW_UP, MAX_ATTEMPTS, nextAttempt, nextQuestion, RECORD, setAttempt, THINK } from "./practiceFlow";
 import { hush, speak, speakTrySaying } from "./speak";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
@@ -258,6 +258,9 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
               <span className="e-label">Coach's note</span>
               <p className="e-hand" style={{ margin: "0", fontSize: `${handSize}px` }}>{attempt.coachNote}</p>
               {attempt.notJudged && <p className="e-meta" style={{ margin: "6px 0 0" }}>{attempt.notJudged}</p>}
+              {live && stoppedByUser() && (
+                <button type="button" className="e-btn e-btn-soft e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "8px" }} onClick={() => { const scoring = scoreWithAi(); go(THINK); void scoring; }}>Score with AI</button>
+              )}
             </div>
             {saidBefore.length > 0 && (
               <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

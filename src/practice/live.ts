@@ -88,6 +88,10 @@ export interface LiveState {
   mockFollowUps: number;
   /** Mock: the run reached the closing "what questions do you have for me?" and it was answered. */
   mockFinished: boolean;
+  /** While thinking: how many words the measured part heard, once the backend said it is ready (`rep-measured`). Null until then. */
+  measured: number | null;
+  /** While thinking: when the wait began (ms since the epoch), so the clock does not restart when the screen does. */
+  thinkingSince: number | null;
 }
 
 const INITIAL: LiveState = {
@@ -124,6 +128,8 @@ const INITIAL: LiveState = {
   lastSessionId: null,
   mockFollowUps: 0,
   mockFinished: false,
+  measured: null,
+  thinkingSince: null,
 };
 
 let state: LiveState = INITIAL;
@@ -223,8 +229,25 @@ export const liveAvailable = () => isApp() || api !== null;
 
 /** A new request: its token is the only one whose result is accepted from now on (an older one went stale). */
 function newRun(): string {
+  ensureMeasuredListener();
   currentRun = `${sessionCount}:${++runCount}`;
   return currentRun;
+}
+
+let listening = false;
+
+/** The backend says the transcript and the measured checks are ready: the thinking screen ticks its first two rows. */
+export function noteMeasured(words: number) {
+  if (state.phase === "thinking" && state.measured === null) set({ measured: Math.max(0, Math.round(words)) });
+}
+
+/** Listens once for `rep-measured`. Nothing happens outside the app. */
+function ensureMeasuredListener() {
+  if (listening || !isApp()) return;
+  listening = true;
+  void import("@tauri-apps/api/event").then(({ listen }) => listen<{ words?: number }>("rep-measured", (e) => noteMeasured(typeof e.payload?.words === "number" ? e.payload.words : 0))).catch(() => {
+    listening = false;
+  });
 }
 
 /** True while a result carrying `run` may still change the screen. */
@@ -290,6 +313,7 @@ export function startLive(o: StartOptions, ctx: LiveContext) {
   const generation = ++sessionCount;
   currentRun = null;
   listeners.forEach((l) => l());
+  ensureMeasuredListener();
   if (liveAvailable()) void checkSpeechAtStart(generation);
 }
 
@@ -507,7 +531,7 @@ export async function stopAndFinish(stopNote: string | null = null) {
   const q = currentQuestion();
   if (!q) return;
   const run = newRun();
-  set({ phase: "thinking", stopNote });
+  set({ phase: "thinking", stopNote, measured: null, thinkingSince: Date.now() });
   try {
     const a = await repApi();
     const rec = await a.stopRecording();
@@ -529,7 +553,7 @@ export async function retryFinish(): Promise<boolean> {
     return false;
   }
   const run = newRun();
-  set({ phase: "thinking", error: null });
+  set({ phase: "thinking", error: null, measured: null, thinkingSince: Date.now() });
   await finishAt(q, path, run);
   return true;
 }
@@ -674,19 +698,38 @@ export const CAP_NOTICE_MARK = "the next AI step would go over it";
 /** True when the rep on screen got only the measured checks because the session was at its limit. */
 export const refusedByCap = (): boolean => state.phase === "result" && (state.notice ?? "").includes(CAP_NOTICE_MARK);
 
-/** After "Keep going" at the spending limit of session `key`: judge the rep on screen again, now that the limit is higher. A Mock waits for its end, so only a Drill does this. */
-export async function rescoreAfterCap(key: string): Promise<boolean> {
-  const rep = currentRep();
-  if (!rep || state.mode !== "drill" || state.sessionId !== key || !refusedByCap()) return false;
-  set({ phase: "thinking" });
+/** Judges the rep on screen again (the words are saved, so the speech part is already done). */
+async function rescoreOnScreen(rep: FullRep): Promise<void> {
+  set({ phase: "thinking", measured: rep.transcript.length, thinkingSince: Date.now() });
   const run = newRun();
   try {
     const out = await (await repApi()).rescoreRep(rep.session_id, rep.n, false, run);
-    if (!isCurrentRun(run)) return true;
+    if (!isCurrentRun(run)) return;
     await apply(out, run);
   } catch (e) {
     if (isCurrentRun(run)) set({ phase: "error", error: message(e) });
   }
+}
+
+/** After "Keep going" at the spending limit of session `key`: judge the rep on screen again, now that the limit is higher. A Mock waits for its end, so only a Drill does this. */
+export async function rescoreAfterCap(key: string): Promise<boolean> {
+  const rep = currentRep();
+  if (!rep || state.mode !== "drill" || state.sessionId !== key || !refusedByCap()) return false;
+  await rescoreOnScreen(rep);
+  return true;
+}
+
+/** The words the backend puts on a rep when the person pressed Stop on the AI. */
+export const STOPPED_NOTICE_MARK = "You stopped the AI.";
+
+/** True when the rep on screen got only the measured checks because the person stopped the AI, and a Drill can score it again. */
+export const stoppedByUser = (): boolean => state.phase === "result" && state.mode === "drill" && (state.notice ?? "").includes(STOPPED_NOTICE_MARK);
+
+/** "Score with AI" after Stop: judge the rep on screen again (keep_restart false, as after the cap). */
+export async function scoreWithAi(): Promise<boolean> {
+  const rep = currentRep();
+  if (!rep || !stoppedByUser()) return false;
+  await rescoreOnScreen(rep);
   return true;
 }
 

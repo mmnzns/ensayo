@@ -123,6 +123,20 @@ pub fn bank_numbers(stories: &[Story], ids: &[String]) -> Vec<numbers::Number> {
     out
 }
 
+/// The payload of the `rep-measured` event: only how many words were heard, never the words.
+pub(crate) fn measured_payload(words: usize) -> serde_json::Value {
+    serde_json::json!({ "words": words })
+}
+
+/// Tells the window the transcript and the measured checks are ready, so the thinking screen can tick those rows while
+/// the AI part still runs. Does nothing before the app has started (tests).
+fn emit_measured(words: usize) {
+    use tauri::Emitter;
+    if let Some(app) = crate::graphics::app() {
+        let _ = app.emit("rep-measured", measured_payload(words));
+    }
+}
+
 fn stamp(now: DateTime<Utc>) -> String {
     now.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
@@ -305,6 +319,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         let _ = std::fs::remove_file(&args.audio_path);
         return Ok(outcome_without_rep("didnt_catch", session_id));
     }
+    emit_measured(words.len());
     // The candidate's own questions at the end of a Mock are judged together afterwards (prompt 10), never as an answer.
     let own_questions = args.question_type == "candidate_questions";
     if own_questions {
@@ -957,6 +972,13 @@ mod tests {
             t += 600;
         }
         v
+    }
+
+    #[test]
+    fn the_measured_event_carries_the_word_count_and_no_text() {
+        let p = measured_payload(42);
+        assert_eq!(p, serde_json::json!({ "words": 42 }));
+        assert_eq!(p.as_object().unwrap().len(), 1);
     }
 
     #[test]

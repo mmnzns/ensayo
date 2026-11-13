@@ -1,3 +1,5 @@
+import Working from "./Working";
+import { stopLocalAi } from "../../ui/aiStop";
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -94,6 +96,7 @@ function Overview({ app, extras, now }: Featured) {
           <Link to={link("applications-questions", { stage: stage.id })}>see them</Link>
         </span>
       ))}
+      {reading.busy && <Working steps={["posting"]} current="posting" kind={store.engine.kind} onStop={() => void stopLocalAi()} />}
       {!analysis && (
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
           <span className="e-h2">Nothing read from the posting yet</span>

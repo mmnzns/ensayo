@@ -1,7 +1,9 @@
 // Draft generated from Design/screens/html/1-7-your-first-story.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
 import { invoke } from "@tauri-apps/api/core";
 import { startFirstRep } from "../practice/practiceFlow";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Working from "../applications/Working";
+import { isStopped, stopLocalAi } from "../../ui/aiStop";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
@@ -24,6 +26,14 @@ function YourFirstStoryLive() {
   const [reading, setReading] = useState(false);
   const [problem, setProblem] = useState("");
   const found = draft ? foundSummary(draft) : null;
+  const store = useStore();
+  const here = useRef(true);
+  useEffect(() => {
+    here.current = true;
+    return () => {
+      here.current = false;
+    };
+  }, []);
 
   const readIt = async () => {
     if (!raw.trim() || reading) return;
@@ -33,13 +43,17 @@ function YourFirstStoryLive() {
     setReading(true);
     try {
       const parsed = await invoke<ParsedDraft>("parse_story", { raw, employerHint: "" });
+      if (!here.current) return;
       setParsedDraft(parsed);
       setDraft(parsed);
     } catch (e) {
-      setParseFailure(null);
-      setProblem(parseProblemLine(e));
+      // Stopped: the form stays as it was, with no banner.
+      if (here.current && !isStopped(e)) {
+        setParseFailure(null);
+        setProblem(parseProblemLine(e));
+      }
     }
-    setReading(false);
+    if (here.current) setReading(false);
   };
   const review = (blank: boolean) => {
     setFromSetup(true);
@@ -81,8 +95,8 @@ function YourFirstStoryLive() {
               <button type="button" className="e-btn e-btn-soft" onClick={() => void readIt()} disabled={!raw.trim() || reading}>
                 {reading ? "Reading..." : "Read it"}
               </button>
-              {reading ? <span className="e-small" role="status">Sorting your story into its parts. A local model can take a minute.</span> : null}
             </div>
+            {reading ? <Working steps={["story"]} current="story" kind={store.engine.kind} onStop={() => void stopLocalAi()} /> : null}
           </div>
           {found ? (
             <div className="e-card" style={{ flex: "1 1 380px", minWidth: "0", display: "flex", flexDirection: "column", gap: "16px" }}>

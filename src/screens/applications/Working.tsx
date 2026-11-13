@@ -2,15 +2,18 @@
 // never looks like a hang. The percentage is an estimate from the time so far against how long the steps usually take.
 import { useEffect, useState } from "react";
 import type { EngineStatus } from "../../data/types";
+import { canStop } from "../../ui/aiStop";
 
-export type WorkStep = "save" | "posting" | "resume";
+export type WorkStep = "save" | "posting" | "resume" | "story" | "debrief";
 
-const STEP_LABEL: Record<WorkStep, string> = { save: "Saving the application", posting: "Reading the posting", resume: "Reading the resume" };
+const STEP_LABEL: Record<WorkStep, string> = { save: "Saving the application", posting: "Reading the posting", resume: "Reading the resume", story: "Reading your story", debrief: "Reading how your questions landed" };
 
 /** Seconds a step usually takes with this engine. From real runs: with GPT-6 Sol a posting took about 30 seconds and a
  *  resume about 40; the local model is several times slower; keywords and patterns are close to instant. */
 export function expectedSeconds(step: WorkStep, kind: EngineStatus["kind"]): number {
   if (step === "save") return 2;
+  if (step === "story") return kind === "local" ? 60 : kind === "key" ? 15 : 5;
+  if (step === "debrief") return kind === "local" ? 60 : kind === "key" ? 20 : 5;
   if (kind === "key") return 45;
   if (kind === "local") return 180;
   return 5;
@@ -56,7 +59,7 @@ export function clock(seconds: number): string {
 }
 
 /** The steps, the one running now, the bar and the clock. Steps are listed in the order they run. `done` jumps the bar to 100. */
-export default function Working({ steps, current, kind, done = false }: { steps: WorkStep[]; current: WorkStep; kind: EngineStatus["kind"]; done?: boolean }) {
+export default function Working({ steps, current, kind, done = false, onStop }: { steps: WorkStep[]; current: WorkStep; kind: EngineStatus["kind"]; done?: boolean; onStop?: () => void }) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const started = Date.now();
@@ -92,6 +95,9 @@ export default function Working({ steps, current, kind, done = false }: { steps:
           ? "This is taking longer than usual, but it's still working while the clock moves. Keep this screen open."
           : `${usual ? `${usual} ` : ""}The percentage is an estimate from the time so far. Keep this screen open.`}
       </span>
+      {onStop && !done && canStop(kind) && (
+        <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ alignSelf: "flex-start" }} onClick={onStop}>Stop</button>
+      )}
     </div>
   );
 }
