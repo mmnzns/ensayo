@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import AppShell from "../../ui/AppShell";
+import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import { plainError } from "../../data/actions";
@@ -80,6 +81,11 @@ export default function NewApplication() {
   const { busy, error, run, setError } = useRun();
   const [step, setStep] = useState<WorkStep>("save");
   const pasting = useRun();
+
+  // Edits not yet saved: the typed and chosen fields against what the screen opened with. Once saved there is nothing to lose.
+  const fields = { company, role, status, appliedOn, source, contact, posting, startup, choice, fileName };
+  const opened = useRef(fields);
+  useDirtyGuard(!saved && differs(fields, opened.current));
 
   /** The stages follow the target until the person changes the list themselves. */
   const seedStages = (id: string) => {
@@ -198,6 +204,7 @@ export default function NewApplication() {
     });
 
   const reset = () => {
+    opened.current = { ...fields, company: "", role: "", source: "", contact: "", posting: "", startup: false, choice: "attach", fileName: "" };
     setSaved(null);
     setCompany("");
     setRole("");
@@ -455,7 +462,11 @@ export default function NewApplication() {
           </div>
         )}
         <ErrorLine error={error} />
-        <Link to="6-1-applications" className="e-btn e-btn-ghost">Cancel</Link>
+        {busy ? (
+          <button type="button" className="e-btn e-btn-ghost" disabled>Cancel</button>
+        ) : (
+          <Link to="6-1-applications" className="e-btn e-btn-ghost">Cancel</Link>
+        )}
         <button type="button" className="e-btn e-btn-primary e-btn-big" disabled={busy} onClick={() => void save()}>{busy ? "Saving and reading" : "Save and read both"}</button>
       </div>
     </AppShell>

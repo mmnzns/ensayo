@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import CapDialog from "./capDialog";
+import LeaveDialog from "./LeaveDialog";
 
 /** Practice and first run: the whole window, no sidebar. */
 export default function FocusShell({ children, style }: { children: ReactNode; style?: CSSProperties }) {
@@ -7,6 +8,7 @@ export default function FocusShell({ children, style }: { children: ReactNode; s
     <div className="e-focus" style={{ display: "flex", flexDirection: "column", minHeight: "100vh", ...style }}>
       {children}
       <CapDialog />
+      <LeaveDialog />
     </div>
   );
 }

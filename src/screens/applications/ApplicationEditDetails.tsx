@@ -1,8 +1,9 @@
 import Working from "./Working";
 import { stopLocalAi } from "../../ui/aiStop";
 import { KEEP_DAYS } from "../../data/trash";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import AppShell from "../../ui/AppShell";
+import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import { useActions } from "../../data/real";
@@ -73,6 +74,11 @@ function EditDetails({ app, extras }: Featured) {
   const [rereading, setRereading] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<{ sessions: number } | null>(null);
 
+  // Edits not yet saved: every field against what the screen opened with.
+  const fields = { targetId, company, role, status, closedReason, applied, source, startup, contacts, notes, posting, stages: stages.map((s) => ({ id: s.id, stage: s.stage, label: s.label, date: s.date, time: s.time })) };
+  const opened = useRef(fields).current;
+  const { release } = useDirtyGuard(differs(fields, opened));
+
   const setContact = (i: number, patch: Partial<Contact>) => setContacts(contacts.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const setStage = (key: string, patch: Partial<StageRow>) => setStages(stages.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   const move = (i: number, d: -1 | 1) => setStages(moveItem(stages, i, d));
@@ -123,15 +129,22 @@ function EditDetails({ app, extras }: Featured) {
           }
         }
       }
-      if (await saveStages(false)) go(overview);
+      if (await saveStages(false)) {
+        release();
+        go(overview);
+      }
     });
   const removeAnyway = () =>
     run(async () => {
-      if (await saveStages(true)) go(overview);
+      if (await saveStages(true)) {
+        release();
+        go(overview);
+      }
     });
   const remove = () =>
     run(async () => {
       await actions.deleteApplication(app.id, alsoPractice);
+      release();
       go("6-1-applications");
     });
 

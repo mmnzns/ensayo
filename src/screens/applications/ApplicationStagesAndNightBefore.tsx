@@ -1,5 +1,7 @@
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
+import Dialog from "../states/Dialog";
+import { useDirtyGuard } from "../../ui/dirtyGuard";
 import Link from "../../ui/Link";
 import type { NightBefore } from "../../data/screens/applications";
 import { useActions, useRepHistory } from "../../data/real";
@@ -9,7 +11,7 @@ import type { ProcessStage, StageId } from "../../data/types";
 import { STAGE_LABEL, nextStage, shortDate, whenText } from "./format";
 import { askedLine, noteFor } from "../../data/interviews";
 import { interviewHappened } from "./afterInterview";
-import { joinAt, lockQuestions, splitAt } from "./forms";
+import { joinAt, lockQuestions, nightDraftOf, nightEdited, splitAt, type NightDraft } from "./forms";
 import { AppHeader, AppTabs, ErrorLine, useAppLink, useRun, withFeatured, type Featured } from "./parts";
 
 const LOCK = (
@@ -41,41 +43,42 @@ function DrillMock({ id, stageId }: { id: string; stageId: string }) {
 }
 
 /** The night-before set for one stage: an opener, one power story from the bank, up to two questions to ask. */
-function NightBeforeCard({ app, stage, stages, lock, onPick }: { app: Featured["app"]; stage: ProcessStage | undefined; stages: ProcessStage[]; lock: NightBefore | undefined; onPick: (id: string) => void }) {
+function NightBeforeCard({ app, stage, stages, lock, draft, onDraft, onDone, onPick }: { app: Featured["app"]; stage: ProcessStage | undefined; stages: ProcessStage[]; lock: NightBefore | undefined; draft: NightDraft; onDraft: (patch: Partial<NightDraft>) => void; onDone: () => void; onPick: (id: string) => void }) {
   const store = useStore();
   const actions = useActions();
   const link = useAppLink();
   const { busy, error, run } = useRun();
-  const [opener, setOpener] = useState(lock?.opener ?? "");
-  const [powerId, setPowerId] = useState(lock?.powerStoryId ?? "");
-  const [questions, setQuestions] = useState<string[]>(lock?.questions ?? []);
-  const [change, setChange] = useState<"opener" | "power" | "questions" | null>(null);
+  // The edits live in the page, one set per stage, so switching stage never loses them.
+  const { opener, powerId, questions, change } = draft;
+  const setOpener = (v: string) => onDraft({ opener: v });
+  const setPowerId = (v: string) => onDraft({ powerId: v });
+  const setChange = (v: NightDraft["change"]) => onDraft({ change: v });
   const [saved, setSaved] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const stories = store.stories;
   const powerStory = stories.find((x) => x.id === powerId);
   const open = (k: "opener" | "power" | "questions") => !lock || change === k;
-  const dirty = !!lock && (opener !== lock.opener || powerId !== lock.powerStoryId || JSON.stringify(lockQuestions(questions)) !== JSON.stringify(lock.questions));
+  const dirty = !!lock && nightEdited(draft, lock);
   const label = stage ? stage.label || STAGE_LABEL[stage.stage] : "";
 
   const save = async () => {
     if (!stage) return;
     const done = await run(() => actions.saveLocked(app.id, { stageId: stage.id, opener, openerPrompt: lock?.openerPrompt, powerStory: powerId, questions: lockQuestions(questions) }));
     if (done) {
-      setChange(null);
+      onDone();
       setSaved(true);
     }
   };
   const clear = async () => {
     if (!stage) return;
     const done = await run(() => actions.clearLocked(app.id, stage.id));
+    setConfirmClear(false);
     if (done) {
-      setOpener("");
-      setPowerId("");
-      setQuestions([]);
+      onDone();
       setSaved(false);
     }
   };
-  const setQuestion = (i: number, v: string) => setQuestions(Object.assign([questions[0] ?? "", questions[1] ?? ""], { [i]: v }));
+  const setQuestion = (i: number, v: string) => onDraft({ questions: Object.assign([questions[0] ?? "", questions[1] ?? ""], { [i]: v }) });
 
   if (!stage) {
     return (
@@ -169,10 +172,25 @@ function NightBeforeCard({ app, stage, stages, lock, onPick }: { app: Featured["
             <Link to={link("6-7-cue-sheet", { stage: stage.id })} className="e-btn e-btn-white">Open cue sheet</Link>
           </>
         )}
-        {lock && <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={busy} onClick={() => void clear()}>Take the lock off</button>}
+        {lock && <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={busy} onClick={() => setConfirmClear(true)}>Take the lock off</button>}
         {saved && !dirty && !error && <span className="e-small" role="status">Locked. The cue sheet is ready.</span>}
         <ErrorLine error={error} />
       </div>
+      {confirmClear && (
+        <Dialog
+          title="Take the lock off?"
+          onClose={() => setConfirmClear(false)}
+          width={440}
+          actions={
+            <>
+              <button type="button" data-autofocus className="e-btn e-btn-line" onClick={() => setConfirmClear(false)}>Keep it locked</button>
+              <button type="button" className="e-btn e-btn-primary" disabled={busy} onClick={() => void clear()}>Take the lock off</button>
+            </>
+          }
+        >
+          <p className="e-body" style={{ margin: 0 }}>{`The opener, power story and questions you locked for ${label} are cleared. You can lock new ones any time.`}</p>
+        </Dialog>
+      )}
     </>
   );
 }
@@ -234,7 +252,16 @@ function StagesTab({ app, extras, now }: Featured) {
   const open = stages.filter((s) => !s.done);
   const [nbPick, setNbPick] = useState<string | null>(null);
   const nbStage = stages.find((s) => s.id === nbPick) ?? stages.find((s) => s.id === app.night_before?.stage_id) ?? stages.find((s) => s.id === extras.nightBefore?.stageId) ?? current ?? open[0];
-  const lock = nbStage ? (extras.lockedByStage?.[nbStage.id] ?? (extras.nightBefore?.stageId === nbStage.id ? extras.nightBefore : undefined)) : undefined;
+  
+
+  // Night-before edits, one set per stage. A stage with nothing changed holds no entry.
+  const lockFor = (id: string): NightBefore | undefined => extras.lockedByStage?.[id] ?? (extras.nightBefore?.stageId === id ? extras.nightBefore : undefined);
+  const [nightDrafts, setNightDrafts] = useState<Record<string, NightDraft>>({});
+  const nightDraft = (id: string): NightDraft => nightDrafts[id] ?? nightDraftOf(lockFor(id));
+  const lock = nbStage ? lockFor(nbStage.id) : undefined;
+  const patchNight = (id: string, patch: Partial<NightDraft>) => setNightDrafts((all) => ({ ...all, [id]: { ...(all[id] ?? nightDraftOf(lockFor(id))), ...patch } }));
+  const dropNight = (id: string) => setNightDrafts(({ [id]: _gone, ...rest }) => rest);
+  useDirtyGuard(stages.some((s) => nightDrafts[s.id] && nightEdited(nightDrafts[s.id], lockFor(s.id))));
 
   const saveEdit = async () => {
     if (!editing) return;
@@ -418,7 +445,7 @@ function StagesTab({ app, extras, now }: Featured) {
           )}
         </section>
         <section className="e-card" style={{ flex: "1 1 440px", minWidth: "0", display: "flex", flexDirection: "column", gap: "16px", boxShadow: "inset 0 0 0 2px var(--e-primary)" }}>
-          <NightBeforeCard key={`${nbStage?.id ?? "none"}|${lock ? "locked" : "open"}`} app={app} stage={nbStage} stages={open} lock={lock} onPick={setNbPick} />
+          <NightBeforeCard key={`${nbStage?.id ?? "none"}|${lock ? "locked" : "open"}`} app={app} stage={nbStage} stages={open} lock={lock} draft={nbStage ? nightDraft(nbStage.id) : nightDraftOf(undefined)} onDraft={(patch) => nbStage && patchNight(nbStage.id, patch)} onDone={() => nbStage && dropNight(nbStage.id)} onPick={setNbPick} />
         </section>
       </div>
       <DeletePractice app={app} />

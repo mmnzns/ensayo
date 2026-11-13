@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import Dialog from "../states/Dialog";
+import { useEffect, useState } from "react";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
+import { useDirtyGuard } from "../../ui/dirtyGuard";
 import { go } from "../../ui/router";
 import { useActions } from "../../data/real";
 import { useHashParam } from "../../data/selection";
@@ -124,18 +124,15 @@ function After({ app, extras, now }: Featured) {
     setConfirmDelete(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageId]);
-  // Esc: nothing inside a field; elsewhere it leaves, after asking when there is unsaved text.
-  const [leaving, setLeaving] = useState(false);
-  const unsavedRef = useRef(false);
-  unsavedRef.current = hasUnsavedText(draft, note);
+  // Unsaved text asks before leaving by a link, the sidebar or Esc (see dirtyGuard.ts).
+  useDirtyGuard(hasUnsavedText(draft, note));
+  // Esc: nothing inside a field (it is for typing); elsewhere it leaves, and go() asks when there is unsaved text.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const t = e.target as HTMLElement | null;
       const inField = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
-      const what = escOnSheet(inField, unsavedRef.current);
-      if (what === "leave") go(back);
-      if (what === "ask") setLeaving(true);
+      if (escOnSheet(inField, false) === "leave") go(back);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -170,7 +167,6 @@ function After({ app, extras, now }: Featured) {
     }
   };
   return (
-    <>
     <InterviewForm
       company={app.company}
       stageLabel={stage.label || STAGE_LABEL[stage.stage]}
@@ -187,22 +183,6 @@ function After({ app, extras, now }: Featured) {
       confirmDelete={confirmDelete}
       backTo={back}
     />
-    {leaving && (
-      <Dialog
-        title="Leave without saving?"
-        onClose={() => setLeaving(false)}
-        width={440}
-        actions={
-          <>
-            <button type="button" data-autofocus className="e-btn e-btn-line" onClick={() => setLeaving(false)}>Keep writing</button>
-            <button type="button" className="e-btn e-btn-primary" onClick={close}>Leave</button>
-          </>
-        }
-      >
-        <p className="e-body" style={{ margin: 0 }}>What you wrote here hasn't been saved.</p>
-      </Dialog>
-    )}
-    </>
   );
 }
 

@@ -1,6 +1,7 @@
 import type { AnchorHTMLAttributes, MouseEvent } from "react";
 import { isApp } from "../data/real";
 import { externalClick, isExternal } from "./openExternal";
+import { askBefore, isBlocked, isPlainClick } from "./dirtyGuard";
 import { hrefFor } from "./router";
 
 type Props = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & { to: string };
@@ -21,8 +22,17 @@ export default function Link({ to, children, onClick, ...rest }: Props) {
       </a>
     );
   }
+  // With unsaved edits on the screen, a click on an in-app link asks first.
+  const handle = (e: MouseEvent<HTMLAnchorElement>) => {
+    onClick?.(e);
+    if (!isPlainClick(e) || !isBlocked()) return;
+    e.preventDefault();
+    askBefore(() => {
+      window.location.hash = hrefFor(to);
+    });
+  };
   return (
-    <a href={hrefFor(to)} onClick={onClick} {...rest}>
+    <a href={hrefFor(to)} {...rest} onClick={handle}>
       {children}
     </a>
   );

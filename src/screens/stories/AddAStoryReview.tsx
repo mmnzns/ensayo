@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
 import { startQuickDrill } from "../../practice/quick";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import { go } from "../../ui/router";
 import { FIELD_HELP } from "./fieldHelp";
 import Numbers, { type NumberRow } from "./Numbers";
@@ -36,6 +37,11 @@ export default function AddAStoryReview() {
   const [adding, setAdding] = useState(false);
   const [custom, setCustom] = useState("");
 
+  // Edits not yet saved: any field that differs from what the screen opened with.
+  const fields = { title, company, headline, context, approach, action, ownership, result, numbers, goodFor };
+  const opened = useRef(fields).current;
+  const { release } = useDirtyGuard(differs(fields, opened));
+
   const { saveStory } = useActions();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -48,6 +54,7 @@ export default function AddAStoryReview() {
       if (setup) setFromSetup(false);
       // "Save and practice" starts a real Drill on this story (a no-op in the browser preview).
       if (next === "3-1-practice-interviewer-asking") startQuickDrill({ targetRole: store.profile.targetRole, stories: [...store.stories.filter((x) => x.id !== saved.id), saved], methods: store.methods }, { storyId: saved.id });
+      release();
       go(next);
     } catch {
       setSaveError(true);

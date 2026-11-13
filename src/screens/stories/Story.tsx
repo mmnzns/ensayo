@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { cardHeadline, proofPointsFromRows } from "../../data/actions";
 import { useActions } from "../../data/real";
 import { storyGaps, useStore } from "../../data/store";
 import type { Branch, Story as StoryType } from "../../data/types";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import { go } from "../../ui/router";
 import { practiceStory } from "../../practice/live";
 import { liveContextOf } from "../../practice/quick";
@@ -73,6 +74,11 @@ function StoryEditor({ story }: { story: StoryType }) {
   const [trigger, setTrigger] = useState("");
   const [angle, setAngle] = useState("");
 
+  // Edits not yet saved: the fields against what was last saved (or opened with). A save moves the baseline.
+  const fields = { headline, context, approach, action, ownership, result, scale, numbers, added };
+  const baseline = useRef(fields);
+  const { release } = useDirtyGuard(differs(fields, baseline.current));
+
   const edited = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
     setSaved(false);
@@ -100,6 +106,7 @@ function StoryEditor({ story }: { story: StoryType }) {
         branches,
         headline: cardHeadline(points, story.headline),
       });
+      baseline.current = fields;
       setFailed(false);
       setSaved(true);
     } catch {
@@ -111,6 +118,7 @@ function StoryEditor({ story }: { story: StoryType }) {
   const remove = async () => {
     try {
       await deleteStory(story.id);
+      release();
       go("5-1-stories");
     } catch {
       setConfirmDelete(false);

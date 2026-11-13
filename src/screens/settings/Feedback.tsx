@@ -1,7 +1,8 @@
 // Draft generated from Design/screens/html/9-1-feedback.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import { useStore } from "../../data/store";
 import { copyText } from "../../ui/clipboard";
 import { isApp } from "../../data/real";
@@ -40,6 +41,10 @@ export default function Feedback() {
   const [diagnostics, setDiagnostics] = useState<string | null>(null);
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
   const later = useLater();
+  // Something written here that nothing has been done with yet: the message, the email, the choices.
+  const fields = { topic, message, pay, fair, email };
+  const opened = useRef(fields).current;
+  useDirtyGuard(differs(fields, opened));
 
   const version = useAppVersion();
   // In the browser preview there is no backend to ask, so the block is just the version and system.

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { askBefore } from "./dirtyGuard";
 
 /** The screen id in a location hash: "#/5-1-stories" is "5-1-stories"; anything else is "" (home). */
 export function parseRoute(hash: string): string {
@@ -17,6 +18,9 @@ export function useRoute(): string {
   return useSyncExternalStore(subscribe, () => parseRoute(window.location.hash), () => "");
 }
 
+/** Go to a screen. Asks first when the screen being left has unsaved edits (see dirtyGuard.ts). */
 export function go(id: string) {
-  window.location.hash = hrefFor(id);
+  askBefore(() => {
+    window.location.hash = hrefFor(id);
+  });
 }

@@ -123,3 +123,22 @@ export function outcomeNotices(out: ResumeOutcome): string[] {
   else if (out.read?.status === "read") said.push(`Read it: ${out.read.claims} ${out.read.claims === 1 ? "line" : "lines"} picked out to check your answers against.`);
   return said;
 }
+
+/** What the night-before card holds for one stage while it is being edited, and which part is open to change. */
+export interface NightDraft {
+  opener: string;
+  powerId: string;
+  questions: string[];
+  change: "opener" | "power" | "questions" | null;
+}
+
+/** The card's starting values for a stage: what is locked, or empty. */
+export function nightDraftOf(lock: { opener: string; powerStoryId: string; questions: string[] } | undefined): NightDraft {
+  return { opener: lock?.opener ?? "", powerId: lock?.powerStoryId ?? "", questions: lock?.questions ?? [], change: null };
+}
+
+/** True when the card holds something that is not locked yet: changes to a lock, or, with no lock, anything chosen or typed. */
+export function nightEdited(d: NightDraft, lock: { opener: string; powerStoryId: string; questions: string[] } | undefined): boolean {
+  if (lock) return d.opener !== lock.opener || d.powerId !== lock.powerStoryId || JSON.stringify(lockQuestions(d.questions)) !== JSON.stringify(lock.questions);
+  return d.opener.trim() !== "" || d.powerId !== "" || lockQuestions(d.questions).length > 0;
+}
