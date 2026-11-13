@@ -195,7 +195,7 @@ impl Capture {
     }
 
     /// Stops the mic, flushes the file and returns where it is. No audio at all is an error, never an empty file.
-    pub fn stop(mut self) -> Result<Recorded, String> {
+    pub fn stop(self) -> Result<Recorded, String> {
         self.mic.lock().unwrap_or_else(|e| e.into_inner()).stop();
         self.stop.store(true, Ordering::Release);
         let samples = self.writer.join().map_err(|_| "The recorder stopped unexpectedly".to_string())?.map_err(|e| e.to_string())?;
@@ -240,9 +240,6 @@ mod tests {
             });
             Ok("Test mic".into())
         }
-        fn restart(&mut self) -> Result<String, String> {
-            Ok("Test mic".into())
-        }
         fn stop(&mut self) {}
     }
 
@@ -274,9 +271,6 @@ mod tests {
     impl AudioSource for HandMic {
         fn start(&mut self, feed: SharedFeed) -> Result<String, String> {
             *self.0.lock().unwrap() = Some(feed);
-            Ok("Hand mic".into())
-        }
-        fn restart(&mut self) -> Result<String, String> {
             Ok("Hand mic".into())
         }
         fn stop(&mut self) {}
@@ -332,9 +326,6 @@ mod tests {
             fn start(&mut self, feed: SharedFeed) -> Result<String, String> {
                 self.0.start(feed)
             }
-            fn restart(&mut self) -> Result<String, String> {
-                Ok("x".into())
-            }
             fn stop(&mut self) {
                 self.1.store(true, Ordering::Release);
             }
@@ -366,9 +357,6 @@ mod tests {
             fn start(&mut self, feed: SharedFeed) -> Result<String, String> {
                 self.0.start(feed)
             }
-            fn restart(&mut self) -> Result<String, String> {
-                Ok("x".into())
-            }
             fn stop(&mut self) {}
             fn failed(&self) -> bool {
                 self.1.load(Ordering::Acquire)
@@ -394,9 +382,6 @@ mod tests {
             fn start(&mut self, _: SharedFeed) -> Result<String, String> {
                 Ok("Silent".into())
             }
-            fn restart(&mut self) -> Result<String, String> {
-                Ok("Silent".into())
-            }
             fn stop(&mut self) {}
         }
         let cap = Capture::start(Box::new(Silent), &path).unwrap();
@@ -413,9 +398,6 @@ mod tests {
         impl AudioSource for Hangs {
             fn start(&mut self, _: SharedFeed) -> Result<String, String> {
                 let _ = self.0.recv(); // never answers until released
-                Ok("Late mic".into())
-            }
-            fn restart(&mut self) -> Result<String, String> {
                 Ok("Late mic".into())
             }
             fn stop(&mut self) {}
@@ -439,9 +421,6 @@ mod tests {
             fn start(&mut self, _: SharedFeed) -> Result<String, String> {
                 Ok("Quick".into())
             }
-            fn restart(&mut self) -> Result<String, String> {
-                Ok("Quick".into())
-            }
             fn stop(&mut self) {}
         }
         let cap = Capture::start_within(Box::new(Quick), &path, Duration::from_secs(5)).unwrap();
@@ -456,9 +435,6 @@ mod tests {
         fn start(&mut self, _: SharedFeed) -> Result<String, String> {
             Err("No microphone".into())
         }
-        fn restart(&mut self) -> Result<String, String> {
-            Err("no".into())
-        }
         fn stop(&mut self) {}
     }
 
@@ -470,9 +446,6 @@ mod tests {
         impl AudioSource for Broken {
             fn start(&mut self, _: SharedFeed) -> Result<String, String> {
                 Err("No microphone found".into())
-            }
-            fn restart(&mut self) -> Result<String, String> {
-                Err("no".into())
             }
             fn stop(&mut self) {}
         }

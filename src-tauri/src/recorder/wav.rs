@@ -1,9 +1,9 @@
-//! 16 kHz mono 16-bit WAV files that stay valid while recording, plus header repair after a crash.
+//! 16 kHz mono 16-bit WAV files that stay valid while recording, The header is rewritten as the audio is written, so a crash loses little.
 
 use super::clock::RATE;
 use super::timeline::SampleSink;
-use std::fs::{File, OpenOptions};
-use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
+use std::fs::File;
+use std::io::{self, BufWriter};
 use std::path::Path;
 
 /// The header is rewritten this often, so a crash loses at most this much audio.
@@ -62,49 +62,16 @@ impl SampleSink for WavSink {
     }
 }
 
-/// Fixes the RIFF and data sizes from the real file length (after a crash) and returns the number of samples.
-pub fn repair_wav(path: &Path) -> io::Result<u64> {
-    let mut f = OpenOptions::new().read(true).write(true).open(path)?;
-    let len = f.metadata()?.len();
-    let mut head = [0u8; 12];
-    f.read_exact(&mut head)?;
-    if &head[0..4] != b"RIFF" || &head[8..12] != b"WAVE" {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "not a WAV file"));
-    }
-    let mut pos = 12u64;
-    loop {
-        if pos + 8 > len {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "no data chunk"));
-        }
-        f.seek(SeekFrom::Start(pos))?;
-        let mut chunk = [0u8; 8];
-        f.read_exact(&mut chunk)?;
-        let size = u32::from_le_bytes(chunk[4..8].try_into().unwrap()) as u64;
-        if &chunk[0..4] == b"data" {
-            let data_start = pos + 8;
-            let data_len = (len - data_start) & !1;
-            f.set_len(data_start + data_len)?;
-            f.seek(SeekFrom::Start(pos + 4))?;
-            f.write_all(&(data_len as u32).to_le_bytes())?;
-            f.seek(SeekFrom::Start(4))?;
-            f.write_all(&((data_start + data_len - 8) as u32).to_le_bytes())?;
-            f.sync_all()?;
-            return Ok(data_len / 2);
-        }
-        pos += 8 + size + (size & 1);
-    }
-}
-
-/// Duration of a 16 kHz mono 16-bit file from its header, in ms.
-pub fn wav_duration_ms(path: &Path) -> Option<u64> {
-    let r = hound::WavReader::open(path).ok()?;
-    let spec = r.spec();
-    Some(r.duration() as u64 * 1000 / spec.sample_rate as u64)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Duration of a 16 kHz mono 16-bit file from its header, in ms.
+    fn wav_duration_ms(path: &Path) -> Option<u64> {
+        let r = hound::WavReader::open(path).ok()?;
+        let spec = r.spec();
+        Some(r.duration() as u64 * 1000 / spec.sample_rate as u64)
+    }
 
     #[test]
     fn writes_a_readable_file() {
@@ -125,32 +92,5 @@ mod tests {
         let ms = wav_duration_ms(&path).unwrap();
         assert!(ms >= 2_000, "{ms}");
         drop(s);
-    }
-
-    #[test]
-    fn repair_recovers_audio_after_a_crash() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("them.wav");
-        let mut s = WavSink::create(&path).unwrap();
-        s.write(&vec![7i16; 32_000]).unwrap();
-        s.flush().unwrap();
-        // the crash: more audio reaches the disk but the header still says 32000 samples
-        std::mem::forget(s);
-        let mut f = OpenOptions::new().append(true).open(&path).unwrap();
-        f.write_all(&vec![0u8; 16_000 * 2]).unwrap();
-        f.write_all(&[1u8]).unwrap(); // a torn half sample
-        drop(f);
-        assert_eq!(repair_wav(&path).unwrap(), 48_000);
-        assert_eq!(wav_duration_ms(&path), Some(3_000));
-        let r = hound::WavReader::open(&path).unwrap();
-        assert_eq!(r.into_samples::<i16>().count(), 48_000);
-    }
-
-    #[test]
-    fn repair_rejects_non_wav_files() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("x.wav");
-        std::fs::write(&path, b"hello world, not a wav").unwrap();
-        assert!(repair_wav(&path).is_err());
     }
 }

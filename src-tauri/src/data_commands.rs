@@ -663,7 +663,7 @@ mod tests {
         assert_eq!(json["profile"]["identityStatement"], "I fix funnels.");
         storage.set_active_target(&second.id).unwrap();
         assert_eq!(serde_json::to_value(load_all_from(&storage).unwrap()).unwrap()["profile"]["identityStatement"], "I run the stack.");
-        assert_eq!(load_all_from(&storage).unwrap().targets_note_pending, false);
+        assert!(!load_all_from(&storage).unwrap().targets_note_pending);
     }
 
     #[test]

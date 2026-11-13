@@ -199,10 +199,6 @@ impl AudioSource for MicSource {
         result
     }
 
-    fn restart(&mut self) -> Result<String, String> {
-        self.request_open()
-    }
-
     fn failed(&self) -> bool {
         self.failed.load(Ordering::Acquire)
     }

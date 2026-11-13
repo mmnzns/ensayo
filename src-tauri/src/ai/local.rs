@@ -700,7 +700,7 @@ done
     fn the_card_is_asked_for_by_a_mac_when_on_and_by_windows_only_with_a_helper_for_it() {
         let card = |on, vulkan: Option<&str>| Card { on, vulkan: vulkan.map(PathBuf::from), name: None, driver: None };
         assert_eq!(card(true, None).ask(), cfg!(target_os = "macos"), "no helper: Metal on the Mac, the processor elsewhere");
-        assert_eq!(card(true, Some("/app/ensayo-llm-vulkan.exe")).ask(), true, "a card helper to ask");
+        assert!(card(true, Some("/app/ensayo-llm-vulkan.exe")).ask(), "a card helper to ask");
         assert!(!card(false, Some("/app/ensayo-llm-vulkan.exe")).ask() && !card(false, None).ask(), "off is off");
     }
 

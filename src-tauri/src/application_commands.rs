@@ -12,7 +12,6 @@ use crate::applications::interviews::{self, NoteInput, NoteView};
 use crate::applications::jd::{self, JdResult, QuestionInput};
 use crate::applications::resume::{self, AttachResult, NoFallback, ReadResult};
 use crate::applications::view::{self, ApplicationView, ExtrasView};
-use crate::audio_retention::audio_path;
 use crate::paths;
 use crate::rep_commands::AiCtx;
 use crate::storage::application_files::DerivedAnalysis;
@@ -679,6 +678,7 @@ pub async fn cue_sheet_markdown(application_id: String, stage_id: String) -> Cmd
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio_retention::audio_path;
     use crate::ai::providers::Provider;
     use crate::scoring::run::testing::Scripted;
     use crate::scoring::run::Budget;

@@ -290,7 +290,7 @@ fn said_lines(claims: &[ClaimRec]) -> Vec<Said> {
     [("availability", "Notice"), ("compensation", "Pay range"), ("reason_for_leaving", "Why leaving"), ("why_this_company", "Why this company")]
         .iter()
         .filter_map(|(kind, label)| {
-            claims.iter().filter(|c| c.kind == *kind && c.superseded_by.is_none() && c.stage != "resume").next_back().map(|c| Said { label: label.to_string(), text: c.value.clone() })
+            claims.iter().rfind(|c| c.kind == *kind && c.superseded_by.is_none() && c.stage != "resume").map(|c| Said { label: label.to_string(), text: c.value.clone() })
         })
         .collect()
 }

@@ -235,7 +235,7 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scoring::fixtures::{question, score_reply, story, verdict, words_of, GOOD, TYPICAL};
+    use crate::scoring::fixtures::{question, score_reply, story, words_of, GOOD, TYPICAL};
     use crate::ai::providers::{AiError, Provider};
     use crate::metrics::{compute, numbers, Inputs};
     use crate::scoring::run::testing::Scripted;
@@ -254,7 +254,7 @@ mod tests {
     }
 
     fn typical_score() -> String {
-        score_reply(6, 6, &[], &[("answer_first", "fail"), ("proof", "pass"), ("story_fit", "pass"), ("ownership", "fail"), ("no_complaining", "pass"), ("method_first", "fail"), ("stage_fit", "pass")], serde_json::from_str::<Value>(NUMBERS).unwrap().into())
+        score_reply(6, 6, &[], &[("answer_first", "fail"), ("proof", "pass"), ("story_fit", "pass"), ("ownership", "fail"), ("no_complaining", "pass"), ("method_first", "fail"), ("stage_fit", "pass")], serde_json::from_str::<Value>(NUMBERS).unwrap())
     }
 
     const COACH: &str = r#"{"note":"Your result came 42 seconds in, after the whole backstory. Say it first, then tell the story.","rewrite":{"text":"I moved seven-day activation from 31 to 44 percent by firing the email when people stalled on bank linking.","position":"open","replaces_sentence":null},"offer_follow_up":true}"#;
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn the_good_answer_passes_and_the_coach_runs_in_all_pass_mode_with_no_rewrite() {
-        let score = score_reply(1, 7, &[8], &[("answer_first", "pass"), ("proof", "pass"), ("story_fit", "pass"), ("context_short", "pass"), ("ownership", "pass"), ("conviction", "pass"), ("no_complaining", "pass"), ("method_first", "pass"), ("approach_before_action", "pass"), ("stage_fit", "pass")], serde_json::from_str::<Value>(r#"[{"text":"31 to 44 percent","sentence":7,"metric":"activation","matches_bank":"st_onboarding.activation_7d","conflicts_with_bank":null,"not_in_bank":false}]"#).unwrap().into());
+        let score = score_reply(1, 7, &[8], &[("answer_first", "pass"), ("proof", "pass"), ("story_fit", "pass"), ("context_short", "pass"), ("ownership", "pass"), ("conviction", "pass"), ("no_complaining", "pass"), ("method_first", "pass"), ("approach_before_action", "pass"), ("stage_fit", "pass")], serde_json::from_str::<Value>(r#"[{"text":"31 to 44 percent","sentence":7,"metric":"activation","matches_bank":"st_onboarding.activation_7d","conflicts_with_bank":null,"not_in_bank":false}]"#).unwrap());
         let llm = Scripted::new(vec![Ok(&score), Ok(r#"{"note":"You led with the 44 percent and stopped right after the result.","rewrite":{"text":"Made up line.","position":"open","replaces_sentence":null},"offer_follow_up":true}"#)]);
         let out = run(&llm, GOOD, false).unwrap();
         assert_eq!(out.fix, None);
@@ -373,8 +373,8 @@ mod tests {
             let llm = Scripted::new(vec![Err(AiError::Failed("stop".into()))]);
             let input = ScoreInput { question: q, stage: "hiring_manager", founder_variant: false, seniority: "senior", identity_statement: "I turn a messy stack into a pipeline.", target_id: target, jd_summary: "", stories: &stories, method: "", metrics: &metrics, bank: &[] };
             let _ = score_answer(&llm, &input, &mut Budget::new(Provider::Claude, 0.0));
-            let user = llm.seen.lock().unwrap()[0].user.clone();
-            user
+            
+            llm.seen.lock().unwrap()[0].user.clone()
         };
         let behavioral = question();
         let user = run(&behavioral, Some("tg_b2b"));

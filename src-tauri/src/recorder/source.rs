@@ -10,8 +10,6 @@ pub type SharedFeed = Arc<Mutex<FeedProducer>>;
 pub trait AudioSource: Send {
     /// Starts delivering buffers into `feed`. Returns a short device name for the UI.
     fn start(&mut self, feed: SharedFeed) -> Result<String, String>;
-    /// Rebuilds on the current default device (after a device change). Returns the new device name.
-    fn restart(&mut self) -> Result<String, String>;
     fn stop(&mut self);
     /// True once the source stopped delivering for good on its own (it gave up reconnecting).
     fn failed(&self) -> bool {

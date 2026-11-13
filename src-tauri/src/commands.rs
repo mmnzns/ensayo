@@ -349,9 +349,6 @@ mod tests {
                 let _ = self.0.recv();
                 Ok("never".into())
             }
-            fn restart(&mut self) -> Result<String, String> {
-                Ok("never".into())
-            }
             fn stop(&mut self) {}
         }
         let state = RecorderState::default();
@@ -381,9 +378,6 @@ mod tests {
                 for n in 0..100u64 {
                     feed.lock().unwrap().push(n * 10_000_000, 16_000, 1, &buf);
                 }
-                Ok("Old mic".into())
-            }
-            fn restart(&mut self) -> Result<String, String> {
                 Ok("Old mic".into())
             }
             fn stop(&mut self) {}

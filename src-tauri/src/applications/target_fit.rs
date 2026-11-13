@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn a_level_one_step_away_still_fits_but_two_steps_does_not_make_it_strong() {
         let mid = target("tg_mid", "Lifecycle Manager", "lifecycle", "b2c", "mid");
-        let senior_posting = keyword_fit(&rec("Senior Lifecycle Manager"), B2C_LIFECYCLE, &[mid.clone()], None).unwrap();
+        let senior_posting = keyword_fit(&rec("Senior Lifecycle Manager"), B2C_LIFECYCLE, std::slice::from_ref(&mid), None).unwrap();
         assert_eq!(senior_posting.per_target[0].fit, "strong");
         let director_posting = keyword_fit(&rec("Director of Lifecycle"), B2C_LIFECYCLE, &[mid], None).unwrap();
         assert_ne!(director_posting.per_target[0].fit, "strong");

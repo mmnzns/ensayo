@@ -1336,7 +1336,7 @@ mod tests {
         let of = |id: &str| summaries.iter().find(|r| r.session_id == id).unwrap().target_id.clone();
         assert_eq!(of(&new).as_deref(), Some(ops.id.as_str()));
         assert_eq!(of(&old).as_deref(), Some(first.id.as_str()));
-        assert_eq!(serde_json::to_value(&summaries[0]).unwrap()["target_id"].is_string(), true);
+        assert!(serde_json::to_value(&summaries[0]).unwrap()["target_id"].is_string());
     }
 
     #[test]
