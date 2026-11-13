@@ -635,8 +635,8 @@ pub async fn clarify_reply(session_id: String, question: String, clarification: 
 
 /// Whether a feedback engine is set up and usable right now (follow-ups need one).
 #[tauri::command]
-pub fn ai_ready() -> bool {
-    matches!(crate::ai_commands::resolved_from_disk(), Ok(Some(_)))
+pub async fn ai_ready() -> bool {
+    tauri::async_runtime::spawn_blocking(|| matches!(crate::ai_commands::resolved_from_disk(), Ok(Some(_)))).await.unwrap_or(false)
 }
 
 /// "Keep it" after "Start this rep again?": measure from after the restart.

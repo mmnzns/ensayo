@@ -97,8 +97,9 @@ fn model_status_in(store: &SharedStore, id: &str) -> Result<ModelStatus, String>
 }
 
 #[tauri::command]
-pub fn model_status(id: String) -> Result<ModelStatus, String> {
-    model_status_in(models_store::store()?, &id)
+pub async fn model_status(id: String) -> Result<ModelStatus, String> {
+    // `store()` can wait for start-up, so it never runs on the thread that serves the window.
+    tauri::async_runtime::spawn_blocking(move || model_status_in(models_store::store()?, &id)).await.map_err(|e| e.to_string())?
 }
 
 /// Ensayo uses this speech model: another app that also uses it can't erase it while Ensayo does. The window says it

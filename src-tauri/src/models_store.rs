@@ -49,13 +49,26 @@ pub fn begin_start_up() {
 /// Adopts Ensayo's older models, erases what no app uses any more, and lets the commands go on. `used` are the models
 /// this app already knows it uses (`move_in` also marks every model it adopts from Ensayo's own old folder).
 pub fn start_up(used: &[&str]) {
-    match open() {
+    start_up_with(&PHASE, || match open() {
         Ok(store) => log_report(&run_start_up(store, used)),
         Err(e) => log::warn!("{e}"),
+    });
+}
+
+/// Sets the phase to Finished when dropped, so a panic inside start-up still lets every waiting command go on.
+struct FinishGuard<'a>(&'a (Mutex<Phase>, Condvar));
+
+impl Drop for FinishGuard<'_> {
+    fn drop(&mut self) {
+        let (lock, done) = self.0;
+        *lock.lock().unwrap_or_else(|e| e.into_inner()) = Phase::Finished;
+        done.notify_all();
     }
-    let (lock, done) = &PHASE;
-    *lock.lock().unwrap_or_else(|e| e.into_inner()) = Phase::Finished;
-    done.notify_all();
+}
+
+fn start_up_with(phase: &(Mutex<Phase>, Condvar), work: impl FnOnce()) {
+    let _finish = FinishGuard(phase);
+    work();
 }
 
 /// What start-up found, for the log: ids and reasons only.
@@ -273,6 +286,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = SharedStore::open_at(app, dir.path().to_path_buf()).unwrap();
         (dir, store)
+    }
+
+    #[test]
+    fn a_start_up_that_panics_still_leaves_the_phase_finished() {
+        let phase = (Mutex::new(Phase::Running), Condvar::new());
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| start_up_with(&phase, || panic!("boom"))));
+        assert!(r.is_err());
+        assert!(*phase.0.lock().unwrap() == Phase::Finished);
+        let ok = (Mutex::new(Phase::Running), Condvar::new());
+        start_up_with(&ok, || {});
+        assert!(*ok.0.lock().unwrap() == Phase::Finished);
     }
 
     #[test]
