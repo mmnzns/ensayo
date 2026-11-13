@@ -189,3 +189,17 @@ describe("the Ollama and LM Studio screen", () => {
     expect(html).not.toContain("aria-pressed");
   });
 });
+
+describe("the slow note on Whisper models", () => {
+  const models = [entry("whisper-turbo", "missing"), entry("parakeet-ultra", "missing")];
+  const render = (os: "windows" | "mac") => renderToString(<SpeechModelList {...{ rows: modelRows(models, "", null, os), fraction: 0, busy: false, showAll: false, confirmId: null, onShowAll: no, onUse: no, onFetch: no, onCancel: no, onAskDelete: no, onDelete: no }} />);
+
+  it("shows on a Whisper model on Windows, and only on that one", () => {
+    const html = render("windows");
+    expect(html.match(/Slow on this computer: runs on the processor\./g)).toHaveLength(1);
+  });
+
+  it("does not show on the Mac", () => {
+    expect(render("mac")).not.toContain("Slow on this computer");
+  });
+});

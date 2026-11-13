@@ -13,7 +13,16 @@ export function speechOrder(os: Os): string[] {
     : ["whisper-turbo", "parakeet-ultra", "whisper-small", "whisper-base", "whisper-tiny"];
 }
 
-export const SPEECH_MODELS = speechOrder(osOf(typeof navigator === "undefined" ? "" : navigator.userAgent));
+const THIS_OS: Os = osOf(typeof navigator === "undefined" ? "" : navigator.userAgent);
+
+export const SPEECH_MODELS = speechOrder(THIS_OS);
+
+/** The small note on a Whisper model on Windows: the engine has no graphics card path for Whisper there yet, so it
+ *  runs on the processor. Null for every other model and computer. */
+export const SLOW_ON_WINDOWS = "Slow on this computer: runs on the processor.";
+export function slowNote(id: string, os: Os): string | null {
+  return os === "windows" && id.startsWith("whisper-") ? SLOW_ON_WINDOWS : null;
+}
 
 export interface SpeechModelEntry {
   id: string;
@@ -58,12 +67,14 @@ export interface ModelRow extends SpeechModelEntry {
   downloadingHere: boolean;
   /** Completely on this computer, so it can be deleted. */
   canDelete: boolean;
+  /** A note about speed on this computer, when there is one. */
+  slowNote: string | null;
 }
 
 const percentOf = (fraction: number | undefined) => progressPercent(fraction ?? 0);
 
 /** `downloadingId` is the model this window is downloading now; the backend also says "downloading" for a download that is running here. */
-export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadingId: string | null = null): ModelRow[] {
+export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadingId: string | null = null, os: Os = THIS_OS): ModelRow[] {
   return models.map((m) => {
     const inUse = m.id === inUseId;
     const downloadingHere = m.state === "downloading" || m.id === downloadingId;
@@ -90,6 +101,7 @@ export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadi
       elsewhere,
       downloadingHere,
       canDelete: here(m),
+      slowNote: slowNote(m.id, os),
     };
   });
 }

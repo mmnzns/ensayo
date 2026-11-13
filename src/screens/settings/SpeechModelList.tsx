@@ -37,6 +37,7 @@ export default function SpeechModelList(p: SpeechModelListProps) {
             <span style={{ flex: "1 1 220px", display: "flex", flexDirection: "column", gap: "2px", ...(have ? {} : { color: "var(--e-muted)" }) }}>
               {m.name}
               <span className="e-small">{m.downloadingHere ? `Downloading, ${percent}%` : m.status}{m.note ? ` · ${m.note}` : ""}</span>
+              {m.slowNote ? <span className="e-small">{m.slowNote}</span> : null}
             </span>
             <span className="e-small">{formatSize(m.size_mb)}</span>
             {m.canUse && !asking && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => p.onUse(m.id)}>Use</button>}
