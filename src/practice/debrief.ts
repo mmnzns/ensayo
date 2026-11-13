@@ -6,6 +6,7 @@ import type { MockDebriefData, DebriefRow } from "../data/screens/results";
 import type { Habit } from "../data/types";
 import type { SessionDetail } from "./api";
 import { flagsOfReps } from "./applied";
+import { sessionCostUsd, sessionModelName } from "./cost";
 import { drillView, STAGE_LABELS, summaryOfFull } from "./habits";
 import type { FullRep } from "./types";
 
@@ -99,6 +100,8 @@ export function debriefOfSession(habits: Habit[], detail: SessionDetail, quality
     mustSay: mustSay.map((m) => ({ id: m.id, text: m.text, said: quality?.must_say_said.find((f) => f.id === m.id)?.said ?? false })),
     rows,
     nextTime: view ? view.nextTime.advice : "Answer a few more questions and this will say what to carry.",
+    costUsd: sessionCostUsd(reps.map((r) => ({ n: r.n, ai_cost_usd: r.ai?.cost_usd ?? null }))),
+    engineName: sessionModelName(reps.map((r) => ({ n: r.n, ai_model: r.ai?.model ?? null }))),
   };
   return { data, askedOwn: own !== undefined };
 }

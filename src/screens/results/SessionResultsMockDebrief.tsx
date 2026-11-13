@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { costLine, engineNameFor } from "../../practice/cost";
 import { useStore } from "../../data/store";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
@@ -17,6 +18,12 @@ import DeleteSession from "./DeleteSession";
 export function followUpsLine(d: Pick<MockDebriefData, "followUps" | "timingOnly">): string {
   if (d.followUps.of > 0) return "Held: no check missed on the follow-up answer.";
   return d.timingOnly ? "Follow-ups need an AI engine to ask them." : "The interviewer asked no follow-ups.";
+}
+
+/** "This mock cost about 6 cents with Claude Sonnet 5.5." Null when no paid engine was used (local AI, timing only). */
+export function mockCostText(d: Pick<MockDebriefData, "costUsd" | "engineName">, engine: { kind: "local" | "key" | "timing"; label: string }): string | null {
+  const line = costLine(d.costUsd ?? 0, engineNameFor(d.engineName, engine));
+  return line ? `This mock cost ${line}.` : null;
 }
 
 export default function SessionResultsMockDebrief() {
@@ -48,6 +55,7 @@ export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefDat
   const updateClaim = useClaimUpdater();
   const [saveError, setSaveError] = useState<string | null>(null);
   const stageText = stageWithKind(d.stageLabel, app?.startup);
+  const costText = mockCostText(d, store.engine);
   // Flags the user has kept ("Two weeks is right now") for this visit only.
   const [kept, setKept] = useState<string[]>([]);
   const openFlags = d.flags.filter((f) => !kept.includes(f.id));
@@ -190,7 +198,10 @@ export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefDat
           })}
         </section>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-          <span className="e-meta">Next time: {d.nextTime}</span>
+          <span style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span className="e-meta">Next time: {d.nextTime}</span>
+            {costText && <span className="e-small">{costText}</span>}
+          </span>
           <div style={{ display: "flex", gap: "12px" }}>
             <Link to="2-1-home" className="e-btn e-btn-ghost">Back home</Link>
             <Link to="2-3-start-a-session" className="e-btn e-btn-primary e-btn-big">Run it again</Link>

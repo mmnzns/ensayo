@@ -786,6 +786,8 @@ pub struct RepSummary {
     pub fillers: usize,
     pub tail_ms: Option<u64>,
     pub ai_cost_usd: Option<f64>,
+    /// The model that judged the answer, as the provider reported it (reps from before 0.3.0 have none).
+    pub ai_model: Option<String>,
 }
 
 pub fn summaries_with(storage: &Storage) -> StorageResult<Vec<RepSummary>> {
@@ -826,6 +828,7 @@ pub fn summaries_with(storage: &Storage) -> StorageResult<Vec<RepSummary>> {
                 fillers: r.metrics.fillers.count,
                 tail_ms: r.metrics.proof.tail_ms,
                 ai_cost_usd: r.rep.ai.as_ref().map(|a| a.cost_usd),
+                ai_model: r.rep.ai.as_ref().and_then(|a| a.model.clone()),
             });
         }
     }

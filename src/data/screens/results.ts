@@ -61,7 +61,7 @@ export interface DrillResultsData {
   };
   /** The habit to carry, what the session showed about it ("Missed on 3 of 5 first tries"), and what to do. */
   nextTime: { habitId: HabitId; evidence: string; advice: string };
-  totals: { answers: number; followUps: number; costCents: number };
+  totals: { answers: number; followUps: number; costUsd: number; engineName: string | null };
 }
 
 export interface ConsistencyFlag {
@@ -117,6 +117,9 @@ export interface MockDebriefData {
   mustSay: MustSayItem[];
   rows: DebriefRow[];
   nextTime: string;
+  /** What the AI calls of the session cost, in US dollars, and the model that judged. 0 for local AI or timing only. */
+  costUsd?: number;
+  engineName?: string | null;
 }
 
 export interface GraduationData {
@@ -186,7 +189,7 @@ export const resultsData: ResultsData = {
       evidence: "You kept going 14 seconds on average after your number. Under 15 is a clean stop.",
       advice: "Try ending on the number.",
     },
-    totals: { answers: 12, followUps: 2, costCents: 6 },
+    totals: { answers: 12, followUps: 2, costUsd: 0.06, engineName: null },
   },
   debrief: {
     applicationId: "app_kestrel",
