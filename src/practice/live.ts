@@ -19,7 +19,7 @@ import type { FinishArgs, FullRep, RepOutcome } from "./types";
 export const HARD_CAP_SECONDS = LIMIT_SECONDS;
 export const MAX_ATTEMPTS = 3;
 
-export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "notice" | "clarify" | "error";
+export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "notice" | "clarify" | "mic_lost" | "error";
 
 export interface LiveFollowUp {
   question: string;
@@ -59,6 +59,8 @@ export interface LiveState {
   recordingPath: string | null;
   /** The microphone that opened for the answer being recorded, as the recorder named it; null before it opens. */
   micName: string | null;
+  /** How long the answer was, in ms, when the microphone was lost; the partial answer is offered for scoring over 3 s. */
+  lostMs: number;
   /** Why the last recording stopped on its own (the time limit); shown with the result. Null when you stopped it. */
   stopNote: string | null;
   /** What each attempt at the current question showed, index 0 is attempt 1. */
@@ -104,6 +106,7 @@ const INITIAL: LiveState = {
   phase: "idle",
   recordingPath: null,
   micName: null,
+  lostMs: 0,
   stopNote: null,
   attempts: [],
   outcomes: [],
@@ -422,6 +425,37 @@ export async function recordingStatus(): Promise<RecordingStatus | null> {
   } catch {
     return null;
   }
+}
+
+/** What the screen says when the microphone goes away mid-answer. */
+export const MIC_LOST = "The microphone went away. Plug it back in and press Record again.";
+/** An answer shorter than this isn't worth scoring after the microphone is lost. */
+export const SCORE_LOST_MIN_MS = 3000;
+
+/** The microphone stopped delivering mid-answer: the recording stops, what was said is kept, and the screen says so. */
+export async function micLost() {
+  if (state.phase !== "recording") return;
+  set({ phase: "mic_lost", error: MIC_LOST, recordingPath: null, lostMs: 0 });
+  try {
+    const rec = await (await repApi()).stopRecording();
+    if (getLive().phase === "mic_lost") set({ recordingPath: rec.path, lostMs: rec.duration_ms });
+  } catch {
+    // Nothing came in before the microphone went: there is no audio to keep.
+  }
+}
+
+/** "Record again" after the microphone was lost: the partial answer is thrown away and a new recording begins. */
+export async function recordAgainAfterLoss() {
+  const path = state.recordingPath;
+  set({ recordingPath: null, lostMs: 0, error: null });
+  if (path) {
+    try {
+      await (await repApi()).discardRecording(path);
+    } catch {
+      // Already gone.
+    }
+  }
+  await beginRecording();
 }
 
 /** Pauses (or resumes) the answer being recorded. Nothing is written while paused and the clock stands still. */

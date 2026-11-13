@@ -31,6 +31,14 @@ impl RecorderState {
         self.active.store(false, Ordering::SeqCst);
     }
 
+    /// A reloaded window leaves a capture running that nothing on screen owns. This hands it over to be stopped (its
+    /// file is kept: it becomes a loose `rec-*.wav` that the start-up sweep handles) and frees the recorder.
+    fn take_over(&self) -> Option<Capture> {
+        let old = self.capture.lock().unwrap_or_else(|e| e.into_inner()).take();
+        self.end();
+        old
+    }
+
     /// True from the start of a recording until it is stopped or fails to start (an update never installs then).
     pub fn is_active(&self) -> bool {
         self.active.load(Ordering::SeqCst)
@@ -192,7 +200,13 @@ pub fn open_mic_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn start_recording(app: AppHandle, state: State<'_, RecorderState>, device: Option<String>) -> Result<String, String> {
+pub async fn start_recording(app: AppHandle, state: State<'_, RecorderState>, device: Option<String>, take_over: Option<bool>) -> Result<String, String> {
+    if take_over == Some(true) && state.is_active() {
+        // The window was reloaded while recording: nothing on screen owns that capture any more.
+        if let Some(cap) = state.take_over() {
+            let _ = tauri::async_runtime::spawn_blocking(move || cap.stop()).await;
+        }
+    }
     state.begin()?;
     // The update flag is set before the installer looks at `is_active` and this looks at the flag only after
     // `begin`, so a recording and an install can't both go ahead (the installer quits Ensayo mid-answer).
@@ -246,11 +260,13 @@ pub struct RecordingLevel {
     /// Recorded time: paused time is not in it.
     elapsed_ms: u64,
     paused: bool,
+    /// The microphone stopped delivering for good (unplugged). The audio so far is kept; stop returns it.
+    failed: bool,
 }
 
 #[tauri::command]
 pub fn recording_level(state: State<'_, RecorderState>) -> Option<RecordingLevel> {
-    state.capture.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| RecordingLevel { level: c.level(), elapsed_ms: c.elapsed_ms(), paused: c.is_paused() })
+    state.capture.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| RecordingLevel { level: c.level(), elapsed_ms: c.elapsed_ms(), paused: c.is_paused(), failed: c.failed() })
 }
 
 /// Pauses the recording: audio stops being written, and the clock and the answer's time limit stand still.
@@ -322,6 +338,37 @@ mod tests {
         assert!(!state.is_active(), "the capture state is free again");
         assert!(state.begin().is_ok());
         drop(keep);
+    }
+
+    #[test]
+    fn a_reloaded_window_takes_over_a_capture_it_no_longer_owns_and_its_file_is_kept() {
+        use crate::recorder::source::{AudioSource, SharedFeed};
+        struct Speaks;
+        impl AudioSource for Speaks {
+            fn start(&mut self, feed: SharedFeed) -> Result<String, String> {
+                let buf = vec![0.3f32; 160];
+                for n in 0..100u64 {
+                    feed.lock().unwrap().push(n * 10_000_000, 16_000, 1, &buf);
+                }
+                Ok("Old mic".into())
+            }
+            fn restart(&mut self) -> Result<String, String> {
+                Ok("Old mic".into())
+            }
+            fn stop(&mut self) {}
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rec-1.wav");
+        let state = RecorderState::default();
+        state.begin().unwrap();
+        *state.capture.lock().unwrap() = Some(Capture::start(Box::new(Speaks), &path).unwrap());
+        assert_eq!(state.begin().unwrap_err(), "Already recording", "the new window can't start while the old capture runs");
+        let old = state.take_over().expect("the old capture is handed over");
+        assert!(!state.is_active());
+        let rec = old.stop().unwrap();
+        assert!(rec.path.is_file() && rec.duration_ms > 500, "its audio is kept");
+        assert!(state.begin().is_ok(), "now it can start");
+        assert!(state.take_over().is_none(), "nothing to take over when nothing is running");
     }
 
     #[test]

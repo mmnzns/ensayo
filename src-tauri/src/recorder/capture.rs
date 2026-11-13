@@ -13,8 +13,12 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+/// No answer is recorded for longer than this, whatever the screen does (it stops itself at 4 minutes).
+pub const MAX_RECORDED_SECS: u64 = 6 * 60;
+
 pub struct Capture {
-    mic: Box<dyn AudioSource>,
+    /// Shared with the writer, which stops the microphone itself when the limit is reached.
+    mic: Arc<Mutex<Box<dyn AudioSource>>>,
     mic_name: String,
     path: PathBuf,
     stop: Arc<AtomicBool>,
@@ -42,7 +46,13 @@ pub struct Recorded {
 }
 
 impl Capture {
-    pub fn start(mut mic: Box<dyn AudioSource>, path: &Path) -> Result<Capture, String> {
+    pub fn start(mic: Box<dyn AudioSource>, path: &Path) -> Result<Capture, String> {
+        Capture::start_capped(mic, path, MAX_RECORDED_SECS * RATE as u64)
+    }
+
+    /// `start`, with the recorded-time limit given in 16 kHz samples (tests use a short one).
+    pub fn start_capped(mic: Box<dyn AudioSource>, path: &Path, max_samples: u64) -> Result<Capture, String> {
+        let mic = Arc::new(Mutex::new(mic));
         let (producer, mut consumer) = feed();
         let shared: SharedFeed = Arc::new(Mutex::new(producer));
         let stop = Arc::new(AtomicBool::new(false));
@@ -51,14 +61,14 @@ impl Capture {
 
         let paused = Arc::new(AtomicBool::new(false));
         let recorded = Arc::new(AtomicU64::new(0));
-        let (stop_w, level_w, paused_w, recorded_w) = (stop.clone(), level.clone(), paused.clone(), recorded.clone());
+        let (stop_w, level_w, paused_w, recorded_w, mic_w) = (stop.clone(), level.clone(), paused.clone(), recorded.clone(), mic.clone());
         let writer = std::thread::Builder::new()
             .name("ensayo-writer".into())
             .spawn(move || {
                 let mut buf = Vec::new();
                 let mut clock: Option<Clock> = None;
                 let mut last_level = Instant::now();
-                loop {
+                'run: loop {
                     let mut got = false;
                     while let Some(h) = consumer.pop(&mut buf) {
                         got = true;
@@ -71,6 +81,12 @@ impl Capture {
                             _ => {}
                         }
                         pipeline.push(clock.position_samples(h.host_ns), h.rate, h.channels as usize, &buf)?;
+                        // The watchdog: Rust ends any recording at the limit, so it never depends on the screen. The
+                        // file is finished here, the microphone is let go, and a later stop returns the file.
+                        if pipeline.written() >= max_samples {
+                            recorded_w.store(pipeline.written(), Ordering::Relaxed);
+                            break 'run;
+                        }
                     }
                     recorded_w.store(pipeline.written(), Ordering::Relaxed);
                     if last_level.elapsed() >= Duration::from_millis(50) {
@@ -88,10 +104,18 @@ impl Capture {
                         std::thread::sleep(Duration::from_millis(5));
                     }
                 }
+                log::warn!("recording reached the {} second limit and was stopped", max_samples / RATE as u64);
+                mic_w.lock().unwrap_or_else(|e| e.into_inner()).stop();
+                let end = pipeline.written();
+                pipeline.finish(end)?;
+                let written = pipeline.written();
+                pipeline.into_sink().finalize()?;
+                Ok(written)
             })
             .map_err(|e| e.to_string())?;
 
-        let mic_name = match mic.start(shared) {
+        let started = mic.lock().unwrap_or_else(|e| e.into_inner()).start(shared);
+        let mic_name = match started {
             Ok(name) => name,
             Err(e) => {
                 stop.store(true, Ordering::Release);
@@ -164,9 +188,15 @@ impl Capture {
         self.paused.load(Ordering::Acquire)
     }
 
+    /// True once the microphone stopped delivering for good on its own (unplugged, or its stream gave up). What was
+    /// recorded so far is still in the file and `stop` returns it.
+    pub fn failed(&self) -> bool {
+        self.mic.lock().unwrap_or_else(|e| e.into_inner()).failed()
+    }
+
     /// Stops the mic, flushes the file and returns where it is. No audio at all is an error, never an empty file.
     pub fn stop(mut self) -> Result<Recorded, String> {
-        self.mic.stop();
+        self.mic.lock().unwrap_or_else(|e| e.into_inner()).stop();
         self.stop.store(true, Ordering::Release);
         let samples = self.writer.join().map_err(|_| "The recorder stopped unexpectedly".to_string())?.map_err(|e| e.to_string())?;
         if samples == 0 {
@@ -289,6 +319,70 @@ mod tests {
         wait_for(&cap, 1900);
         let rec = cap.stop().unwrap();
         assert!((1900..=2100).contains(&rec.duration_ms), "two seconds were recorded, got {} ms", rec.duration_ms);
+    }
+
+    #[test]
+    fn rust_ends_a_recording_at_the_limit_by_itself_and_keeps_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("capped.wav");
+        let slot = Arc::new(Mutex::new(None));
+        let stopped = Arc::new(AtomicBool::new(false));
+        struct Watched(HandMic, Arc<AtomicBool>);
+        impl AudioSource for Watched {
+            fn start(&mut self, feed: SharedFeed) -> Result<String, String> {
+                self.0.start(feed)
+            }
+            fn restart(&mut self) -> Result<String, String> {
+                Ok("x".into())
+            }
+            fn stop(&mut self) {
+                self.1.store(true, Ordering::Release);
+            }
+        }
+        // A one second limit instead of six minutes; three seconds of audio arrive.
+        let cap = Capture::start_capped(Box::new(Watched(HandMic(slot.clone()), stopped.clone())), &path, RATE as u64).unwrap();
+        let feed = slot.lock().unwrap().clone().unwrap();
+        push_tone(&feed, 0, 3);
+        for _ in 0..400 {
+            if stopped.load(Ordering::Acquire) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(stopped.load(Ordering::Acquire), "the microphone was let go without anyone calling stop");
+        let rec = cap.stop().unwrap();
+        assert!((1000..=1100).contains(&rec.duration_ms), "kept the first second, got {} ms", rec.duration_ms);
+        assert!(rec.path.is_file());
+    }
+
+    #[test]
+    fn a_microphone_that_errors_marks_the_capture_failed_and_the_audio_so_far_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lost.wav");
+        let slot = Arc::new(Mutex::new(None));
+        let lost = Arc::new(AtomicBool::new(false));
+        struct Flaky(HandMic, Arc<AtomicBool>);
+        impl AudioSource for Flaky {
+            fn start(&mut self, feed: SharedFeed) -> Result<String, String> {
+                self.0.start(feed)
+            }
+            fn restart(&mut self) -> Result<String, String> {
+                Ok("x".into())
+            }
+            fn stop(&mut self) {}
+            fn failed(&self) -> bool {
+                self.1.load(Ordering::Acquire)
+            }
+        }
+        let cap = Capture::start(Box::new(Flaky(HandMic(slot.clone()), lost.clone())), &path).unwrap();
+        assert!(!cap.failed());
+        let feed = slot.lock().unwrap().clone().unwrap();
+        push_tone(&feed, 0, 2);
+        wait_for(&cap, 1900);
+        lost.store(true, Ordering::Release); // the device was unplugged
+        assert!(cap.failed());
+        let rec = cap.stop().unwrap();
+        assert!((1900..=2100).contains(&rec.duration_ms), "kept what was said, got {} ms", rec.duration_ms);
     }
 
     #[test]

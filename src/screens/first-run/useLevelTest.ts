@@ -2,6 +2,7 @@
 // level, then throws the recording away.
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { takeOverOnFirstStart } from "../../practice/api";
 import { levelVerdict, pushLevel } from "./setup";
 
 export const BARS = 14;
@@ -39,7 +40,7 @@ export function useLevelTest(device: string) {
     setVerdict(null);
     setLevels([]);
     try {
-      await invoke("start_recording", { device: device || null });
+      await invoke("start_recording", { device: device || null, takeOver: takeOverOnFirstStart() });
     } catch (e) {
       setTrouble(typeof e === "string" && e.trim() ? e : "Ensayo couldn't start listening. Check the microphone and try again.");
       return;

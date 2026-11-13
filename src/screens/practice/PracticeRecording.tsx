@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { useLive, beginRecording, getLive, recordingStatus, restartRecording, setRecordingPaused, stopAndFinish } from "../../practice/live";
+import { useLive, beginRecording, getLive, micLost, MIC_LOST, recordAgainAfterLoss, recordingStatus, restartRecording, retryFinish, SCORE_LOST_MIN_MS, setRecordingPaused, stopAndFinish } from "../../practice/live";
 import { LIMIT_STOPPED, LIMIT_WARNING, limitState } from "../../practice/limit";
 import { SILENCE_START, silenceStep, silenceStop } from "../../practice/silence";
 import { readPrefs } from "../settings/prefs";
@@ -49,7 +49,8 @@ export function LimitNotice({ seconds }: { seconds: number }) {
 export default function PracticeRecording() {
   const { timerMaxSeconds, levelBars } = useStore().screens.practice;
   const { live, session, question, targetSeconds, endTo, onEnd } = usePractice();
-  const { mode, phase, micName } = useLive();
+  const { mode, phase, micName, lostMs } = useLive();
+  const lost = live && phase === "mic_lost";
   // Mock is like the real call, so no clock. In a Drill the clock follows "Show the timer in Drill" in Settings.
   const [showTimer] = useState(() => readPrefs().practice.timer);
   const noClock = live && (mode === "mock" || !showTimer);
@@ -70,6 +71,10 @@ export default function PracticeRecording() {
     const id = window.setInterval(
       () =>
         void recordingStatus().then((st) => {
+          if (st?.failed && getLive().phase === "recording") {
+            void micLost();
+            return;
+          }
           const l = st?.level ?? 0;
           setLevel(pausedRef.current ? 0 : l);
           // The clock and the limit count recorded time, which the recorder keeps: paused time is not in it.
@@ -103,10 +108,12 @@ export default function PracticeRecording() {
   }, [live]);
 
   const stop = (why?: string) => {
+    if (lost) return;
     if (live) void stopAndFinish(why ?? null);
     go(THINK);
   };
   const togglePause = () => {
+    if (lost) return;
     const next = !pausedRef.current;
     pausedRef.current = next;
     setPaused(next);
@@ -138,7 +145,7 @@ export default function PracticeRecording() {
   const dot = (
     <span className="e-pill" style={{ gap: "8px" }}>
       <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--e-primary)" }} />
-      {paused ? "Paused" : "Recording"}
+      {lost ? "Stopped" : paused ? "Paused" : "Recording"}
     </span>
   );
 
@@ -152,8 +159,21 @@ export default function PracticeRecording() {
           <span className="e-label">You're answering</span>
           <p style={{ margin: "0", fontSize: "22px", fontWeight: "600", lineHeight: "1.35", color: "var(--e-muted)" }}>{question}</p>
         </div>
-        <LevelBars bars={levelBars} level={live ? level : undefined} />
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", width: "100%", maxWidth: "420px" }}>
+        {lost ? (
+          <div role="alert" className="e-card" style={{ display: "flex", flexDirection: "column", gap: "14px", alignItems: "center", maxWidth: "520px", padding: "28px" }}>
+            <span style={{ fontSize: "18px", fontWeight: "600" }}>{MIC_LOST}</span>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
+              {lostMs > SCORE_LOST_MIN_MS && (
+                <button type="button" className="e-btn e-btn-soft" onClick={() => { void retryFinish(); go(THINK); }}>Score what I said</button>
+              )}
+              <button type="button" className="e-btn e-btn-primary" onClick={() => void recordAgainAfterLoss()}>Record again</button>
+            </div>
+            {lostMs > 0 && <span className="e-small">Ensayo kept the {clock(Math.round(lostMs / 1000))} you said before it stopped.</span>}
+          </div>
+        ) : (
+          <LevelBars bars={levelBars} level={live ? level : undefined} />
+        )}
+        <div style={{ display: lost ? "none" : "flex", flexDirection: "column", alignItems: "center", gap: "12px", width: "100%", maxWidth: "420px" }}>
           {/* A Mock is like the real call: no clock and no target while you talk (the four minute cap still stops it). */}
           {!noClock && <span style={{ fontSize: "44px", fontWeight: "600", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{clock(seconds)}</span>}
           {live && micName && <span className="e-small" data-testid="mic-name">{micName}</span>}
@@ -168,7 +188,7 @@ export default function PracticeRecording() {
             <span className="e-small">{clock(max)}</span>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+        <div style={{ display: lost ? "none" : "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
           <button type="button" aria-label="Stop answering" onClick={() => stop()} style={{ width: "96px", height: "96px", borderRadius: "50%", background: "var(--e-ink)", color: "var(--e-surface)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(43,39,34,0.22)", border: "none", padding: 0, cursor: "pointer" }}>
             <span style={{ width: "30px", height: "30px", borderRadius: "6px", background: "var(--e-surface)" }} />
           </button>

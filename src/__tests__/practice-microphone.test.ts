@@ -38,11 +38,11 @@ describe("the chosen microphone", () => {
     const { tauriApi } = await import("../practice/api");
     const api = await tauriApi();
     expect(await api.startRecording()).toBe("Studio Mic");
-    expect(invoked.find((i) => i.cmd === "start_recording")?.args).toEqual({ device: "USB Mic" });
+    expect(invoked.find((i) => i.cmd === "start_recording")?.args).toEqual({ device: "USB Mic", takeOver: true });
     invoked.length = 0;
     vi.stubGlobal("window", { localStorage: storage() });
     await api.startRecording();
-    expect(invoked.find((i) => i.cmd === "start_recording")?.args).toEqual({ device: null });
+    expect(invoked.find((i) => i.cmd === "start_recording")?.args).toEqual({ device: null, takeOver: false });
     vi.unstubAllGlobals();
   });
 

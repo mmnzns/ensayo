@@ -16,6 +16,8 @@ export interface RecordingStatus {
   level: number;
   elapsed_ms: number;
   paused?: boolean;
+  /** The microphone stopped delivering for good (unplugged). The audio so far is kept. */
+  failed?: boolean;
 }
 
 export interface RepApi {
@@ -51,6 +53,16 @@ export interface RepApi {
 
 export { SPEECH_MODELS };
 
+let firstStart = true;
+
+/** True for the first recording a window starts after it loads, false after. A window that was reloaded while
+ *  recording has no recording of its own, so the first start takes over whatever capture the backend still holds. */
+export function takeOverOnFirstStart(): boolean {
+  const first = firstStart;
+  firstStart = false;
+  return first;
+}
+
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export async function tauriApi(): Promise<RepApi> {
@@ -69,7 +81,7 @@ export async function tauriApi(): Promise<RepApi> {
     return id;
   };
   return {
-    startRecording: () => invoke<string>("start_recording", { device: readPrefs().mic.device || null }),
+    startRecording: () => invoke<string>("start_recording", { device: readPrefs().mic.device || null, takeOver: takeOverOnFirstStart() }),
     stopRecording: () => invoke("stop_recording"),
     level: () => invoke("recording_level"),
     pauseRecording: () => invoke("pause_recording"),
