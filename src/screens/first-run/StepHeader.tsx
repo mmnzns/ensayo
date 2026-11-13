@@ -2,7 +2,7 @@ import Link from "../../ui/Link";
 import Wordmark from "../../ui/Wordmark";
 
 /** The first-run header: wordmark, "Step N of 7" dots, and Skip (omitted on the microphone step, which cannot be skipped). */
-export default function StepHeader({ step, skipTo }: { step: number; skipTo?: string }) {
+export default function StepHeader({ step, skipTo, onSkip }: { step: number; skipTo?: string; /** Runs instead of going straight to `skipTo`, for a step that asks first. */ onSkip?: () => void }) {
   return (
     <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
       <span className="e-brand" style={{ padding: "0" }} aria-label="Ensayo">
@@ -13,7 +13,9 @@ export default function StepHeader({ step, skipTo }: { step: number; skipTo?: st
           <span key={i} className={i < step ? "on" : undefined} />
         ))}
       </div>
-      {skipTo ? (
+      {skipTo && onSkip ? (
+        <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={onSkip}>Skip</button>
+      ) : skipTo ? (
         <Link to={skipTo} className="e-btn e-btn-ghost e-btn-sm">Skip</Link>
       ) : (
         <span style={{ width: "64px" }} />

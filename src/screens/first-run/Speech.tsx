@@ -6,6 +6,9 @@ import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import StepHeader from "./StepHeader";
 import { useSpeech } from "./useSpeech";
+import Dialog from "../states/Dialog";
+import { go } from "../../ui/router";
+import { SPEECH_WARNING, speechWarningNeeded } from "./setup";
 
 type Choice = "local" | "download";
 type Download = "idle" | "downloading" | "ready";
@@ -24,11 +27,15 @@ function SpeechLive() {
   const { plan, downloading, fraction, error, download } = useSpeech();
   const pct = percentOf(fraction);
   const ready = plan?.kind === "ready";
+  // Leaving with no speech model asks first: practice can't hear anything until one is downloaded.
+  const [asking, setAsking] = useState(false);
+  const warn = speechWarningNeeded(plan);
+  const next = "1-6-feedback-engine";
 
   return (
     <FocusShell>
       <div className="e-wrap" style={{ width: "100%", gap: "32px" }}>
-        <StepHeader step={5} skipTo="1-6-feedback-engine" />
+        <StepHeader step={5} skipTo={next} onSkip={warn ? () => setAsking(true) : undefined} />
         <div className="e-narrow" style={{ gap: "24px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <span className="e-label">Step 5 of 7</span>
@@ -77,10 +84,25 @@ function SpeechLive() {
           <p className="e-meta" style={{ margin: "0" }}>Want something faster or online? More speech options are in Settings, under Speech.</p>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
             <Link to="1-4-microphone" className="e-btn e-btn-ghost">← Back</Link>
-            <Link to="1-6-feedback-engine" className="e-btn e-btn-primary">Continue</Link>
+            {warn ? <button type="button" className="e-btn e-btn-primary" onClick={() => setAsking(true)}>Continue</button> : <Link to={next} className="e-btn e-btn-primary">Continue</Link>}
           </div>
         </div>
       </div>
+      {asking && (
+        <Dialog
+          title="No speech model yet"
+          onClose={() => setAsking(false)}
+          width={440}
+          actions={
+            <>
+              <button type="button" data-autofocus className="e-btn e-btn-line" onClick={() => setAsking(false)}>Stay here</button>
+              <button type="button" className="e-btn e-btn-primary" onClick={() => go(next)}>Continue anyway</button>
+            </>
+          }
+        >
+          <p className="e-body" style={{ margin: 0 }}>{SPEECH_WARNING}</p>
+        </Dialog>
+      )}
     </FocusShell>
   );
 }

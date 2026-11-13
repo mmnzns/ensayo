@@ -6,6 +6,8 @@ import { useSyncExternalStore } from "react";
 import type { PracticeAttempt, PracticeSession } from "../data/screens/practice";
 import type { Method, Story, Target } from "../data/types";
 import type { QuestionQuality } from "./debrief";
+import { go } from "../ui/router";
+import { NO_SPEECH_MODEL } from "./errorRoute";
 import { isApp, tauriApi, type RepApi, type SessionDetail } from "./api";
 import { attemptFromOutcome } from "./attempt";
 import { banksFor, ownQuestion, pickApplicationQuestions, pickClosing, pickQuestions, type BankQuestion, type ExtraQuestion } from "./questions";
@@ -115,6 +117,8 @@ const INITIAL: LiveState = {
 };
 
 let state: LiveState = INITIAL;
+/** Counts the sessions started, so a check that comes back late can tell it is about an older one. */
+let sessionCount = 0;
 let stories: Story[] = [];
 let target: Target | undefined;
 let methods: Method[] = [];
@@ -259,7 +263,24 @@ export function startLive(o: StartOptions, ctx: LiveContext) {
         : pickQuestions({ bank, stage: o.stage, mode: o.mode, count: o.count, startup: o.startup, story, seed });
   const closing = o.mode === "mock" ? pickClosing(bank, o.stage, seed) : undefined;
   state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, targetId: ctx.target?.id ?? null, stageId: o.applicationId ? (o.stageId ?? null) : null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
+  const generation = ++sessionCount;
   listeners.forEach((l) => l());
+  if (liveAvailable()) void checkSpeechAtStart(generation);
+}
+
+/** A session needs a speech model to hear the first answer. When none is on this computer, the session is dropped
+ *  before anything is recorded and the page that explains it opens instead. */
+async function checkSpeechAtStart(generation: number) {
+  let missing = false;
+  try {
+    const a = await repApi();
+    missing = a.speechReady ? !(await a.speechReady()) : false;
+  } catch {
+    missing = false;
+  }
+  if (!missing || generation !== sessionCount || !state.active) return;
+  resetLive();
+  go(NO_SPEECH_MODEL);
 }
 
 /** Questions in a Drill for one story. */
@@ -636,6 +657,18 @@ export async function cancelLive() {
     }
   }
   set({ active: false, phase: "idle", recordingPath: null });
+}
+
+/** "Try again" on an error page: back to the same question for another go. */
+export async function tryAgainAfterError(open: (screen: string) => void): Promise<void> {
+  await retryQuestion();
+  open(ASKING_SCREEN);
+}
+
+/** "Back home" on an error page: the session ends and Home opens. */
+export async function backHomeAfterError(open: (screen: string) => void): Promise<void> {
+  await cancelLive();
+  open("2-1-home");
 }
 
 /** After an error or "didn't catch that": go back to the question for another go. */

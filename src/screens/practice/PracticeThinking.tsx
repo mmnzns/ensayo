@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
 import type { EngineStatus } from "../../data/types";
+import { errorPage } from "../../practice/errorRoute";
 import { askRoute, MOCK_DEBRIEF, resultRoute, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
@@ -76,6 +77,11 @@ export default function PracticeThinking() {
     go(endTo);
   };
   const failed = live && state.phase === "error";
+  // A rejected key or an engine that can't be reached has its own page; any other error stays here.
+  const errorTo = failed ? errorPage(state.error) : null;
+  useEffect(() => {
+    if (errorTo) go(errorTo);
+  }, [errorTo]);
   const [asking, setAsking] = useState(false);
   const onEsc = () => (escDecision(atStake("thinking", live, failed)) === "ask" ? setAsking(true) : end());
   useKeys({ esc: onEsc });

@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../../data/store";
+import { backHomeAfterError, tryAgainAfterError, useLive } from "../../practice/live";
 import Link from "../../ui/Link";
+import { go } from "../../ui/router";
 import StatePage from "./StatePage";
 
 /** No internet, or no key saved: practice still works with timing only. */
 export default function ErrorOfflineEngine() {
   const { engine } = useStore();
+  const real = useLive().active;
   const [state, setState] = useState<"idle" | "checking" | "still">("idle");
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -21,11 +24,18 @@ export default function ErrorOfflineEngine() {
       title={`${engine.label} can't be reached`}
       actions={
         <>
-          <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big">Practice with timing only</Link>
-          <button type="button" className="e-btn e-btn-line" onClick={retry} disabled={state === "checking"} style={state === "checking" ? { opacity: 0.6 } : undefined}>
-            {state === "checking" ? "Checking" : "Try again"}
-          </button>
+          {real ? (
+            <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={() => void tryAgainAfterError(go)}>Try again</button>
+          ) : (
+            <>
+              <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big">Practice with timing only</Link>
+              <button type="button" className="e-btn e-btn-line" onClick={retry} disabled={state === "checking"} style={state === "checking" ? { opacity: 0.6 } : undefined}>
+                {state === "checking" ? "Checking" : "Try again"}
+              </button>
+            </>
+          )}
           <Link to="8-5-settings-ai" className="e-btn e-btn-ghost">AI settings</Link>
+          {real ? <button type="button" className="e-btn e-btn-ghost" onClick={() => void backHomeAfterError(go)}>Back home</button> : <Link to="2-1-home" className="e-btn e-btn-ghost">Back home</Link>}
         </>
       }
     >

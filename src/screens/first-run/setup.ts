@@ -135,6 +135,12 @@ export function speechPlan(models: SpeechModelStatus[], vad: SpeechModelStatus |
   return { kind: "download", modelId: first.id, name: first.name, sizeMb: first.size_mb, onlyVoiceDetection: false };
 }
 
+/** What Continue and Skip ask when the step is left with no speech model downloaded. */
+export const SPEECH_WARNING = "Practice won't work until a speech model is downloaded. Continue anyway?";
+
+/** True when the person is about to leave the step with no speech model (or only the voice detection piece missing). */
+export const speechWarningNeeded = (plan: SpeechPlan | null): boolean => plan?.kind === "download";
+
 const message = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : "");
 const OFFLINE = /dns|resolve|connect|error sending request|network is unreachable|offline|timed out|no route/i;
 

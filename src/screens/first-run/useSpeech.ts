@@ -48,5 +48,5 @@ export function useSpeech() {
     await refresh();
   };
 
-  return { plan, downloading: fraction !== null, fraction: fraction ?? 0, error, download };
+  return { plan, refresh, downloading: fraction !== null, fraction: fraction ?? 0, error, download };
 }

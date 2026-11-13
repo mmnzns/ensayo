@@ -24,6 +24,8 @@ export interface RepApi {
   nextFollowUp(sessionId: string, parentN: number): Promise<FollowUpQuestion>;
   clarifyReply(sessionId: string, question: string, clarification: string, stage: string): Promise<string>;
   aiReady(): Promise<boolean>;
+  /** True when a speech model is on this computer (the check a finished answer makes). Optional: fakes count as ready. */
+  speechReady?(): Promise<boolean>;
   discardRecording(path: string): Promise<void>;
   labelCriteria(sessionId: string, n: number, labels: Record<string, "pass" | "fail">): Promise<void>;
   repLabels(sessionId: string, n: number): Promise<Record<string, "pass" | "fail">>;
@@ -41,12 +43,17 @@ export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__
 export async function tauriApi(): Promise<RepApi> {
   const { invoke } = await import("@tauri-apps/api/core");
   // The model chosen in Settings, Speech comes first; then the usual order. Read every time, so a change applies at once.
-  const pickModel = async () => {
+  const findModel = async (): Promise<string | null> => {
     for (const id of candidateModels(readPrefs().speech.model)) {
       const s = await invoke<{ state: string }>("model_status", { id }).catch(() => null);
       if (s && (s.state === "ready" || s.state === "on_this_computer")) return id;
     }
-    throw new Error("No speech model is on this computer yet. Download one from Settings.");
+    return null;
+  };
+  const pickModel = async () => {
+    const id = await findModel();
+    if (id === null) throw new Error("No speech model is on this computer yet. Download one from Settings.");
+    return id;
   };
   return {
     startRecording: async () => {
@@ -62,6 +69,7 @@ export async function tauriApi(): Promise<RepApi> {
     nextFollowUp: (sessionId, parentN) => invoke("next_follow_up", { sessionId, parentN }),
     clarifyReply: (sessionId, question, clarification, stage) => invoke("clarify_reply", { sessionId, question, clarification, stage }),
     aiReady: () => invoke("ai_ready"),
+    speechReady: async () => (await findModel()) !== null,
     discardRecording: (path) => invoke("discard_recording", { path }),
     labelCriteria: (sessionId, n, labels) => invoke("label_criteria", { sessionId, n, labels }),
     repLabels: (sessionId, n) => invoke("rep_labels", { sessionId, n }),
