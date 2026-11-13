@@ -81,11 +81,16 @@ pub fn purge_with(storage: &Storage, audio: &Path, trash_audio: &Path, now: Date
         if waiting.contains(&id) {
             continue;
         }
-        if storage.session(&id).ok().flatten().is_some() {
-            let _ = audio_retention::restore_from_trash(audio, trash_audio, &id);
-        } else {
-            audio_retention::remove_trashed(trash_audio, &id);
-            out.audio += 1;
+        match storage.session(&id) {
+            Ok(Some(_)) => {
+                let _ = audio_retention::restore_from_trash(audio, trash_audio, &id);
+            }
+            Ok(None) => {
+                audio_retention::remove_trashed(trash_audio, &id);
+                out.audio += 1;
+            }
+            // Not being able to read a session is not the same as it being gone: its recordings stay.
+            Err(e) => log::warn!("trash purge: a session could not be read ({}), its recordings were left", e.kind()),
         }
     }
     Ok(out)
@@ -126,11 +131,19 @@ pub async fn restore_session(session_id: String) -> Cmd<()> {
 /// Run on start, next to the audio sweep.
 #[tauri::command]
 pub async fn purge_trash() -> Cmd<PurgeResult> {
-    blocking(|| {
-        let storage = open_storage().map_err(plain_storage)?;
-        purge_with(&storage, &paths::audio_dir(), &paths::audio_trash_dir(), Utc::now()).map_err(plain_storage)
-    })
-    .await
+    blocking(|| purge_if_readable(open_storage(), &paths::audio_dir(), &paths::audio_trash_dir(), Utc::now())).await
+}
+
+/// `purge_with`, but when the data folder can't be opened nothing is purged: the trash can't be told from empty, and
+/// the recordings waiting beside it would look like leftovers.
+pub fn purge_if_readable(storage: StorageResult<Storage>, audio: &Path, trash_audio: &Path, now: DateTime<Utc>) -> Cmd<PurgeResult> {
+    match storage {
+        Ok(storage) => purge_with(&storage, audio, trash_audio, now).map_err(plain_storage),
+        Err(e) => {
+            log::warn!("trash purge skipped: the data folder could not be read ({})", e.kind());
+            Ok(PurgeResult::default())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -219,5 +232,35 @@ mod tests {
         assert_eq!(say(err), GONE);
         let err = delete_session_with(&s, &audio, &trash, "ses_gone", at(21, 9)).unwrap_err();
         assert_eq!(say(err), GONE);
+    }
+
+    #[test]
+    fn a_data_folder_that_cannot_be_read_skips_the_purge_and_leaves_the_trashed_recordings() {
+        let (d, s) = setup();
+        let (audio, trash) = (d.path().join("audio"), d.path().join("trash/audio"));
+        make(&s, &audio, "ses_a", None, 1);
+        delete_session_with(&s, &audio, &trash, "ses_a", at(1, 9)).unwrap();
+        let missing = Storage::open(d.path().join("not-mounted"));
+        assert!(missing.is_err());
+        assert_eq!(purge_if_readable(missing, &audio, &trash, at(28, 9)).unwrap(), PurgeResult::default());
+        assert!(audio_path(&trash, "ses_a", 1).is_file(), "nothing was removed");
+        // With the folder readable the same call purges.
+        assert_eq!(purge_if_readable(Ok(s), &audio, &trash, at(28, 9)).unwrap(), PurgeResult { sessions: 1, audio: 1 });
+    }
+
+    #[test]
+    fn a_session_that_cannot_be_read_is_not_taken_for_gone() {
+        let (d, s) = setup();
+        let (audio, trash) = (d.path().join("audio"), d.path().join("trash/audio"));
+        fs::create_dir_all(trash.join("ses_odd")).unwrap();
+        fs::write(trash.join("ses_odd/1.wav"), b"RIFF").unwrap();
+        fs::create_dir_all(trash.join("ses_gone")).unwrap();
+        fs::write(trash.join("ses_gone/1.wav"), b"RIFF").unwrap();
+        fs::create_dir_all(s.root().join("sessions/ses_odd")).unwrap();
+        fs::write(s.root().join("sessions/ses_odd/session.json"), "{ half a file").unwrap();
+        let out = purge_with(&s, &audio, &trash, at(21, 9)).unwrap();
+        assert_eq!(out, PurgeResult { sessions: 0, audio: 1 });
+        assert!(trash.join("ses_odd/1.wav").is_file(), "unreadable is not gone");
+        assert!(!trash.join("ses_gone").exists(), "really gone: removed");
     }
 }

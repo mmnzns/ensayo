@@ -43,6 +43,18 @@ pub type Result<T> = std::result::Result<T, StorageError>;
 use std::path::Path;
 
 impl StorageError {
+    /// A short word for the kind of problem, for the log (never the message: it may name a path).
+    pub fn kind(&self) -> &'static str {
+        match self {
+            StorageError::Unavailable(_) => "unavailable",
+            StorageError::Io(..) => "io",
+            StorageError::Json(..) => "json",
+            StorageError::TooNew(..) => "too_new",
+            StorageError::NotFound(_) => "not_found",
+            StorageError::Invalid(_) => "invalid",
+        }
+    }
+
     /// The file this error is about, when it names one.
     pub fn file(&self) -> Option<&Path> {
         match self {

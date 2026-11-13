@@ -836,10 +836,29 @@ pub async fn sweep_audio(rec: tauri::State<'_, crate::commands::RecorderState>) 
     let recording = rec.is_active();
     blocking(move || {
         let Some(days) = settings::retention_days(&settings::load(&paths::settings_file())) else { return Ok(0) };
-        let keep: HashSet<String> = open().and_then(|s| s.eval_reps()).map(|l| l.items.into_iter().map(|r| format!("{}/{}", r.full.session_id, r.full.rep.n)).collect()).unwrap_or_default();
-        Ok(audio_retention::sweep(&paths::audio_dir(), days, &keep, std::time::SystemTime::now(), recording))
+        Ok(sweep_with(open(), &paths::audio_dir(), days, std::time::SystemTime::now(), recording))
     })
     .await
+}
+
+/// The audio sweep, given the result of opening the data folder. Reps labelled for the eval set keep their audio, so
+/// the sweep needs that list: when it can't be read (the folder isn't there, a file in it is damaged) nothing is
+/// swept, because an empty guess would delete audio that has to stay. Returns how many files went.
+pub fn sweep_with(storage: StorageResult<Storage>, audio_root: &Path, days: u32, now: std::time::SystemTime, recording: bool) -> usize {
+    let list = storage.and_then(|s| s.eval_reps());
+    let loaded = match list {
+        Ok(l) if l.problems.is_empty() => l,
+        Ok(l) => {
+            log::warn!("audio sweep skipped: {} file(s) in the eval list could not be read", l.problems.len());
+            return 0;
+        }
+        Err(e) => {
+            log::warn!("audio sweep skipped: the eval list could not be read ({})", e.kind());
+            return 0;
+        }
+    };
+    let keep: HashSet<String> = loaded.items.into_iter().map(|r| format!("{}/{}", r.full.session_id, r.full.rep.n)).collect();
+    audio_retention::sweep(audio_root, days, &keep, now, recording)
 }
 
 #[tauri::command]
@@ -1683,5 +1702,28 @@ mod tests {
         assert_eq!(c1.passed, Some(false));
         assert!(c1.evidence.starts_with("Your resume says \"31% to 44%\""), "{}", c1.evidence);
         assert_eq!(rep.rep.fix.as_deref(), Some("c1_consistent"));
+    }
+
+    #[test]
+    fn the_audio_sweep_skips_when_it_cannot_read_what_to_keep() {
+        use std::time::{Duration, SystemTime};
+        let dir = tempfile::tempdir().unwrap();
+        let audio = dir.path().join("audio");
+        std::fs::create_dir_all(audio.join("ses_a")).unwrap();
+        std::fs::write(audio.join("ses_a/1.wav"), b"RIFF").unwrap();
+        let later = SystemTime::now() + Duration::from_secs(90 * 86_400);
+        // The data folder isn't there: nothing is swept.
+        assert_eq!(sweep_with(Storage::open(dir.path().join("not-mounted")), &audio, 30, later, false), 0);
+        assert!(audio.join("ses_a/1.wav").is_file());
+        // The folder is there but a file in the eval list is damaged: the keep list can't be trusted.
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        std::fs::create_dir_all(storage.root().join("eval")).unwrap();
+        std::fs::write(storage.root().join("eval/ses_a-1.json"), "{ half a file").unwrap();
+        assert_eq!(sweep_with(Ok(storage.clone()), &audio, 30, later, false), 0);
+        assert!(audio.join("ses_a/1.wav").is_file());
+        // A readable (here empty) list sweeps as before.
+        std::fs::remove_file(storage.root().join("eval/ses_a-1.json")).unwrap();
+        assert_eq!(sweep_with(Ok(storage), &audio, 30, later, false), 1);
+        assert!(!audio.join("ses_a/1.wav").exists());
     }
 }
