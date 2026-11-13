@@ -119,6 +119,10 @@ const INITIAL: LiveState = {
 let state: LiveState = INITIAL;
 /** Counts the sessions started, so a check that comes back late can tell it is about an older one. */
 let sessionCount = 0;
+/** Counts the finish or rescore requests made. With the session count it makes the run token. */
+let runCount = 0;
+/** The run token a result must carry to land: null when no request is wanted (the session ended, or nothing runs). */
+let currentRun: string | null = null;
 let stories: Story[] = [];
 let target: Target | undefined;
 let methods: Method[] = [];
@@ -207,7 +211,17 @@ export async function recordMustSay(sessionId: string, applicationId: string, sa
 /** Whether a session started from the Start screen runs the real loop: only inside the app. */
 export const liveAvailable = () => isApp() || api !== null;
 
+/** A new request: its token is the only one whose result is accepted from now on (an older one went stale). */
+function newRun(): string {
+  currentRun = `${sessionCount}:${++runCount}`;
+  return currentRun;
+}
+
+/** True while a result carrying `run` may still change the screen. */
+const isCurrentRun = (run: string) => run === currentRun && state.active;
+
 export function resetLive() {
+  currentRun = null;
   state = INITIAL;
   stories = [];
   target = undefined;
@@ -264,6 +278,7 @@ export function startLive(o: StartOptions, ctx: LiveContext) {
   const closing = o.mode === "mock" ? pickClosing(bank, o.stage, seed) : undefined;
   state = { ...INITIAL, active: true, mode: o.mode, tries: o.mode === "drill" && o.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: o.mode === "mock" || o.followUps !== false, stage: o.stage, applicationId: o.applicationId ?? null, targetId: ctx.target?.id ?? null, stageId: o.applicationId ? (o.stageId ?? null) : null, founderVariant: o.startup === true, questions: closing ? [...questions, closing] : questions, phase: "asking" };
   const generation = ++sessionCount;
+  currentRun = null;
   listeners.forEach((l) => l());
   if (liveAvailable()) void checkSpeechAtStart(generation);
 }
@@ -286,6 +301,7 @@ async function checkSpeechAtStart(generation: number) {
 /** Questions in a Drill for one story. */
 export const STORY_DRILL = 3;
 export const ASKING_SCREEN = "3-1-practice-interviewer-asking";
+export const THINKING_SCREEN = "3-3-practice-thinking";
 
 /** A Drill for one story: the three questions in the bank that fit it best (`storyFit`; fewer fit, the best of the rest
  *  fill in). True when a real session started; false in the browser preview, which keeps its sample walk-through. */
@@ -396,39 +412,69 @@ export async function recordingLevel(): Promise<number> {
   }
 }
 
+function finishArgs(q: BankQuestion, path: string): FinishArgs {
+  return {
+    session_id: state.sessionId,
+    mode: state.mode,
+    stage: state.stage,
+    application_id: state.applicationId,
+    ...(state.targetId ? { target_id: state.targetId } : {}),
+    stage_id: state.applicationId ? state.stageId : null,
+    question_id: q.id,
+    question_text: currentQuestionText(),
+    question_type: q.type,
+    behavioral_situation: q.behavioral_situation && q.behavioral_situation !== "other" ? q.behavioral_situation : null,
+    commitment_check: q.commitment_check,
+    builder_operator_check: q.builder_operator_check,
+    is_major_story: !["factual", "gap", "motivation"].includes(q.type),
+    founder_variant: state.founderVariant && state.stage === "leadership",
+    follow_up: state.view === "followup" && state.followUp ? { parent_n: state.followUp.parentN, kind: state.followUp.kind, number: state.followUp.number } : null,
+    attempt: state.view === "followup" ? 1 : state.attempt,
+    story_ids: storyIdsFor(q),
+    audio_path: path,
+  };
+}
+
+/** Scores the recording at `path`. A result from a run that went stale (the session ended, or a newer request began) is ignored and deletes nothing. */
+async function finishAt(q: BankQuestion, path: string, run: string) {
+  try {
+    const out = await (await repApi()).finishRep(finishArgs(q, path), run);
+    if (!isCurrentRun(run)) return;
+    await apply(out, run);
+  } catch (e) {
+    if (isCurrentRun(run)) set({ phase: "error", error: message(e) });
+  }
+}
+
 export async function stopAndFinish() {
   const q = currentQuestion();
   if (!q) return;
+  const run = newRun();
   set({ phase: "thinking" });
   try {
     const a = await repApi();
     const rec = await a.stopRecording();
+    if (!isCurrentRun(run)) return;
     set({ recordingPath: rec.path });
-    const args: FinishArgs = {
-      session_id: state.sessionId,
-      mode: state.mode,
-      stage: state.stage,
-      application_id: state.applicationId,
-      ...(state.targetId ? { target_id: state.targetId } : {}),
-      stage_id: state.applicationId ? state.stageId : null,
-      question_id: q.id,
-      question_text: currentQuestionText(),
-      question_type: q.type,
-      behavioral_situation: q.behavioral_situation && q.behavioral_situation !== "other" ? q.behavioral_situation : null,
-      commitment_check: q.commitment_check,
-      builder_operator_check: q.builder_operator_check,
-      is_major_story: !["factual", "gap", "motivation"].includes(q.type),
-      founder_variant: state.founderVariant && state.stage === "leadership",
-      follow_up: state.view === "followup" && state.followUp ? { parent_n: state.followUp.parentN, kind: state.followUp.kind, number: state.followUp.number } : null,
-      attempt: state.view === "followup" ? 1 : state.attempt,
-      story_ids: storyIdsFor(q),
-      audio_path: rec.path,
-    };
-    const out = await a.finishRep(args);
-    await apply(out);
+    await finishAt(q, rec.path, run);
   } catch (e) {
-    set({ phase: "error", error: message(e) });
+    if (isCurrentRun(run)) set({ phase: "error", error: message(e) });
   }
+}
+
+/** "Try again" on the thinking screen's error: scores the same recording again. It is not discarded. Without a
+ *  recording (the stop itself failed), it goes back to the question. */
+export async function retryFinish(): Promise<boolean> {
+  const q = currentQuestion();
+  const path = state.recordingPath;
+  if (!q || !path) {
+    await retryQuestion();
+    return false;
+  }
+  const run = newRun();
+  set({ phase: "thinking", error: null });
+  await finishAt(q, path, run);
+  return true;
 }
 
 const NOTICES: Record<string, string> = {
@@ -443,12 +489,13 @@ export function notAnAnswerNotice(heard: string | null): string {
   return `${NOTICES.not_an_answer}${quote} An answer speaks to what was asked: say your answer first, then back it up. Try again.`;
 }
 
-async function apply(out: RepOutcome) {
+async function apply(out: RepOutcome, run: string) {
   if (out.outcome === "clarifying") {
     // Asking to clarify is a valid move: the interviewer answers, then the real answer is recorded. It is not scored.
     const question = currentQuestionText();
     try {
       const reply = await (await repApi()).clarifyReply(out.session_id, question, out.transcript_text ?? "", state.stage);
+      if (!isCurrentRun(run)) return;
       set({
         phase: "clarify",
         clarify: [
@@ -461,6 +508,7 @@ async function apply(out: RepOutcome) {
         restartOffered: false,
       });
     } catch {
+      if (!isCurrentRun(run)) return;
       set({ phase: "notice", notice: NOTICES.clarifying, sessionId: out.session_id, recordingPath: null, restartOffered: false });
     }
     return;
@@ -476,7 +524,7 @@ async function apply(out: RepOutcome) {
   if (state.view === "followup") {
     set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, followUpOutcome: out, followUpAttempt: attemptFromOutcome(out), restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
     announceHistory();
-    if (state.mode === "mock") await advanceMock(out);
+    if (state.mode === "mock") await advanceMock(out, run);
     return;
   }
   const i = state.attempt - 1;
@@ -484,7 +532,7 @@ async function apply(out: RepOutcome) {
   const outcomes = [...state.outcomes.slice(0, i), out];
   set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
   announceHistory();
-  if (state.mode === "mock") await advanceMock(out);
+  if (state.mode === "mock") await advanceMock(out, run);
 }
 
 export const isClosingQuestion = () => currentQuestion()?.type === "candidate_questions";
@@ -498,7 +546,7 @@ export function askRoute(): string {
 export const MOCK_DEBRIEF = "4-4-session-results-mock-debrief";
 
 /** A Mock gives no note after an answer: the interviewer moves on, to a follow-up when one is due, else the next question. */
-async function advanceMock(out: RepOutcome) {
+async function advanceMock(out: RepOutcome, run: string) {
   if (isClosingQuestion()) {
     set({ mockFinished: true, phase: "idle", view: "attempt" });
     return;
@@ -507,6 +555,7 @@ async function advanceMock(out: RepOutcome) {
   const cap = state.stage === "recruiter" ? 1 : 2;
   if (asked && state.aiReady && state.mockFollowUps < cap) {
     const question = await requestFollowUp();
+    if (!isCurrentRun(run)) return;
     if (question) {
       set({ mockFollowUps: state.mockFollowUps + 1, phase: "asking", notice: null });
       return;
@@ -547,11 +596,13 @@ export function nextLiveQuestion(): "asking" | "done" {
 export async function keepAfterRestart() {
   const rep = currentRep();
   if (!rep) return;
+  const run = newRun();
   try {
-    const out = await (await repApi()).rescoreRep(rep.session_id, rep.n, true);
-    await apply({ ...out, restart_offered: false });
+    const out = await (await repApi()).rescoreRep(rep.session_id, rep.n, true, run);
+    if (!isCurrentRun(run)) return;
+    await apply({ ...out, restart_offered: false }, run);
   } catch (e) {
-    set({ phase: "error", error: message(e) });
+    if (isCurrentRun(run)) set({ phase: "error", error: message(e) });
   }
 }
 
@@ -639,8 +690,11 @@ export async function savedLabels(): Promise<Record<string, "pass" | "fail">> {
   }
 }
 
-/** Ends the session. A recording in progress is stopped and thrown away. */
+/** Ends the session. A recording in progress is stopped and thrown away. A recording being scored is left alone: the
+ *  run goes stale, so its result is ignored, and the backend moves the file into the session when it finishes. */
 export async function cancelLive() {
+  const scoring = state.phase === "thinking";
+  currentRun = null;
   if (state.phase === "recording") {
     try {
       const a = await repApi();
@@ -649,7 +703,7 @@ export async function cancelLive() {
     } catch {
       // Nothing was being recorded: fine.
     }
-  } else if (state.recordingPath) {
+  } else if (state.recordingPath && !scoring) {
     try {
       await (await repApi()).discardRecording(state.recordingPath);
     } catch {
@@ -661,6 +715,12 @@ export async function cancelLive() {
 
 /** "Try again" on an error page: back to the same question for another go. */
 export async function tryAgainAfterError(open: (screen: string) => void): Promise<void> {
+  // A kept recording is scored again; without one, the question is asked again.
+  if (state.recordingPath) {
+    void retryFinish();
+    open(THINKING_SCREEN);
+    return;
+  }
   await retryQuestion();
   open(ASKING_SCREEN);
 }
@@ -671,7 +731,7 @@ export async function backHomeAfterError(open: (screen: string) => void): Promis
   open("2-1-home");
 }
 
-/** After an error or "didn't catch that": go back to the question for another go. */
+/** "Record again" (and "didn't catch that"): throws any kept recording away and goes back to the question for another go. */
 export async function retryQuestion() {
   if (state.recordingPath) {
     try {

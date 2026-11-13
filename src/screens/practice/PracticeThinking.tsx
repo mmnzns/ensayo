@@ -4,7 +4,7 @@ import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
 import type { EngineStatus } from "../../data/types";
 import { errorPage } from "../../practice/errorRoute";
-import { askRoute, MOCK_DEBRIEF, resultRoute, retryQuestion, useLive } from "../../practice/live";
+import { askRoute, MOCK_DEBRIEF, resultRoute, retryFinish, retryQuestion, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { SessionHeader } from "./parts";
@@ -107,7 +107,8 @@ export default function PracticeThinking() {
             <div role="alert" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <span className="e-meta" style={{ color: "var(--e-warn-ink)" }}>{state.error}</span>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={() => { void retryQuestion(); go("3-1-practice-interviewer-asking"); }}>Try again</button>
+                <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={() => void retryFinish().then((again) => { if (!again) go("3-1-practice-interviewer-asking"); })}>Try again</button>
+                {state.recordingPath && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => { void retryQuestion(); go("3-1-practice-interviewer-asking"); }}>Record again</button>}
                 <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={end}>End session</button>
               </div>
             </div>

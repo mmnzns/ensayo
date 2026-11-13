@@ -15,10 +15,11 @@ export interface RepApi {
   startRecording(): Promise<void>;
   stopRecording(): Promise<{ path: string; duration_ms: number }>;
   level(): Promise<{ level: number; elapsed_ms: number } | null>;
-  finishRep(args: FinishArgs): Promise<RepOutcome>;
+  /** `run` is the token of this request (session and counter). The backend does not need it; the caller uses it to ignore a late result. */
+  finishRep(args: FinishArgs, run?: string): Promise<RepOutcome>;
   /** Loads the speech model while the answer is recorded, so the transcript doesn't wait for it. Optional: fakes skip it. */
   warmSpeech?(): Promise<void>;
-  rescoreRep(sessionId: string, n: number, keepRestart: boolean): Promise<RepOutcome>;
+  rescoreRep(sessionId: string, n: number, keepRestart: boolean, run?: string): Promise<RepOutcome>;
   deleteRep(sessionId: string, n: number): Promise<void>;
   labelRep(sessionId: string, n: number, wrong: boolean): Promise<void>;
   nextFollowUp(sessionId: string, parentN: number): Promise<FollowUpQuestion>;
