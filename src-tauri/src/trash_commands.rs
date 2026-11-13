@@ -6,7 +6,7 @@
 use crate::audio_retention;
 use crate::data_commands::{blocking, open_storage, plain as plain_storage};
 use crate::paths;
-use crate::storage::trash::TrashedSession;
+use crate::storage::trash::{TrashedApplication, TrashedSession, TrashedStory};
 use crate::storage::{Result as StorageResult, Storage, StorageError};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -124,6 +124,41 @@ pub async fn restore_session(session_id: String) -> Cmd<()> {
     blocking(move || {
         let storage = open_storage().map_err(plain_storage)?;
         restore_with(&storage, &paths::audio_dir(), &paths::audio_trash_dir(), &session_id).map_err(say)
+    })
+    .await
+}
+
+fn say_gone(e: StorageError, what: &str) -> String {
+    match e {
+        StorageError::NotFound(_) => format!("That {what} is no longer here"),
+        other => plain_storage(other),
+    }
+}
+
+#[tauri::command]
+pub async fn trashed_stories() -> Cmd<Vec<TrashedStory>> {
+    blocking(|| open_storage().and_then(|s| s.trashed_stories()).map_err(plain_storage)).await
+}
+
+#[tauri::command]
+pub async fn restore_story(story_id: String) -> Cmd<()> {
+    blocking(move || {
+        let storage = open_storage().map_err(plain_storage)?;
+        storage.restore_story(&story_id).map(|_| ()).map_err(|e| say_gone(e, "story"))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn trashed_applications() -> Cmd<Vec<TrashedApplication>> {
+    blocking(|| open_storage().and_then(|s| s.trashed_applications()).map_err(plain_storage)).await
+}
+
+#[tauri::command]
+pub async fn restore_application(application_id: String) -> Cmd<()> {
+    blocking(move || {
+        let storage = open_storage().map_err(plain_storage)?;
+        storage.restore_application(&application_id).map(|_| ()).map_err(|e| say_gone(e, "application"))
     })
     .await
 }

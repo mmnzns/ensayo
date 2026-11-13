@@ -1,5 +1,7 @@
-//! The trash for practice sessions. Deleting a session moves its folder to `<data folder>/trash/sessions/<id>/` and
-//! writes a `deleted_at` stamp file in it; the person has seven days to restore it. The trash sits inside the data
+//! The trash for practice sessions, stories and applications. Deleting a session moves its folder to
+//! `<data folder>/trash/sessions/<id>/`, a story to `trash/stories/<id>/` (its file plus the methods that listed it)
+//! and an application's whole folder to `trash/applications/<id>/`, each with a `deleted_at` stamp file in it; the
+//! person has seven days to restore it. The trash sits inside the data
 //! folder on purpose: a second computer on the same synced folder then sees the same state. The seven days are
 //! counted from the stamp file, never from file times (a sync resets those). Nothing that reads history (the sessions
 //! list, rep summaries, habit stats, streaks, readiness) looks in the trash, and the eval copies in `eval/` are never
@@ -7,11 +9,13 @@
 
 use super::io::{atomic_write, is_safe_id, read_text, rename_retrying};
 use super::migrate;
+use super::applications::AppRecord;
+use super::model::Story;
 use super::reps::Session;
 use super::versioned::{load_record, save_record};
 use super::{Result, Storage, StorageError};
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
@@ -32,11 +36,41 @@ pub struct TrashedSession {
     pub reps: usize,
 }
 
+/// A story in the trash, in brief.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TrashedStory {
+    pub id: String,
+    /// RFC 3339, UTC: when it was deleted.
+    pub deleted_at: String,
+    pub title: String,
+    pub employer: String,
+}
+
+/// An application in the trash, in brief.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TrashedApplication {
+    pub id: String,
+    /// RFC 3339, UTC: when it was deleted.
+    pub deleted_at: String,
+    pub company: String,
+    pub role: String,
+}
+
+/// The methods (situations) that listed a story when it was deleted, so restoring puts it back in them.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct MethodLinks {
+    situations: Vec<String>,
+}
+
 /// What a purge removed.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Purged {
     /// Session ids whose folders were removed.
     pub sessions: Vec<String>,
+    /// Story ids removed.
+    pub stories: Vec<String>,
+    /// Application ids removed.
+    pub applications: Vec<String>,
 }
 
 fn checked(id: &str) -> Result<&str> {
@@ -141,28 +175,183 @@ impl Storage {
         Ok(session)
     }
 
-    /// Removes sessions that have been in the trash for more than seven days, by their stamp. A folder with no
-    /// readable stamp (a sync cut it short) gets a fresh one, so its seven days start now.
-    pub fn purge_trash(&self, now: DateTime<Utc>) -> Result<Purged> {
+    fn trash_stories_dir(&self) -> PathBuf {
+        self.trash_dir().join("stories")
+    }
+    fn trash_applications_dir(&self) -> PathBuf {
+        self.trash_dir().join("applications")
+    }
+
+    /// Moves a folder into `parent/<id>` after stamping it. A leftover with the same id is replaced (the newer wins).
+    fn move_in(&self, src: &std::path::Path, parent: PathBuf, id: &str, now: DateTime<Utc>) -> Result<()> {
+        let dest = parent.join(id);
+        if dest.exists() {
+            fs::remove_dir_all(&dest).map_err(|e| io(&dest, e))?;
+        }
+        fs::create_dir_all(&parent).map_err(|e| io(&parent, e))?;
+        let stamp = src.join(STAMP);
+        atomic_write(&stamp, stamp_text(now).as_bytes())?;
+        if let Err(e) = rename_retrying(src, &dest) {
+            let _ = fs::remove_file(&stamp);
+            return Err(io(src, e));
+        }
+        Ok(())
+    }
+
+    /// Moves a story into the trash and takes it out of every method that listed it (remembering which).
+    pub fn trash_story(&self, id: &str, now: DateTime<Utc>) -> Result<()> {
         self.ensure_writable()?;
-        let mut out = Purged::default();
-        let Ok(rd) = fs::read_dir(self.trash_sessions_dir()) else { return Ok(out) };
+        let path = self.root().join("bank/stories").join(format!("{}.json", checked(id)?));
+        if !path.is_file() {
+            return Err(StorageError::NotFound(format!("story {id}")));
+        }
+        let staging = self.trash_stories_dir().join(format!(".staging-{id}"));
+        if staging.exists() {
+            fs::remove_dir_all(&staging).map_err(|e| io(&staging, e))?;
+        }
+        fs::create_dir_all(&staging).map_err(|e| io(&staging, e))?;
+        let mut links = MethodLinks::default();
+        let methods = self.methods()?;
+        for m in &methods {
+            if m.story_ids.iter().any(|s| s == id) {
+                links.situations.push(m.situation.clone());
+            }
+        }
+        let bytes = fs::read(&path).map_err(|e| io(&path, e))?;
+        atomic_write(&staging.join("story.json"), &bytes)?;
+        save_record(&staging.join("methods.json"), &links)?;
+        // The copy is complete before the live file goes, so a crash in between leaves the story in both places.
+        self.move_in(&staging, self.trash_stories_dir(), id, now)?;
+        fs::remove_file(&path).map_err(|e| io(&path, e))?;
+        for mut m in methods {
+            if m.story_ids.iter().any(|s| s == id) {
+                m.story_ids.retain(|s| s != id);
+                self.save_method(&m)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The stories in the trash, most recently deleted first.
+    pub fn trashed_stories(&self) -> Result<Vec<TrashedStory>> {
+        let Ok(rd) = fs::read_dir(self.trash_stories_dir()) else { return Ok(vec![]) };
+        let mut out = Vec::new();
+        for entry in rd.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() || entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            let Ok(Some(s)) = load_record::<Story>(&dir.join("story.json"), migrate::story) else { continue };
+            let deleted_at = self.stamp_of(&dir).map(stamp_text).unwrap_or_default();
+            out.push(TrashedStory { id: s.id, deleted_at, title: s.title, employer: s.employer });
+        }
+        out.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at).then(a.id.cmp(&b.id)));
+        Ok(out)
+    }
+
+    /// Puts a story back, and back into the methods that listed it (those that still exist). Refused when a story with
+    /// that id exists again.
+    pub fn restore_story(&self, id: &str) -> Result<Story> {
+        self.ensure_writable()?;
+        let src = self.trash_stories_dir().join(checked(id)?);
+        let file = src.join("story.json");
+        if !file.is_file() {
+            return Err(StorageError::NotFound(format!("story {id}")));
+        }
+        let dest = self.root().join("bank/stories").join(format!("{id}.json"));
+        if dest.exists() {
+            return Err(StorageError::Invalid("That story is already back.".into()));
+        }
+        let links = load_record::<MethodLinks>(&src.join("methods.json"), migrate::unchanged).ok().flatten().unwrap_or_default();
+        let bytes = fs::read(&file).map_err(|e| io(&file, e))?;
+        atomic_write(&dest, &bytes)?;
+        for mut m in self.methods()? {
+            if links.situations.contains(&m.situation) && !m.story_ids.iter().any(|s| s == id) {
+                m.story_ids.push(id.to_string());
+                self.save_method(&m)?;
+            }
+        }
+        fs::remove_dir_all(&src).map_err(|e| io(&src, e))?;
+        self.story(id)
+    }
+
+    /// Moves an application's whole folder (posting, resume file, claims, notes) into the trash.
+    pub fn trash_application(&self, id: &str, now: DateTime<Utc>) -> Result<()> {
+        self.ensure_writable()?;
+        let src = self.application_dir(id)?;
+        if !src.is_dir() {
+            return Err(StorageError::NotFound(format!("application {id}")));
+        }
+        self.move_in(&src, self.trash_applications_dir(), id, now)
+    }
+
+    /// The applications in the trash, most recently deleted first.
+    pub fn trashed_applications(&self) -> Result<Vec<TrashedApplication>> {
+        let Ok(rd) = fs::read_dir(self.trash_applications_dir()) else { return Ok(vec![]) };
+        let mut out = Vec::new();
         for entry in rd.flatten() {
             let dir = entry.path();
             if !dir.is_dir() {
                 continue;
             }
+            let Ok(Some(a)) = load_record::<AppRecord>(&dir.join("application.json"), migrate::application) else { continue };
+            let deleted_at = self.stamp_of(&dir).map(stamp_text).unwrap_or_default();
+            out.push(TrashedApplication { id: a.id, deleted_at, company: a.company, role: a.role });
+        }
+        out.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at).then(a.id.cmp(&b.id)));
+        Ok(out)
+    }
+
+    /// Moves an application's folder back. Refused when an application with that id exists again.
+    pub fn restore_application(&self, id: &str) -> Result<AppRecord> {
+        self.ensure_writable()?;
+        let src = self.trash_applications_dir().join(checked(id)?);
+        if !src.is_dir() {
+            return Err(StorageError::NotFound(format!("application {id}")));
+        }
+        let dest = self.application_dir(id)?;
+        if dest.exists() {
+            return Err(StorageError::Invalid("That application is already back.".into()));
+        }
+        let stamp = src.join(STAMP);
+        if stamp.exists() {
+            fs::remove_file(&stamp).map_err(|e| io(&stamp, e))?;
+        }
+        fs::create_dir_all(self.applications_dir()).map_err(|e| io(&self.applications_dir(), e))?;
+        rename_retrying(&src, &dest).map_err(|e| io(&src, e))?;
+        self.application(id)
+    }
+
+    /// Removes what has been in the trash for more than seven days, by the stamp. A folder with no readable stamp
+    /// (a sync cut it short) gets a fresh one, so its seven days start now.
+    pub fn purge_trash(&self, now: DateTime<Utc>) -> Result<Purged> {
+        self.ensure_writable()?;
+        let mut out = Purged::default();
+        out.sessions = self.purge_kind(self.trash_sessions_dir(), now)?;
+        out.stories = self.purge_kind(self.trash_stories_dir(), now)?;
+        out.applications = self.purge_kind(self.trash_applications_dir(), now)?;
+        Ok(out)
+    }
+
+    fn purge_kind(&self, parent: PathBuf, now: DateTime<Utc>) -> Result<Vec<String>> {
+        let mut gone = Vec::new();
+        let Ok(rd) = fs::read_dir(parent) else { return Ok(gone) };
+        for entry in rd.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() || entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
             match self.stamp_of(&dir) {
                 Some(at) if now - at > Duration::days(KEEP_DAYS) => {
                     fs::remove_dir_all(&dir).map_err(|e| io(&dir, e))?;
-                    out.sessions.push(entry.file_name().to_string_lossy().into_owned());
+                    gone.push(entry.file_name().to_string_lossy().into_owned());
                 }
                 Some(_) => {}
                 None => atomic_write(&dir.join(STAMP), stamp_text(now).as_bytes())?,
             }
         }
-        out.sessions.sort();
-        Ok(out)
+        gone.sort();
+        Ok(gone)
     }
 
     /// Removes everything in the trash now.
@@ -181,6 +370,7 @@ impl Storage {
 mod tests {
     use super::*;
     use crate::storage::applications::NewApplication;
+    use crate::storage::model::Method;
     use chrono::{NaiveDate, TimeZone};
 
     fn storage() -> (tempfile::TempDir, Storage) {
@@ -342,5 +532,106 @@ mod tests {
         assert!(!s.root().join("trash").exists());
         assert!(s.root().join("notes.txt").exists());
         s.empty_trash().unwrap(); // nothing left: still fine
+    }
+
+    fn a_story(id: &str, title: &str) -> Story {
+        let mut st: Story = serde_json::from_value(serde_json::json!({ "id": id, "title": title, "employer": "Fernhill" })).unwrap();
+        st.direct_answer = "I did the thing.".into();
+        st
+    }
+
+    #[test]
+    fn a_deleted_story_goes_to_the_trash_and_comes_back_identical_into_its_methods() {
+        let (_d, s) = storage();
+        s.save_story(&a_story("st_a", "Pricing change")).unwrap();
+        s.save_story(&a_story("st_b", "Other")).unwrap();
+        s.save_method(&Method { situation: "problem_solving".into(), spoken: "x".into(), story_ids: vec!["st_a".into(), "st_b".into()], extra: Default::default() }).unwrap();
+        let before = fs::read(s.root().join("bank/stories/st_a.json")).unwrap();
+        s.trash_story("st_a", at(21, 9, 0, 0)).unwrap();
+        assert!(!s.root().join("bank/stories/st_a.json").exists());
+        assert!(s.story("st_a").is_err());
+        assert_eq!(s.methods().unwrap()[0].story_ids, vec!["st_b".to_string()], "out of the method while deleted");
+        assert_eq!(s.trashed_stories().unwrap(), vec![TrashedStory { id: "st_a".into(), deleted_at: "2026-10-21T09:00:00Z".into(), title: "Pricing change".into(), employer: "Fernhill".into() }]);
+        s.restore_story("st_a").unwrap();
+        assert_eq!(fs::read(s.root().join("bank/stories/st_a.json")).unwrap(), before, "identical content");
+        assert!(s.methods().unwrap()[0].story_ids.contains(&"st_a".to_string()));
+        assert!(s.trashed_stories().unwrap().is_empty());
+        assert!(!s.root().join("trash/stories/st_a").exists());
+    }
+
+    #[test]
+    fn delete_story_moves_to_the_trash_and_a_restore_is_refused_when_the_id_exists_again() {
+        let (_d, s) = storage();
+        s.save_story(&a_story("st_a", "One")).unwrap();
+        s.delete_story("st_a").unwrap();
+        assert_eq!(s.trashed_stories().unwrap().len(), 1);
+        s.save_story(&a_story("st_a", "New one with the same id")).unwrap();
+        match s.restore_story("st_a") {
+            Err(StorageError::Invalid(m)) => assert_eq!(m, "That story is already back."),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(s.story("st_a").unwrap().title, "New one with the same id", "the live story is untouched");
+        assert!(matches!(s.restore_story("st_zzz"), Err(StorageError::NotFound(_))));
+        assert!(matches!(s.restore_story("../x"), Err(StorageError::Invalid(_))));
+    }
+
+    #[test]
+    fn a_deleted_application_moves_whole_and_comes_back_identical_and_is_refused_on_a_clash() {
+        let (_d, s) = storage();
+        let app = s.create_application(NewApplication { company: "Kestrel Pay".into(), role: "PM".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
+        s.save_application_text(&app.id, "jd.txt", "The posting").unwrap();
+        s.save_application_bytes(&app.id, "resume/resume.pdf", b"%PDF-1").unwrap();
+        s.save_application_text(&app.id, "notes.txt", "my notes").unwrap();
+        let record_before = fs::read(s.root().join(format!("applications/{}/application.json", app.id))).unwrap();
+        s.delete_application(&app.id, false).unwrap();
+        assert!(!s.root().join("applications").join(&app.id).exists());
+        assert!(s.load_applications(NaiveDate::from_ymd_opt(2026, 10, 21).unwrap().and_hms_opt(9, 0, 0).unwrap()).unwrap().items.is_empty());
+        let listed = s.trashed_applications().unwrap();
+        assert_eq!((listed[0].company.as_str(), listed[0].role.as_str()), ("Kestrel Pay", "PM"));
+        let back = s.restore_application(&app.id).unwrap();
+        assert_eq!(back.id, app.id);
+        let dir = s.root().join("applications").join(&app.id);
+        assert_eq!(fs::read(dir.join("application.json")).unwrap(), record_before);
+        assert_eq!(fs::read_to_string(dir.join("jd.txt")).unwrap(), "The posting");
+        assert_eq!(fs::read(dir.join("resume/resume.pdf")).unwrap(), b"%PDF-1");
+        assert_eq!(fs::read_to_string(dir.join("notes.txt")).unwrap(), "my notes");
+        assert!(!dir.join(STAMP).exists());
+        // Delete again, make the id exist again (another computer), and restore is refused.
+        s.delete_application(&app.id, false).unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        match s.restore_application(&app.id) {
+            Err(StorageError::Invalid(m)) => assert_eq!(m, "That application is already back."),
+            other => panic!("{other:?}"),
+        }
+        assert!(s.root().join("trash/applications").join(&app.id).is_dir(), "still in the trash");
+    }
+
+    #[test]
+    fn stories_and_applications_are_purged_after_seven_days_by_the_stamp() {
+        let (_d, s) = storage();
+        let app = s.create_application(NewApplication { company: "Kestrel Pay".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
+        s.save_story(&a_story("st_a", "One")).unwrap();
+        s.trash_story("st_a", at(14, 9, 0, 0)).unwrap();
+        s.trash_application(&app.id, at(14, 9, 0, 0)).unwrap();
+        let p = s.purge_trash(at(21, 9, 0, 0)).unwrap();
+        assert!(p.stories.is_empty() && p.applications.is_empty(), "exactly seven days stays");
+        let p = s.purge_trash(at(21, 9, 0, 1)).unwrap();
+        assert_eq!(p.stories, vec!["st_a".to_string()]);
+        assert_eq!(p.applications, vec![app.id.clone()]);
+        assert!(s.trashed_stories().unwrap().is_empty() && s.trashed_applications().unwrap().is_empty());
+        assert!(matches!(s.restore_story("st_a"), Err(StorageError::NotFound(_))));
+        assert!(matches!(s.restore_application(&app.id), Err(StorageError::NotFound(_))));
+    }
+
+    #[test]
+    fn delete_all_removes_trashed_stories_and_applications_too() {
+        let (_d, s) = storage();
+        let app = s.create_application(NewApplication { company: "Kestrel Pay".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
+        s.save_story(&a_story("st_a", "One")).unwrap();
+        s.delete_story("st_a").unwrap();
+        s.delete_application(&app.id, false).unwrap();
+        assert!(s.root().join("trash/stories/st_a").is_dir() && s.root().join("trash/applications").join(&app.id).is_dir());
+        s.delete_all().unwrap();
+        assert!(!s.root().join("trash").exists());
     }
 }

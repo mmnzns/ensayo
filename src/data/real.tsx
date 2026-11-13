@@ -53,7 +53,7 @@ import { mergedProfile } from "./targets";
 import { AI_CHANGED, type AiView } from "../screens/settings/aiSettings";
 import { habitStats, pickFocusHabits, sessionList, streakOf, type RepSummary } from "../practice/habits";
 import { getLive } from "../practice/live";
-import { liveBlock, previewRestore, previewTrash, type PracticeDeleted, type TrashedSession } from "./trash";
+import { liveBlock, previewRestore, previewTrash, type PracticeDeleted, type TrashedApplication, type TrashedSession, type TrashedStory } from "./trash";
 
 /** True inside the desktop app. In a plain browser (`npm run dev`) the data is the mock, held in memory. */
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -120,6 +120,10 @@ export interface Actions {
   deleteApplicationPractice(applicationId: string): Promise<PracticeDeleted>;
   /** Fails with "That session is no longer here" when the other computer purged it. */
   restoreSession(sessionId: string): Promise<void>;
+  /** Puts a deleted story back (refused with a plain message when a story with that id exists again). */
+  restoreStory(storyId: string): Promise<void>;
+  /** Puts a deleted application back, with its posting, resume file, claims and notes. */
+  restoreApplication(applicationId: string): Promise<void>;
   /** `needs_confirm` when a removed stage has sessions: ask, then call again with `confirm` true. */
   saveProcess(applicationId: string, stages: StageInput[], confirm?: boolean): Promise<ProcessOutcome>;
   addStage(applicationId: string, stage: StageId, label?: string, at?: string): Promise<AppBundle>;
@@ -185,6 +189,8 @@ const NO_ACTIONS: Actions = {
   deleteSession: unavailable,
   deleteApplicationPractice: unavailable,
   restoreSession: unavailable,
+  restoreStory: unavailable,
+  restoreApplication: unavailable,
   saveProcess: unavailable,
   addStage: unavailable,
   removeStage: unavailable,
@@ -249,6 +255,13 @@ export const useRepHistory = (): RepSummary[] => useContext(RepsContext);
 export const TrashContext = createContext<TrashedSession[]>([]);
 /** Sessions deleted in the last seven days, most recently deleted first. They are not part of any history. */
 export const useTrashedSessions = (): TrashedSession[] => useContext(TrashContext);
+/** Stories and applications deleted in the last seven days (the app only; the browser preview has no such trash). */
+export interface OtherTrash {
+  stories: TrashedStory[];
+  applications: TrashedApplication[];
+}
+export const OtherTrashContext = createContext<OtherTrash>({ stories: [], applications: [] });
+export const useOtherTrash = (): OtherTrash => useContext(OtherTrashContext);
 /** Plain-words lines for data files that could not be read (a damaged file, one from a newer Ensayo). */
 export const useDataProblems = (): string[] => useContext(DataInfoContext).problems;
 
@@ -481,6 +494,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [damaged, setDamaged] = useState<DamagedFile[]>([]);
   const [reps, setReps] = useState<RepSummary[]>([]);
   const [trashed, setTrashed] = useState<TrashedSession[]>([]);
+  const [otherTrash, setOtherTrash] = useState<OtherTrash>({ stories: [], applications: [] });
   const [engine, setEngine] = useState<EngineStatus>(TIMING_ONLY);
 
   // The sidebar's engine line: what the saved AI settings mean right now (a key saved, the local model on this computer).
@@ -517,6 +531,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!app) return;
     try {
       setTrashed(await invoke<TrashedSession[]>("trashed_sessions"));
+      const [stories, applications] = await Promise.all([invoke<TrashedStory[]>("trashed_stories"), invoke<TrashedApplication[]>("trashed_applications")]);
+      setOtherTrash({ stories, applications });
     } catch {
       // The trash is a convenience: no list is better than a blocked window.
     }
@@ -737,6 +753,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
       async deleteStory(id) {
         if (app) await invoke("delete_story", { id });
         setState((s) => deleteStoryIn(s, id));
+        // The story waits in the trash: Settings, Privacy lists it.
+        if (app) announceHistory();
+      },
+      async restoreStory(storyId) {
+        if (!app) return Promise.reject(new Error(NEEDS_THE_APP));
+        try {
+          await invoke("restore_story", { storyId });
+          await readAll();
+        } finally {
+          announceHistory();
+        }
+      },
+      async restoreApplication(applicationId) {
+        if (!app) return Promise.reject(new Error(NEEDS_THE_APP));
+        try {
+          await invoke("restore_application", { applicationId });
+          await readAll();
+        } finally {
+          announceHistory();
+        }
       },
       async setProofVerified(storyId, label, verified) {
         if (app) {
@@ -796,7 +832,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       },
       ...applicationActions(app, appsRef, setApps, previewPracticeTrashed),
     }),
-    [app, targetActions, refreshTargets, previewPracticeTrashed],
+    [app, targetActions, refreshTargets, previewPracticeTrashed, readAll],
   );
 
   const store = useMemo<Store>(() => {
@@ -847,11 +883,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       <DataInfoContext.Provider value={info}>
         <RepsContext.Provider value={reps}>
           <TrashContext.Provider value={trashed}>
+          <OtherTrashContext.Provider value={otherTrash}>
           <TargetsNoteContext.Provider value={app && tg.notePending}>
           <SetupContext.Provider value={app && state.profile === null && tg.you === null}>
             <StoreProvider store={store}>{app && <DamagedFilesBanner files={damaged} />}{children}</StoreProvider>
           </SetupContext.Provider>
           </TargetsNoteContext.Provider>
+          </OtherTrashContext.Provider>
           </TrashContext.Provider>
         </RepsContext.Provider>
       </DataInfoContext.Provider>

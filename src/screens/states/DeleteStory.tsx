@@ -1,4 +1,5 @@
 import { useStore } from "../../data/store";
+import { RESTORE_IN_SETTINGS } from "../../data/trash";
 import Dialog, { dangerButton, useQuietConfirm } from "./Dialog";
 import PreviewStage, { goBack } from "./Preview";
 
@@ -36,7 +37,7 @@ export function DeleteStoryDialog({ storyTitle, onClose, onConfirm }: DeleteStor
       }
     >
       <p className="e-body" style={{ margin: 0 }}>
-        This removes the story and its numbers from your bank. It can't be undone.
+        This removes the story and its numbers from your bank. {RESTORE_IN_SETTINGS}
       </p>
       <p className="e-meta" style={{ margin: 0 }}>
         Practice you already did on it stays in your history. Any application that leaned on it will show "No story for this yet" for that point.

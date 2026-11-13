@@ -12,6 +12,7 @@ import { privacySetup, type AiView } from "./aiSettings";
 import { deleteFailedLine, leftBehindLine, folderChangedLine, folderPathProblem, folderProblemLine, leavesRows, retentionChoice, retentionLabel } from "./privacy";
 import { clearPrefs, readPrefs } from "./prefs";
 import BackupSection from "./BackupSection";
+import RecentlyDeletedAll from "./RecentlyDeletedAll";
 import { inUseModel, type SpeechModelEntry } from "./speechModels";
 import { onWindows, pastedPath } from "./targetForms";
 
@@ -175,6 +176,7 @@ export default function SettingsPrivacy() {
           </div>
         </section>
         <BackupSection />
+        <RecentlyDeletedAll />
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <span className="e-h3">Delete</span>
           <div className="e-rowline" style={asking === "recordings" ? { flexWrap: "wrap" } : undefined}>

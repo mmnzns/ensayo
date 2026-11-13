@@ -20,6 +20,24 @@ export interface TrashedSession {
   reps: number;
 }
 
+/** What `trashed_stories` returns for each story in the trash. */
+export interface TrashedStory {
+  id: string;
+  /** RFC 3339, UTC. */
+  deleted_at: string;
+  title: string;
+  employer: string;
+}
+
+/** What `trashed_applications` returns for each application in the trash. */
+export interface TrashedApplication {
+  id: string;
+  /** RFC 3339, UTC. */
+  deleted_at: string;
+  company: string;
+  role: string;
+}
+
 /** What `delete_application_practice` returns. */
 export interface PracticeDeleted {
   sessions: number;
@@ -52,6 +70,31 @@ export const restoreHint = (count: number): string => `You have ${KEEP_DAYS} day
 
 /** At the end of the Recently deleted list. */
 export const TRASH_NOTE = `Deleted sessions are kept for ${KEEP_DAYS} days, then they go for good.`;
+
+/** In the delete confirmation of a story or an application: where the way back is. */
+export const RESTORE_IN_SETTINGS = `You can restore it for ${KEEP_DAYS} days in Settings, Privacy.`;
+
+/** The end of Settings, Privacy, Recently deleted: all three kinds. */
+export const TRASH_NOTE_ALL = `Deleted sessions, stories and applications are kept for ${KEEP_DAYS} days, then they go for good.`;
+
+/** One row of Settings, Privacy, Recently deleted. */
+export interface TrashRow {
+  kind: "session" | "story" | "application";
+  id: string;
+  deletedAt: string;
+  title: string;
+  detail: string;
+}
+
+/** The three kinds as one list, most recently deleted first. Sessions are named like the Sessions list names them. */
+export function trashRows(sessions: TrashedSession[], stories: TrashedStory[], applications: TrashedApplication[], companyOf: (applicationId: string) => string | undefined): TrashRow[] {
+  const rows: TrashRow[] = [
+    ...sessions.map((t): TrashRow => ({ kind: "session", id: t.id, deletedAt: t.deleted_at, title: trashedTitle(t, companyOf), detail: `Session · ${plural(t.reps, "answer")} · ${keptUntil(t.deleted_at)}` })),
+    ...stories.map((t): TrashRow => ({ kind: "story", id: t.id, deletedAt: t.deleted_at, title: t.title, detail: `Story${t.employer ? ` · ${t.employer}` : ""} · ${keptUntil(t.deleted_at)}` })),
+    ...applications.map((t): TrashRow => ({ kind: "application", id: t.id, deletedAt: t.deleted_at, title: t.role ? `${t.company}, ${t.role}` : t.company, detail: `Application · ${keptUntil(t.deleted_at)}` })),
+  ];
+  return rows.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt) || a.id.localeCompare(b.id));
+}
 
 /** "kept until Oct 29": the last day a trashed session can come back. */
 export function keptUntil(deletedAt: string): string {

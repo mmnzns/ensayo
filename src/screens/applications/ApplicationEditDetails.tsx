@@ -1,4 +1,4 @@
-import { KEEP_DAYS } from "../../data/trash";
+import { KEEP_DAYS, RESTORE_IN_SETTINGS } from "../../data/trash";
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -298,7 +298,7 @@ function EditDetails({ app, extras }: Featured) {
           <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={() => setConfirmDelete(true)}>Delete application</button>
         ) : (
           <span style={{ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }} role="alertdialog" aria-label="Delete this application">
-            <span className="e-meta">{`Delete ${app.company}? Its posting, resume file, claims log and stages go with it. This can't be undone.`}</span>
+            <span className="e-meta">{`Delete ${app.company}? Its posting, resume file, claims log and stages go with it. ${RESTORE_IN_SETTINGS}`}</span>
             <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
               <input type="checkbox" className="e-check" checked={alsoPractice} onChange={(e) => setAlsoPractice(e.target.checked)} />
               <span className="e-small">{practice > 0 ? `Delete its ${practice} practice ${practice === 1 ? "session" : "sessions"} too` : "Delete its practice too"}</span>

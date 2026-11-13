@@ -791,7 +791,7 @@ impl Storage {
                 out.kept_sessions += 1;
             }
         }
-        fs::remove_dir_all(&dir).map_err(|e| StorageError::Io(dir, e.to_string()))?;
+        self.trash_application(id, Utc::now())?;
         Ok(out)
     }
 

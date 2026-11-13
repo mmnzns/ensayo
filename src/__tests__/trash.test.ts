@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import { StoreProvider, type Store } from "../data/store";
-import { TrashContext } from "../data/real";
-import { answersIn, deletePracticeText, deleteSessionText, GONE_LINE, keptUntil, KEEP_DAYS, liveBlock, LIVE_BLOCK, NO_LONGER_HERE, previewRestore, previewTrash, recentlyDeletedLine, restoreHint, trashedTitle, type TrashedSession } from "../data/trash";
+import { OtherTrashContext, TrashContext } from "../data/real";
+import { answersIn, deletePracticeText, deleteSessionText, GONE_LINE, keptUntil, KEEP_DAYS, liveBlock, LIVE_BLOCK, NO_LONGER_HERE, previewRestore, previewTrash, recentlyDeletedLine, RESTORE_IN_SETTINGS, restoreHint, trashedTitle, trashRows, type TrashedSession } from "../data/trash";
 import { routes as settingsRoutes } from "../screens/settings";
 import { DeleteSessionFor } from "../screens/results/DeleteSession";
 import { FlashLine, clearFlash, setFlash } from "../ui/flash";
@@ -115,5 +115,43 @@ describe("the line that follows you home", () => {
     expect(strip(renderToStaticMarkup(createElement(FlashLine)))).toContain("That session was deleted");
     clearFlash();
     expect(renderToStaticMarkup(createElement(FlashLine))).toBe("");
+  });
+});
+
+describe("stories and applications in the trash", () => {
+  const story = { id: "st_a", deleted_at: "2026-10-22T09:00:00Z", title: "Pricing change", employer: "Fernhill" };
+  const application = { id: "app_a", deleted_at: "2026-10-23T09:00:00Z", company: "Kestrel Pay", role: "Product manager" };
+
+  it("says where the way back is, in the same words everywhere", () => {
+    expect(RESTORE_IN_SETTINGS).toBe("You can restore it for 7 days in Settings, Privacy.");
+    expect(RESTORE_IN_SETTINGS).not.toContain("\u2014");
+  });
+
+  it("puts the three kinds in one list, newest deletion first", () => {
+    const rows = trashRows([trashedRow("ses_a")], [story], [application], () => undefined);
+    expect(rows.map((r) => `${r.kind}:${r.id}`)).toEqual(["application:app_a", "story:st_a", "session:ses_a"]);
+    expect(rows[0].title).toBe("Kestrel Pay, Product manager");
+    expect(rows[1].detail).toBe("Story · Fernhill · kept until Oct 29");
+  });
+
+  it("lists them in Settings, Privacy with a Restore each, and the delete dialogs point there", () => {
+    const html = renderToStaticMarkup(
+      createElement(StoreProvider, {
+        store: mockStore,
+        children: createElement(TrashContext.Provider, { value: [trashedRow("ses_a")], children: createElement(OtherTrashContext.Provider, { value: { stories: [story], applications: [application] }, children: createElement(settingsRoutes["8-6-settings-privacy"]) }) }),
+      }),
+    );
+    const text = strip(html);
+    expect(text).toContain("Recently deleted");
+    expect(text).toContain("Pricing change");
+    expect(text).toContain("Kestrel Pay, Product manager");
+    expect(text).toContain("Recruiter · general questions");
+    expect(html.match(/>Restore</g)?.length).toBe(3);
+    expect(text).toContain("Deleted sessions, stories and applications are kept for 7 days");
+    expect(text).not.toContain("\u2014");
+  });
+
+  it("shows an empty list plainly", () => {
+    expect(strip(render("8-6-settings-privacy"))).toContain("Nothing deleted lately.");
   });
 });

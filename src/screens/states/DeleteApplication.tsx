@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../../data/store";
+import { RESTORE_IN_SETTINGS } from "../../data/trash";
 import Dialog, { dangerButton, useQuietConfirm } from "./Dialog";
 import { plural } from "./format";
 import PreviewStage, { goBack } from "./Preview";
@@ -45,7 +46,7 @@ export function DeleteApplicationDialog({ company, role, sessionCount, onClose, 
       }
     >
       <p className="e-body" style={{ margin: 0 }}>
-        This removes {company}, {role}: its job posting, the resume file you attached, the claims log and the stages. It can't be undone.
+        This removes {company}, {role}: its job posting, the resume file you attached, the claims log and the stages. {RESTORE_IN_SETTINGS}
       </p>
       <p className="e-meta" style={{ margin: 0 }}>
         {sessionCount === 0
