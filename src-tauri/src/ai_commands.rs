@@ -208,6 +208,12 @@ pub async fn ai_settings() -> Cmd<AiView> {
     blocking(|| Ok(view_with(&settings::load(&paths::settings_file()).ai.unwrap_or_default(), keys::get))).await
 }
 
+/// Whether Ensayo has a listed price for a model, so Settings can say when costs are estimated high.
+#[tauri::command]
+pub fn model_price_known(model: String) -> bool {
+    crate::ai::cost::price_known(model.trim())
+}
+
 #[tauri::command]
 pub async fn save_ai_settings(ai: AiSettings) -> Cmd<()> {
     blocking(move || {

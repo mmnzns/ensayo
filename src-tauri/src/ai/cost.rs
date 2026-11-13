@@ -32,6 +32,7 @@ const PRICES: &[(&str, Price)] = &[
     ("claude-opus-5-5", exact(4.0, 20.0)),
     ("claude-haiku-5-5", exact(0.10, 0.50)),
     ("claude-fable-5-1", exact(10.0, 50.0)),
+    ("claude-fable-5-2", exact(8.0, 40.0)),
     // OpenAI.
     ("gpt-6-sol", guess(5.0, 30.0)),
     ("gpt-6.1-sol", guess(5.0, 30.0)),
@@ -90,6 +91,49 @@ pub fn price(model: &str) -> Option<Price> {
         .map(|(_, p)| *p)
 }
 
+/// True when the table has a price for this model (a dated snapshot of a listed model counts).
+pub fn price_known(model: &str) -> bool {
+    price(model).is_some()
+}
+
+/// The rows of the table that belong to a provider. Claude rows are `claude-*`, OpenAI `gpt-*` (not the open-weight
+/// `gpt-oss`), Gemini `gemini-*`, OpenRouter rows contain a slash; Groq, Cerebras and Mistral are the models their
+/// catalog lists.
+fn rows_of(provider: Provider) -> Vec<Price> {
+    let rows = PRICES.iter().filter(|(id, _)| match provider {
+        Provider::Claude => id.starts_with("claude-"),
+        Provider::OpenAi => id.starts_with("gpt-") && !id.starts_with("gpt-oss"),
+        Provider::Gemini => id.starts_with("gemini-"),
+        Provider::OpenRouter => id.contains('/'),
+        Provider::Groq | Provider::Cerebras | Provider::Mistral => super::providers::catalog(provider).contains(id),
+        Provider::Compatible => false,
+    });
+    rows.map(|(_, p)| *p).collect()
+}
+
+fn highest(rows: impl IntoIterator<Item = Price>) -> Option<Price> {
+    rows.into_iter().max_by(|a, b| a.output.total_cmp(&b.output))
+}
+
+/// What a model on a paid provider is priced at: its table price, or, when it has none, the provider's highest listed
+/// price (by output price) marked as a guess, so an unlisted model is never counted as free. A provider with no rows
+/// falls back to the highest price in the whole table. Local servers are free and never come here.
+pub fn price_or_fallback(provider: Provider, model: &str) -> Option<Price> {
+    if provider == Provider::Compatible {
+        return None;
+    }
+    if let Some(p) = price(model) {
+        return Some(p);
+    }
+    let top = highest(rows_of(provider)).or_else(|| highest(PRICES.iter().map(|(_, p)| *p)))?;
+    Some(Price { approx: true, ..top })
+}
+
+fn cost_at(p: Price, input_tokens: u32, output_tokens: u32, cache_read_tokens: u32, cache_write_tokens: u32) -> f64 {
+    let input = f64::from(input_tokens) + 0.10 * f64::from(cache_read_tokens) + 1.25 * f64::from(cache_write_tokens);
+    (input * p.input + f64::from(output_tokens) * p.output) / 1_000_000.0
+}
+
 /// USD for one call, or None when the model has no known price (local models: free, so the caller counts them as 0).
 pub fn estimate(model: &str, input_tokens: u32, output_tokens: u32) -> Option<f64> {
     estimate_cached(model, input_tokens, output_tokens, 0, 0)
@@ -98,9 +142,7 @@ pub fn estimate(model: &str, input_tokens: u32, output_tokens: u32) -> Option<f6
 /// Like `estimate`, with Claude's prompt cache: reads cost 10% of the input price and writes 125% of it. The cached
 /// tokens are counted apart from `input_tokens`.
 pub fn estimate_cached(model: &str, input_tokens: u32, output_tokens: u32, cache_read_tokens: u32, cache_write_tokens: u32) -> Option<f64> {
-    let p = price(model)?;
-    let input = f64::from(input_tokens) + 0.10 * f64::from(cache_read_tokens) + 1.25 * f64::from(cache_write_tokens);
-    Some((input * p.input + f64::from(output_tokens) * p.output) / 1_000_000.0)
+    Some(cost_at(price(model)?, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens))
 }
 
 /// What the session has spent so far.
@@ -122,12 +164,15 @@ impl Spend {
         self.record(reply, usd, price(&reply.model).is_some_and(|p| p.approx));
     }
 
-    /// Like `add`, but knows which provider answered: a local server (`Provider::Compatible`) costs nothing.
+    /// Like `add`, but knows which provider answered: a local server (`Provider::Compatible`) costs nothing, and a
+    /// model a paid provider has no price for is counted at that provider's highest price, as an estimate.
     pub fn add_from(&mut self, provider: Provider, reply: &LlmReply) {
-        if provider == Provider::Compatible {
-            self.record(reply, 0.0, false);
-        } else {
-            self.add(reply);
+        match price_or_fallback(provider, &reply.model) {
+            None => self.record(reply, 0.0, false),
+            Some(p) => {
+                let usd = cost_at(p, reply.input_tokens, reply.output_tokens, reply.cache_read_tokens, reply.cache_write_tokens);
+                self.record(reply, usd, p.approx);
+            }
         }
     }
 
@@ -248,5 +293,37 @@ mod tests {
         assert_eq!(s.calls, 1);
         s.add_from(Provider::Groq, &reply("openai/gpt-oss-20b", 1_000_000, 1_000_000));
         assert!(s.usd > 0.0);
+    }
+
+    #[test]
+    fn an_unlisted_model_is_priced_at_its_providers_top_row_and_is_an_estimate() {
+        let mut s = Spend::default();
+        s.add_from(Provider::Claude, &reply("claude-sonnet-9-9", 1_000_000, 1_000_000));
+        assert!((s.usd - 60.0).abs() < 1e-9, "{}", s.usd);
+        assert!(s.approx);
+        // The cache price rules apply to the fallback too: 1M reads at a tenth of $10.
+        let mut c = Spend::default();
+        c.add_from(Provider::Claude, &LlmReply { cache_read_tokens: 1_000_000, ..reply("claude-sonnet-9-9", 0, 0) });
+        assert!((c.usd - 1.0).abs() < 1e-9, "{}", c.usd);
+        let mut o = Spend::default();
+        o.add_from(Provider::OpenRouter, &reply("acme/brand-new", 1_000_000, 1_000_000));
+        let top = price("openai/gpt-6-sol").unwrap();
+        assert!((o.usd - (top.input + top.output)).abs() < 1e-9, "{}", o.usd);
+        assert!(o.approx);
+        // A local server stays free for any model.
+        let mut l = Spend::default();
+        l.add_from(Provider::Compatible, &reply("claude-sonnet-9-9", 1_000_000, 1_000_000));
+        assert_eq!(l.usd, 0.0);
+        assert!(!price_known("claude-sonnet-9-9") && price_known("claude-fable-5-2"));
+    }
+
+    #[test]
+    fn every_paid_provider_has_rows_to_fall_back_on() {
+        assert!(rows_of(Provider::Claude).len() >= 5);
+        for p in [Provider::OpenAi, Provider::Gemini, Provider::Groq, Provider::Cerebras, Provider::Mistral, Provider::OpenRouter] {
+            assert!(!rows_of(p).is_empty(), "{p:?}");
+        }
+        assert!(rows_of(Provider::Compatible).is_empty());
+        assert_eq!(highest(PRICES.iter().map(|(_, p)| *p)).unwrap().output, 50.0);
     }
 }

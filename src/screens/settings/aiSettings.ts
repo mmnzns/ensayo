@@ -189,6 +189,16 @@ export const fromAdvanced = (option: string): string => (option.startsWith(AUTOM
 export const withScoring = (s: AiSettings, option: string): AiSettings => ({ ...s, fast_model: fromAdvanced(option) });
 export const withWriting = (s: AiSettings, option: string): AiSettings => ({ ...s, strong_model: fromAdvanced(option) });
 
+// ---------- Unlisted models ----------
+
+export const UNPRICED_LINE = "Ensayo doesn't know this model's price, so costs are estimated high.";
+
+/** The model a cloud provider will use for answers: the chosen one, or the provider's default. Empty when there is none to price. */
+export const chosenModel = (p: ProviderInfo, s: AiSettings): string => (s.fast_model || p.fast_default).trim();
+
+/** The line to show under the model: only for a cloud model the price list does not have. `known` is null until the backend has answered. */
+export const unpricedNote = (kind: AiKind, model: string, known: boolean | null): string => (kind === "key" && model !== "" && known === false ? UNPRICED_LINE : "");
+
 // ---------- Spending cap ----------
 
 const CAPS: [string, number][] = [

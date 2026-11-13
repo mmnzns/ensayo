@@ -12,6 +12,8 @@ import {
   contextLine,
   detectedLine,
   cloudProviders,
+  chosenModel,
+  unpricedNote,
   explainTestError,
   initialState,
   isLocalAddress,
@@ -362,6 +364,24 @@ export function useAiEngine(view: AiView) {
 
 export type AiEngine = ReturnType<typeof useAiEngine>;
 
+/** Says so when the chosen cloud model has no listed price. */
+export function UnpricedNote({ kind, model }: { kind: AiKind; model: string }) {
+  const [known, setKnown] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (kind !== "key" || !model) return setKnown(null);
+    let stale = false;
+    invoke<boolean>("model_price_known", { model }).then(
+      (k) => !stale && setKnown(k),
+      () => !stale && setKnown(null),
+    );
+    return () => {
+      stale = true;
+    };
+  }, [kind, model]);
+  const line = unpricedNote(kind, model, known);
+  return line ? <span className="e-meta" role="status">{line}</span> : null;
+}
+
 /** The part of the engine form under the three cards: provider and model, the key and Test, or the built-in local AI. `guided` is the setup step, where "on this computer" means the built-in model. */
 export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: boolean }) {
   const { st, kind, settings, cloud, provider, hasKey, typedKey, otherOpen, setOtherOpen, result, found, problem, local, detect, change, moved } = ai;
@@ -430,6 +450,7 @@ export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: b
               </div>
             )}
           </div>
+          {!builtIn && <UnpricedNote kind={kind} model={chosenModel(provider, settings)} />}
           {builtIn ? (
             <BuiltInPanel ai={local} st={st} change={change} />
           ) : (

@@ -184,6 +184,7 @@ pub fn run() {
             ai_commands::clear_api_key,
             ai_commands::test_ai,
             ai_commands::session_cost,
+            ai_commands::model_price_known,
             story_commands::parse_story,
             mock_commands::mock_debrief,
             mock_commands::load_debrief,
