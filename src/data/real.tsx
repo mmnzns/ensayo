@@ -43,6 +43,7 @@ import type { ApplicationExtras, InterviewNote, NewApplicationDraft } from "./sc
 import { mockDeleteInterviewNote, mockForgetAsked, mockSaveInterviewNote, mockSetAskedFirst } from "./interviews";
 import { TIMING_ONLY, engineStatusOf } from "./engine";
 import { mockStore } from "./mock";
+import { DamagedFilesBanner, type DamagedFile } from "./damagedFiles";
 import { pickFolder } from "../ui/pickFile";
 import { StoreProvider, useStore, type Store } from "./store";
 import type { Application, EngineStatus, Method, Profile, StageId, Story, Target, You } from "./types";
@@ -81,6 +82,8 @@ interface LoadAll extends Partial<TargetsBundle> {
   applications: Application[];
   application_extras: Record<string, ApplicationExtras>;
   problems: string[];
+  /** Files that could not be read and were left out (you.json, a method): named in a banner with Show file. */
+  damaged?: DamagedFile[];
 }
 
 /** What the screens can change. Each one saves first (in the app) and then updates what is on screen. */
@@ -475,6 +478,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DataStatus | null>(null);
   const [error, setError] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
+  const [damaged, setDamaged] = useState<DamagedFile[]>([]);
   const [reps, setReps] = useState<RepSummary[]>([]);
   const [trashed, setTrashed] = useState<TrashedSession[]>([]);
   const [engine, setEngine] = useState<EngineStatus>(TIMING_ONLY);
@@ -547,6 +551,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTg({ you: all.you ?? null, targets: all.targets ?? [], notePending: all.targetsNotePending ?? false });
     setApps({ applications: all.applications ?? [], extras: all.application_extras ?? {} });
     setProblems(all.problems);
+    setDamaged(all.damaged ?? []);
     await readReps();
     await readEngine();
     setPhase("ready");
@@ -844,7 +849,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           <TrashContext.Provider value={trashed}>
           <TargetsNoteContext.Provider value={app && tg.notePending}>
           <SetupContext.Provider value={app && state.profile === null && tg.you === null}>
-            <StoreProvider store={store}>{children}</StoreProvider>
+            <StoreProvider store={store}>{app && <DamagedFilesBanner files={damaged} />}{children}</StoreProvider>
           </SetupContext.Provider>
           </TargetsNoteContext.Provider>
           </TrashContext.Provider>

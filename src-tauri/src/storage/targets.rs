@@ -299,7 +299,11 @@ impl Storage {
     /// Saves your name, full name and habits. The active target is only taken when it is a target you can use, and the
     /// one-time note flag stays as stored (the screens do not know it).
     pub fn save_you(&self, you: &You) -> Result<You> {
-        let stored = self.you()?;
+        // A damaged you.json is replaced (it is kept aside by the save); one from a newer Ensayo is never touched.
+        let stored = match self.you() {
+            Err(StorageError::Json(..)) => None,
+            other => other?,
+        };
         let targets = self.targets()?;
         let usable = |id: &String| targets.iter().any(|t| &t.id == id && !t.archived);
         let active = you.active_target_id.clone().filter(usable).or_else(|| stored.as_ref().and_then(|s| s.active_target_id.clone()).filter(usable)).or_else(|| targets.iter().find(|t| !t.archived).map(|t| t.id.clone()));

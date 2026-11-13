@@ -42,6 +42,26 @@ pub type Result<T> = std::result::Result<T, StorageError>;
 
 use std::path::Path;
 
+impl StorageError {
+    /// The file this error is about, when it names one.
+    pub fn file(&self) -> Option<&Path> {
+        match self {
+            StorageError::Io(p, _) | StorageError::Json(p, _) | StorageError::TooNew(p, _, _) => Some(p),
+            _ => None,
+        }
+    }
+}
+
+/// One plain line for a file that could not be read: its name only (the folder is the person's own business and the
+/// line may end up in a bug report).
+pub fn damaged_line(path: &Path, e: &StorageError) -> String {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "A file".into());
+    match e {
+        StorageError::TooNew(..) => format!("{name} was saved by a newer Ensayo, so this one skipped it. Update Ensayo to use it."),
+        _ => format!("{name} is damaged, so Ensayo skipped it. Your other data loaded."),
+    }
+}
+
 /// A handle on one data folder.
 #[derive(Debug, Clone)]
 pub struct Storage {
@@ -54,11 +74,14 @@ pub struct Storage {
 pub struct Loaded<T> {
     pub items: Vec<T>,
     pub problems: Vec<String>,
+    /// The files behind `problems`, where a reader fills it in (the app offers "Show file" for these). Not the same
+    /// length as `problems` for readers that don't.
+    pub files: Vec<PathBuf>,
 }
 
 impl<T> Default for Loaded<T> {
     fn default() -> Self {
-        Loaded { items: vec![], problems: vec![] }
+        Loaded { items: vec![], problems: vec![], files: vec![] }
     }
 }
 

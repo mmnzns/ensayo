@@ -131,6 +131,37 @@ pub struct LoadAll {
     pub application_extras: BTreeMap<String, ExtrasView>,
     /// A plain-words line for each file that could not be read.
     pub problems: Vec<String>,
+    /// The files behind the banner that names a damaged file and offers Show file: `you.json` and the methods.
+    pub damaged: Vec<DamagedFile>,
+}
+
+/// A file Ensayo could not read. The name is shown; the path is only for "Show file".
+#[derive(Debug, Serialize, PartialEq)]
+pub struct DamagedFile {
+    pub name: String,
+    pub path: String,
+}
+
+impl DamagedFile {
+    fn of(path: &Path) -> DamagedFile {
+        DamagedFile { name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), path: path.to_string_lossy().into_owned() }
+    }
+}
+
+/// What was skipped while loading: a line for each, and the file where there is one to show.
+#[derive(Default)]
+struct Skipped {
+    problems: Vec<String>,
+    files: Vec<DamagedFile>,
+}
+
+impl Skipped {
+    /// `fallback` stands for the file when the error doesn't name one.
+    fn add(&mut self, fallback: PathBuf, e: &StorageError) {
+        let path = e.file().map(Path::to_path_buf).unwrap_or(fallback);
+        self.problems.push(crate::storage::damaged_line(&path, e));
+        self.files.push(DamagedFile::of(&path));
+    }
 }
 
 pub fn load_all_from(storage: &Storage) -> StorageResult<LoadAll> {
@@ -138,17 +169,34 @@ pub fn load_all_from(storage: &Storage) -> StorageResult<LoadAll> {
 }
 
 pub fn load_all_at(storage: &Storage, now: chrono::NaiveDateTime) -> StorageResult<LoadAll> {
+    let mut skipped = Skipped::default();
     // Targets first: reading them moves a v0 profile over, which the other reads depend on.
-    let you = storage.you()?;
-    let targets = storage.load_targets()?;
+    let (you, you_failed) = match storage.you() {
+        Ok(y) => (y, false),
+        Err(e) => {
+            skipped.add(storage.root().join("you.json"), &e);
+            (None, true)
+        }
+    };
+    let targets = storage.load_targets().unwrap_or_else(|e| {
+        skipped.add(storage.root().join("targets"), &e);
+        Default::default()
+    });
     let mut stories = storage.load_stories()?;
     stories.items = storage.with_practice_by_target(stories.items)?;
     let apps = view::load_all(storage, now)?;
-    let mut problems = stories.problems;
+    let methods = storage.load_methods();
+    for file in &methods.files {
+        skipped.files.push(DamagedFile::of(file));
+    }
+    let profile = if you_failed { None } else { storage.profile().unwrap_or(None) };
+    let Skipped { mut problems, files: damaged } = skipped;
+    problems.extend(stories.problems);
     problems.extend(targets.problems);
     problems.extend(apps.problems);
+    problems.extend(methods.problems);
     let pending = you.as_ref().is_some_and(|y| y.targets_note_pending);
-    Ok(LoadAll { profile: storage.profile()?, you, targets: targets.items, targets_note_pending: pending, stories: stories.items, methods: storage.methods()?, applications: apps.applications, application_extras: apps.extras, problems })
+    Ok(LoadAll { profile, you, targets: targets.items, targets_note_pending: pending, stories: stories.items, methods: methods.items, applications: apps.applications, application_extras: apps.extras, problems, damaged })
 }
 
 pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
@@ -605,5 +653,44 @@ mod tests {
         let json = serde_json::to_value(&all).unwrap();
         assert!(json["applications"].is_array() && json["application_extras"].is_object());
         assert!(json.get("profile").is_some() && json.get("stories").is_some() && json.get("methods").is_some(), "the existing fields stay");
+    }
+
+    #[test]
+    fn a_damaged_you_file_loads_as_empty_with_a_banner_naming_the_file_and_everything_else_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        storage.save_story(&story("st_a")).unwrap();
+        std::fs::write(storage.root().join("you.json"), "{ not json").unwrap();
+        let all = load_all_from(&storage).unwrap();
+        assert!(all.you.is_none() && all.profile.is_none());
+        assert_eq!(all.stories.len(), 1, "the rest loads");
+        assert_eq!(all.damaged.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), vec!["you.json"]);
+        assert!(all.problems.iter().any(|p| p.starts_with("you.json is damaged")), "{:?}", all.problems);
+        for line in &all.problems {
+            assert!(!line.contains(dir.path().to_string_lossy().as_ref()), "no full path in a line: {line}");
+        }
+        assert!(all.damaged[0].path.ends_with("you.json"), "the path is there for Show file");
+        // Saving a new you never destroys the damaged one.
+        storage.save_you(&crate::storage::targets::You { name: "D".into(), full_name: "".into(), focus_habits: vec![], active_target_id: None, targets_note_pending: false, extra: Default::default() }).unwrap();
+        let aside = std::fs::read_dir(storage.root()).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().starts_with("you.json.damaged-")).count();
+        assert_eq!(aside, 1);
+    }
+
+    #[test]
+    fn a_damaged_or_newer_method_is_skipped_with_a_banner_and_the_other_methods_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        storage.save_method(&Method { situation: "motivation".into(), spoken: "ok".into(), story_ids: vec![], extra: Default::default() }).unwrap();
+        std::fs::write(storage.root().join("bank/methods/disagreement.json"), "nope").unwrap();
+        std::fs::write(storage.root().join("bank/methods/influence.json"), r#"{"schema_version": 99, "situation": "influence", "spoken": "x"}"#).unwrap();
+        let all = load_all_from(&storage).unwrap();
+        assert_eq!(all.methods.len(), 1);
+        let mut names: Vec<&str> = all.damaged.iter().map(|d| d.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, vec!["disagreement.json", "influence.json"]);
+        assert!(all.problems.iter().any(|p| p.starts_with("influence.json was saved by a newer Ensayo")), "{:?}", all.problems);
+        // Nothing is wrong with a healthy folder.
+        let ok = Storage::init(dir.path().join("fine")).unwrap();
+        assert!(load_all_from(&ok).unwrap().damaged.is_empty());
     }
 }

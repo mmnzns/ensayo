@@ -139,6 +139,24 @@ impl Storage {
         Ok(out)
     }
 
+    /// Every saved method. A file that can't be read is reported (its name only, never its path) and skipped, so
+    /// one damaged method never hides the others.
+    pub fn load_methods(&self) -> Loaded<Method> {
+        let mut out = Loaded::<Method>::default();
+        for situation in SITUATIONS {
+            let path = self.method_path(situation);
+            match load_record::<Method>(&path, migrate::unchanged) {
+                Ok(Some(m)) => out.items.push(m),
+                Ok(None) => {}
+                Err(e) => {
+                    out.problems.push(super::damaged_line(&path, &e));
+                    out.files.push(path);
+                }
+            }
+        }
+        out
+    }
+
     pub fn save_method(&self, method: &Method) -> Result<()> {
         if !SITUATIONS.contains(&method.situation.as_str()) {
             return Err(StorageError::Invalid(format!("\"{}\" is not a situation", method.situation)));
