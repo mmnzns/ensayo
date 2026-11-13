@@ -92,8 +92,15 @@ pub fn price(model: &str) -> Option<Price> {
 
 /// USD for one call, or None when the model has no known price (local models: free, so the caller counts them as 0).
 pub fn estimate(model: &str, input_tokens: u32, output_tokens: u32) -> Option<f64> {
+    estimate_cached(model, input_tokens, output_tokens, 0, 0)
+}
+
+/// Like `estimate`, with Claude's prompt cache: reads cost 10% of the input price and writes 125% of it. The cached
+/// tokens are counted apart from `input_tokens`.
+pub fn estimate_cached(model: &str, input_tokens: u32, output_tokens: u32, cache_read_tokens: u32, cache_write_tokens: u32) -> Option<f64> {
     let p = price(model)?;
-    Some((f64::from(input_tokens) * p.input + f64::from(output_tokens) * p.output) / 1_000_000.0)
+    let input = f64::from(input_tokens) + 0.10 * f64::from(cache_read_tokens) + 1.25 * f64::from(cache_write_tokens);
+    Some((input * p.input + f64::from(output_tokens) * p.output) / 1_000_000.0)
 }
 
 /// What the session has spent so far.
@@ -111,7 +118,7 @@ impl Spend {
     /// Counts one reply at the table price. A model with no price counts as free. A local server that happens to
     /// serve a model whose id is in the table must be counted with `add_from`, so it stays free.
     pub fn add(&mut self, reply: &LlmReply) {
-        let usd = estimate(&reply.model, reply.input_tokens, reply.output_tokens).unwrap_or(0.0);
+        let usd = estimate_cached(&reply.model, reply.input_tokens, reply.output_tokens, reply.cache_read_tokens, reply.cache_write_tokens).unwrap_or(0.0);
         self.record(reply, usd, price(&reply.model).is_some_and(|p| p.approx));
     }
 
@@ -128,7 +135,7 @@ impl Spend {
         self.approx |= approx;
         self.usd += usd;
         self.calls += 1;
-        self.input_tokens += u64::from(reply.input_tokens);
+        self.input_tokens += u64::from(reply.input_tokens) + u64::from(reply.cache_read_tokens) + u64::from(reply.cache_write_tokens);
         self.output_tokens += u64::from(reply.output_tokens);
     }
 
@@ -144,7 +151,7 @@ mod tests {
     use super::*;
 
     fn reply(model: &str, input: u32, output: u32) -> LlmReply {
-        LlmReply { text: String::new(), input_tokens: input, output_tokens: output, model: model.into(), cut_off: false }
+        LlmReply { text: String::new(), input_tokens: input, output_tokens: output, model: model.into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 }
     }
 
     #[test]
@@ -171,6 +178,19 @@ mod tests {
         assert!((usd - 0.04).abs() < 1e-9, "{usd}");
         let usd = estimate("claude-fable-5-1", 1_000_000, 1_000_000).unwrap();
         assert!((usd - 60.0).abs() < 1e-9, "{usd}");
+    }
+
+    #[test]
+    fn cache_reads_cost_a_tenth_and_cache_writes_a_quarter_more_than_input() {
+        // Sonnet 5.5 at $2 in: 1M plain input = 2.00, 1M cache reads = 0.20, 1M cache writes = 2.50.
+        let plain = estimate_cached("claude-sonnet-5-5", 1_000_000, 0, 0, 0).unwrap();
+        let read = estimate_cached("claude-sonnet-5-5", 0, 0, 1_000_000, 0).unwrap();
+        let write = estimate_cached("claude-sonnet-5-5", 0, 0, 0, 1_000_000).unwrap();
+        assert!((plain - 2.0).abs() < 1e-9 && (read - 0.2).abs() < 1e-9 && (write - 2.5).abs() < 1e-9, "{plain} {read} {write}");
+        let mut s = Spend::default();
+        s.add(&LlmReply { cache_read_tokens: 1_000_000, cache_write_tokens: 100_000, ..reply("claude-sonnet-5-5", 0, 0) });
+        assert!((s.usd - 0.45).abs() < 1e-9, "{}", s.usd);
+        assert_eq!(s.input_tokens, 1_100_000);
     }
 
     #[test]

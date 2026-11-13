@@ -397,7 +397,7 @@ pub mod testing {
         fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
             self.seen.lock().unwrap().push(req.clone());
             let next = self.replies.lock().unwrap().pop_front().expect("the script ran out of replies");
-            next.map(|(text, cut_off)| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off })
+            next.map(|(text, cut_off)| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off, cache_read_tokens: 0, cache_write_tokens: 0 })
         }
     }
 }

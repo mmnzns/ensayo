@@ -515,7 +515,7 @@ mod tests {
         let (provider, cap) = local.budget_basis();
         assert_eq!(cap, 0.0);
         // Even a model id that is in the price table (a local server or a mislabelled reply) costs nothing here.
-        let reply = LlmReply { text: String::new(), input_tokens: 5_000_000, output_tokens: 1_000_000, model: "claude-opus-5-5".into(), cut_off: false };
+        let reply = LlmReply { text: String::new(), input_tokens: 5_000_000, output_tokens: 1_000_000, model: "claude-opus-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 };
         with_budget("ses_local_free", provider, cap, |b| {
             b.spend.add_from(b.provider, &reply);
             assert_eq!((b.spend.usd, b.spend.calls, b.spend.input_tokens, b.spend.approx), (0.0, 1, 5_000_000, false));
@@ -530,7 +530,7 @@ mod tests {
     fn switching_engine_mid_session_uses_the_new_engines_prices() {
         use crate::ai::llm::LlmReply;
         let id = "ses_switch_test";
-        let reply = LlmReply { text: String::new(), input_tokens: 1_000_000, output_tokens: 0, model: "claude-haiku-5-5".into(), cut_off: false };
+        let reply = LlmReply { text: String::new(), input_tokens: 1_000_000, output_tokens: 0, model: "claude-haiku-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 };
         with_budget(id, Provider::Compatible, 0.0, |b| b.spend.add_from(b.provider, &reply));
         assert_eq!(session_cost(id.into()), 0.0);
         with_budget(id, Provider::Claude, 1.0, |b| b.spend.add_from(b.provider, &reply));
@@ -556,7 +556,7 @@ mod tests {
     fn a_session_keeps_its_running_cost_between_reps() {
         use crate::ai::llm::LlmReply;
         let id = "ses_cost_test";
-        with_budget(id, Provider::Claude, 1.0, |b| b.spend.add(&LlmReply { text: String::new(), input_tokens: 1_000_000, output_tokens: 0, model: "claude-haiku-5-5".into(), cut_off: false }));
+        with_budget(id, Provider::Claude, 1.0, |b| b.spend.add(&LlmReply { text: String::new(), input_tokens: 1_000_000, output_tokens: 0, model: "claude-haiku-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 }));
         let first = session_cost(id.into());
         assert!(first > 0.0);
         with_budget(id, Provider::Claude, 1.0, |b| assert!((b.spend.usd - first).abs() < 1e-12));

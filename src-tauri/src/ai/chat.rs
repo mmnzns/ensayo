@@ -123,6 +123,9 @@ fn base_of(base: &str) -> &str {
 /// itself still has the caller's limit's worth of room after the thinking.
 pub const THINKING_ROOM: u32 = 16_000;
 
+/// A system prompt longer than this many characters is sent as a cacheable block.
+pub const CACHE_SYSTEM_CHARS: usize = 4_000;
+
 /// Anthropic Messages API: `system` is a top-level field and `max_tokens` is required. It has no JSON mode, so
 /// `req.json` changes nothing here; the prompt asks for JSON and `json::extract_json` reads it.
 pub fn anthropic_request(base: &str, key: &str, model: &str, req: &LlmRequest, settings: &ModelSettings) -> WireRequest {
@@ -132,7 +135,13 @@ pub fn anthropic_request(base: &str, key: &str, model: &str, req: &LlmRequest, s
         "messages": [{ "role": "user", "content": req.user }],
     });
     if !req.system.is_empty() {
-        body["system"] = json!(req.system);
+        // A long system prompt is cached (the rubric and the schema repeat on every call). Shorter ones are below
+        // the cache's minimum size and are sent as plain text.
+        body["system"] = if req.system.chars().count() > CACHE_SYSTEM_CHARS {
+            json!([{ "type": "text", "text": req.system, "cache_control": { "type": "ephemeral" } }])
+        } else {
+            json!(req.system)
+        };
     }
     if let Some(t) = settings.temperature {
         body["temperature"] = json!(t);
@@ -226,7 +235,7 @@ fn finish(provider: Provider, model: &str, req: &LlmRequest, text: String, usage
     }
     let input_tokens = usage.0.unwrap_or_else(|| estimate_tokens(&req.system).saturating_add(estimate_tokens(&req.user)));
     let output_tokens = usage.1.unwrap_or_else(|| estimate_tokens(&text));
-    Ok(LlmReply { text, input_tokens, output_tokens, model: model.to_string(), cut_off })
+    Ok(LlmReply { text, input_tokens, output_tokens, model: model.to_string(), cut_off, cache_read_tokens: 0, cache_write_tokens: 0 })
 }
 
 pub fn parse_anthropic(body: &Value, model: &str, req: &LlmRequest) -> Result<LlmReply, AiError> {
@@ -235,7 +244,9 @@ pub fn parse_anthropic(body: &Value, model: &str, req: &LlmRequest) -> Result<Ll
     if text.trim().is_empty() && body["stop_reason"] == "refusal" {
         return Err(AiError::Failed("Claude declined to answer this one.".into()));
     }
-    finish(Provider::Claude, model, req, text, usage, body["stop_reason"] == "max_tokens")
+    let cache = |key: &str| token_count(&body["usage"][key]).unwrap_or(0);
+    let (read, write) = (cache("cache_read_input_tokens"), cache("cache_creation_input_tokens"));
+    finish(Provider::Claude, model, req, text, usage, body["stop_reason"] == "max_tokens").map(|r| LlmReply { cache_read_tokens: read, cache_write_tokens: write, ..r })
 }
 
 pub fn parse_openai(provider: Provider, body: &Value, model: &str, req: &LlmRequest) -> Result<LlmReply, AiError> {
@@ -620,6 +631,28 @@ mod tests {
     }
 
     #[test]
+    fn a_long_system_prompt_is_one_cacheable_block_and_a_short_one_stays_plain() {
+        let s = model_settings(Provider::Claude, "claude-sonnet-5-5", Tier::Fast);
+        let long = LlmRequest { system: "x".repeat(CACHE_SYSTEM_CHARS + 1), ..request(true, Tier::Fast) };
+        let w = anthropic_request("b", "k", "claude-sonnet-5-5", &long, &s);
+        assert_eq!(w.body["system"], json!([{ "type": "text", "text": "x".repeat(CACHE_SYSTEM_CHARS + 1), "cache_control": { "type": "ephemeral" } }]));
+        let edge = LlmRequest { system: "x".repeat(CACHE_SYSTEM_CHARS), ..request(true, Tier::Fast) };
+        assert!(anthropic_request("b", "k", "claude-sonnet-5-5", &edge, &s).body["system"].is_string());
+        assert_eq!(anthropic_request("b", "k", "claude-sonnet-5-5", &request(true, Tier::Fast), &s).body["system"], "Be brief.");
+    }
+
+    #[test]
+    fn anthropic_reply_reads_cache_usage_and_other_providers_report_none() {
+        let body = json!({ "content": [{ "type": "text", "text": "{}" }], "usage": { "input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 4000, "cache_creation_input_tokens": 250 } });
+        let r = parse_anthropic(&body, "claude-sonnet-5-5", &request(true, Tier::Fast)).unwrap();
+        assert_eq!((r.input_tokens, r.cache_read_tokens, r.cache_write_tokens), (10, 4000, 250));
+        let none = parse_anthropic(&json!({ "content": [{ "type": "text", "text": "{}" }] }), "m", &request(true, Tier::Fast)).unwrap();
+        assert_eq!((none.cache_read_tokens, none.cache_write_tokens), (0, 0));
+        let o = parse_openai(Provider::OpenAi, &json!({ "choices": [{ "message": { "content": "{}" } }] }), "m", &request(true, Tier::Fast)).unwrap();
+        assert_eq!((o.cache_read_tokens, o.cache_write_tokens), (0, 0));
+    }
+
+    #[test]
     fn openai_request_asks_for_json_and_names_the_token_limit_the_way_each_server_expects() {
         let r = request(true, Tier::Strong);
         let s = model_settings(Provider::OpenAi, "gpt-6-sol", Tier::Strong);
@@ -668,7 +701,7 @@ mod tests {
     fn anthropic_reply_joins_text_parts_and_reads_usage() {
         let body = json!({ "content": [{ "type": "thinking", "thinking": "..." }, { "type": "text", "text": "{\"a\":" }, { "type": "text", "text": "1}" }], "usage": { "input_tokens": 120, "output_tokens": 30 } });
         let r = parse_anthropic(&body, "claude-sonnet-5-5", &request(true, Tier::Fast)).unwrap();
-        assert_eq!(r, LlmReply { text: "{\"a\":1}".into(), input_tokens: 120, output_tokens: 30, model: "claude-sonnet-5-5".into(), cut_off: false });
+        assert_eq!(r, LlmReply { text: "{\"a\":1}".into(), input_tokens: 120, output_tokens: 30, model: "claude-sonnet-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 });
     }
 
     #[test]
@@ -800,7 +833,7 @@ mod tests {
         assert_eq!(seen[0].body["system"], "Be brief.");
         assert_eq!(seen[0].body["max_tokens"], 500 + THINKING_ROOM);
         assert_eq!(seen[0].body["messages"][0]["content"], "Score this answer.");
-        assert_eq!(r, LlmReply { text: "{\"score\": 5}".into(), input_tokens: 21, output_tokens: 6, model: "claude-sonnet-5-5".into(), cut_off: false });
+        assert_eq!(r, LlmReply { text: "{\"score\": 5}".into(), input_tokens: 21, output_tokens: 6, model: "claude-sonnet-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 });
         assert!(pauses.lock().unwrap().is_empty());
     }
 
