@@ -22,6 +22,8 @@ pub struct LlmRequest {
     pub schema: Option<serde_json::Value>,
     pub max_tokens: u32,
     pub tier: Tier,
+    /// Which step this call is, for the `ai-progress` event: the prompt's id, or "ai" for anything else. Never text.
+    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]

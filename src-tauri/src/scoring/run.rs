@@ -22,7 +22,16 @@ pub enum CallError {
     TooLong,
     /// The session's estimated cost reached the cap set in Settings: what it had spent, and the cap, in US dollars.
     CapReached { spent: f64, cap: f64 },
+    /// The person pressed Stop. Never retried; the answer keeps its measured checks and nothing else is saved.
+    Stopped,
 }
+
+/// What a read (story, posting, resume) returns to the screen when the person stopped the AI. The screen goes back to
+/// the form with nothing saved and no error banner.
+pub const STOPPED: &str = "stopped";
+
+/// The line for an answer the person stopped the AI on.
+const STOPPED_NOTICE: &str = "You stopped the AI. This answer got the measured checks only.";
 
 /// The plain-words reason every screen gives when a reply was cut off twice.
 pub const TOO_LONG: &str = "The AI's reply was too long to finish.";
@@ -38,6 +47,7 @@ impl CallError {
             CallError::Invalid(_) => format!("The AI answered twice in a shape Ensayo couldn't read. {TIMING_ONLY} Try the next answer; if it keeps happening, choose another model in Settings › AI."),
             CallError::TooLong => format!("{TOO_LONG} {TIMING_ONLY} Try the next answer; if it keeps happening, choose another model in Settings › AI."),
             CallError::CapReached { .. } => format!("{} {TIMING_ONLY} The rest of this session works the same way.", self.cap_words()),
+            CallError::Stopped => STOPPED_NOTICE.to_string(),
         }
     }
 
@@ -91,6 +101,7 @@ fn from_ai(e: AiError) -> CallError {
     match e {
         AiError::Unavailable(m) => CallError::Unavailable(m),
         AiError::Failed(m) => CallError::Failed(m),
+        AiError::Stopped => CallError::Stopped,
     }
 }
 
@@ -120,7 +131,7 @@ pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, b
         } else {
             format!("{user}\n\nYour last reply was rejected: {last}. Return only one JSON object that matches the JSON Schema in the reply format: its field names, required fields and allowed values.")
         };
-        let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, schema: Some(prompt.schema.clone()), max_tokens: limit, tier: prompt.tier }).map_err(from_ai)?;
+        let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, schema: Some(prompt.schema.clone()), max_tokens: limit, tier: prompt.tier, label: prompt.id.clone() }).map_err(from_ai)?;
         budget.spend.add_from(budget.provider, &reply);
         cut_off = reply.cut_off;
         let mut value = match extract_json(&reply.text) {
@@ -594,5 +605,24 @@ mod tests {
         let mut free = Budget::new(Provider::Claude, 0.0);
         free.spend.usd = 99.0;
         assert!(call_json(&Scripted::new(vec![Ok(GOOD)]), get(PromptId::Classify), &vars(), 400, &mut free).is_ok(), "0 means no cap");
+    }
+
+    #[test]
+    fn a_stopped_call_ends_at_once_and_is_not_asked_again() {
+        let llm = Scripted::new(vec![Err(AiError::Stopped), Ok(GOOD)]);
+        let mut b = budget();
+        let err = call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut b).unwrap_err();
+        assert_eq!(err, CallError::Stopped);
+        assert_eq!(llm.calls(), 1);
+        assert_eq!(b.spend.calls, 0, "nothing is counted for an answer that never came");
+        assert_eq!(err.notice(), "You stopped the AI. This answer got the measured checks only.");
+        assert_eq!(STOPPED, "stopped");
+    }
+
+    #[test]
+    fn each_call_is_labelled_with_its_prompt_id() {
+        let llm = Scripted::new(vec![Ok(GOOD)]);
+        call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap();
+        assert_eq!(llm.seen.lock().unwrap()[0].label, get(PromptId::Classify).id);
     }
 }

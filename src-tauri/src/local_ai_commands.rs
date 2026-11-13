@@ -71,8 +71,14 @@ pub fn cancel_local_ai_download() {
 
 /// Frees the model's memory now (the Settings row calls it when the engine is switched away from local).
 #[tauri::command]
-pub fn stop_local_ai() {
-    local::stop_shared();
+pub async fn stop_local_ai() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(local::stop_shared).await.map_err(|e| e.to_string())
+}
+
+/// The Stop button: the answer being written ends now, and the AI is not asked again. The model stays loaded.
+#[tauri::command]
+pub async fn cancel_local_ai() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(local::cancel_shared).await.map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

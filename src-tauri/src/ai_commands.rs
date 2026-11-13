@@ -266,6 +266,7 @@ pub async fn test_ai(provider: String, base_url: Option<String>, key: Option<Str
         let base = if p == Provider::Compatible { compatible_base(base_url.as_deref().filter(|b| !b.trim().is_empty()).unwrap_or("http://localhost:11434")) } else { default_base(p).to_string() };
         let models = list_models(p, &base, &key).map_err(|e| match e {
             AiError::Unavailable(m) | AiError::Failed(m) => m,
+            AiError::Stopped => "Stopped.".to_string(),
         })?;
         let recommended = recommended_model(p, &models);
         Ok(TestResult { models, recommended })

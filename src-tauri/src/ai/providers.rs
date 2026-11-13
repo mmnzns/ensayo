@@ -10,6 +10,8 @@ pub enum AiError {
     Unavailable(String),
     /// The call failed (network, rate limit, refusal). May work next time.
     Failed(String),
+    /// The person pressed Stop. Never retried, and never shown as a failure.
+    Stopped,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

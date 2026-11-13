@@ -415,6 +415,7 @@ impl ProviderLlm {
         match error {
             AiError::Unavailable(m) => AiError::Unavailable(clean(m)),
             AiError::Failed(m) => AiError::Failed(clean(m)),
+            AiError::Stopped => AiError::Stopped,
         }
     }
 }
@@ -436,6 +437,17 @@ fn mentions_schema(body: &Value) -> bool {
 
 impl Llm for ProviderLlm {
     fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
+        // A cloud call has no token count to report: one event as it starts and one as it ends.
+        let started = std::time::Instant::now();
+        super::progress::emit(&req.label, None, 0);
+        let out = self.complete_inner(req);
+        super::progress::emit(&req.label, None, started.elapsed().as_millis() as u64);
+        out
+    }
+}
+
+impl ProviderLlm {
+    fn complete_inner(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
         let model = self.model_for(req.tier);
         if model.trim().is_empty() {
             return Err(AiError::Unavailable(format!("No model is chosen for {}. Pick one in Settings › AI.", self.provider.name())));
@@ -485,7 +497,7 @@ mod tests {
     use std::sync::Mutex;
 
     fn request(json: bool, tier: Tier) -> LlmRequest {
-        LlmRequest { system: "Be brief.".into(), user: "Score this answer.".into(), json, schema: None, max_tokens: 500, tier }
+        LlmRequest { system: "Be brief.".into(), user: "Score this answer.".into(), json, schema: None, max_tokens: 500, tier, label: "ai".into() }
     }
 
     // ----- model settings table -----
@@ -750,7 +762,7 @@ mod tests {
 
     #[test]
     fn a_thinking_model_gets_room_to_think_on_top_of_the_reply() {
-        let req = LlmRequest { system: String::new(), user: "u".into(), json: true, schema: None, max_tokens: 4000, tier: Tier::Strong };
+        let req = LlmRequest { system: String::new(), user: "u".into(), json: true, schema: None, max_tokens: 4000, tier: Tier::Strong, label: "ai".into() };
         let sol = model_settings(Provider::OpenAi, "gpt-6-sol", Tier::Strong);
         assert!(sol.reasoning_effort.is_some());
         let w = openai_request(Provider::OpenAi, "https://api.openai.com/v1", "k", "gpt-6-sol", &req, &sol, true);

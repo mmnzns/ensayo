@@ -16,6 +16,8 @@ fn story_message(e: &CallError) -> String {
         CallError::TooLong => format!("{} Try Read it again, or fill it in yourself.", crate::scoring::run::TOO_LONG),
         CallError::Invalid(_) => "The AI's reply couldn't be read this time. Try Read it again, or fill it in yourself.".into(),
         CallError::CapReached { .. } => format!("{} Or fill it in yourself.", e.cap_words()),
+        // The screen goes back to the form, with nothing saved and no error banner.
+        CallError::Stopped => crate::scoring::run::STOPPED.into(),
     }
 }
 
@@ -47,5 +49,10 @@ mod story_message_tests {
             assert!(!m.contains('\u{2014}'), "no em dashes: {m}");
         }
         assert!(story_message(&CallError::Invalid("x".into())).contains("Try Read it again"));
+    }
+
+    #[test]
+    fn a_stopped_read_is_the_word_the_screen_recognises() {
+        assert_eq!(story_message(&CallError::Stopped), "stopped");
     }
 }

@@ -80,6 +80,11 @@ pub fn set_speech_card_failed(failed: bool) {
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static TOLD: Mutex<Option<HashSet<&'static str>>> = Mutex::new(None);
 
+/// The app handle, once `set_app` has run (None in tests): for the events other modules send to the window.
+pub fn app() -> Option<AppHandle> {
+    APP.get().cloned()
+}
+
 /// Lets `fell_back` reach the window.
 pub fn set_app(app: AppHandle) {
     let _ = APP.set(app);

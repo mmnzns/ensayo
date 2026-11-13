@@ -781,6 +781,7 @@ fn failure_notice(e: &CallError) -> String {
         CallError::TooLong => crate::scoring::run::TOO_LONG.to_string(),
         CallError::Invalid(_) => "The AI's reply couldn't be read.".to_string(),
         CallError::CapReached { .. } => e.cap_words(),
+        CallError::Stopped => "You stopped the AI.".to_string(),
     };
     format!("{reason} The resume was read by pattern only: the numbers and dates in it.")
 }
@@ -851,7 +852,11 @@ pub fn read_resume(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageRes
     };
     let had_ai_read = rec.status == "read" && rec.engine.as_deref() == Some("ai");
     let attempt: Result<Reply, String> = match ai {
-        Some(mut ctx) => ai_read(&mut ctx, &app.company, &app.role, &text, posting.as_deref(), &stories, &points).map_err(|e| failure_notice(&e)),
+        Some(mut ctx) => match ai_read(&mut ctx, &app.company, &app.role, &text, posting.as_deref(), &stories, &points) {
+            // Stopped by the person: nothing is saved and the screen goes back to the resume.
+            Err(CallError::Stopped) => return Err(StorageError::Invalid(crate::scoring::run::STOPPED.into())),
+            other => other.map_err(|e| failure_notice(&e)),
+        },
         None => Err(NO_ENGINE.to_string()),
     };
     let (validated, source, notice) = match attempt {
