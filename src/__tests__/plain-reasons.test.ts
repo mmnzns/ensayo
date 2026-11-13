@@ -51,8 +51,7 @@ describe("settings and start lines say what a switch changes", () => {
 
   it("the focus and the spending cap say what they change and what is lost", () => {
     expect(FOCUS_HINT).toContain("doesn't change which fix");
-    expect(CAP_HINT).toContain("no coach note");
-    expect(CAP_HINT).toContain("Try saying");
+    expect(CAP_HINT).toBe("When a session reaches this, Ensayo asks before spending more.");
   });
 });
 

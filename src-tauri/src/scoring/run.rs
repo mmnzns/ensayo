@@ -54,7 +54,7 @@ impl CallError {
     /// How much of the limit the session spent, and where to raise it. The spend is an estimate.
     pub fn cap_words(&self) -> String {
         match self {
-            CallError::CapReached { spent, cap } => format!("This session has spent about ${spent:.2} of its ${cap:.2} limit, and the next AI step would go over it. Raise the limit in Settings › AI."),
+            CallError::CapReached { spent, cap } => format!("This session has spent about ${spent:.2} of its ${cap:.2} limit, and the next AI step would go over it. Change the limit in Settings › AI."),
             _ => String::new(),
         }
     }
@@ -63,22 +63,77 @@ impl CallError {
 /// What a session has spent, and what it may spend.
 pub struct Budget {
     pub spend: Spend,
-    /// 0 means no cap.
+    /// The limit set in Settings. 0 means no cap.
     pub cap_usd: f64,
     pub provider: Provider,
+    /// What the person allowed on top of the cap with "Keep going": the limit is `cap_usd + extra_usd`.
+    pub extra_usd: f64,
+    /// The person chose "Timing only" at the limit: every AI step of the session is refused from now on.
+    pub declined: bool,
+    /// The limit the "spending limit reached" question was last sent for.
+    announced: Option<f64>,
+    /// An AI step was refused at the limit since the question was last sent.
+    refused: bool,
+}
+
+/// What the spending-limit question needs to say: the session total, the cap and the limit in force (US dollars).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CapReport {
+    pub spent: f64,
+    pub cap: f64,
+    pub limit: f64,
 }
 
 impl Budget {
     pub fn new(provider: Provider, cap_usd: f64) -> Budget {
-        Budget { spend: Spend::default(), cap_usd, provider }
+        Budget { spend: Spend::default(), cap_usd, provider, extra_usd: 0.0, declined: false, announced: None, refused: false }
     }
 
-    fn check(&self) -> Result<(), CallError> {
-        if self.cap_usd > 0.0 && self.spend.would_exceed(self.cap_usd) {
-            Err(CallError::CapReached { spent: self.spend.usd, cap: self.cap_usd })
+    /// What this session may spend before it asks: the cap plus whatever "Keep going" added.
+    pub fn limit(&self) -> f64 {
+        self.cap_usd + self.extra_usd
+    }
+
+    /// The limit applies: a cloud engine and a cap that is not "None". A local engine and a local server cost nothing.
+    fn capped(&self) -> bool {
+        self.cap_usd > 0.0 && self.provider != Provider::Compatible
+    }
+
+    /// True once the spend has reached the limit.
+    pub fn reached(&self) -> bool {
+        self.capped() && self.spend.would_exceed(self.limit())
+    }
+
+    fn check(&mut self) -> Result<(), CallError> {
+        if self.capped() && (self.declined || self.reached()) {
+            self.refused = true;
+            Err(CallError::CapReached { spent: self.spend.usd, cap: self.limit() })
         } else {
             Ok(())
         }
+    }
+
+    /// Whether the question should go to the window now: the spend reached the limit, the person has not declined, and
+    /// it was not already sent for this limit (unless a step was refused since, which asks again). Sending it once per
+    /// limit is the point, so this marks it as sent.
+    pub fn take_cap_report(&mut self) -> Option<CapReport> {
+        if !self.reached() || self.declined || (self.announced == Some(self.limit()) && !self.refused) {
+            return None;
+        }
+        self.announced = Some(self.limit());
+        self.refused = false;
+        Some(CapReport { spent: self.spend.usd, cap: self.cap_usd, limit: self.limit() })
+    }
+
+    /// "Keep going": another full cap on top of what has been spent so far.
+    pub fn keep_going(&mut self) {
+        self.extra_usd = self.spend.usd;
+        self.refused = false;
+    }
+
+    /// "Timing only": no more questions, and no more AI steps, this session.
+    pub fn decline(&mut self) {
+        self.declined = true;
     }
 }
 
@@ -624,5 +679,71 @@ mod tests {
         let llm = Scripted::new(vec![Ok(GOOD)]);
         call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap();
         assert_eq!(llm.seen.lock().unwrap()[0].label, get(PromptId::Classify).id);
+    }
+
+    fn spent(b: &mut Budget, usd: f64) {
+        b.spend.usd = usd;
+    }
+
+    #[test]
+    fn keep_going_moves_the_limit_by_a_full_cap() {
+        let mut b = Budget::new(Provider::Claude, 1.0);
+        assert_eq!(b.limit(), 1.0);
+        spent(&mut b, 1.04);
+        assert!(b.reached() && b.check().is_err());
+        b.keep_going();
+        assert!((b.limit() - 2.04).abs() < 1e-9, "spent so far plus the cap: {}", b.limit());
+        assert!(!b.reached() && b.check().is_ok());
+        spent(&mut b, 2.05);
+        assert!(b.reached());
+        b.keep_going();
+        assert!((b.limit() - 3.05).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_question_goes_out_once_per_limit_and_again_when_a_step_is_refused() {
+        let mut b = Budget::new(Provider::Claude, 1.0);
+        spent(&mut b, 0.9);
+        assert_eq!(b.take_cap_report(), None, "not there yet");
+        spent(&mut b, 1.04);
+        assert_eq!(b.take_cap_report(), Some(CapReport { spent: 1.04, cap: 1.0, limit: 1.0 }));
+        assert_eq!(b.take_cap_report(), None, "already asked for this limit");
+        // A step refused because the question has not been answered: ask again.
+        assert!(b.check().is_err());
+        assert_eq!(b.take_cap_report(), Some(CapReport { spent: 1.04, cap: 1.0, limit: 1.0 }));
+        assert_eq!(b.take_cap_report(), None);
+        // Keep going: a new limit, and the question returns when it is reached, with the session total.
+        b.keep_going();
+        assert_eq!(b.take_cap_report(), None);
+        spent(&mut b, 2.10);
+        assert_eq!(b.take_cap_report(), Some(CapReport { spent: 2.10, cap: 1.0, limit: 2.04 }));
+        assert_eq!(b.take_cap_report(), None);
+    }
+
+    #[test]
+    fn timing_only_refuses_every_step_and_never_asks_again() {
+        let mut b = Budget::new(Provider::Claude, 1.0);
+        spent(&mut b, 1.5);
+        b.decline();
+        assert_eq!(b.take_cap_report(), None);
+        assert!(matches!(b.check(), Err(CallError::CapReached { .. })));
+        // Even with room under the limit, a declined session stays timing only, and still does not ask.
+        let mut c = Budget::new(Provider::Claude, 1.0);
+        c.decline();
+        assert!(matches!(c.check(), Err(CallError::CapReached { .. })));
+        assert_eq!(c.take_cap_report(), None);
+        let llm = Scripted::new(vec![Ok(GOOD)]);
+        assert!(matches!(call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut c), Err(CallError::CapReached { .. })));
+        assert_eq!(llm.calls(), 0);
+    }
+
+    #[test]
+    fn a_local_engine_and_no_cap_never_ask() {
+        let mut local = Budget::new(Provider::Compatible, 1.0);
+        spent(&mut local, 50.0);
+        assert!(local.take_cap_report().is_none() && local.check().is_ok() && !local.reached());
+        let mut none = Budget::new(Provider::Claude, 0.0);
+        spent(&mut none, 50.0);
+        assert!(none.take_cap_report().is_none() && none.check().is_ok());
     }
 }

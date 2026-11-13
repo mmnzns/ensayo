@@ -27,7 +27,7 @@ fn story_message(e: &CallError) -> String {
 pub async fn parse_story(raw: String, employer_hint: String) -> Cmd<ParsedStory> {
     tauri::async_runtime::spawn_blocking(move || {
         let _t = crate::logging::Timer::new("parse_story");
-        let (out, unavailable) = with_ai("story-parse", |ai| match ai {
+        let (out, unavailable) = with_ai(&format!("story-parse-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)), |ai| match ai {
             Some(ctx) => parse_story::parse_story(ctx.llm, &raw, &employer_hint, ctx.budget).map_err(|e| story_message(&e)),
             None => Err(NO_ENGINE.to_string()),
         });

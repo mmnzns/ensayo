@@ -500,6 +500,26 @@ export async function keepAfterRestart() {
   }
 }
 
+/** The notice a rep carries when the AI step was refused at the spending limit (the backend's words). */
+export const CAP_NOTICE_MARK = "the next AI step would go over it";
+
+/** True when the rep on screen got only the measured checks because the session was at its limit. */
+export const refusedByCap = (): boolean => state.phase === "result" && (state.notice ?? "").includes(CAP_NOTICE_MARK);
+
+/** After "Keep going" at the spending limit of session `key`: judge the rep on screen again, now that the limit is higher. A Mock waits for its end, so only a Drill does this. */
+export async function rescoreAfterCap(key: string): Promise<boolean> {
+  const rep = currentRep();
+  if (!rep || state.mode !== "drill" || state.sessionId !== key || !refusedByCap()) return false;
+  set({ phase: "thinking" });
+  try {
+    const out = await (await repApi()).rescoreRep(rep.session_id, rep.n, false);
+    await apply(out);
+  } catch (e) {
+    set({ phase: "error", error: message(e) });
+  }
+  return true;
+}
+
 /** After "Start this rep again?": throw the rep away and record it again. */
 export async function startOverAfterRestart() {
   const rep = currentRep();

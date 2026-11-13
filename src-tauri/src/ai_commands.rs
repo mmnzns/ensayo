@@ -10,7 +10,7 @@ use crate::ai::providers::{catalog, compatible_base, default_base, list_models, 
 use crate::keys;
 use crate::models_store;
 use crate::paths;
-use crate::scoring::run::Budget;
+use crate::scoring::run::{Budget, CapReport};
 use crate::storage::settings::{self, AiSettings};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -155,8 +155,59 @@ pub fn with_budget<T>(session: &str, provider: Provider, cap_usd: f64, f: impl F
     // Settings may have changed engine since the last rep (cloud to local, say): the new one's prices apply.
     taken.provider = provider;
     let out = f(&mut taken);
+    // Right after the step that took the session to its limit (or one refused at it), the window asks what to do.
+    let report = taken.take_cap_report();
     budgets().lock().unwrap_or_else(|e| e.into_inner()).insert(session.to_string(), taken);
+    if let Some(r) = report {
+        announce_cap(session, r);
+    }
     out
+}
+
+/// Tells the window the session reached its spending limit. `key` is the session id or "application-<id>".
+fn announce_cap(key: &str, r: CapReport) {
+    use tauri::Emitter;
+    if let Some(app) = crate::graphics::app() {
+        let _ = app.emit("spending-cap-reached", serde_json::json!({ "key": key, "spent": r.spent, "cap": r.cap, "limit": r.limit }));
+    }
+}
+
+/// Where a session stands against its limit, for the question's text.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct BudgetState {
+    pub spent: f64,
+    pub cap: f64,
+    pub limit: f64,
+    pub reached: bool,
+    pub declined: bool,
+}
+
+pub fn state_of(b: Option<&Budget>) -> BudgetState {
+    match b {
+        Some(b) => BudgetState { spent: b.spend.usd, cap: b.cap_usd, limit: b.limit(), reached: b.reached(), declined: b.declined },
+        None => BudgetState { spent: 0.0, cap: 0.0, limit: 0.0, reached: false, declined: false },
+    }
+}
+
+#[tauri::command]
+pub fn budget_state(key: String) -> BudgetState {
+    state_of(budgets().lock().unwrap_or_else(|e| e.into_inner()).get(&key))
+}
+
+/// "Keep going": the limit becomes what has been spent plus the cap again.
+#[tauri::command]
+pub fn continue_past_cap(key: String) {
+    if let Some(b) = budgets().lock().unwrap_or_else(|e| e.into_inner()).get_mut(&key) {
+        b.keep_going();
+    }
+}
+
+/// "Timing only": the rest of the session is timing only, with no more questions.
+#[tauri::command]
+pub fn decline_past_cap(key: String) {
+    if let Some(b) = budgets().lock().unwrap_or_else(|e| e.into_inner()).get_mut(&key) {
+        b.decline();
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -567,5 +618,25 @@ mod tests {
         let first = session_cost(id.into());
         assert!(first > 0.0);
         with_budget(id, Provider::Claude, 1.0, |b| assert!((b.spend.usd - first).abs() < 1e-12));
+    }
+
+    #[test]
+    fn the_budget_commands_follow_a_session_through_keep_going_and_timing_only() {
+        use crate::ai::llm::LlmReply;
+        let id = "ses_cap_flow";
+        let big = LlmReply { text: String::new(), input_tokens: 1_000_000, output_tokens: 0, model: "claude-sonnet-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 };
+        // $2 of input against a $1 cap.
+        with_budget(id, Provider::Claude, 1.0, |b| b.spend.add_from(b.provider, &big));
+        let st = budget_state(id.into());
+        assert!(st.reached && !st.declined && st.cap == 1.0 && st.limit == 1.0 && (st.spent - 2.0).abs() < 1e-9, "{st:?}");
+        continue_past_cap(id.into());
+        let st = budget_state(id.into());
+        assert!(!st.reached && (st.limit - 3.0).abs() < 1e-9, "{st:?}");
+        // The cap from Settings is re-applied on every step; the extra stays.
+        with_budget(id, Provider::Claude, 1.0, |b| assert!((b.limit() - 3.0).abs() < 1e-9));
+        decline_past_cap(id.into());
+        assert!(budget_state(id.into()).declined);
+        // A key nobody used reads as nothing spent.
+        assert_eq!(budget_state("nobody".into()), BudgetState { spent: 0.0, cap: 0.0, limit: 0.0, reached: false, declined: false });
     }
 }
