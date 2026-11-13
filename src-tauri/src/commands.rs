@@ -250,7 +250,7 @@ pub async fn stop_recording(state: State<'_, RecorderState>) -> Result<StoppedRe
 pub async fn transcribe_recording(path: PathBuf, model_id: String) -> Result<transcribe::Transcript, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _t = crate::logging::Timer::new("transcribe_recording");
-        crate::speech::loaded::transcribe_wav(&path, &model_id)
+        crate::speech::loaded::transcribe_wav(&path, &model_id, "")
     })
     .await
     .map_err(|e| e.to_string())?

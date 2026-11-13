@@ -154,11 +154,11 @@ fn tell_if_card_failed() {
 }
 
 /// One recorded answer to a transcript, with the model kept loaded for the next one.
-pub fn transcribe_wav(wav: &Path, model_id: &str) -> Result<Transcript, String> {
+pub fn transcribe_wav(wav: &Path, model_id: &str, question_type: &str) -> Result<Transcript, String> {
     let samples = vad::read_track(wav).map_err(|e| format!("Couldn't read the recording: {e}"))?;
     let out = with_speech(model_id, |s| {
         let spans = vad::detect(&s.vad_dir, &samples)?;
-        transcribe::transcribe_with(&mut s.model, &samples, &spans)
+        transcribe::transcribe_with(&mut s.model, &samples, &spans, question_type)
     })?;
     tell_if_card_failed();
     out
@@ -237,7 +237,7 @@ mod tests {
         let id = std::env::var("ENSAYO_SMOKE_MODEL").unwrap_or_else(|_| "whisper-tiny".into());
         for answer in ["first", "second"] {
             let t = Instant::now();
-            let out = transcribe_wav(Path::new(&wav), &id).unwrap();
+            let out = transcribe_wav(Path::new(&wav), &id, "").unwrap();
             println!("{answer} answer: {} words in {:.2}s ({})", out.words.len(), t.elapsed().as_secs_f64(), out.engine);
         }
         unload();

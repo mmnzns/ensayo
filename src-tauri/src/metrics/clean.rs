@@ -4,9 +4,6 @@
 use super::sentences::Sentence;
 use crate::speech::words::Word;
 
-/// Under this much speech the rep is "didn't catch that" and is not scored.
-pub const MIN_SPEECH_MS: u64 = 3_000;
-
 /// Phrases speech engines produce on silence or music. Matched as a whole sentence at the start or end.
 const HALLUCINATIONS: [&str; 7] = [
     "thank you for watching",
@@ -60,8 +57,9 @@ pub fn speech_ms(words: &[Word]) -> u64 {
     words.iter().map(|w| w.end_ms.saturating_sub(w.start_ms)).sum()
 }
 
-pub fn heard_enough(words: &[Word]) -> bool {
-    speech_ms(words) >= MIN_SPEECH_MS
+/// Enough was said to score: 3 s of speech, or 1 s of two or more words for a factual question.
+pub fn heard_enough(words: &[Word], question_type: &str) -> bool {
+    speech_ms(words) >= crate::speech::transcribe::needed_speech_ms(question_type, words.len())
 }
 
 /// The last sentence that says the speaker is starting over, if any. Everything before it can be discarded.
@@ -107,10 +105,15 @@ mod tests {
     #[test]
     fn under_three_seconds_of_speech_is_not_enough() {
         let few = words(&[("hello", 0, 500), ("there", 500, 1_000)]);
-        assert!(!heard_enough(&few));
+        assert!(!heard_enough(&few, "behavioral"));
         let w: Vec<Word> = (0..10).map(|i| Word { text: "w".into(), start_ms: i * 500, end_ms: i * 500 + 400 }).collect();
-        assert!(heard_enough(&w));
-        assert!(!heard_enough(&[]));
+        assert!(heard_enough(&w, "behavioral"));
+        assert!(!heard_enough(&[], "factual"));
+        // A factual question needs only a second of two or more words.
+        let short = words(&[("next", 0, 600), ("month", 600, 1_300)]);
+        assert!(heard_enough(&short, "factual"));
+        assert!(!heard_enough(&short, "behavioral"));
+        assert!(!heard_enough(&words(&[("next", 0, 1_300)]), "factual"));
     }
 
     #[test]

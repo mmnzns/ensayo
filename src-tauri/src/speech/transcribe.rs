@@ -11,7 +11,21 @@ use voice_engine_stt::{ChunkOptions, Timing};
 use std::path::Path;
 
 pub const DIDNT_CATCH_THAT: &str = "Didn't catch that";
-const MIN_SPEECH_MS: u64 = 3_000;
+/// Under this much speech an answer is "didn't catch that" and is not scored.
+pub const MIN_SPEECH_MS: u64 = 3_000;
+/// A factual question ("When could you start?") has a short answer: this much speech is enough...
+pub const MIN_FACTUAL_SPEECH_MS: u64 = 1_000;
+/// ...when at least this many words were recognised.
+pub const MIN_FACTUAL_WORDS: usize = 2;
+
+/// The least speech an answer needs: short for a factual question with two or more words heard, 3 s otherwise.
+pub fn needed_speech_ms(question_type: &str, words_heard: usize) -> u64 {
+    if question_type == "factual" && words_heard >= MIN_FACTUAL_WORDS {
+        MIN_FACTUAL_SPEECH_MS
+    } else {
+        MIN_SPEECH_MS
+    }
+}
 
 /// Whole transcripts Whisper invents from silence or music (lower case, no punctuation).
 const HALLUCINATIONS: &[&str] = &["thank you for watching", "thanks for watching", "please subscribe", "subtitles by the amara org community", "thank you"];
@@ -39,10 +53,12 @@ fn is_hallucination(words: &[Word]) -> bool {
     HALLUCINATIONS.contains(&text)
 }
 
-pub fn transcribe_with(model: &mut Loaded, samples: &[f32], spans: &[Span]) -> Result<Transcript, String> {
+/// `question_type` decides how little speech is enough (`needed_speech_ms`); "" means the usual 3 s.
+pub fn transcribe_with(model: &mut Loaded, samples: &[f32], spans: &[Span], question_type: &str) -> Result<Transcript, String> {
     let duration_ms = samples.len() as u64 * 1000 / RATE as u64;
     let speech_ms: u64 = spans.iter().map(|s| s.len() as u64 * 1000 / RATE as u64).sum();
-    if speech_ms < MIN_SPEECH_MS {
+    // Before the engine runs, the shortest any answer can be; once the words are known, the real limit.
+    if speech_ms < needed_speech_ms(question_type, MIN_FACTUAL_WORDS) {
         return Err(DIDNT_CATCH_THAT.into());
     }
     let chunks = vad::shape(spans, samples, model.shape);
@@ -56,7 +72,7 @@ pub fn transcribe_with(model: &mut Loaded, samples: &[f32], spans: &[Span]) -> R
         language = language.or(r.language);
         words.extend(offset(r.segments.into_iter().flat_map(|s| s.words).collect(), span.start_ms()));
     }
-    if words.is_empty() || is_hallucination(&words) {
+    if words.is_empty() || is_hallucination(&words) || speech_ms < needed_speech_ms(question_type, words.len()) {
         return Err(DIDNT_CATCH_THAT.into());
     }
     Ok(Transcript { words, language, engine: model.label.clone(), duration_ms })
@@ -68,7 +84,7 @@ pub fn transcribe_with(model: &mut Loaded, samples: &[f32], spans: &[Span]) -> R
 pub fn transcribe_wav(wav: &Path, model: &mut Loaded, vad_dir: &Path) -> Result<Transcript, String> {
     let samples = vad::read_track(wav).map_err(|e| format!("Couldn't read the recording: {e}"))?;
     let spans = vad::detect(vad_dir, &samples)?;
-    transcribe_with(model, &samples, &spans)
+    transcribe_with(model, &samples, &spans, "")
 }
 
 #[cfg(test)]
@@ -125,7 +141,7 @@ mod tests {
         // two speech spans: 1.0-3.0 s and 5.0-7.0 s, in an 8 s recording
         let samples = vec![0.1f32; 8 * 16_000];
         let spans = vec![Span { start: 16_000, end: 48_000 }, Span { start: 80_000, end: 112_000 }];
-        let t = transcribe_with(&mut one_word_each("hello"), &samples, &spans).unwrap();
+        let t = transcribe_with(&mut one_word_each("hello"), &samples, &spans, "").unwrap();
         assert_eq!(t.engine, "Fake");
         assert_eq!(t.duration_ms, 8_000);
         assert_eq!(t.language.as_deref(), Some("en"));
@@ -138,7 +154,7 @@ mod tests {
         let spans = vec![Span { start: 16_000, end: 48_000 }, Span { start: 80_000, end: 112_000 }];
         let model = OneWordEach::new("hello");
         let seen = model.1.clone();
-        transcribe_with(&mut fake(model, "Fake", exact()), &samples, &spans).unwrap();
+        transcribe_with(&mut fake(model, "Fake", exact()), &samples, &spans, "").unwrap();
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 2);
         for o in seen.iter() {
@@ -150,20 +166,54 @@ mod tests {
     fn under_three_seconds_of_speech_is_didnt_catch_that() {
         let samples = vec![0.1f32; 2 * 16_000];
         let spans = vec![Span { start: 0, end: 32_000 }];
-        assert_eq!(transcribe_with(&mut one_word_each("hi"), &samples, &spans).unwrap_err(), DIDNT_CATCH_THAT);
+        assert_eq!(transcribe_with(&mut one_word_each("hi"), &samples, &spans, "").unwrap_err(), DIDNT_CATCH_THAT);
+    }
+
+    /// Two chunks of `each_ms` speech, so a one-word-per-chunk model recognises two words.
+    fn two_short_chunks(each_ms: usize) -> (Vec<f32>, Vec<Span>) {
+        let n = each_ms * 16;
+        (vec![0.1f32; 6 * 16_000], vec![Span { start: 16_000, end: 16_000 + n }, Span { start: 48_000, end: 48_000 + n }])
+    }
+
+    #[test]
+    fn a_short_answer_to_a_factual_question_is_accepted_with_two_words_heard() {
+        let (samples, spans) = two_short_chunks(750); // 1.5 s of speech, two words
+        let t = transcribe_with(&mut one_word_each("Tuesday"), &samples, &spans, "factual").unwrap();
+        assert_eq!(t.words.len(), 2);
+    }
+
+    #[test]
+    fn the_same_short_answer_to_a_behavioral_question_is_didnt_catch_that() {
+        let (samples, spans) = two_short_chunks(750);
+        for kind in ["behavioral", "technical", ""] {
+            assert_eq!(transcribe_with(&mut one_word_each("Tuesday"), &samples, &spans, kind).unwrap_err(), DIDNT_CATCH_THAT, "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_factual_answer_still_needs_a_second_of_speech_and_two_words() {
+        let (samples, spans) = two_short_chunks(400); // 0.8 s
+        assert_eq!(transcribe_with(&mut one_word_each("Tuesday"), &samples, &spans, "factual").unwrap_err(), DIDNT_CATCH_THAT);
+        // 1.5 s but only one word recognised
+        let samples = vec![0.1f32; 3 * 16_000];
+        let one = vec![Span { start: 0, end: 24_000 }];
+        assert_eq!(transcribe_with(&mut one_word_each("Tuesday"), &samples, &one, "factual").unwrap_err(), DIDNT_CATCH_THAT);
+        assert_eq!(needed_speech_ms("factual", 2), 1_000);
+        assert_eq!(needed_speech_ms("factual", 1), 3_000);
+        assert_eq!(needed_speech_ms("behavioral", 9), 3_000);
     }
 
     #[test]
     fn no_speech_at_all_is_didnt_catch_that() {
         let samples = vec![0.0f32; 10 * 16_000];
-        assert_eq!(transcribe_with(&mut one_word_each("x"), &samples, &[]).unwrap_err(), DIDNT_CATCH_THAT);
+        assert_eq!(transcribe_with(&mut one_word_each("x"), &samples, &[], "").unwrap_err(), DIDNT_CATCH_THAT);
     }
 
     #[test]
     fn a_known_whisper_hallucination_is_not_an_answer() {
         let samples = vec![0.1f32; 5 * 16_000];
         let spans = vec![Span { start: 0, end: 5 * 16_000 }];
-        assert_eq!(transcribe_with(&mut one_word_each("Thank you for watching."), &samples, &spans).unwrap_err(), DIDNT_CATCH_THAT);
+        assert_eq!(transcribe_with(&mut one_word_each("Thank you for watching."), &samples, &spans, "").unwrap_err(), DIDNT_CATCH_THAT);
     }
 
     #[test]
@@ -180,7 +230,7 @@ mod tests {
         }
         let samples = vec![0.1f32; 5 * 16_000];
         let spans = vec![Span { start: 0, end: 5 * 16_000 }];
-        let t = transcribe_with(&mut fake(Says(vec!["Thank", "you", "for", "having", "me."]), "Fake", exact()), &samples, &spans).unwrap();
+        let t = transcribe_with(&mut fake(Says(vec!["Thank", "you", "for", "having", "me."]), "Fake", exact()), &samples, &spans, "").unwrap();
         assert_eq!(t.words.len(), 5);
     }
 
@@ -197,7 +247,7 @@ mod tests {
         }
         let samples = vec![0.1f32; 5 * 16_000];
         let spans = vec![Span { start: 0, end: 5 * 16_000 }];
-        let e = transcribe_with(&mut fake(Broken, "Broken", Shape::whisper()), &samples, &spans).unwrap_err();
+        let e = transcribe_with(&mut fake(Broken, "Broken", Shape::whisper()), &samples, &spans, "").unwrap_err();
         assert!(e.contains("memory"), "{e}");
     }
 
@@ -309,9 +359,9 @@ mod tests {
             let mut model = engine::load(id, &dir, gpu(id)).unwrap();
             let load = t.elapsed().as_secs_f64();
             // The first pass warms caches; the second is the one an answer after the first sees.
-            let _ = transcribe_with(&mut model, &samples, &spans).unwrap();
+            let _ = transcribe_with(&mut model, &samples, &spans, "").unwrap();
             let t = Instant::now();
-            let out = transcribe_with(&mut model, &samples, &spans).unwrap();
+            let out = transcribe_with(&mut model, &samples, &spans, "").unwrap();
             let run = t.elapsed().as_secs_f64();
             let heard = bench_words(&out.words.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" "));
             let kept: Vec<String> = FILLERS.iter().zip(&said).map(|(f, n)| format!("{}/{n}", heard.iter().filter(|w| w == f).count())).collect();

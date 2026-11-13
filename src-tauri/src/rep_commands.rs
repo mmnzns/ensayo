@@ -522,8 +522,8 @@ pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Sen
     tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
-fn transcribe_path(path: &Path, model_id: &str) -> Cmd<transcribe::Transcript> {
-    crate::speech::loaded::transcribe_wav(path, model_id)
+fn transcribe_path(path: &Path, model_id: &str, question_type: &str) -> Cmd<transcribe::Transcript> {
+    crate::speech::loaded::transcribe_wav(path, model_id, question_type)
 }
 
 /// Loads the speech model while an answer is being recorded, so its transcript doesn't wait for the load. Failing
@@ -556,7 +556,7 @@ pub async fn finish_rep(mut args: FinishArgs, model_id: String) -> Cmd<RepOutcom
         let storage = open().map_err(plain)?;
         let settings = settings::load(&paths::settings_file());
         let keep_audio = settings::retention_days(&settings) != Some(0);
-        let words = match transcribe_path(&args.audio_path, &model_id) {
+        let words = match transcribe_path(&args.audio_path, &model_id, &args.question_type) {
             Ok(t) => t.words,
             Err(e) if e == transcribe::DIDNT_CATCH_THAT => Vec::new(),
             Err(e) => return Err(e),
@@ -1416,7 +1416,7 @@ mod tests {
         let tmp = guard.path().to_path_buf();
         let copy = tmp.join("rec.wav");
         fs::copy(&wav, &copy).unwrap();
-        let t = transcribe_path(&copy, &model).unwrap();
+        let t = transcribe_path(&copy, &model, "").unwrap();
         eprintln!("{} words from {}", t.words.len(), t.engine);
         let mut a = args(&tmp, 1, None);
         a.audio_path = copy;

@@ -144,7 +144,7 @@ pub fn compute(input: Inputs) -> Metrics {
     }
     let window = timing::window(input.stage, input.question_type);
     let speaking_ms = timing::speaking_ms(&words);
-    let outcome = if clean::heard_enough(&words) { Outcome::Scored } else { Outcome::DidntCatch };
+    let outcome = if clean::heard_enough(&words, input.question_type) { Outcome::Scored } else { Outcome::DidntCatch };
     let items = fillers::find(&words);
     let filler_rate = one_decimal(fillers::per_minute(items.len(), speaking_ms));
     let proof = timing::proof(&sentences, &input.bank);
