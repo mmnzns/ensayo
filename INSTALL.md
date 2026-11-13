@@ -35,6 +35,7 @@ You can change all of this later in **Settings**.
 
 ## Where things are
 
+- New installs keep the data folder in **Documents › Ensayo**, where the uninstaller never touches it. If you installed an earlier version, Home offers to move your data there.
 - Your stories and history are plain files in the **data folder** (Settings, Privacy shows where). You can point it at a synced folder to use the same stories on two computers; open Ensayo on one computer at a time.
 - Speech models, answer recordings and settings are kept on this computer only.
 - API keys are kept in the macOS Keychain or the Windows Credential Manager, never in a file.
