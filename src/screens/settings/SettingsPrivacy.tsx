@@ -5,6 +5,7 @@ import { isApp, type DataStatus } from "../../data/real";
 import { revealPath } from "../../ui/openExternal";
 import { pickFolder } from "../../ui/pickFile";
 import { useStore } from "../../data/store";
+import Link from "../../ui/Link";
 import { formatSize } from "./format";
 import { SettingsLayout, useLater } from "./parts";
 import { privacySetup, type AiView } from "./aiSettings";
@@ -122,7 +123,7 @@ export default function SettingsPrivacy() {
           {rows.map((r, i) => (
             <div key={r.title} className="e-rowline" style={i === rows.length - 1 ? { borderBottom: "none" } : undefined}>
               <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-                {r.title}<span className="e-small">{r.detail}</span>
+                {r.title}<span className="e-small">{r.detail}{r.link && <> <Link to={r.link.url}>{r.link.label}</Link></>}</span>
               </span>
               <span className={r.stays ? "e-badge e-badge-ok" : "e-badge"}>{r.badge}</span>
             </div>

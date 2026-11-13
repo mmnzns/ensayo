@@ -337,7 +337,7 @@ describe("what leaves this computer", () => {
   });
 
   it("derives the setup for a cloud engine", () => {
-    expect(privacySetup(view)).toEqual({ ai: "key", provider: "Claude", assistant: "Claude" });
+    expect(privacySetup(view)).toEqual({ ai: "key", provider: "Claude", assistant: "Claude", providerId: "claude" });
   });
 
   it("derives the setup for timing only", () => {
@@ -364,7 +364,7 @@ describe("what leaves this computer", () => {
 
   it("does not claim a server elsewhere stays on this computer", () => {
     const s = privacySetup({ settings: { ...settings, provider: "compatible", base_url: "https://llm.example.com/v1" }, providers });
-    expect(s).toEqual({ ai: "key", provider: "llm.example.com", assistant: "the model you pick" });
+    expect(s).toEqual({ ai: "key", provider: "llm.example.com", assistant: "the model you pick", providerId: "compatible" });
   });
 
   it("treats a server on the home network as this side of the door", () => {

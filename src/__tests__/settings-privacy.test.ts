@@ -44,6 +44,33 @@ describe("choosing a new data folder", () => {
   });
 });
 
+describe("what each provider says about training", () => {
+  const transcripts = (providerId: string) => leavesRows({ speech: "Whisper", speechLocal: true, ai: "key", provider: "X", assistant: "Y", providerId }).find((r) => r.title === "Transcripts of your answers")!;
+
+  it("says Not used for training only for Anthropic, OpenAI and Mistral", () => {
+    for (const id of ["claude", "openai", "mistral"]) expect(transcripts(id).detail, id).toContain("Not used for training.");
+    for (const id of ["gemini", "openrouter", "groq", "cerebras", "something-new"]) expect(transcripts(id).detail, id).not.toContain("Not used for training");
+  });
+
+  it("points every other provider to its data policy, with a link where the table has one", () => {
+    expect(transcripts("gemini").detail).toContain("Check the provider's data policy.");
+    expect(transcripts("gemini").link?.url).toBe("https://ai.google.dev/gemini-api/terms");
+    expect(transcripts("openrouter").link?.url).toBe("https://openrouter.ai/privacy");
+    expect(transcripts("groq").link?.url).toBe("https://groq.com/privacy-policy");
+    expect(transcripts("cerebras").link?.url).toBe("https://www.cerebras.ai/privacy-policy");
+    expect(transcripts("claude").link).toBeUndefined();
+  });
+
+  it("says a compatible server stays on the server you chose", () => {
+    expect(transcripts("compatible").detail).toContain("Stays on the server you chose.");
+  });
+
+  it("leaves local AI rows as they were", () => {
+    const rows = leavesRows({ speech: "Whisper", speechLocal: true, ai: "local", provider: "", assistant: "the local model" });
+    expect(rows[1].detail).toBe("The AI runs on this computer. Nothing is sent.");
+  });
+});
+
 describe("what leaves this computer", () => {
   it("names the speech model that runs here", () => {
     const rows = leavesRows({ speech: "Parakeet", speechLocal: true, ai: "local", provider: "", assistant: "the local model" });

@@ -8,6 +8,27 @@ export interface LeaveRow {
   badge: string;
   /** True when nothing goes out for this row (green badge). */
   stays: boolean;
+  /** The provider's data policy page, when the row points to one. */
+  link?: { label: string; url: string };
+}
+
+/** What each provider says about training on what Ensayo sends it, by provider id. Only the providers whose paid API policy says so read "Not used for training." */
+const NOT_TRAINED = "Not used for training.";
+const CHECK_POLICY = "Check the provider's data policy.";
+const POLICIES: Record<string, { text: string; url?: string }> = {
+  claude: { text: NOT_TRAINED },
+  openai: { text: NOT_TRAINED },
+  mistral: { text: NOT_TRAINED },
+  gemini: { text: CHECK_POLICY, url: "https://ai.google.dev/gemini-api/terms" },
+  openrouter: { text: CHECK_POLICY, url: "https://openrouter.ai/privacy" },
+  groq: { text: CHECK_POLICY, url: "https://groq.com/privacy-policy" },
+  cerebras: { text: CHECK_POLICY, url: "https://www.cerebras.ai/privacy-policy" },
+  compatible: { text: "Stays on the server you chose." },
+};
+
+/** The training sentence for a provider id, with a link to its policy when there is one. An id the table doesn't know gets the cautious wording. */
+export function trainingNote(providerId: string | undefined): { text: string; url?: string } {
+  return POLICIES[providerId ?? ""] ?? { text: CHECK_POLICY };
 }
 
 export function leavesRows(setup: PrivacyData["setup"]): LeaveRow[] {
@@ -19,7 +40,14 @@ export function leavesRows(setup: PrivacyData["setup"]): LeaveRow[] {
       : { title: "Your recordings", detail: `Sent to ${speech} to turn into text, one answer at a time.`, badge: `Sent to ${speech}`, stays: false },
   );
   if (ai === "key") {
-    rows.push({ title: "Transcripts of your answers", detail: `Sent to ${provider} so ${assistant} can give feedback. Not used for training.`, badge: `Sent to ${provider}`, stays: false });
+    const note = trainingNote(setup.providerId);
+    rows.push({
+      title: "Transcripts of your answers",
+      detail: `Sent to ${provider} so ${assistant} can give feedback. ${note.text}`,
+      badge: `Sent to ${provider}`,
+      stays: false,
+      ...(note.url ? { link: { label: "Read their policy", url: note.url } } : {}),
+    });
     rows.push({ title: "Stories, job postings and resumes", detail: "Sent only when a question needs them.", badge: "Sent when needed", stays: false });
   } else if (ai === "local") {
     rows.push({ title: "Transcripts of your answers", detail: "The AI runs on this computer. Nothing is sent.", badge: "Stays here", stays: true });

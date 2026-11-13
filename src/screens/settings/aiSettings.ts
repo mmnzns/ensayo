@@ -338,16 +338,16 @@ export function assistantName(id: string): string {
 }
 
 /** The `ai`, `provider` and `assistant` that `leavesRows` needs. A server out on the internet counts as sending, not as local. */
-export function privacySetup(view: AiView): { ai: AiKind; provider: string; assistant: string } {
+export function privacySetup(view: AiView): { ai: AiKind; provider: string; assistant: string; providerId?: string } {
   const { settings, providers } = view;
   const id = settings.provider;
   if (id === "") return { ai: "timing", provider: "", assistant: "" };
   if (id === BUILT_IN) return { ai: "local", provider: "", assistant: "the local model" };
   if (id === COMPATIBLE) {
     if (isLocalAddress(settings.base_url)) return { ai: "local", provider: "", assistant: "the local model" };
-    return { ai: "key", provider: hostOf(settings.base_url), assistant: "the model you pick" };
+    return { ai: "key", provider: hostOf(settings.base_url), assistant: "the model you pick", providerId: COMPATIBLE };
   }
-  return { ai: "key", provider: providers.find((p) => p.id === id)?.name ?? id, assistant: assistantName(id) };
+  return { ai: "key", provider: providers.find((p) => p.id === id)?.name ?? id, assistant: assistantName(id), providerId: id };
 }
 
 // ---------- The Test line ----------

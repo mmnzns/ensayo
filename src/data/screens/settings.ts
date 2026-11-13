@@ -110,7 +110,7 @@ export interface AiData {
 
 export interface PrivacyData {
   /** What the app is set up to use right now; "What leaves this computer" is worked out from it. */
-  setup: { speech: string; speechLocal: boolean; ai: AiKind; provider: string; assistant: string };
+  setup: { speech: string; speechLocal: boolean; ai: AiKind; provider: string; assistant: string; /** The provider id (`claude`, `gemini`...), which decides the training wording. */ providerId?: string };
   retention: string;
   retentionOptions: string[];
   recordingsMb: number;
