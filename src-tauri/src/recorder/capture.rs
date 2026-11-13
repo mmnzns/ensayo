@@ -8,7 +8,7 @@ use super::source::{AudioSource, SharedFeed};
 use super::wav::WavSink;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -19,7 +19,10 @@ pub struct Capture {
     path: PathBuf,
     stop: Arc<AtomicBool>,
     level: Arc<AtomicU32>,
-    started: Instant,
+    /// Pause is asked for here; the writer applies it to the recording clock at the next buffer it reads.
+    paused: Arc<AtomicBool>,
+    /// 16 kHz samples written so far: recorded time only, so paused time is never in it.
+    recorded: Arc<AtomicU64>,
     writer: JoinHandle<io::Result<u64>>,
 }
 
@@ -46,7 +49,9 @@ impl Capture {
         let level = Arc::new(AtomicU32::new(0));
         let mut pipeline = TrackPipeline::new(WavSink::create(path).map_err(|e| format!("Couldn't create the recording: {e}"))?);
 
-        let (stop_w, level_w) = (stop.clone(), level.clone());
+        let paused = Arc::new(AtomicBool::new(false));
+        let recorded = Arc::new(AtomicU64::new(0));
+        let (stop_w, level_w, paused_w, recorded_w) = (stop.clone(), level.clone(), paused.clone(), recorded.clone());
         let writer = std::thread::Builder::new()
             .name("ensayo-writer".into())
             .spawn(move || {
@@ -58,8 +63,16 @@ impl Capture {
                     while let Some(h) = consumer.pop(&mut buf) {
                         got = true;
                         let clock = clock.get_or_insert_with(|| Clock::new(h.host_ns));
+                        // Pause and resume take effect at this buffer's own capture time, so the clock (and the
+                        // file) never count the time in between.
+                        match (paused_w.load(Ordering::Acquire), clock.is_paused()) {
+                            (true, false) => drop(clock.pause(h.host_ns)),
+                            (false, true) => drop(clock.resume(h.host_ns)),
+                            _ => {}
+                        }
                         pipeline.push(clock.position_samples(h.host_ns), h.rate, h.channels as usize, &buf)?;
                     }
+                    recorded_w.store(pipeline.written(), Ordering::Relaxed);
                     if last_level.elapsed() >= Duration::from_millis(50) {
                         level_w.store(pipeline.level().to_bits(), Ordering::Relaxed);
                         last_level = Instant::now();
@@ -87,7 +100,7 @@ impl Capture {
                 return Err(e);
             }
         };
-        Ok(Capture { mic, mic_name, path: path.to_path_buf(), stop, level, started: Instant::now(), writer })
+        Ok(Capture { mic, mic_name, path: path.to_path_buf(), stop, level, paused, recorded, writer })
     }
 
     /// Like `start`, but gives up after `limit` when the device never answers (a mic that hangs while opening). The open
@@ -132,8 +145,23 @@ impl Capture {
         f32::from_bits(self.level.load(Ordering::Relaxed))
     }
 
+    /// Recorded time in ms: what is in the file so far. It stands still while paused.
     pub fn elapsed_ms(&self) -> u64 {
-        self.started.elapsed().as_millis() as u64
+        self.recorded.load(Ordering::Relaxed) * 1000 / RATE as u64
+    }
+
+    /// Stops writing audio. The microphone stays open and its buffers are dropped, so Resume is instant and needs no
+    /// new permission or device handshake (the cost is that the system's microphone indicator stays on while paused).
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::Release);
+    }
+
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::Release);
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Acquire)
     }
 
     /// Stops the mic, flushes the file and returns where it is. No audio at all is an error, never an empty file.
@@ -209,6 +237,58 @@ mod tests {
         let samples = read_samples(&path);
         let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
         assert!(rms > 0.2, "the tone should be audible, rms {rms}");
+    }
+
+    /// A mic the test feeds by hand: buffers are pushed with host times the test chooses.
+    struct HandMic(Arc<Mutex<Option<SharedFeed>>>);
+    impl AudioSource for HandMic {
+        fn start(&mut self, feed: SharedFeed) -> Result<String, String> {
+            *self.0.lock().unwrap() = Some(feed);
+            Ok("Hand mic".into())
+        }
+        fn restart(&mut self) -> Result<String, String> {
+            Ok("Hand mic".into())
+        }
+        fn stop(&mut self) {}
+    }
+
+    /// Pushes `secs` seconds of tone starting at host time `from_s`, as 10 ms mono buffers at 16 kHz.
+    fn push_tone(feed: &SharedFeed, from_s: u64, secs: u64) {
+        for n in 0..secs * 100 {
+            let buf: Vec<f32> = (0..160).map(|i| ((n * 160 + i) as f32 * 0.1).sin() * 0.5).collect();
+            feed.lock().unwrap().push(from_s * 1_000_000_000 + n * 10_000_000, 16_000, 1, &buf);
+        }
+    }
+
+    fn wait_for(cap: &Capture, ms: u64) {
+        for _ in 0..400 {
+            if cap.elapsed_ms() >= ms {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("recorded time stayed at {} ms", cap.elapsed_ms());
+    }
+
+    #[test]
+    fn paused_time_is_not_recorded_and_does_not_count_toward_the_clock() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("paused.wav");
+        let slot = Arc::new(Mutex::new(None));
+        let cap = Capture::start(Box::new(HandMic(slot.clone())), &path).unwrap();
+        let feed = slot.lock().unwrap().clone().unwrap();
+        push_tone(&feed, 0, 1);
+        wait_for(&cap, 900);
+        cap.pause();
+        assert!(cap.is_paused());
+        push_tone(&feed, 1, 5); // five seconds arrive while paused: they are dropped
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(cap.elapsed_ms() < 1100, "the clock stood still: {} ms", cap.elapsed_ms());
+        cap.resume();
+        push_tone(&feed, 6, 1);
+        wait_for(&cap, 1900);
+        let rec = cap.stop().unwrap();
+        assert!((1900..=2100).contains(&rec.duration_ms), "two seconds were recorded, got {} ms", rec.duration_ms);
     }
 
     #[test]

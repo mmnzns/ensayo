@@ -5,6 +5,7 @@ export interface KeyHandlers {
   enter?: () => void;
   n?: () => void;
   l?: () => void;
+  p?: () => void;
   r?: () => void;
   esc?: () => void;
 }
@@ -14,6 +15,7 @@ const MAP: Record<string, keyof KeyHandlers> = {
   Enter: "enter",
   n: "n",
   l: "l",
+  p: "p",
   r: "r",
   Escape: "esc",
 };
@@ -48,7 +50,7 @@ export function runKey(e: Pick<KeyboardEvent, "key" | "repeat" | "metaKey" | "ct
   return true;
 }
 
-/** Practice keys (Space, Enter, N, L, R, Esc). Listens only while the calling screen is mounted, so it never leaks into other screens. */
+/** Practice keys (Space, Enter, N, L, P, R, Esc). Listens only while the calling screen is mounted, so it never leaks into other screens. */
 export function useKeys(handlers: KeyHandlers) {
   const ref = useRef(handlers);
   ref.current = handlers;

@@ -8,14 +8,15 @@ import type { Method, Story, Target } from "../data/types";
 import type { QuestionQuality } from "./debrief";
 import { go } from "../ui/router";
 import { NO_SPEECH_MODEL } from "./errorRoute";
-import { isApp, tauriApi, type RepApi, type SessionDetail } from "./api";
+import { isApp, tauriApi, type RecordingStatus, type RepApi, type SessionDetail } from "./api";
 import { attemptFromOutcome } from "./attempt";
+import { LIMIT_SECONDS } from "./limit";
 import { banksFor, ownQuestion, pickApplicationQuestions, pickClosing, pickQuestions, type BankQuestion, type ExtraQuestion } from "./questions";
 import type { MustSayItem } from "./debrief";
 import { pickStories } from "./stories";
 import type { FinishArgs, FullRep, RepOutcome } from "./types";
 
-export const HARD_CAP_SECONDS = 240;
+export const HARD_CAP_SECONDS = LIMIT_SECONDS;
 export const MAX_ATTEMPTS = 3;
 
 export type Phase = "idle" | "asking" | "recording" | "thinking" | "result" | "didnt_catch" | "notice" | "clarify" | "error";
@@ -58,6 +59,8 @@ export interface LiveState {
   recordingPath: string | null;
   /** The microphone that opened for the answer being recorded, as the recorder named it; null before it opens. */
   micName: string | null;
+  /** Why the last recording stopped on its own (the time limit); shown with the result. Null when you stopped it. */
+  stopNote: string | null;
   /** What each attempt at the current question showed, index 0 is attempt 1. */
   attempts: PracticeAttempt[];
   outcomes: RepOutcome[];
@@ -101,6 +104,7 @@ const INITIAL: LiveState = {
   phase: "idle",
   recordingPath: null,
   micName: null,
+  stopNote: null,
   attempts: [],
   outcomes: [],
   restartOffered: false,
@@ -381,7 +385,7 @@ export async function beginRecording() {
   try {
     const api = await repApi();
     const name = await api.startRecording();
-    set({ phase: "recording", error: null, micName: typeof name === "string" && name ? name : null });
+    set({ phase: "recording", error: null, stopNote: null, micName: typeof name === "string" && name ? name : null });
     // Load the speech model while you talk; if it can't, the transcript says why when you stop.
     void api.warmSpeech?.().catch(() => {});
   } catch (e) {
@@ -400,7 +404,7 @@ export async function restartRecording() {
     const rec = await a.stopRecording();
     await a.discardRecording(rec.path);
     const name = await a.startRecording();
-    set({ phase: "recording", error: null, micName: typeof name === "string" && name ? name : null });
+    set({ phase: "recording", error: null, stopNote: null, micName: typeof name === "string" && name ? name : null });
   } catch (e) {
     set({ phase: "error", error: message(e) });
   }
@@ -408,10 +412,25 @@ export async function restartRecording() {
 
 /** 0 to 1, how loud the mic is right now. 0 when it cannot be read. */
 export async function recordingLevel(): Promise<number> {
+  return (await recordingStatus())?.level ?? 0;
+}
+
+/** The recorder's level, recorded time and pause state; null when it cannot be read. */
+export async function recordingStatus(): Promise<RecordingStatus | null> {
   try {
-    return (await (await repApi()).level())?.level ?? 0;
+    return await (await repApi()).level();
   } catch {
-    return 0;
+    return null;
+  }
+}
+
+/** Pauses (or resumes) the answer being recorded. Nothing is written while paused and the clock stands still. */
+export async function setRecordingPaused(paused: boolean): Promise<void> {
+  try {
+    const a = await repApi();
+    await (paused ? a.pauseRecording?.() : a.resumeRecording?.());
+  } catch (e) {
+    set({ notice: message(e) });
   }
 }
 
@@ -449,11 +468,12 @@ async function finishAt(q: BankQuestion, path: string, run: string) {
   }
 }
 
-export async function stopAndFinish() {
+/** Stops the recording and scores it. `stopNote` says why when Ensayo stopped it (the time limit). */
+export async function stopAndFinish(stopNote: string | null = null) {
   const q = currentQuestion();
   if (!q) return;
   const run = newRun();
-  set({ phase: "thinking" });
+  set({ phase: "thinking", stopNote });
   try {
     const a = await repApi();
     const rec = await a.stopRecording();
@@ -492,6 +512,11 @@ export function notAnAnswerNotice(heard: string | null): string {
   return `${NOTICES.not_an_answer}${quote} An answer speaks to what was asked: say your answer first, then back it up. Try again.`;
 }
 
+/** The result's notice with why the recording stopped, when it was the limit. */
+function withStopNote(notice: string | null): string | null {
+  return [state.stopNote, notice].filter(Boolean).join(" ") || null;
+}
+
 async function apply(out: RepOutcome, run: string) {
   if (out.outcome === "clarifying") {
     // Asking to clarify is a valid move: the interviewer answers, then the real answer is recorded. It is not scored.
@@ -525,7 +550,7 @@ async function apply(out: RepOutcome, run: string) {
     return;
   }
   if (state.view === "followup") {
-    set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, followUpOutcome: out, followUpAttempt: attemptFromOutcome(out), restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
+    set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, followUpOutcome: out, followUpAttempt: attemptFromOutcome(out), restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: withStopNote(out.notice), clarify: null });
     announceHistory();
     if (state.mode === "mock") await advanceMock(out, run);
     return;
@@ -533,7 +558,7 @@ async function apply(out: RepOutcome, run: string) {
   const i = state.attempt - 1;
   const attempts = [...state.attempts.slice(0, i), attemptFromOutcome(out)];
   const outcomes = [...state.outcomes.slice(0, i), out];
-  set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: out.notice, clarify: null });
+  set({ phase: "result", sessionId: out.session_id, lastSessionId: out.session_id, attempts, outcomes, restartOffered: out.restart_offered, noteWrong: false, recordingPath: null, notice: withStopNote(out.notice), clarify: null });
   announceHistory();
   if (state.mode === "mock") await advanceMock(out, run);
 }

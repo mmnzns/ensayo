@@ -243,12 +243,25 @@ fn open_capture(mic: Box<dyn crate::recorder::source::AudioSource>, path: &std::
 #[derive(Serialize)]
 pub struct RecordingLevel {
     level: f32,
+    /// Recorded time: paused time is not in it.
     elapsed_ms: u64,
+    paused: bool,
 }
 
 #[tauri::command]
 pub fn recording_level(state: State<'_, RecorderState>) -> Option<RecordingLevel> {
-    state.capture.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| RecordingLevel { level: c.level(), elapsed_ms: c.elapsed_ms() })
+    state.capture.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| RecordingLevel { level: c.level(), elapsed_ms: c.elapsed_ms(), paused: c.is_paused() })
+}
+
+/// Pauses the recording: audio stops being written, and the clock and the answer's time limit stand still.
+#[tauri::command]
+pub fn pause_recording(state: State<'_, RecorderState>) -> Result<(), String> {
+    state.capture.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| c.pause()).ok_or_else(|| "Not recording".to_string())
+}
+
+#[tauri::command]
+pub fn resume_recording(state: State<'_, RecorderState>) -> Result<(), String> {
+    state.capture.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| c.resume()).ok_or_else(|| "Not recording".to_string())
 }
 
 #[derive(Serialize)]

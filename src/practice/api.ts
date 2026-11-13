@@ -11,11 +11,22 @@ export interface SessionDetail {
   reps: FullRep[];
 }
 
+/** What the recorder says while it records. */
+export interface RecordingStatus {
+  level: number;
+  elapsed_ms: number;
+  paused?: boolean;
+}
+
 export interface RepApi {
   /** Starts the microphone chosen in Settings. Resolves with the name of the device that opened (fakes may give none). */
   startRecording(): Promise<string | void>;
   stopRecording(): Promise<{ path: string; duration_ms: number }>;
-  level(): Promise<{ level: number; elapsed_ms: number } | null>;
+  /** `elapsed_ms` is recorded time (paused time is not in it). */
+  level(): Promise<RecordingStatus | null>;
+  /** Stops writing audio until `resumeRecording`. Optional: fakes skip it. */
+  pauseRecording?(): Promise<void>;
+  resumeRecording?(): Promise<void>;
   /** `run` is the token of this request (session and counter). The backend does not need it; the caller uses it to ignore a late result. */
   finishRep(args: FinishArgs, run?: string): Promise<RepOutcome>;
   /** Loads the speech model while the answer is recorded, so the transcript doesn't wait for it. Optional: fakes skip it. */
@@ -61,6 +72,8 @@ export async function tauriApi(): Promise<RepApi> {
     startRecording: () => invoke<string>("start_recording", { device: readPrefs().mic.device || null }),
     stopRecording: () => invoke("stop_recording"),
     level: () => invoke("recording_level"),
+    pauseRecording: () => invoke("pause_recording"),
+    resumeRecording: () => invoke("resume_recording"),
     finishRep: async (args) => invoke("finish_rep", { args, modelId: await pickModel() }),
     warmSpeech: async () => invoke("warm_speech_model", { modelId: await pickModel() }),
     rescoreRep: (sessionId, n, keepRestart) => invoke("rescore_rep", { sessionId, n, keepRestart }),

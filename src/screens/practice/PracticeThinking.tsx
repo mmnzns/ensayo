@@ -97,6 +97,7 @@ export default function PracticeThinking() {
         <div className="e-card" style={{ width: "100%", maxWidth: "520px", padding: "40px", display: "flex", flexDirection: "column", gap: "26px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <span className="e-hand" style={{ fontSize: "28px" }}>{failed ? "That didn't work" : "Listening back..."}</span>
+            {!failed && state.stopNote && <span className="e-meta" role="status">{state.stopNote}</span>}
             {!failed && (
               <span className="e-meta">
                 {attempt ? `Your answer: ${clock(attempt.durationSeconds)}. ` : ""}{live ? "A few more seconds." : `About ${thinking.extraSeconds} more seconds.`}

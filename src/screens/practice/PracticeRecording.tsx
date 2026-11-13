@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { useLive, beginRecording, getLive, HARD_CAP_SECONDS, recordingLevel, restartRecording, stopAndFinish } from "../../practice/live";
+import { useLive, beginRecording, getLive, recordingStatus, restartRecording, setRecordingPaused, stopAndFinish } from "../../practice/live";
+import { LIMIT_STOPPED, LIMIT_WARNING, limitState } from "../../practice/limit";
 import { SILENCE_START, silenceStep, silenceStop } from "../../practice/silence";
 import { readPrefs } from "../settings/prefs";
 import FocusShell from "../../ui/FocusShell";
@@ -37,6 +38,14 @@ function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
   );
 }
 
+/** "30 seconds left" from 3:30 on, in a Drill and in a Mock (a Mock hides the clock, but the limit is the same). */
+export function LimitNotice({ seconds }: { seconds: number }) {
+  if (limitState(seconds) === "ok") return null;
+  return (
+    <span role="status" aria-live="polite" style={{ fontSize: "15px", fontWeight: "600", color: "var(--e-warn-ink)" }}>{LIMIT_WARNING}</span>
+  );
+}
+
 export default function PracticeRecording() {
   const { timerMaxSeconds, levelBars } = useStore().screens.practice;
   const { live, session, question, targetSeconds, endTo, onEnd } = usePractice();
@@ -48,6 +57,8 @@ export default function PracticeRecording() {
   const stopRef = useRef<() => void>(() => {});
   const [seconds, setSeconds] = useState(0);
   const [level, setLevel] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
   const max = live ? Math.max(timerMaxSeconds, targetSeconds.to + 30) : timerMaxSeconds;
 
   // A live session starts the microphone when the screen opens, shows its real level, and stops itself at the hard cap.
@@ -58,9 +69,16 @@ export default function PracticeRecording() {
     silence.current = SILENCE_START;
     const id = window.setInterval(
       () =>
-        void recordingLevel().then((l) => {
-          setLevel(l);
-          if (!autoStop) return;
+        void recordingStatus().then((st) => {
+          const l = st?.level ?? 0;
+          setLevel(pausedRef.current ? 0 : l);
+          // The clock and the limit count recorded time, which the recorder keeps: paused time is not in it.
+          if (st) setSeconds(Math.floor(st.elapsed_ms / 1000));
+          if (st?.paused !== undefined && st.paused !== pausedRef.current) {
+            pausedRef.current = st.paused;
+            setPaused(st.paused);
+          }
+          if (!autoStop || pausedRef.current) return;
           silence.current = silenceStep(silence.current, l, 130);
           if (silenceStop(silence.current)) stopRef.current();
         }),
@@ -75,39 +93,52 @@ export default function PracticeRecording() {
     if (live && phase === "error") go(ASK);
   }, [live, phase]);
 
-  // Count up from 0:00 while the screen is mounted.
+  // The preview has no recorder: it counts up from 0:00 while the screen is mounted and not paused.
   useEffect(() => {
-    const id = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    if (live) return;
+    const id = window.setInterval(() => {
+      if (!pausedRef.current) setSeconds((s) => s + 1);
+    }, 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [live]);
 
-  const stop = () => {
-    if (live) void stopAndFinish();
+  const stop = (why?: string) => {
+    if (live) void stopAndFinish(why ?? null);
     go(THINK);
   };
-  stopRef.current = stop;
+  const togglePause = () => {
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    setPaused(next);
+    silence.current = SILENCE_START;
+    if (live) void setRecordingPaused(next);
+  };
+  stopRef.current = () => stop();
   const end = () => {
     onEnd?.();
     go(endTo);
   };
   const startOver = () => {
     setSeconds(0);
+    pausedRef.current = false;
+    setPaused(false);
     silence.current = SILENCE_START;
     if (live) void restartRecording();
   };
+  // At 4:00 of recorded time it stops, says why on the next screen, and scores the answer.
   useEffect(() => {
-    if (live && seconds >= HARD_CAP_SECONDS) stop();
+    if (limitState(seconds) === "stop") stop(LIMIT_STOPPED);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seconds, live]);
+  }, [seconds]);
   const [asking, setAsking] = useState(false);
   const onEsc = () => (escDecision(atStake("recording", live)) === "ask" ? setAsking(true) : end());
-  useKeys({ space: stop, esc: onEsc });
+  useKeys({ space: () => stop(), p: togglePause, esc: onEsc });
 
   const pct = (n: number) => `${Math.min(100, (n / max) * 100)}%`;
   const dot = (
     <span className="e-pill" style={{ gap: "8px" }}>
       <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--e-primary)" }} />
-      Recording
+      {paused ? "Paused" : "Recording"}
     </span>
   );
 
@@ -126,6 +157,7 @@ export default function PracticeRecording() {
           {/* A Mock is like the real call: no clock and no target while you talk (the four minute cap still stops it). */}
           {!noClock && <span style={{ fontSize: "44px", fontWeight: "600", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{clock(seconds)}</span>}
           {live && micName && <span className="e-small" data-testid="mic-name">{micName}</span>}
+          <LimitNotice seconds={seconds} />
           <div style={{ position: "relative", width: "100%", height: "8px", borderRadius: "999px", background: "var(--e-line)", display: noClock ? "none" : undefined }} aria-label={`${seconds} seconds, target ${targetSeconds.from} to ${targetSeconds.to}`}>
             <span style={{ position: "absolute", left: "0", top: "0", height: "8px", width: pct(seconds), borderRadius: "999px", background: "var(--e-primary)" }} />{" "}
             <span style={{ position: "absolute", left: pct(targetSeconds.from), top: "-4px", width: pct(targetSeconds.to - targetSeconds.from), height: "16px", borderRadius: "6px", boxShadow: "inset 0 0 0 2px var(--e-win)" }} />
@@ -137,12 +169,14 @@ export default function PracticeRecording() {
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-          <button type="button" aria-label="Stop answering" onClick={stop} style={{ width: "96px", height: "96px", borderRadius: "50%", background: "var(--e-ink)", color: "var(--e-surface)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(43,39,34,0.22)", border: "none", padding: 0, cursor: "pointer" }}>
+          <button type="button" aria-label="Stop answering" onClick={() => stop()} style={{ width: "96px", height: "96px", borderRadius: "50%", background: "var(--e-ink)", color: "var(--e-surface)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(43,39,34,0.22)", border: "none", padding: 0, cursor: "pointer" }}>
             <span style={{ width: "30px", height: "30px", borderRadius: "6px", background: "var(--e-surface)" }} />
           </button>
           <span className="e-meta">
             Press <Kbd>Space</Kbd> when you're done
           </span>
+          <button type="button" className="e-btn e-btn-soft e-btn-sm" aria-pressed={paused} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
+          <span className="e-small">or press <Kbd>P</Kbd></span>
         </div>
       </div>
       <div className="e-wrap" style={{ width: "100%" }}>
