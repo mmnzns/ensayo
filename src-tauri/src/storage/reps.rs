@@ -30,10 +30,57 @@ pub struct Session {
     /// else the first target that is not archived, decided when it is read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_id: Option<String>,
+    /// What "Continue where you left off" needs: the plan of questions and how far the session got. Sessions from
+    /// before 0.3.0 have none and are never offered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume: Option<Resume>,
     /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
     #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
+
+/// The plan of a session and where it stopped. A mid-answer state is not kept: only whole answers move `next_index`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Resume {
+    /// The questions in the order they are asked, as the screen's question objects (opaque here).
+    pub plan: Vec<serde_json::Value>,
+    /// 0-based index of the next question to ask: one past the furthest question answered.
+    #[serde(default)]
+    pub next_index: u32,
+    /// Tries per question in a Drill.
+    #[serde(default = "three")]
+    pub tries: u32,
+    /// A Drill offers follow-ups.
+    #[serde(default = "yes")]
+    pub follow_ups: bool,
+    #[serde(default)]
+    pub founder_variant: bool,
+    /// The person ended the session, or it ran to its last question.
+    #[serde(default)]
+    pub ended: bool,
+    /// Fields a newer Ensayo added. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+fn three() -> u32 {
+    3
+}
+
+/// What starts a session's `Resume`: the plan and the settings it was started with.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ResumeSeed {
+    pub plan: Vec<serde_json::Value>,
+    #[serde(default = "three")]
+    pub tries: u32,
+    #[serde(default = "yes")]
+    pub follow_ups: bool,
+    #[serde(default)]
+    pub founder_variant: bool,
+}
+
+/// A session is offered for "Continue where you left off" for this long after it started.
+pub const RESUME_HOURS: i64 = 24;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Feedback {
@@ -176,6 +223,47 @@ impl Storage {
 
     pub fn session(&self, id: &str) -> Result<Option<Session>> {
         load_record(&self.session_dir(checked(id)?).join("session.json"), migrate::unchanged)
+    }
+
+    /// Records that the answer at `question_index` is saved: the next question is the one after it. The first call
+    /// for a session also keeps its plan (`seed`); later calls only move `next_index` forward. A session without a plan
+    /// (made before 0.3.0) stays without one.
+    pub fn note_progress(&self, id: &str, question_index: u32, seed: Option<&ResumeSeed>) -> Result<()> {
+        let Some(mut s) = self.session(id)? else { return Err(StorageError::NotFound(format!("session {id}"))) };
+        let next = question_index.saturating_add(1);
+        match (&mut s.resume, seed) {
+            (Some(r), _) => {
+                if next <= r.next_index {
+                    return Ok(());
+                }
+                r.next_index = next;
+            }
+            (None, Some(seed)) => {
+                s.resume = Some(Resume { plan: seed.plan.clone(), next_index: next, tries: seed.tries, follow_ups: seed.follow_ups, founder_variant: seed.founder_variant, ended: false, extra: Default::default() });
+            }
+            (None, None) => return Ok(()),
+        }
+        self.save_session(&s)
+    }
+
+    /// Marks a session ended (the person ended it, or it ran to its last question). A session without a plan is left alone.
+    pub fn end_session(&self, id: &str) -> Result<()> {
+        let Some(mut s) = self.session(id)? else { return Ok(()) };
+        match &mut s.resume {
+            Some(r) if !r.ended => r.ended = true,
+            _ => return Ok(()),
+        }
+        self.save_session(&s)
+    }
+
+    /// The newest session started less than 24 hours ago that was not ended and still has questions left.
+    pub fn resumable_session(&self, now: chrono::DateTime<chrono::Utc>) -> Result<Option<Session>> {
+        let fresh = |s: &Session| {
+            let Ok(started) = chrono::DateTime::parse_from_rfc3339(&s.started) else { return false };
+            let age = now - started.with_timezone(&chrono::Utc);
+            age >= chrono::Duration::zero() && age < chrono::Duration::hours(RESUME_HOURS)
+        };
+        Ok(self.sessions()?.items.into_iter().find(|s| fresh(s) && s.resume.as_ref().is_some_and(|r| !r.ended && (r.next_index as usize) < r.plan.len())))
     }
 
     /// Newest first. A session folder whose file cannot be read is reported, not hidden.
@@ -362,6 +450,7 @@ impl Storage {
 mod tests {
     use super::*;
     use crate::metrics::{compute, numbers, Inputs};
+    use chrono::TimeZone;
 
     fn storage() -> (tempfile::TempDir, Storage) {
         let dir = tempfile::tempdir().unwrap();
@@ -378,7 +467,7 @@ mod tests {
     }
 
     fn session(id: &str, started: &str) -> Session {
-        Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: started.into(), target_id: None }
+        Session { extra: Default::default(), resume: None, id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: started.into(), target_id: None }
     }
 
     fn rep(n: u32) -> FullRep {
@@ -398,7 +487,7 @@ mod tests {
         let (_d, s) = storage();
         let a = s.save_target(&Target::default()).unwrap();
         let b = s.save_target(&Target::default()).unwrap();
-        let sess = |id: &str, target: Option<&str>| Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-21T09:00:00Z".into(), target_id: target.map(String::from) };
+        let sess = |id: &str, target: Option<&str>| Session { extra: Default::default(), resume: None, id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-21T09:00:00Z".into(), target_id: target.map(String::from) };
         s.save_session(&sess("ses_a", Some(&a.id))).unwrap();
         s.save_session(&sess("ses_b", Some(&b.id))).unwrap();
         s.save_session(&sess("ses_old", None)).unwrap();
@@ -563,5 +652,70 @@ mod tests {
         s.delete_all().unwrap();
         assert!(!s.root().join("sessions").exists());
         assert!(!s.root().join("eval").exists());
+    }
+
+    fn seed(n: usize) -> ResumeSeed {
+        ResumeSeed { plan: (0..n).map(|i| serde_json::json!({ "id": format!("q{i}") })).collect(), tries: 3, follow_ups: true, founder_variant: false }
+    }
+
+    fn at(day: u32, h: u32) -> chrono::DateTime<chrono::Utc> {
+        use chrono::TimeZone;
+        chrono::Utc.with_ymd_and_hms(2026, 10, day, h, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn next_index_is_saved_after_each_answer_and_never_goes_back() {
+        let (_d, s) = storage();
+        s.save_session(&session("ses_a", "2026-10-21T09:00:00Z")).unwrap();
+        s.note_progress("ses_a", 0, Some(&seed(5))).unwrap();
+        assert_eq!(s.session("ses_a").unwrap().unwrap().resume.unwrap().next_index, 1);
+        s.note_progress("ses_a", 2, None).unwrap();
+        s.note_progress("ses_a", 1, None).unwrap();
+        let r = s.session("ses_a").unwrap().unwrap().resume.unwrap();
+        assert_eq!((r.next_index, r.plan.len()), (3, 5));
+        // A session without a plan (from before 0.3.0) stays without one.
+        s.save_session(&session("ses_old", "2026-10-21T09:00:00Z")).unwrap();
+        s.note_progress("ses_old", 0, None).unwrap();
+        assert!(s.session("ses_old").unwrap().unwrap().resume.is_none());
+    }
+
+    #[test]
+    fn the_resume_fields_survive_a_save_and_an_unknown_field_next_to_them() {
+        let (_d, s) = storage();
+        s.save_session(&session("ses_a", "2026-10-21T09:00:00Z")).unwrap();
+        s.note_progress("ses_a", 0, Some(&seed(2))).unwrap();
+        let path = s.root().join("sessions/ses_a/session.json");
+        let mut v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        v["from_a_newer_ensayo"] = serde_json::json!(true);
+        v["resume"]["also_newer"] = serde_json::json!(1);
+        std::fs::write(&path, v.to_string()).unwrap();
+        s.end_session("ses_a").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!((v["from_a_newer_ensayo"].as_bool(), v["resume"]["also_newer"].as_i64(), v["resume"]["ended"].as_bool(), v["schema_version"].as_u64()), (Some(true), Some(1), Some(true), Some(2)));
+    }
+
+    #[test]
+    fn only_a_recent_unended_session_with_questions_left_is_offered() {
+        let (_d, s) = storage();
+        let now = at(21, 12);
+        // Newest first by start: fresh+open, then ones that must not be offered.
+        s.save_session(&session("ses_ended", "2026-10-21T11:00:00Z")).unwrap();
+        s.note_progress("ses_ended", 0, Some(&seed(5))).unwrap();
+        s.end_session("ses_ended").unwrap();
+        s.save_session(&session("ses_done", "2026-10-21T10:30:00Z")).unwrap();
+        s.note_progress("ses_done", 2, Some(&seed(3))).unwrap();
+        s.save_session(&session("ses_plain", "2026-10-21T10:00:00Z")).unwrap();
+        assert!(s.resumable_session(now).unwrap().is_none(), "ended, finished and plan-less sessions are not offered");
+        s.save_session(&session("ses_open", "2026-10-21T09:00:00Z")).unwrap();
+        s.note_progress("ses_open", 1, Some(&seed(5))).unwrap();
+        assert_eq!(s.resumable_session(now).unwrap().unwrap().id, "ses_open");
+        // 24 hours exactly is too old; a minute under is fine.
+        assert!(s.resumable_session(at(22, 9)).unwrap().is_none());
+        assert_eq!(s.resumable_session(chrono::Utc.with_ymd_and_hms(2026, 10, 22, 8, 59, 0).unwrap()).unwrap().unwrap().id, "ses_open");
+        // The newest qualifying one wins.
+        s.save_session(&session("ses_newer", "2026-10-21T11:30:00Z")).unwrap();
+        s.note_progress("ses_newer", 0, Some(&seed(2))).unwrap();
+        assert_eq!(s.resumable_session(now).unwrap().unwrap().id, "ses_newer");
+        assert_eq!(s.resumable_session(now).unwrap().unwrap().resume.unwrap().next_index, 1);
     }
 }

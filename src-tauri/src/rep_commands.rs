@@ -69,6 +69,12 @@ pub struct FinishArgs {
     /// when it starts.
     #[serde(default)]
     pub target_id: Option<String>,
+    /// Which question of the session's plan this answers (0-based), so the session can be continued after quitting.
+    #[serde(default)]
+    pub question_index: Option<u32>,
+    /// The plan of questions and settings, sent with the first answer of a session.
+    #[serde(default)]
+    pub resume: Option<crate::storage::reps::ResumeSeed>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -373,7 +379,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         }
     }
     if storage.session(&session_id)?.is_none() {
-        storage.save_session(&Session { extra: Default::default(), id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now), target_id: target_id.clone() })?;
+        storage.save_session(&Session { extra: Default::default(), resume: None, id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now), target_id: target_id.clone() })?;
     }
     let n = storage.next_rep_number(&session_id)?;
     let delta = delta_for(storage, &session_id, &args.question_id, args.attempt, &metrics);
@@ -404,6 +410,12 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         metrics,
     };
     storage.save_rep(&session_id, &full)?;
+    if let Some(index) = args.question_index {
+        // Not being able to note the progress must not cost the answer that was just saved.
+        if let Err(e) = storage.note_progress(&session_id, index, args.resume.as_ref()) {
+            log::warn!("the progress of {session_id} was not saved ({})", e.kind());
+        }
+    }
     if let Some(p) = &pending {
         if let Err(e) = hook::save_pending(storage, p, &session_id, n) {
             log::warn!("claims of {session_id}/{n} were not saved: {e}");
@@ -825,6 +837,18 @@ pub async fn rep_summaries() -> Cmd<Vec<RepSummary>> {
     blocking(|| open().and_then(|s| summaries_with(&s)).map_err(plain)).await
 }
 
+/// "Continue where you left off": the newest session under a day old that was not ended and has questions left.
+#[tauri::command]
+pub async fn resumable_session() -> Cmd<Option<Session>> {
+    blocking(|| open().and_then(|s| s.resumable_session(chrono::Utc::now())).map_err(plain)).await
+}
+
+/// The person ended the session, or it ran to its last question: it is not offered again.
+#[tauri::command]
+pub async fn end_session(session_id: String) -> Cmd<()> {
+    blocking(move || open().and_then(|s| s.end_session(&session_id)).map_err(plain)).await
+}
+
 #[tauri::command]
 pub async fn list_sessions() -> Cmd<Vec<Session>> {
     blocking(|| Ok(open().and_then(|s| s.sessions()).map_err(plain)?.items)).await
@@ -966,6 +990,8 @@ mod tests {
             story_ids: vec!["st_a".into()],
             audio_path: wav,
             target_id: None,
+            question_index: None,
+            resume: None,
         }
     }
 
@@ -1077,6 +1103,30 @@ mod tests {
         let two = finish_with(&storage, &audio, &args(&tmp, 2, Some(&one.session_id)), words(40), true, now(), None).unwrap();
         assert_eq!(one.session_id, two.session_id);
         assert_eq!(storage.reps(&one.session_id).unwrap().items.len(), 2);
+    }
+
+    #[test]
+    fn each_saved_answer_moves_next_index_and_the_first_one_keeps_the_plan() {
+        use crate::storage::reps::ResumeSeed;
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let audio = tmp.join("audio");
+        let plan: Vec<serde_json::Value> = (0..4).map(|i| serde_json::json!({ "id": format!("q{i}"), "text": format!("Question {i}") })).collect();
+        let mut first = args(&tmp, 1, None);
+        first.question_index = Some(0);
+        first.resume = Some(ResumeSeed { plan: plan.clone(), tries: 2, follow_ups: false, founder_variant: true });
+        let one = finish_with(&storage, &audio, &first, words(40), true, now(), None).unwrap();
+        let saved = storage.session(&one.session_id).unwrap().unwrap().resume.unwrap();
+        assert_eq!((saved.next_index, saved.plan.len(), saved.tries, saved.follow_ups, saved.founder_variant, saved.ended), (1, 4, 2, false, true, false));
+        // A second try at the same question does not move it; the next question does. The plan is not sent again.
+        let mut again = args(&tmp, 2, Some(&one.session_id));
+        again.question_index = Some(0);
+        finish_with(&storage, &audio, &again, words(40), true, now(), None).unwrap();
+        assert_eq!(storage.session(&one.session_id).unwrap().unwrap().resume.unwrap().next_index, 1);
+        let mut next = args(&tmp, 1, Some(&one.session_id));
+        next.question_index = Some(1);
+        finish_with(&storage, &audio, &next, words(40), true, now(), None).unwrap();
+        assert_eq!(storage.session(&one.session_id).unwrap().unwrap().resume.unwrap().next_index, 2);
     }
 
     #[test]

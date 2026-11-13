@@ -7,7 +7,9 @@ import Link from "../../ui/Link";
 import { dayAndTime, inDays, longDate, weekdayName, whenPhrase } from "./format";
 import { setSessionPreset } from "./preset";
 import { withParams } from "../../data/selection";
-import { liveAvailable } from "../../practice/live";
+import { liveAvailable, resumeLive } from "../../practice/live";
+import { useResumable } from "../../practice/resume";
+import ContinueCard from "./ContinueCard";
 import { startApplicationDrill, startQuickDrill } from "../../practice/quick";
 import { useApplicationExtras } from "../../practice/extras";
 import HomeEmpty from "./HomeEmpty";
@@ -26,6 +28,9 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
   const extras = useApplicationExtras(next?.application.id);
   // The Drill is for the application's target when it starts from an application, else for the one practised now.
   const target = practiceTargetFor(next?.application, targets, activeTarget);
+
+  const resumable = useResumable();
+  const resumeTarget = resumable ? (targets.find((t) => t.id === resumable.target_id) ?? practiceTargetFor(applications.find((a) => a.id === resumable.application_id), targets, activeTarget)) : undefined;
 
   const focusId = profile.focusHabits[0];
   const practiceTitle = focusId ? home.practiceTitles[focusId] : "Practice a few general questions";
@@ -75,6 +80,13 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
             {`Practice still works. ${TIMING_ONLY_MISSING}`}
           </span>
         </section>
+      )}
+      {resumable && (
+        <ContinueCard
+          session={resumable}
+          companyOf={(id) => applications.find((a) => a.id === id)?.company}
+          onContinue={() => resumeLive(resumable, { targetRole: resumeTarget?.role ?? profile.targetRole, stories: store.stories, methods: store.methods, target: resumeTarget })}
+        />
       )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "stretch" }}>
         <section className="e-card e-glow" style={{ flex: "999 1 480px", minWidth: "0", padding: "36px", display: "flex", flexDirection: "column", gap: "18px" }}>

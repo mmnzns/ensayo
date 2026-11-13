@@ -380,7 +380,7 @@ mod tests {
     }
 
     fn session(id: &str, application: Option<&str>, started: &str) -> Session {
-        Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: application.map(|_| "stg_1".to_string()), started: started.into(), target_id: None }
+        Session { extra: Default::default(), resume: None, id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: application.map(|_| "stg_1".to_string()), started: started.into(), target_id: None }
     }
 
     /// A session folder with `reps` numbered rep folders (a file each) and a debrief.

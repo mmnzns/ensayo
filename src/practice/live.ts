@@ -204,6 +204,38 @@ export async function recordMustSay(sessionId: string, applicationId: string, sa
   return true;
 }
 
+/** The session is over (ended, or ran to its last question): "Continue where you left off" does not offer it again. */
+function markEnded(sessionId: string | null) {
+  if (!sessionId || !liveAvailable()) return;
+  void repApi().then((a) => a.endSession?.(sessionId)).catch(() => {});
+}
+
+/** A saved session that can be picked up again: what `resumable_session` returns. */
+export interface ResumableSession {
+  id: string;
+  mode: "drill" | "mock";
+  stage: string;
+  application_id: string | null;
+  stage_id?: string | null;
+  target_id?: string | null;
+  started: string;
+  resume: { plan: BankQuestion[]; next_index: number; tries: number; follow_ups: boolean; founder_variant: boolean };
+}
+
+/** "Continue where you left off": the same session (so new answers join it), with the same plan, mode, stage and
+ *  application, at the next question. Starts the way `startLive` does; a mid-answer state is not restored. */
+export function resumeLive(r: ResumableSession, ctx: LiveContext) {
+  stories = ctx.stories;
+  methods = ctx.methods;
+  target = ctx.target;
+  const { resume } = r;
+  state = { ...INITIAL, active: true, mode: r.mode, tries: resume.tries === 2 ? 2 : MAX_ATTEMPTS, followUps: r.mode === "mock" || resume.follow_ups, stage: r.stage, applicationId: r.application_id, targetId: r.target_id ?? ctx.target?.id ?? null, stageId: r.application_id ? (r.stage_id ?? null) : null, founderVariant: resume.founder_variant, sessionId: r.id, questions: resume.plan, index: Math.min(resume.next_index, Math.max(0, resume.plan.length - 1)), phase: "asking" };
+  const generation = ++sessionCount;
+  listeners.forEach((l) => l());
+  if (liveAvailable()) void checkSpeechAtStart(generation);
+  void checkAi();
+}
+
 /** Whether a session started from the Start screen runs the real loop: only inside the app. */
 export const liveAvailable = () => isApp() || api !== null;
 
@@ -423,6 +455,9 @@ export async function stopAndFinish() {
       attempt: state.view === "followup" ? 1 : state.attempt,
       story_ids: storyIdsFor(q),
       audio_path: rec.path,
+      // So the session can be continued after quitting: where this answer sits, and (once) the plan itself.
+      question_index: state.index,
+      ...(state.sessionId ? {} : { resume: { plan: state.questions, tries: state.tries, follow_ups: state.followUps, founder_variant: state.founderVariant } }),
     };
     const out = await a.finishRep(args);
     await apply(out);
@@ -500,6 +535,7 @@ export const MOCK_DEBRIEF = "4-4-session-results-mock-debrief";
 /** A Mock gives no note after an answer: the interviewer moves on, to a follow-up when one is due, else the next question. */
 async function advanceMock(out: RepOutcome) {
   if (isClosingQuestion()) {
+    markEnded(state.sessionId);
     set({ mockFinished: true, phase: "idle", view: "attempt" });
     return;
   }
@@ -536,6 +572,7 @@ export function tryAgain() {
 /** Moves to the next question, or says the session is over. */
 export function nextLiveQuestion(): "asking" | "done" {
   if (state.index + 1 >= state.questions.length) {
+    markEnded(state.sessionId);
     set({ phase: "idle" });
     return "done";
   }
@@ -641,6 +678,7 @@ export async function savedLabels(): Promise<Record<string, "pass" | "fail">> {
 
 /** Ends the session. A recording in progress is stopped and thrown away. */
 export async function cancelLive() {
+  markEnded(state.sessionId);
   if (state.phase === "recording") {
     try {
       const a = await repApi();

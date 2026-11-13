@@ -152,4 +152,8 @@ export interface FinishArgs {
   attempt: number;
   story_ids: string[];
   audio_path: string;
+  /** Which question of the session's plan this answers (0-based), so the session can be continued after quitting. */
+  question_index?: number;
+  /** The plan and settings, sent with the first answer of a session only. */
+  resume?: { plan: unknown[]; tries: number; follow_ups: boolean; founder_variant: boolean };
 }

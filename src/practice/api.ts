@@ -32,6 +32,8 @@ export interface RepApi {
   audioAvailable(sessionId: string, n: number): Promise<boolean>;
   readAudio(sessionId: string, n: number): Promise<ArrayBuffer>;
   loadSession(sessionId: string): Promise<SessionDetail | null>;
+  /** The person ended the session, or it ran to its last question: it is not offered as "Continue where you left off". Optional: fakes skip it. */
+  endSession?(sessionId: string): Promise<void>;
   /** Judges the candidate's own questions (and the must-say list) for a finished Mock. Rejects with a plain line when no engine is set up. */
   mockDebrief(args: { session_id: string; company: string; role: string; jd_summary: string; priorities: string; must_say: MustSayItem[] }): Promise<QuestionQuality>;
 }
@@ -76,6 +78,7 @@ export async function tauriApi(): Promise<RepApi> {
     audioAvailable: (sessionId, n) => invoke("rep_audio_available", { sessionId, n }),
     readAudio: (sessionId, n) => invoke("read_rep_audio", { sessionId, n }),
     loadSession: (sessionId) => invoke("load_session", { sessionId }),
+    endSession: (sessionId) => invoke("end_session", { sessionId }),
     mockDebrief: (args) => invoke("mock_debrief", { args }),
   };
 }

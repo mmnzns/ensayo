@@ -181,6 +181,8 @@ pub fn run() {
             rep_commands::read_rep_audio,
             rep_commands::load_session,
             rep_commands::list_sessions,
+            rep_commands::resumable_session,
+            rep_commands::end_session,
             rep_commands::rep_summaries,
             rep_commands::sweep_audio,
             rep_commands::audio_retention,

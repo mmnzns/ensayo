@@ -200,7 +200,7 @@ mod tests {
     }
 
     fn make(s: &Storage, audio: &Path, id: &str, application: Option<&str>, reps: u32) {
-        s.save_session(&Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: None, started: "2026-10-01T10:00:00Z".into(), target_id: None }).unwrap();
+        s.save_session(&Session { extra: Default::default(), resume: None, id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: None, started: "2026-10-01T10:00:00Z".into(), target_id: None }).unwrap();
         for n in 1..=reps {
             fs::create_dir_all(s.root().join(format!("sessions/{id}/reps/{n}"))).unwrap();
             fs::create_dir_all(audio.join(id)).unwrap();

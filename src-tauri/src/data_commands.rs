@@ -608,7 +608,7 @@ mod tests {
         storage.save_profile(&Profile { extra: Default::default(), name: "D".into(), full_name: "".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] }).unwrap();
         let target = storage.targets().unwrap().remove(0);
         storage.save_story(&story("st_a")).unwrap();
-        storage.save_session(&Session { extra: Default::default(), id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: Some(target.id.clone()) }).unwrap();
+        storage.save_session(&Session { extra: Default::default(), resume: None, id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: Some(target.id.clone()) }).unwrap();
         let words: Vec<crate::speech::words::Word> = (0..12).map(|i| crate::speech::words::Word { text: "word".into(), start_ms: i * 500, end_ms: i * 500 + 400 }).collect();
         let metrics = crate::metrics::compute(crate::metrics::Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: vec![], keep_restart: false });
         let rep = Rep { extra: Default::default(), n: 1, question_id: "q".into(), question_text: "?".into(), question_type: "behavioral".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-20T10:00:00Z".into(), story_ids: vec!["st_a".into()], fix: None, note: None, rewrite: None, ai: None, follow_up: None, feedback: None };
