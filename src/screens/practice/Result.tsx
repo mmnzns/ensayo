@@ -100,6 +100,7 @@ function DetailsCard({ details, onHide, labeling }: { details: PracticeAttempt["
         </div>
       )}
       {details.footnote && <p className="e-small" style={{ margin: "8px 0 0" }}>{details.footnote}</p>}
+      {details.judgedBy && <p className="e-small" style={{ margin: "4px 0 0" }}>{details.judgedBy}</p>}
     </section>
   );
 }

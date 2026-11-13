@@ -215,7 +215,7 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
                 fix: score.fix,
                 note: score.note,
                 rewrite: score.rewrite,
-                meta: AiMeta { prompts: score.prompts, rubric_version: score.rubric_version, cost_usd: ai.budget.spend.usd },
+                meta: AiMeta { prompts: score.prompts, rubric_version: score.rubric_version, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
                 question_type: question.question_type,
             }
         }
@@ -262,7 +262,7 @@ fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &F
                 fix,
                 note: coach.note,
                 rewrite: coach.rewrite,
-                meta: AiMeta { prompts: vec![format!("score-follow-up v{}", get(PromptId::ScoreFollowUp).version), format!("coach-note v{}", get(PromptId::Coach).version)], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd },
+                meta: AiMeta { prompts: vec![format!("score-follow-up v{}", get(PromptId::ScoreFollowUp).version), format!("coach-note v{}", get(PromptId::Coach).version)], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
                 question_type: parent.rep.question_type.clone(),
             }
         }
@@ -1235,6 +1235,7 @@ mod tests {
         assert!(out.notice.is_none());
         let saved = storage.rep(&out.session_id, 1).unwrap().unwrap();
         assert_eq!(saved.rep.note, rep.rep.note);
+        assert_eq!(saved.rep.ai.as_ref().unwrap().model.as_deref(), Some("claude-haiku-5-5"), "the saved score names the model that judged it");
     }
 
     #[test]

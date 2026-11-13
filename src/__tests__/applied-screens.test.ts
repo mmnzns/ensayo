@@ -97,6 +97,27 @@ describe("the result of an answer that was said differently", () => {
   });
 });
 
+describe("the model that judged a rep", () => {
+  async function resultHtml(model: string | null | undefined) {
+    const judged: RepOutcome = { ...outcome, rep: { ...rep, ai: { prompts: [], rubric_version: 1, cost_usd: 0, ...(model === undefined ? {} : { model }) } } };
+    setRepApi({ ...api, finishRep: async () => judged } as unknown as RepApi);
+    startLive({ mode: "drill", stage: "hiring_manager", count: 2, source: "application", applicationId: "app_h", stageId: "s1" }, ctx);
+    await beginRecording();
+    await stopAndFinish();
+    return render("3-4-result-attempt-1-details-open", storeWith([application()]));
+  }
+
+  it("shows 'Judged by' with the catalog name in Details", async () => {
+    expect(await resultHtml("claude-sonnet-5-5")).toContain("Judged by Claude Sonnet 5.5");
+  });
+
+  it("shows the raw id when the model is not in the catalog, and nothing when there is none", async () => {
+    expect(await resultHtml("some-new-model")).toContain("Judged by some-new-model");
+    expect(await resultHtml(undefined)).not.toContain("Judged by");
+    expect(await resultHtml(null)).not.toContain("Judged by");
+  });
+});
+
 describe("the Mock debrief's flags", () => {
   const d = { ...mockStore.screens.results.debrief, applicationId: "app_h" };
   const claims = [{ id: "c_a", type: "notice" as const, subject: "Notice period", value: "four weeks' notice", quote: "", stage: "s0", stage_label: "Recruiter", status: "consistent" as const }];

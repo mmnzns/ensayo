@@ -3,6 +3,7 @@
 // filler words, and there is no "try saying" line (it needs the transcript and the stories read by a model).
 
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine, type TranscriptSegment } from "../data/screens/practice";
+import { modelLabel } from "../data/engine";
 import { consistencySentences, unknownCheckLabel } from "./applied";
 import type { Check, Delta, FullRep, Metrics, RepOutcome } from "./types";
 
@@ -239,6 +240,16 @@ function rows(rep: FullRep): DetailRow[] {
   return out;
 }
 
+/** The built-in local models, by the id the helper reports (the catalog names in src-tauri/src/ai/local_models.rs). */
+const LOCAL_NAMES: Record<string, string> = { "qwen3.5-4b": "Qwen3.5 4B", "qwen3.5-9b": "Qwen3.5 9B", "granite-4.2-3b": "Granite 4.2 3B" };
+
+/** "Judged by Claude Sonnet 5.5": the name the app knows the model by, else the id as the provider reported it. Nothing for a rep no model scored. */
+export function judgedByLine(rep: FullRep): string | undefined {
+  const id = rep.ai?.model?.trim();
+  if (!id) return undefined;
+  return `Judged by ${modelLabel(id) ?? LOCAL_NAMES[id] ?? id}`;
+}
+
 export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
   const rep = o.rep;
   if (!rep) throw new Error("A rep that was not scored has no result to show");
@@ -256,6 +267,7 @@ export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
     details: {
       rows: rows(rep),
       footnote: rep.ai ? "" : "Only the timing checks ran on this answer. Answering first, saying what you decided and story fit need an AI engine: your own key or the local AI, in Settings under AI.",
+      judgedBy: judgedByLine(rep),
     },
   };
 }

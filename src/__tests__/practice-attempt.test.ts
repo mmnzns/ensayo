@@ -185,6 +185,15 @@ describe("a rep judged by the AI", () => {
     expect(rows.find((r) => r.label === "Said what you decided")).toMatchObject({ state: "notyet", note: '"we changed the trigger"' });
   });
 
+  it("names the model that judged the rep: the catalog name when known, else the id, and nothing for timing only", () => {
+    const withModel = (model?: string) => attemptFromOutcome(ai({ ai: { prompts: [], rubric_version: 1, cost_usd: 0, model } })).details.judgedBy;
+    expect(withModel("claude-sonnet-5-5")).toBe("Judged by Claude Sonnet 5.5");
+    expect(withModel("qwen3.5-4b")).toBe("Judged by Qwen3.5 4B");
+    expect(withModel("gpt-6-luna")).toBe("Judged by gpt-6-luna");
+    expect(withModel(undefined)).toBeUndefined();
+    expect(attemptFromOutcome(outcome("length", [check("length", false)])).details.judgedBy).toBeUndefined();
+  });
+
   it("drops the 'turns on once you add a key' footnote when an AI judged it, and keeps it for a timing-only rep", () => {
     expect(attemptFromOutcome(ai()).details.footnote).toBe("");
     expect(attemptFromOutcome(outcome("length", [check("length", false)])).details.footnote).toContain("need an AI engine");

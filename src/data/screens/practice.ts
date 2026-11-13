@@ -68,7 +68,7 @@ export interface PracticeAttempt {
   transcript: TranscriptLine[];
   /** Caption under the transcript explaining the highlighted sentence. */
   highlightCaption?: string;
-  details: { rows: DetailRow[]; footnote: string };
+  details: { rows: DetailRow[]; footnote: string; /** "Judged by <model>", for a rep a model scored. */ judgedBy?: string };
 }
 
 export interface FollowUpData {

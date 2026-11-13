@@ -97,6 +97,9 @@ pub struct AiMeta {
     pub rubric_version: u32,
     /// Estimated cost of the AI calls for this rep so far, in US dollars.
     pub cost_usd: f64,
+    /// The model that judged it, as the provider reported it. Reps saved before 0.3.0 have none.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// A rep with its words and measurements, as the screens read it.
@@ -355,6 +358,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = Storage::init(dir.path().join("data")).unwrap();
         (dir, s)
+    }
+
+    #[test]
+    fn a_rep_saved_before_the_model_was_recorded_still_loads() {
+        let old: AiMeta = serde_json::from_str(r#"{"prompts": ["score-answer v3"], "rubric_version": 2, "cost_usd": 0.01}"#).unwrap();
+        assert_eq!(old.model, None);
+        let new: AiMeta = serde_json::from_str(r#"{"prompts": [], "rubric_version": 2, "cost_usd": 0.0, "model": "claude-sonnet-5-5"}"#).unwrap();
+        assert_eq!(new.model.as_deref(), Some("claude-sonnet-5-5"));
     }
 
     fn session(id: &str, started: &str) -> Session {

@@ -100,7 +100,7 @@ export interface FullRep {
   /** The coach's note and the line to say instead. Null for a rep judged by timing only. */
   note: string | null;
   rewrite: Rewrite | null;
-  ai: { prompts: string[]; rubric_version: number; cost_usd: number } | null;
+  ai: { prompts: string[]; rubric_version: number; cost_usd: number; model?: string | null } | null;
   feedback: { note_was_wrong: boolean; at: string } | null;
   transcript: Word[];
   metrics: Metrics;

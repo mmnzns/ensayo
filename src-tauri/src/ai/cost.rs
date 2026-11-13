@@ -105,6 +105,8 @@ pub struct Spend {
     pub output_tokens: u64,
     /// Some of `usd` comes from a guessed price (see `Price::approx`), so show the total as an estimate.
     pub approx: bool,
+    /// The model of the most recent reply.
+    pub last_model: Option<String>,
 }
 
 impl Spend {
@@ -128,6 +130,7 @@ impl Spend {
         self.approx |= approx;
         self.usd += usd;
         self.calls += 1;
+        self.last_model = Some(reply.model.clone());
         self.input_tokens += u64::from(reply.input_tokens);
         self.output_tokens += u64::from(reply.output_tokens);
     }
