@@ -1,7 +1,8 @@
 // The rows of Settings, Speech > Models. A plain component: it shows what it is given and says what the person pressed,
 // so every state (partial, downloading here, downloading in another app, installed) can be checked without the app.
 import { formatSize } from "./format";
-import { deleteQuestion, hiddenCount, progressPercent, visibleRows, type ModelRow } from "./speechModels";
+import Dialog from "../states/Dialog";
+import { deleteQuestion, removeQuestion, hiddenCount, progressPercent, visibleRows, type ModelRow } from "./speechModels";
 
 const ring = (color: string) => ({ width: "10px", height: "10px", borderRadius: "50%", boxShadow: `inset 0 0 0 1.5px ${color}`, flex: "none" as const });
 
@@ -20,6 +21,10 @@ export interface SpeechModelListProps {
   onCancel: () => void;
   onAskDelete: (id: string | null) => void;
   onDelete: (id: string) => void;
+  /** The model whose "Remove from this computer" question is open. */
+  removeId?: string | null;
+  onAskRemove?: (id: string | null) => void;
+  onRemove?: (id: string) => void;
 }
 
 export default function SpeechModelList(p: SpeechModelListProps) {
@@ -48,6 +53,23 @@ export default function SpeechModelList(p: SpeechModelListProps) {
             )}
             {m.downloadingHere && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={p.onCancel}>Cancel</button>}
             {m.canDelete && !asking && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => p.onAskDelete(m.id)}>Delete</button>}
+            {m.canDelete && !asking && p.onAskRemove && (
+              <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => p.onAskRemove?.(m.id)}>Remove from this computer</button>
+            )}
+            {p.removeId === m.id && p.onAskRemove && (
+              <Dialog
+                title="Remove from this computer?"
+                onClose={() => p.onAskRemove?.(null)}
+                actions={
+                  <>
+                    <button type="button" className="e-btn e-btn-line" onClick={() => p.onAskRemove?.(null)}>Keep it</button>
+                    <button type="button" className="e-btn e-btn-line" onClick={() => p.onRemove?.(m.id)}>Remove</button>
+                  </>
+                }
+              >
+                <p className="e-body" style={{ margin: 0 }}>{removeQuestion(m.name, m.size_mb)}</p>
+              </Dialog>
+            )}
             {asking && (
               <span role="alertdialog" aria-label={`Delete ${m.name}`} style={{ flexBasis: "100%", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <span className="e-small" style={{ color: "var(--e-ink)" }}>{deleteQuestion(m.name)}</span>

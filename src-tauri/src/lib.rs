@@ -115,6 +115,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
             commands::model_status,
+            commands::remove_model_everywhere,
             commands::speech_models,
             commands::download_model,
             commands::cancel_model_download,

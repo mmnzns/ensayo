@@ -18,7 +18,7 @@ export default function SettingsSpeech() {
 }
 
 function SpeechLive() {
-  const { models, inUseId, downloadingId, fraction, error, notice, download, cancel, remove, use } = useSpeechModels();
+  const { models, inUseId, downloadingId, fraction, error, notice, download, cancel, remove, use, removeId, askRemove, removeEverywhere } = useSpeechModels();
   const graphics = useGraphicsCard();
   const [showAll, setShowAll] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -67,6 +67,9 @@ function SpeechLive() {
               setConfirmId(null);
               void remove(id);
             }}
+            removeId={removeId}
+            onAskRemove={askRemove}
+            onRemove={(id) => void removeEverywhere(id)}
           />
           <span className="e-small" style={{ paddingTop: "8px" }}>A download picks up where it stopped. Delete takes a model off this computer; Delete all Ensayo data under Privacy removes every model Ensayo uses.</span>
         </section>

@@ -40,7 +40,7 @@ import {
   type ProviderInfo,
 } from "./aiSettings";
 import SpeechModelList from "./SpeechModelList";
-import { modelRows, type SpeechModelEntry } from "./speechModels";
+import { modelRows, removedLine, type Removal, type SpeechModelEntry } from "./speechModels";
 import { CheckIcon } from "./parts";
 
 export type TestState = { sig: string; status: "testing" | "ok" | "bad" | "empty"; line: string };
@@ -108,6 +108,7 @@ export function useLocalAi(active: boolean) {
   const [notice, setNotice] = useState("");
   /** The model whose Delete question is open. */
   const [confirming, askDelete] = useState<string | null>(null);
+  const [removeId, askRemove] = useState<string | null>(null);
   const cancelled = useRef(false);
 
   const refresh = () => invoke<LocalAiView>("local_ai_status").then(setStatus, (e) => setError(explainTestError(e)));
@@ -167,7 +168,26 @@ export function useLocalAi(active: boolean) {
       },
     );
   };
-  return { status, busy, error, notice, confirming, askDelete, download, cancel, remove };
+  /** "Remove from this computer": erases the model for every Craft Concepts app, after the person confirmed. */
+  const removeEverywhere = (id: string) => {
+    askRemove(null);
+    setError("");
+    setNotice("");
+    const name = status?.models.find((m) => m.id === id)?.name ?? "The model";
+    invoke<Removal>("remove_model_everywhere", { id }).then(
+      (r) => {
+        const line = removedLine(name, r);
+        (line.problem ? setError : setNotice)(line.text);
+        void refresh();
+        announceAiChange();
+      },
+      (e) => {
+        setError(explainTestError(e));
+        void refresh();
+      },
+    );
+  };
+  return { status, busy, error, notice, confirming, askDelete, download, cancel, remove, removeId, askRemove, removeEverywhere };
 }
 
 type LocalAi = ReturnType<typeof useLocalAi>;
@@ -211,6 +231,9 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
           onCancel={ai.cancel}
           onAskDelete={ai.askDelete}
           onDelete={(id) => ai.remove(id)}
+          removeId={ai.removeId}
+          onAskRemove={ai.askRemove}
+          onRemove={ai.removeEverywhere}
         />
       </div>
       {!here && !rows.some((r) => r.downloadingHere) && <span className="e-meta">{localModelLine(m)}. Until a model is downloaded and in use, you'll get timing notes only.</span>}
