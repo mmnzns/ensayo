@@ -13,8 +13,11 @@ const NO_ENGINE: &str = "Reading pasted text needs a feedback engine. Choose one
 fn story_message(e: &CallError) -> String {
     match e {
         CallError::Unavailable(m) | CallError::Failed(m) => m.clone(),
+        CallError::TooLong => format!("{} Try Read it again, or fill it in yourself.", crate::scoring::run::TOO_LONG),
         CallError::Invalid(_) => "The AI's reply couldn't be read this time. Try Read it again, or fill it in yourself.".into(),
         CallError::CapReached { .. } => format!("{} Or fill it in yourself.", e.cap_words()),
+        // The screen goes back to the form, with nothing saved and no error banner.
+        CallError::Stopped => crate::scoring::run::STOPPED.into(),
     }
 }
 
@@ -24,7 +27,7 @@ fn story_message(e: &CallError) -> String {
 pub async fn parse_story(raw: String, employer_hint: String) -> Cmd<ParsedStory> {
     tauri::async_runtime::spawn_blocking(move || {
         let _t = crate::logging::Timer::new("parse_story");
-        let (out, unavailable) = with_ai("story-parse", |ai| match ai {
+        let (out, unavailable) = with_ai(&format!("story-parse-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)), |ai| match ai {
             Some(ctx) => parse_story::parse_story(ctx.llm, &raw, &employer_hint, ctx.budget).map_err(|e| story_message(&e)),
             None => Err(NO_ENGINE.to_string()),
         });
@@ -46,5 +49,10 @@ mod story_message_tests {
             assert!(!m.contains('\u{2014}'), "no em dashes: {m}");
         }
         assert!(story_message(&CallError::Invalid("x".into())).contains("Try Read it again"));
+    }
+
+    #[test]
+    fn a_stopped_read_is_the_word_the_screen_recognises() {
+        assert_eq!(story_message(&CallError::Stopped), "stopped");
     }
 }

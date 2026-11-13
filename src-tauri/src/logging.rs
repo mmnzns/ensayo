@@ -258,9 +258,11 @@ impl Llm for LoggedLlm {
         match &out {
             Ok(r) => log::info!(target: "ensayo::ai", "{} {tier} model={} sent_bytes={sent} reply_bytes={} in={} out={} {ms} ms", self.engine, r.model, r.text.len(), r.input_tokens, r.output_tokens),
             Err(e) => {
+                let stopped = String::new();
                 let (kind, m) = match e {
                     AiError::Unavailable(m) => ("unavailable", m),
                     AiError::Failed(m) => ("failed", m),
+                    AiError::Stopped => ("stopped", &stopped),
                 };
                 log::warn!(target: "ensayo::ai", "{} {tier} {kind} sent_bytes={sent} {ms} ms: {}", self.engine, truncate(m, ERROR_MAX_BYTES));
             }
@@ -395,9 +397,9 @@ mod tests {
 
     #[test]
     fn a_logged_model_call_passes_the_reply_through_unchanged() {
-        let reply = LlmReply { text: "hello".into(), input_tokens: 3, output_tokens: 1, model: "m".into() };
+        let reply = LlmReply { text: "hello".into(), input_tokens: 3, output_tokens: 1, model: "m".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 };
         let llm = LoggedLlm::new(Box::new(Fake(Ok(reply.clone()))), "test");
-        let req = LlmRequest { system: "s".into(), user: "u".into(), json: false, schema: None, max_tokens: 10, tier: Tier::Fast };
+        let req = LlmRequest { system: "s".into(), user: "u".into(), json: false, schema: None, max_tokens: 10, tier: Tier::Fast, label: "ai".into() };
         assert_eq!(llm.complete(&req).unwrap(), reply);
         let bad = LoggedLlm::new(Box::new(Fake(Err(AiError::Failed("down".into())))), "test");
         assert_eq!(bad.complete(&req).unwrap_err(), AiError::Failed("down".into()));

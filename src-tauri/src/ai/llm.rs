@@ -22,6 +22,8 @@ pub struct LlmRequest {
     pub schema: Option<serde_json::Value>,
     pub max_tokens: u32,
     pub tier: Tier,
+    /// Which step this call is, for the `ai-progress` event: the prompt's id, or "ai" for anything else. Never text.
+    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +33,13 @@ pub struct LlmReply {
     pub output_tokens: u32,
     /// The model id that answered, for the cost table and the score log.
     pub model: String,
+    /// The provider stopped because it hit the token limit, even if some text came back.
+    pub cut_off: bool,
+    /// Input tokens the provider served from its prompt cache (billed at a tenth of the input price). Claude only.
+    pub cache_read_tokens: u32,
+    /// Input tokens written to the prompt cache (billed at 125% of the input price). Claude only. Neither count is
+    /// part of `input_tokens`.
+    pub cache_write_tokens: u32,
 }
 
 pub trait Llm: Send + Sync {

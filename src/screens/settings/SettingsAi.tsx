@@ -19,8 +19,8 @@ const OTHER = "Other model…";
 const pick = (options: string[], value: string | undefined) => (value && options.includes(value) ? value : options[0]);
 
 /** In the app the screen is driven by the real settings; in the browser preview it stays the mock below. */
-/** What a session loses when it reaches the cap and switches to timing only. */
-export const CAP_HINT = "If a session would go over, the rest of it is timing only: no coach note, no Try saying line, and no check of answering first or saying what you decided. Length, fillers, the number and the stop are still checked.";
+/** What happens when a session reaches the cap. */
+export const CAP_HINT = "When a session reaches this, Ensayo asks before spending more.";
 
 export default function SettingsAi() {
   return isApp() ? <SettingsAiLive /> : <SettingsAiMock />;

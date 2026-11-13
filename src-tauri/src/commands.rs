@@ -105,8 +105,9 @@ fn model_status_in(store: &SharedStore, id: &str) -> Result<ModelStatus, String>
 }
 
 #[tauri::command]
-pub fn model_status(id: String) -> Result<ModelStatus, String> {
-    model_status_in(models_store::store()?, &id)
+pub async fn model_status(id: String) -> Result<ModelStatus, String> {
+    // `store()` can wait for start-up, so it never runs on the thread that serves the window.
+    tauri::async_runtime::spawn_blocking(move || model_status_in(models_store::store()?, &id)).await.map_err(|e| e.to_string())?
 }
 
 /// Ensayo uses this speech model: another app that also uses it can't erase it while Ensayo does. The window says it
@@ -172,6 +173,36 @@ pub async fn delete_model(id: String) -> Result<models_store::Deleted, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let store = models_store::store()?;
         delete_in(store, &id, || {
+            if crate::speech::loaded::is_loaded(&id) {
+                crate::speech::loaded::unload();
+            }
+            if crate::ai::local_models::find(&id).is_some() {
+                crate::ai::local::unload_shared();
+            }
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Frees the model if it is the one in use, then erases it for every app. `unload` runs first: a loaded model holds its
+/// files open (Windows won't delete them) and a hold on its folder, which would make the erase answer "in use".
+fn remove_everywhere_in(store: &SharedStore, id: &str, unload: impl FnOnce()) -> Result<models_store::Removal, String> {
+    let known = models::speech_model(id).is_some() || crate::ai::local_models::find(id).is_some();
+    if !known {
+        return Err("Unknown model".into());
+    }
+    unload();
+    models_store::remove_everywhere(store, id)
+}
+
+/// "Remove from this computer": the model is erased for Ensayo, Talaan and Parlato alike. "erased", "in_use" (another
+/// app has it loaded or is downloading it) or "not_there"; `old_copies_left` counts old files still to go.
+#[tauri::command]
+pub async fn remove_model_everywhere(id: String) -> Result<models_store::Removal, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = models_store::store()?;
+        remove_everywhere_in(store, &id, || {
             if crate::speech::loaded::is_loaded(&id) {
                 crate::speech::loaded::unload();
             }
@@ -463,6 +494,19 @@ mod tests {
     fn a_speech_download_of_something_that_is_not_a_speech_model_is_refused() {
         let (_d, store) = temp_store();
         assert_eq!(download_speech(&store, "qwen3.5-4b", &AtomicBool::new(false), &mut |_, _| {}).unwrap_err(), "Unknown model");
+    }
+
+    #[test]
+    fn remove_everywhere_unloads_first_then_erases_and_refuses_what_is_not_a_model() {
+        let (_d, store) = temp_store();
+        install(&store, "whisper-tiny");
+        let mut order = vec![];
+        let got = remove_everywhere_in(&store, "whisper-tiny", || order.push("unload")).unwrap();
+        assert_eq!(got.result, "erased");
+        assert_eq!(order, ["unload"]);
+        assert_eq!(models_store::state_name(&store.status("whisper-tiny")), "missing");
+        assert_eq!(remove_everywhere_in(&store, "whisper-tiny", || {}).unwrap().result, "not_there");
+        assert_eq!(remove_everywhere_in(&store, "nope", || panic!("nothing to unload")).unwrap_err(), "Unknown model");
     }
 
     #[test]

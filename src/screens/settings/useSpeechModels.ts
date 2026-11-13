@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { downloadErrorLine } from "../first-run/setup";
 import { readPrefs, updateSpeech } from "./prefs";
 import { noteSpeechModelUse } from "./speechUse";
-import { deletedLine, inUseModel, type SpeechModelEntry } from "./speechModels";
+import { deletedLine, inUseModel, removedLine, type Removal, type SpeechModelEntry } from "./speechModels";
 
 /** The speech models on this computer, which one a session uses, and downloading another. Same commands and
  *  `model-progress` event as the Speech step in setup. */
@@ -62,6 +62,9 @@ export function useSpeechModels() {
     invoke("cancel_model_download").catch((e) => setError(downloadErrorLine(e)));
   };
 
+  /** The model whose "Remove from this computer" question is open. */
+  const [removeId, setRemoveId] = useState<string | null>(null);
+
   /** Deletes a model from this computer. Another Craft Concepts app that uses it keeps it. */
   const remove = async (id: string) => {
     const name = models?.find((m) => m.id === id)?.name ?? "The model";
@@ -76,11 +79,26 @@ export function useSpeechModels() {
     await refresh();
   };
 
+  /** "Remove from this computer": erases the model for every Craft Concepts app, after the person confirmed. */
+  const removeEverywhere = async (id: string) => {
+    const name = models?.find((m) => m.id === id)?.name ?? "The model";
+    setRemoveId(null);
+    setError("");
+    setNotice("");
+    try {
+      const line = removedLine(name, await invoke<Removal>("remove_model_everywhere", { id }));
+      (line.problem ? setError : setNotice)(line.text);
+    } catch (e) {
+      setError(downloadErrorLine(e));
+    }
+    await refresh();
+  };
+
   const use = (id: string) => {
     updateSpeech({ model: id });
     setPreferred(id);
     noteSpeechModelUse(id);
   };
 
-  return { models, inUseId: models ? inUseModel(models, preferred) : "", downloadingId, fraction, error, notice, download, cancel, remove, use };
+  return { models, inUseId: models ? inUseModel(models, preferred) : "", downloadingId, fraction, error, notice, download, cancel, remove, use, removeId, askRemove: setRemoveId, removeEverywhere };
 }

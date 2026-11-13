@@ -4,6 +4,7 @@
 //! too. Reasoning models may put `<think>...</think>` in the text; `json::extract_json` strips it.
 
 use super::llm::{Llm, LlmReply, LlmRequest, Tier};
+use crate::scoring::run::{openai_strict_schema, provider_schema};
 use super::providers::{self, AiError, Provider, auth_headers, http_error};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -122,6 +123,9 @@ fn base_of(base: &str) -> &str {
 /// itself still has the caller's limit's worth of room after the thinking.
 pub const THINKING_ROOM: u32 = 16_000;
 
+/// A system prompt longer than this many characters is sent as a cacheable block.
+pub const CACHE_SYSTEM_CHARS: usize = 4_000;
+
 /// Anthropic Messages API: `system` is a top-level field and `max_tokens` is required. It has no JSON mode, so
 /// `req.json` changes nothing here; the prompt asks for JSON and `json::extract_json` reads it.
 pub fn anthropic_request(base: &str, key: &str, model: &str, req: &LlmRequest, settings: &ModelSettings) -> WireRequest {
@@ -131,10 +135,25 @@ pub fn anthropic_request(base: &str, key: &str, model: &str, req: &LlmRequest, s
         "messages": [{ "role": "user", "content": req.user }],
     });
     if !req.system.is_empty() {
-        body["system"] = json!(req.system);
+        // A long system prompt is cached (the rubric and the schema repeat on every call). Shorter ones are below
+        // the cache's minimum size and are sent as plain text.
+        body["system"] = if req.system.chars().count() > CACHE_SYSTEM_CHARS {
+            json!([{ "type": "text", "text": req.system, "cache_control": { "type": "ephemeral" } }])
+        } else {
+            json!(req.system)
+        };
     }
     if let Some(t) = settings.temperature {
         body["temperature"] = json!(t);
+    }
+    if is_recent_claude(model) {
+        // Thinking counts as output, so the reply keeps its own room; effort keeps the thinking short.
+        body["max_tokens"] = json!(req.max_tokens + THINKING_ROOM);
+        let mut config = json!({ "effort": if req.tier == Tier::Fast { "low" } else { "medium" } });
+        if let Some(schema) = &req.schema {
+            config["format"] = json!({ "type": "json_schema", "schema": provider_schema(schema) });
+        }
+        body["output_config"] = config;
     }
     WireRequest { url: format!("{}/messages", base_of(base)), headers: auth_headers(Provider::Claude, key), body }
 }
@@ -160,7 +179,15 @@ pub fn openai_request(provider: Provider, base: &str, key: &str, model: &str, re
         body["reasoning_effort"] = json!(e);
     }
     if json_mode {
-        body["response_format"] = json!({ "type": "json_object" });
+        body["response_format"] = match (&req.schema, provider) {
+            // OpenAI's own API holds the reply to the schema. Strict mode wants every field required, so optional
+            // ones become nullable; a schema that can't be made strict-safe is sent with strict off.
+            (Some(schema), Provider::OpenAi) => match openai_strict_schema(&provider_schema(schema)) {
+                Some(strict) => json!({ "type": "json_schema", "json_schema": { "name": "reply", "strict": true, "schema": strict } }),
+                None => json!({ "type": "json_schema", "json_schema": { "name": "reply", "strict": false, "schema": provider_schema(schema) } }),
+            },
+            _ => json!({ "type": "json_object" }),
+        };
     }
     WireRequest { url: format!("{}/chat/completions", base_of(base)), headers: auth_headers(provider, key), body }
 }
@@ -175,6 +202,9 @@ pub fn gemini_request(base: &str, key: &str, model: &str, req: &LlmRequest, sett
     }
     if req.json {
         config["responseMimeType"] = json!("application/json");
+        if let Some(schema) = &req.schema {
+            config["responseJsonSchema"] = provider_schema(schema);
+        }
     }
     let mut body = json!({
         "contents": [{ "role": "user", "parts": [{ "text": req.user }] }],
@@ -205,7 +235,7 @@ fn finish(provider: Provider, model: &str, req: &LlmRequest, text: String, usage
     }
     let input_tokens = usage.0.unwrap_or_else(|| estimate_tokens(&req.system).saturating_add(estimate_tokens(&req.user)));
     let output_tokens = usage.1.unwrap_or_else(|| estimate_tokens(&text));
-    Ok(LlmReply { text, input_tokens, output_tokens, model: model.to_string() })
+    Ok(LlmReply { text, input_tokens, output_tokens, model: model.to_string(), cut_off, cache_read_tokens: 0, cache_write_tokens: 0 })
 }
 
 pub fn parse_anthropic(body: &Value, model: &str, req: &LlmRequest) -> Result<LlmReply, AiError> {
@@ -214,7 +244,9 @@ pub fn parse_anthropic(body: &Value, model: &str, req: &LlmRequest) -> Result<Ll
     if text.trim().is_empty() && body["stop_reason"] == "refusal" {
         return Err(AiError::Failed("Claude declined to answer this one.".into()));
     }
-    finish(Provider::Claude, model, req, text, usage, body["stop_reason"] == "max_tokens")
+    let cache = |key: &str| token_count(&body["usage"][key]).unwrap_or(0);
+    let (read, write) = (cache("cache_read_input_tokens"), cache("cache_creation_input_tokens"));
+    finish(Provider::Claude, model, req, text, usage, body["stop_reason"] == "max_tokens").map(|r| LlmReply { cache_read_tokens: read, cache_write_tokens: write, ..r })
 }
 
 pub fn parse_openai(provider: Provider, body: &Value, model: &str, req: &LlmRequest) -> Result<LlmReply, AiError> {
@@ -277,6 +309,11 @@ pub struct ProviderLlm {
     timeout_override: Option<Duration>,
     /// Set once a server has refused `response_format`, so later calls skip the doomed first try.
     json_mode_refused: AtomicBool,
+    /// Set once a provider has refused the schema mode (Claude's `output_config.format`, OpenAI's `json_schema`,
+    /// Gemini's `responseJsonSchema`), so later calls go out on the plain path.
+    schema_refused: AtomicBool,
+    /// Set once Claude has refused `output_config` itself (an API version without effort), so later calls leave it out.
+    effort_refused: AtomicBool,
 }
 
 // The key never appears in debug output.
@@ -297,6 +334,8 @@ impl ProviderLlm {
             sleep: Arc::new(std::thread::sleep),
             timeout_override: None,
             json_mode_refused: AtomicBool::new(false),
+            schema_refused: AtomicBool::new(false),
+            effort_refused: AtomicBool::new(false),
         }
     }
 
@@ -347,11 +386,16 @@ impl ProviderLlm {
 
     fn round_trip(&self, req: &LlmRequest, model: &str, json_mode: bool) -> Result<LlmReply, Failure> {
         let settings = model_settings(self.provider, model, req.tier);
-        let wire = match format_of(self.provider) {
+        let mut wire = match format_of(self.provider) {
             Format::Anthropic => anthropic_request(&self.base, &self.key, model, req, &settings),
             Format::OpenAi => openai_request(self.provider, &self.base, &self.key, model, req, &settings, json_mode),
             Format::Gemini => gemini_request(&self.base, &self.key, model, req, &settings),
         };
+        if self.effort_refused.load(Ordering::Relaxed) {
+            if let Some(body) = wire.body.as_object_mut() {
+                body.remove("output_config");
+            }
+        }
         let timeout = self.timeout_override.unwrap_or_else(|| timeout(self.provider, req.tier));
         let body = self.post_with_retry(&wire, timeout)?;
         match format_of(self.provider) {
@@ -371,18 +415,70 @@ impl ProviderLlm {
         match error {
             AiError::Unavailable(m) => AiError::Unavailable(clean(m)),
             AiError::Failed(m) => AiError::Failed(clean(m)),
+            AiError::Stopped => AiError::Stopped,
         }
     }
 }
 
+/// Which providers take the schema in the request: recent Claude models, OpenAI's own API and Gemini.
+fn schema_applies(provider: Provider, model: &str) -> bool {
+    match provider {
+        Provider::Claude => is_recent_claude(model),
+        Provider::OpenAi | Provider::Gemini => true,
+        _ => false,
+    }
+}
+
+/// A 400 whose body is about the schema mode (the error text names the field it refused).
+fn mentions_schema(body: &Value) -> bool {
+    let text = body.to_string().to_lowercase();
+    ["output_config", "format", "json_schema", "response_format", "responsejsonschema", "schema"].iter().any(|k| text.contains(k))
+}
+
 impl Llm for ProviderLlm {
     fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
+        // A cloud call has no token count to report: one event as it starts and one as it ends.
+        let started = std::time::Instant::now();
+        super::progress::emit(&req.label, None, 0);
+        let out = self.complete_inner(req);
+        super::progress::emit(&req.label, None, started.elapsed().as_millis() as u64);
+        out
+    }
+}
+
+impl ProviderLlm {
+    fn complete_inner(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
         let model = self.model_for(req.tier);
         if model.trim().is_empty() {
             return Err(AiError::Unavailable(format!("No model is chosen for {}. Pick one in Settings › AI.", self.provider.name())));
         }
         let json_mode = req.json && !self.json_mode_refused.load(Ordering::Relaxed);
-        let result = self.round_trip(req, model, json_mode).or_else(|f| {
+        // The schema goes to the providers that can hold a reply to it; after a refusal, to none.
+        let mut req = req.clone();
+        let schema_sent = req.schema.is_some() && req.json && schema_applies(self.provider, model) && !self.schema_refused.load(Ordering::Relaxed);
+        if !schema_sent {
+            req.schema = None;
+        }
+        let mut first = self.round_trip(&req, model, json_mode);
+        if let Err(f) = &first {
+            if schema_sent && f.status == Some(400) && mentions_schema(&f.body) {
+                self.schema_refused.store(true, Ordering::Relaxed);
+                log::info!("schema mode refused by {}; asking again without it", self.provider.name());
+                req.schema = None;
+                first = self.round_trip(&req, model, json_mode);
+            }
+        }
+        if let Err(f) = &first {
+            // Without the schema, Claude still refused `output_config`: the effort setting goes too.
+            let about_config = f.body.to_string().to_lowercase();
+            if self.provider == Provider::Claude && f.status == Some(400) && (about_config.contains("output_config") || about_config.contains("effort")) && !self.effort_refused.load(Ordering::Relaxed) {
+                self.effort_refused.store(true, Ordering::Relaxed);
+                log::info!("effort setting refused by {}; asking again without it", self.provider.name());
+                first = self.round_trip(&req, model, json_mode);
+            }
+        }
+        let req = &req;
+        let result = first.or_else(|f| {
             // Some servers reject `response_format`. Ask again without it; the prompt still asks for JSON.
             let refused = json_mode && format_of(self.provider) == Format::OpenAi && f.status == Some(400) && f.body.to_string().to_lowercase().contains("response_format");
             if !refused {
@@ -401,7 +497,7 @@ mod tests {
     use std::sync::Mutex;
 
     fn request(json: bool, tier: Tier) -> LlmRequest {
-        LlmRequest { system: "Be brief.".into(), user: "Score this answer.".into(), json, schema: None, max_tokens: 500, tier }
+        LlmRequest { system: "Be brief.".into(), user: "Score this answer.".into(), json, schema: None, max_tokens: 500, tier, label: "ai".into() }
     }
 
     // ----- model settings table -----
@@ -476,12 +572,113 @@ mod tests {
         assert!(w.headers.contains(&("x-api-key".into(), "sk-ant-key".into())));
         assert!(w.headers.iter().any(|(k, _)| k == "anthropic-version"));
         assert_eq!(w.body["model"], "claude-sonnet-5-5");
-        assert_eq!(w.body["max_tokens"], 500);
+        assert_eq!(w.body["max_tokens"], 500 + THINKING_ROOM);
         assert_eq!(w.body["system"], "Be brief.");
         assert_eq!(w.body["messages"], json!([{ "role": "user", "content": "Score this answer." }]));
         assert!(w.body.get("temperature").is_none());
         let old = model_settings(Provider::Claude, "claude-haiku-4-5", Tier::Fast);
         assert_eq!(anthropic_request("b", "k", "claude-haiku-4-5", &request(false, Tier::Fast), &old).body["temperature"], 0.0);
+    }
+
+    #[test]
+    fn recent_claude_models_get_room_to_think_and_an_effort_by_tier() {
+        for m in ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"] {
+            let s = model_settings(Provider::Claude, m, Tier::Fast);
+            let fast = anthropic_request("b", "k", m, &request(true, Tier::Fast), &s);
+            assert_eq!(fast.body["max_tokens"], 500 + THINKING_ROOM, "{m}");
+            assert_eq!(fast.body["output_config"]["effort"], "low", "{m}");
+            let strong = anthropic_request("b", "k", m, &request(true, Tier::Strong), &s);
+            assert_eq!(strong.body["output_config"]["effort"], "medium", "{m}");
+        }
+        let old = model_settings(Provider::Claude, "claude-sonnet-4-6", Tier::Strong);
+        let w = anthropic_request("b", "k", "claude-sonnet-4-6", &request(true, Tier::Strong), &old);
+        assert_eq!(w.body["max_tokens"], 500);
+        assert!(w.body.get("output_config").is_none());
+    }
+
+    #[test]
+    fn parsers_flag_a_reply_cut_off_at_the_limit_even_with_text() {
+        let r = request(true, Tier::Fast);
+        let a = parse_anthropic(&json!({ "content": [{ "type": "text", "text": "{\"a\":" }], "stop_reason": "max_tokens" }), "m", &r).unwrap();
+        assert!(a.cut_off);
+        let a = parse_anthropic(&json!({ "content": [{ "type": "text", "text": "{}" }], "stop_reason": "end_turn" }), "m", &r).unwrap();
+        assert!(!a.cut_off);
+        let o = parse_openai(Provider::OpenAi, &json!({ "choices": [{ "message": { "content": "{\"a\":" }, "finish_reason": "length" }] }), "m", &r).unwrap();
+        assert!(o.cut_off);
+        let g = parse_gemini(&json!({ "candidates": [{ "content": { "parts": [{ "text": "{\"a\":" }] }, "finishReason": "MAX_TOKENS" }] }), "m", &r).unwrap();
+        assert!(g.cut_off);
+    }
+
+    fn schema_request(tier: Tier) -> LlmRequest {
+        let schema = json!({ "type": "object", "properties": { "n": { "type": "integer", "minimum": 1 }, "note": { "type": "string", "maxLength": 20 } }, "required": ["n"] });
+        LlmRequest { schema: Some(schema), ..request(true, tier) }
+    }
+
+    #[test]
+    fn claude_gets_the_schema_in_output_config_beside_the_effort_but_only_on_recent_models() {
+        let r = schema_request(Tier::Fast);
+        let s = model_settings(Provider::Claude, "claude-sonnet-5-5", Tier::Fast);
+        let w = anthropic_request("b", "k", "claude-sonnet-5-5", &r, &s);
+        assert_eq!(w.body["output_config"]["effort"], "low");
+        let format = &w.body["output_config"]["format"];
+        assert_eq!(format["type"], "json_schema");
+        assert_eq!(format["schema"]["additionalProperties"], false);
+        assert!(format["schema"]["properties"]["n"].get("minimum").is_none() && format["schema"]["properties"]["note"].get("maxLength").is_none());
+        let old = model_settings(Provider::Claude, "claude-sonnet-4-6", Tier::Fast);
+        let w = anthropic_request("b", "k", "claude-sonnet-4-6", &r, &old);
+        assert!(w.body.get("output_config").is_none());
+    }
+
+    #[test]
+    fn openai_gets_a_strict_json_schema_with_every_field_required() {
+        let r = schema_request(Tier::Fast);
+        let s = model_settings(Provider::OpenAi, "gpt-6-sol", Tier::Fast);
+        let w = openai_request(Provider::OpenAi, "b", "k", "gpt-6-sol", &r, &s, true);
+        let rf = &w.body["response_format"];
+        assert_eq!((rf["type"].as_str(), rf["json_schema"]["strict"].as_bool(), rf["json_schema"]["name"].as_str()), (Some("json_schema"), Some(true), Some("reply")));
+        let schema = &rf["json_schema"]["schema"];
+        assert_eq!(schema["required"], json!(["n", "note"]));
+        assert_eq!(schema["properties"]["note"]["type"], json!(["string", "null"]));
+        assert_eq!(schema["additionalProperties"], false);
+        // Every other chat-completions provider keeps json_object.
+        for p in [Provider::Groq, Provider::Cerebras, Provider::Mistral, Provider::OpenRouter, Provider::Compatible] {
+            let s = model_settings(p, "m", Tier::Fast);
+            let w = openai_request(p, "b", "k", "m", &r, &s, true);
+            assert_eq!(w.body["response_format"], json!({ "type": "json_object" }), "{p:?}");
+        }
+    }
+
+    #[test]
+    fn gemini_gets_the_schema_beside_the_mime_type() {
+        let r = schema_request(Tier::Fast);
+        let s = model_settings(Provider::Gemini, "gemini-3.8-flash", Tier::Fast);
+        let w = gemini_request("b", "k", "gemini-3.8-flash", &r, &s);
+        let config = &w.body["generationConfig"];
+        assert_eq!(config["responseMimeType"], "application/json");
+        assert_eq!(config["responseJsonSchema"]["additionalProperties"], false);
+        assert!(config["responseJsonSchema"]["properties"]["n"].get("minimum").is_none());
+    }
+
+    #[test]
+    fn a_long_system_prompt_is_one_cacheable_block_and_a_short_one_stays_plain() {
+        let s = model_settings(Provider::Claude, "claude-sonnet-5-5", Tier::Fast);
+        let long = LlmRequest { system: "x".repeat(CACHE_SYSTEM_CHARS + 1), ..request(true, Tier::Fast) };
+        let w = anthropic_request("b", "k", "claude-sonnet-5-5", &long, &s);
+        assert_eq!(w.body["system"], json!([{ "type": "text", "text": "x".repeat(CACHE_SYSTEM_CHARS + 1), "cache_control": { "type": "ephemeral" } }]));
+        let edge = LlmRequest { system: "x".repeat(CACHE_SYSTEM_CHARS), ..request(true, Tier::Fast) };
+        assert!(anthropic_request("b", "k", "claude-sonnet-5-5", &edge, &s).body["system"].is_string());
+        assert_eq!(anthropic_request("b", "k", "claude-sonnet-5-5", &request(true, Tier::Fast), &s).body["system"], "Be brief.");
+    }
+
+    #[test]
+    fn anthropic_reply_reads_cache_usage_and_other_providers_report_none() {
+        let body = json!({ "content": [{ "type": "text", "text": "{}" }], "usage": { "input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 4000, "cache_creation_input_tokens": 250 } });
+        let r = parse_anthropic(&body, "claude-sonnet-5-5", &request(true, Tier::Fast)).unwrap();
+        assert_eq!((r.input_tokens, r.cache_read_tokens, r.cache_write_tokens), (10, 4000, 250));
+        let none = parse_anthropic(&json!({ "content": [{ "type": "text", "text": "{}" }] }), "m", &request(true, Tier::Fast)).unwrap();
+        assert_eq!((none.cache_read_tokens, none.cache_write_tokens), (0, 0));
+        let o = parse_openai(Provider::OpenAi, &json!({ "choices": [{ "message": { "content": "{}" } }] }), "m", &request(true, Tier::Fast)).unwrap();
+        assert_eq!((o.cache_read_tokens, o.cache_write_tokens), (0, 0));
     }
 
     #[test]
@@ -533,7 +730,7 @@ mod tests {
     fn anthropic_reply_joins_text_parts_and_reads_usage() {
         let body = json!({ "content": [{ "type": "thinking", "thinking": "..." }, { "type": "text", "text": "{\"a\":" }, { "type": "text", "text": "1}" }], "usage": { "input_tokens": 120, "output_tokens": 30 } });
         let r = parse_anthropic(&body, "claude-sonnet-5-5", &request(true, Tier::Fast)).unwrap();
-        assert_eq!(r, LlmReply { text: "{\"a\":1}".into(), input_tokens: 120, output_tokens: 30, model: "claude-sonnet-5-5".into() });
+        assert_eq!(r, LlmReply { text: "{\"a\":1}".into(), input_tokens: 120, output_tokens: 30, model: "claude-sonnet-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 });
     }
 
     #[test]
@@ -565,7 +762,7 @@ mod tests {
 
     #[test]
     fn a_thinking_model_gets_room_to_think_on_top_of_the_reply() {
-        let req = LlmRequest { system: String::new(), user: "u".into(), json: true, schema: None, max_tokens: 4000, tier: Tier::Strong };
+        let req = LlmRequest { system: String::new(), user: "u".into(), json: true, schema: None, max_tokens: 4000, tier: Tier::Strong, label: "ai".into() };
         let sol = model_settings(Provider::OpenAi, "gpt-6-sol", Tier::Strong);
         assert!(sol.reasoning_effort.is_some());
         let w = openai_request(Provider::OpenAi, "https://api.openai.com/v1", "k", "gpt-6-sol", &req, &sol, true);
@@ -663,9 +860,9 @@ mod tests {
         assert_eq!(seen[0].header("x-api-key"), Some("sk-ant-secret-key"));
         assert_eq!(seen[0].header("anthropic-version"), Some("2023-06-01"));
         assert_eq!(seen[0].body["system"], "Be brief.");
-        assert_eq!(seen[0].body["max_tokens"], 500);
+        assert_eq!(seen[0].body["max_tokens"], 500 + THINKING_ROOM);
         assert_eq!(seen[0].body["messages"][0]["content"], "Score this answer.");
-        assert_eq!(r, LlmReply { text: "{\"score\": 5}".into(), input_tokens: 21, output_tokens: 6, model: "claude-sonnet-5-5".into() });
+        assert_eq!(r, LlmReply { text: "{\"score\": 5}".into(), input_tokens: 21, output_tokens: 6, model: "claude-sonnet-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 });
         assert!(pauses.lock().unwrap().is_empty());
     }
 
@@ -722,6 +919,51 @@ mod tests {
         assert!(seen[1].body.get("response_format").is_none(), "retried without it");
         assert!(seen[2].body.get("response_format").is_none(), "and later calls don't try it again");
         assert!(pauses.lock().unwrap().is_empty(), "the fallback is not a timed retry");
+    }
+
+    #[test]
+    fn a_refused_schema_is_asked_again_without_it_once_and_remembered() {
+        let refusal = reply(400, json!({ "error": { "message": "Invalid schema for response_format 'reply'" } }));
+        let (base, server) = fake_server(vec![refusal, openai_ok("{\"n\": 1}"), openai_ok("{\"n\": 2}")]);
+        let (llm, pauses) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol");
+        let r = schema_request(Tier::Fast);
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 1}");
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 2}");
+        let seen = server.join().unwrap();
+        assert_eq!(seen.len(), 3);
+        assert_eq!(seen[0].body["response_format"]["type"], "json_schema");
+        assert_eq!(seen[1].body["response_format"]["type"], "json_object", "today's path");
+        assert_eq!(seen[2].body["response_format"]["type"], "json_object", "and later calls skip the schema");
+        assert!(pauses.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_claude_400_about_output_config_after_the_schema_goes_drops_the_effort_too() {
+        let refusal = || reply(400, json!({ "error": { "message": "output_config: extra inputs are not permitted" } }));
+        let ok = |n: u32| reply(200, json!({ "content": [{ "type": "text", "text": format!("{{\"n\": {n}}}") }], "usage": { "input_tokens": 1, "output_tokens": 1 } }));
+        let (base, server) = fake_server(vec![refusal(), refusal(), ok(1), ok(2)]);
+        let (llm, _) = llm(Provider::Claude, base, "sk-ant-key-12345678", "claude-sonnet-5-5");
+        let r = schema_request(Tier::Fast);
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 1}");
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 2}");
+        let seen = server.join().unwrap();
+        assert_eq!(seen.len(), 4);
+        assert!(seen[1].body["output_config"].get("format").is_none() && seen[1].body["output_config"].get("effort").is_some(), "first the schema goes");
+        assert!(seen[2].body.get("output_config").is_none(), "then the effort");
+        assert!(seen[3].body.get("output_config").is_none(), "and later calls leave it out");
+    }
+
+    #[test]
+    fn a_claude_400_about_output_config_falls_back_to_the_plain_request() {
+        let refusal = reply(400, json!({ "error": { "message": "output_config.format: extra inputs are not permitted" } }));
+        let ok = reply(200, json!({ "content": [{ "type": "text", "text": "{\"n\": 1}" }], "usage": { "input_tokens": 1, "output_tokens": 1 } }));
+        let (base, server) = fake_server(vec![refusal, ok]);
+        let (llm, _) = llm(Provider::Claude, format!("{base}/v1"), "sk-ant-secret-key", "claude-sonnet-5-5");
+        assert!(llm.complete(&schema_request(Tier::Fast)).is_ok());
+        let seen = server.join().unwrap();
+        assert!(seen[0].body["output_config"].get("format").is_some());
+        assert!(seen[1].body["output_config"].get("format").is_none(), "the effort stays, the schema goes");
+        assert!(seen[1].body["output_config"].get("effort").is_some());
     }
 
     #[test]

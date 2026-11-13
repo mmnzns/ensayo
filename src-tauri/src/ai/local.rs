@@ -12,6 +12,7 @@
 //! still carries the schema as text.
 
 use super::llm::{Llm, LlmReply, LlmRequest};
+use super::progress::{self, Throttle};
 use super::providers::AiError;
 use crate::graphics;
 use crate::models_store;
@@ -24,7 +25,7 @@ use std::time::{Duration, Instant};
 use voice_engine_client::{EngineError, Limits, LlmClient, LlmConfig};
 use voice_engine_models::catalog::LlmInfo;
 use voice_engine_models::ModelHandle;
-use voice_engine_protocol::{Completion, JSON_OBJECT_SCHEMA};
+use voice_engine_protocol::{Completion, Event, Phase, JSON_OBJECT_SCHEMA};
 
 pub const HELPER: &str = "ensayo-llm";
 
@@ -186,7 +187,6 @@ const OUT_OF_MEMORY: &str = "The built-in local AI ran out of memory. Close some
 const CRASHED: &str = "The built-in local AI stopped unexpectedly. Try again, or choose another feedback engine in Settings › AI.";
 const NO_START: &str = "The built-in local AI didn't start. Try again, or choose another feedback engine in Settings › AI.";
 const TOO_SLOW: &str = "The built-in local AI took too long, so Ensayo stopped it. Try again, or choose another feedback engine in Settings › AI.";
-const STOPPED: &str = "The built-in local AI was stopped before it finished answering. Try again.";
 const NOT_DOWNLOADED: &str = "The built-in local AI's model isn't downloaded yet. Download it in Settings › AI.";
 const FAILED: &str = "The built-in local AI couldn't answer. Try again, or choose another feedback engine in Settings › AI.";
 
@@ -200,7 +200,7 @@ fn message(e: &EngineError) -> AiError {
         EngineError::PromptTooLong { prompt_tokens, n_ctx, max_tokens } => {
             AiError::Failed(format!("The text is too long for the built-in local AI ({prompt_tokens} tokens, room for {}).", n_ctx.saturating_sub(*max_tokens)))
         }
-        EngineError::Cancelled => AiError::Failed(STOPPED.into()),
+        EngineError::Cancelled => AiError::Stopped,
         EngineError::ModelMissing { .. } => AiError::Unavailable(NOT_DOWNLOADED.into()),
         _ => AiError::Failed(FAILED.into()),
     }
@@ -258,9 +258,19 @@ impl Llm for LocalLlm {
         // Fast and Strong share the one loaded model.
         let model_path = self.model_path.to_string_lossy().into_owned();
         let n_ctx = context_here(&self.model_name);
+        // Progress goes to the window at most four times a second, with a count and never any text.
+        let started = Instant::now();
+        let mut throttle = Throttle::new();
         let run = |json_schema: Option<String>| {
             let c = completion(model_path.clone(), n_ctx, req, json_schema, self.gpu);
-            self.client.complete(c, &mut |_| {})
+            self.client.complete(c, &mut |ev: &Event| {
+                if let Event::Progress { phase, done, .. } = ev {
+                    let ms = started.elapsed().as_millis() as u64;
+                    if throttle.ready(ms) {
+                        progress::emit(&req.label, (*phase == Phase::Writing).then_some(*done), ms);
+                    }
+                }
+            })
         };
         let result = with_schema_fallback(req, run);
         let out = result.map_err(|e| {
@@ -280,7 +290,7 @@ impl Llm for LocalLlm {
         if reply.text.trim().is_empty() {
             return Err(AiError::Failed(if reply.truncated { "The built-in local AI ran out of room before it finished answering." } else { "The built-in local AI sent back an empty answer." }.into()));
         }
-        Ok(LlmReply { text: reply.text, input_tokens: reply.prompt_tokens, output_tokens: reply.output_tokens, model: self.model_name.clone() })
+        Ok(LlmReply { text: reply.text, input_tokens: reply.prompt_tokens, output_tokens: reply.output_tokens, model: self.model_name.clone(), cut_off: reply.truncated, cache_read_tokens: 0, cache_write_tokens: 0 })
     }
 }
 
@@ -346,6 +356,15 @@ pub fn card_turned_on() {
         None => {}
     }
     forget_card_failure();
+}
+
+/// Stops the answer being written now (the person pressed Stop). The helper keeps its model and the call ends as
+/// `AiError::Stopped`. Does nothing when no answer is running.
+pub fn cancel_shared() {
+    let client = SHARED.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, c, _)| c.clone());
+    if let Some(client) = client {
+        client.cancel();
+    }
 }
 
 /// Frees the loaded model's memory and its file now, but keeps the helper for the next answer (a model is being deleted).
@@ -455,7 +474,7 @@ mod tests {
     }
 
     fn request(json: bool, tier: Tier) -> LlmRequest {
-        LlmRequest { system: "Be brief.".into(), user: "Classify this question.".into(), json, schema: None, max_tokens: 200, tier }
+        LlmRequest { system: "Be brief.".into(), user: "Classify this question.".into(), json, schema: None, max_tokens: 200, tier, label: "ai".into() }
     }
 
     fn with_schema(json: bool, schema: Option<serde_json::Value>) -> LlmRequest {
@@ -507,9 +526,25 @@ mod tests {
         assert_eq!(n, 1);
     }
 
+    #[test]
+    fn a_stopped_call_is_never_asked_again() {
+        // A schema request that was cancelled: one call, and the error stays Cancelled (which becomes Stopped).
+        let req = with_schema(true, Some(serde_json::json!({"type": "object"})));
+        let mut n = 0;
+        let out: Result<(), _> = with_schema_fallback(&req, |_| {
+            n += 1;
+            std::thread::sleep(Duration::from_millis(20));
+            Err(EngineError::Cancelled)
+        });
+        assert_eq!(n, 1);
+        assert!(matches!(out, Err(EngineError::Cancelled)));
+        assert_eq!(message(&EngineError::Cancelled), AiError::Stopped);
+    }
+
     fn text_of(e: AiError) -> String {
         match e {
             AiError::Unavailable(m) | AiError::Failed(m) => m,
+            AiError::Stopped => "stopped".into(),
         }
     }
 
@@ -574,7 +609,7 @@ mod tests {
         assert_eq!(failed(EngineError::CouldNotStart { message: "no such file".into() }), NO_START);
         assert_eq!(failed(EngineError::VersionMismatch { helper: 1, app: 2 }), NO_START);
         assert_eq!(failed(EngineError::TimedOut), TOO_SLOW);
-        assert_eq!(failed(EngineError::Cancelled), STOPPED);
+        assert_eq!(message(&EngineError::Cancelled), AiError::Stopped, "a stop is its own kind, not a failure");
         let long = failed(EngineError::PromptTooLong { prompt_tokens: 17_000, n_ctx: 16_384, max_tokens: 1_000 });
         assert_eq!(long, "The text is too long for the built-in local AI (17000 tokens, room for 15384).");
         for other in [EngineError::BadSchema { detail: "x".into() }, EngineError::NoChatTemplate, EngineError::BadRequest, EngineError::Internal { message: "boom".into() }, EngineError::GpuFailed { fell_back: false }] {
@@ -597,7 +632,6 @@ mod tests {
         for m in [OUT_OF_MEMORY, CRASHED, NO_START, TOO_SLOW, FAILED, NOT_DOWNLOADED, MISSING_HELPER] {
             assert!(m.contains("Settings › AI"), "{m}");
         }
-        assert!(STOPPED.contains("Try again"));
     }
 
     /// A helper that speaks the engine's protocol without a model: answers the ping, the idle setting, and every
@@ -846,7 +880,7 @@ done
         let mut rejected = vec![];
         for id in PromptId::ALL {
             let prompt = get(id);
-            let req = LlmRequest { system: "Reply with a JSON object.".into(), user: "Synthetic.".into(), json: true, schema: Some(prompt.schema.clone()), max_tokens: 4, tier: prompt.tier };
+            let req = LlmRequest { system: "Reply with a JSON object.".into(), user: "Synthetic.".into(), json: true, schema: Some(prompt.schema.clone()), max_tokens: 4, tier: prompt.tier, label: "ai".into() };
             let t = Instant::now();
             let out = ai.client.complete(completion(ai.model_path.to_string_lossy().into_owned(), 2048, &req, grammar_schema(&req), false), &mut |_| {});
             let verdict = match &out {

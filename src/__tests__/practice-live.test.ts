@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { RepApi } from "../practice/api";
-import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute, practiceStory, rehearseQuestion, startStoryDrill, startQuestionDrill, ASKING_SCREEN } from "../practice/live";
+import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute, practiceStory, rehearseQuestion, startStoryDrill, startQuestionDrill, ASKING_SCREEN, rescoreAfterCap, CAP_NOTICE_MARK } from "../practice/live";
 import { liveContextOf } from "../practice/quick";
 import { storyFit } from "../practice/questions";
 import type { FinishArgs, FullRep, RepOutcome } from "../practice/types";
@@ -204,6 +204,30 @@ describe("one rep", () => {
     begin();
     await beginRecording();
     expect(getLive()).toMatchObject({ phase: "error", error: "Microphone permission denied" });
+  });
+});
+
+describe("keeping going at the spending limit", () => {
+  it("judges again the rep that was refused at the limit, and leaves one that was judged", async () => {
+    const refused = { ...scored(1, "length"), notice: `This session has spent about $1.02 of its $1.00 limit, and ${CAP_NOTICE_MARK}. Change the limit in Settings › AI.` };
+    const a = fake([refused]);
+    setRepApi(a.api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    expect(await rescoreAfterCap("another_session")).toBe(false);
+    expect(await rescoreAfterCap("ses_a")).toBe(true);
+    expect(a.calls).toContain("rescore:false");
+    expect(getLive()).toMatchObject({ phase: "result", notice: null });
+
+    resetLive();
+    const b = fake([scored(1, "length")]);
+    setRepApi(b.api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    expect(await rescoreAfterCap("ses_a")).toBe(false);
+    expect(b.calls.some((c) => c.startsWith("rescore"))).toBe(false);
   });
 });
 

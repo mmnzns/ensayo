@@ -38,6 +38,9 @@ import {
   withProvider,
   withTypedModel,
   withWriting,
+  UNPRICED_LINE,
+  chosenModel,
+  unpricedNote,
   type AiView,
   type LocalAiView,
   type ProviderInfo,
@@ -442,5 +445,21 @@ describe("Ollama and LM Studio found on this computer", () => {
     expect(detectedLine("LM Studio", lmStudio, false)).toBe("LM Studio is running. Pick one of its 2 models:");
     expect(detectedLine("Ollama", { ...ollama, models: [] }, false)).toContain("has no models yet");
     expect(detectedLine("Ollama", { ...ollama, running: false }, false)).toContain("couldn't read its list of models");
+  });
+});
+
+describe("the line for a model with no listed price", () => {
+  it("shows only for a cloud model the price list lacks", () => {
+    expect(unpricedNote("key", "claude-new", false)).toBe(UNPRICED_LINE);
+    expect(unpricedNote("key", "claude-sonnet-5-5", true)).toBe("");
+    expect(unpricedNote("key", "claude-new", null)).toBe("");
+    expect(unpricedNote("local", "llama3", false)).toBe("");
+    expect(unpricedNote("timing", "", false)).toBe("");
+    expect(UNPRICED_LINE).toBe("Ensayo doesn't know this model's price, so costs are estimated high.");
+  });
+
+  it("prices the chosen model, or the provider's default when none is chosen", () => {
+    expect(chosenModel(claude, settings)).toBe("claude-haiku-4");
+    expect(chosenModel(claude, { ...settings, fast_model: "my-model" })).toBe("my-model");
   });
 });

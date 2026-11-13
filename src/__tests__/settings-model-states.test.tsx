@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BuiltInPanel, DetectedModels } from "../screens/settings/AiEngine";
 import type { AiScreenState, DetectedServer, LocalAiView, LocalModel } from "../screens/settings/aiSettings";
 import SpeechModelList, { type SpeechModelListProps } from "../screens/settings/SpeechModelList";
-import { modelRows, type SpeechModelEntry } from "../screens/settings/speechModels";
+import { modelRows, removedLine, type SpeechModelEntry } from "../screens/settings/speechModels";
 
 const entry = (id: string, state: SpeechModelEntry["state"], over: Partial<SpeechModelEntry> = {}): SpeechModelEntry => ({ id, name: `Name of ${id}`, maker: "OpenAI", note: "", languages: "", size_mb: 100, recommended: true, state, ...over });
 
@@ -197,5 +197,64 @@ describe("the Ollama and LM Studio screen", () => {
     expect(html).toContain("find Ollama running on this computer");
     expect(html).toContain("Look again");
     expect(html).not.toContain("aria-pressed");
+  });
+});
+
+describe("the slow note on Whisper models", () => {
+  const models = [entry("whisper-turbo", "missing"), entry("parakeet-ultra", "missing")];
+  const render = (os: "windows" | "mac") => renderToString(<SpeechModelList {...{ rows: modelRows(models, "", null, os), fraction: 0, busy: false, showAll: false, confirmId: null, onShowAll: no, onUse: no, onFetch: no, onCancel: no, onAskDelete: no, onDelete: no }} />);
+
+  it("shows on a Whisper model on Windows, and only on that one", () => {
+    const html = render("windows");
+    expect(html.match(/Slow on this computer: runs on the processor\./g)).toHaveLength(1);
+  });
+
+  it("does not show on the Mac", () => {
+    expect(render("mac")).not.toContain("Slow on this computer");
+  });
+});
+
+describe("Remove from this computer", () => {
+  const withRemove = (models: SpeechModelEntry[], removeId: string | null = null) => list(models, { removeId, onAskRemove: no, onRemove: no });
+
+  it("is offered next to Delete for a model on disk, and not for one that is missing", () => {
+    expect(withRemove([entry("a", "ready"), entry("b", "on_this_computer")]).match(/>Remove from this computer</g)).toHaveLength(2);
+    expect(withRemove([entry("a", "missing")])).not.toContain("Remove from this computer");
+  });
+
+  it("asks first, naming the model, who else loses it and the size it frees", () => {
+    const html = withRemove([entry("a", "ready", { size_mb: 2400 })], "a");
+    expect(html).toContain("Remove Name of a from this computer? Talaan and Parlato will lose it too and will download it again if they need it. Frees 2.4 GB.");
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain("Keep it");
+  });
+
+  it("opens no question until asked", () => {
+    expect(withRemove([entry("a", "ready")])).not.toContain('role="dialog"');
+  });
+});
+
+describe("what Remove from this computer says afterwards", () => {
+  it("says it is removed, and the row then reads Not downloaded", () => {
+    expect(removedLine("Qwen", { result: "erased", old_copies_left: 0 })).toEqual({ text: "Qwen is removed from this computer.", problem: false });
+    expect(list([entry("a", "missing")])).toContain("Not downloaded");
+  });
+
+  it("tells the person to close the other apps when one is using the model", () => {
+    expect(removedLine("Qwen", { result: "in_use", old_copies_left: 0 })).toEqual({ text: "Another app is using this model right now. Close Talaan and Parlato and try again.", problem: true });
+  });
+
+  it("says old files will go next time", () => {
+    const r = removedLine("Qwen", { result: "erased", old_copies_left: 2 });
+    expect(r.text).toContain("Some old files couldn't be removed yet. They'll go the next time.");
+    expect(r.problem).toBe(false);
+  });
+
+  it("says plainly when the model was not there", () => {
+    expect(removedLine("Qwen", { result: "not_there", old_copies_left: 0 }).text).toBe("Qwen wasn't on this computer.");
+  });
+
+  it("uses no em dashes", () => {
+    for (const r of [{ result: "erased", old_copies_left: 1 }, { result: "in_use", old_copies_left: 0 }, { result: "not_there", old_copies_left: 0 }] as const) expect(removedLine("X", r).text).not.toContain("—");
   });
 });

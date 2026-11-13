@@ -17,6 +17,8 @@ Ensayo needs 64-bit Windows 10 or 11 on a PC from about 2015 or newer (a process
 2. If Windows says it protected your PC, choose **More info, then Run anyway**. (This appears for any app without a paid certificate.)
 3. Open Ensayo from the Start menu. Windows does not ask about the microphone the way a Mac does: it is allowed unless it was switched off. If Ensayo says it is blocked, open **Settings, Privacy & security, Microphone** and turn on both **Microphone access** and **Let desktop apps access your microphone**.
 
+On Windows 10, the first install needs internet if WebView2 (a part of Windows that Ensayo uses to show its window) isn't already installed. Windows 11 has it.
+
 ## Updates
 
 New versions arrive by themselves. Ensayo checks in the background; when one is ready a note at the top says so, and **Update now** installs it and restarts. **Later** hides it until the next time you open Ensayo. **Settings, About** shows your version and has **Check for updates**. Ensayo never updates in the middle of a practice answer. On a Mac, an update keeps the microphone permission you gave the first time.
@@ -45,4 +47,5 @@ You can change all of this later in **Settings**.
 
 - **In the app:** Settings, Privacy, **Delete all my data** removes your stories, history, recordings, models and saved keys.
 - **Mac:** then drag Ensayo from Applications to the Bin.
-- **Windows:** Settings, Apps, Ensayo, Uninstall. Tick **Delete the application data** to remove everything, including saved keys. A data folder you chose yourself (on a drive, say) is left alone because it holds your stories.
+- **Windows:** Settings, Apps, Ensayo, Uninstall. Tick **Delete the application data** to remove everything, including saved keys. A data folder you chose, such as one in Documents or Google Drive, is never removed by the uninstaller, because it holds your stories.
+- **Speech and AI models are shared.** Uninstalling doesn't remove speech or AI models that Talaan or Parlato also use. If you want the space back, use **Remove from this computer** in Settings first.

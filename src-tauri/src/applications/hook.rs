@@ -67,8 +67,10 @@ pub struct Heard<'a> {
 
 fn consistency_notice(e: &CallError) -> String {
     match e {
+        CallError::Stopped => "You stopped the AI, so this answer wasn't compared with what you said in earlier stages and your resume.".to_string(),
         CallError::CapReached { .. } => format!("{} So this answer wasn't compared with what you said in earlier stages and your resume.", e.cap_words()),
         CallError::Unavailable(m) | CallError::Failed(m) => format!("{m} So this answer wasn't compared with what you said in earlier stages and your resume."),
+        CallError::TooLong => format!("{} So this answer wasn't compared with what you said in earlier stages and your resume. The next answer tries again.", crate::scoring::run::TOO_LONG),
         CallError::Invalid(_) => "The AI's reply couldn't be read, so this answer wasn't compared with what you said in earlier stages and your resume. The next answer tries again.".to_string(),
     }
 }

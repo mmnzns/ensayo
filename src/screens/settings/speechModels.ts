@@ -2,6 +2,7 @@
 // says. The screen talks to the backend; these decide what to show.
 
 import { osOf, type Os } from "../first-run/setup";
+import { formatSize } from "./format";
 
 /** Speech models in the order Ensayo prefers them; the first one on this computer is used. Windows starts with
  *  Parakeet Ultra: with no graphics chip to run Whisper Turbo, a two-minute answer waited about a minute for it,
@@ -13,7 +14,16 @@ export function speechOrder(os: Os): string[] {
     : ["whisper-turbo", "parakeet-ultra", "whisper-small", "whisper-base", "whisper-tiny"];
 }
 
-export const SPEECH_MODELS = speechOrder(osOf(typeof navigator === "undefined" ? "" : navigator.userAgent));
+const THIS_OS: Os = osOf(typeof navigator === "undefined" ? "" : navigator.userAgent);
+
+export const SPEECH_MODELS = speechOrder(THIS_OS);
+
+/** The small note on a Whisper model on Windows: the engine has no graphics card path for Whisper there yet, so it
+ *  runs on the processor. Null for every other model and computer. */
+export const SLOW_ON_WINDOWS = "Slow on this computer: runs on the processor.";
+export function slowNote(id: string, os: Os): string | null {
+  return os === "windows" && id.startsWith("whisper-") ? SLOW_ON_WINDOWS : null;
+}
 
 export interface SpeechModelEntry {
   id: string;
@@ -62,12 +72,14 @@ export interface ModelRow extends SpeechModelEntry {
   downloadingHere: boolean;
   /** Completely on this computer, so it can be deleted. */
   canDelete: boolean;
+  /** A note about speed on this computer, when there is one. */
+  slowNote: string | null;
 }
 
 const percentOf = (fraction: number | undefined) => progressPercent(fraction ?? 0);
 
 /** `downloadingId` is the model this window is downloading now; the backend also says "downloading" for a download that is running here. */
-export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadingId: string | null = null): ModelRow[] {
+export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadingId: string | null = null, os: Os = THIS_OS): ModelRow[] {
   return models.map((m) => {
     const inUse = m.id === inUseId;
     const downloadingHere = m.state === "downloading" || m.id === downloadingId;
@@ -97,6 +109,7 @@ export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadi
       elsewhere,
       downloadingHere,
       canDelete: here(m),
+      slowNote: slowNote(m.id, os),
     };
   });
 }
@@ -120,6 +133,27 @@ export function deletedLine(name: string, result: string): string {
     : result === "erased"
       ? `${name} is deleted from this computer.`
       : `Ensayo wasn't using ${name}.`;
+}
+
+/** The question before "Remove from this computer": it says who else loses the model and what it frees. */
+export const removeQuestion = (name: string, sizeMb: number): string =>
+  `Remove ${name} from this computer? Talaan and Parlato will lose it too and will download it again if they need it. Frees ${formatSize(sizeMb)}.`;
+
+/** What `remove_model_everywhere` returns. */
+export interface Removal {
+  result: "erased" | "in_use" | "not_there";
+  old_copies_left: number;
+}
+
+export const IN_USE_LINE = "Another app is using this model right now. Close Talaan and Parlato and try again.";
+export const OLD_FILES_LINE = "Some old files couldn't be removed yet. They'll go the next time.";
+
+/** What the person is told after "Remove from this computer". `problem` is true when nothing was removed and they need to act. */
+export function removedLine(name: string, r: Removal): { text: string; problem: boolean } {
+  if (r.result === "in_use") return { text: IN_USE_LINE, problem: true };
+  if (r.result === "not_there") return { text: `${name} wasn't on this computer.`, problem: false };
+  const gone = `${name} is removed from this computer.`;
+  return { text: r.old_copies_left > 0 ? `${gone} ${OLD_FILES_LINE}` : gone, problem: false };
 }
 
 /** Megabytes of speech models on this computer, counting the ones another app downloaded. */

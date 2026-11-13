@@ -2,7 +2,7 @@
 // synthesis, and the computer's own speech run by the backend (nativeVoice.ts). The saved choice says which is tried
 // first; the other is the fallback. Everything is guarded, because a computer may have no voice at all.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { chooseVoice, readPrefs, speechRate, type NativeVoiceLike } from "../screens/settings/prefs";
 import { fetchNativeVoices, inApp, speakNative, stopNative } from "./nativeVoice";
 import { engineOrder, probeBrowserVoices, speakInOrder, type ProbeSource } from "./voiceEngine";
@@ -153,6 +153,26 @@ async function speakSystem(text: string): Promise<boolean> {
   }
 }
 
+// ---------- is the interviewer speaking ----------
+
+let speaking = false;
+const speakingListeners = new Set<() => void>();
+
+function setSpeaking(on: boolean) {
+  if (speaking === on) return;
+  speaking = on;
+  speakingListeners.forEach((l) => l());
+}
+
+/** True while a line is being read aloud. */
+export const isSpeaking = (): boolean => speaking;
+export const subscribeSpeaking = (l: () => void) => {
+  speakingListeners.add(l);
+  return () => void speakingListeners.delete(l);
+};
+/** Re-renders when the interviewer starts or stops speaking. */
+export const useSpeaking = (): boolean => useSyncExternalStore(subscribeSpeaking, isSpeaking, isSpeaking);
+
 /** Reads `text` aloud in the chosen voice and speed. Returns false when nothing can speak.
  *  `onEnd` runs when the line ends, is stopped, or no engine could speak it (`spoke` false). */
 export function say(text: string, onEnd?: (spoke: boolean) => void): boolean {
@@ -165,9 +185,14 @@ export function say(text: string, onEnd?: (spoke: boolean) => void): boolean {
   if (order.length === 0) return false;
   const mine = ++line;
   halt();
+  setSpeaking(true);
   if (inApp() && nativeCache === null) void loadNativeVoices();
   const live = () => mine === line;
-  void speakInOrder(order, (engine, isLast) => (engine === "browser" ? speakBrowser(text, !isLast) : speakSystem(text)), live).then((spoke) => onEnd?.(spoke));
+  void speakInOrder(order, (engine, isLast) => (engine === "browser" ? speakBrowser(text, !isLast) : speakSystem(text)), live).then((spoke) => {
+    // A newer line may have taken over; only the latest one says the speaking is over.
+    if (mine === line) setSpeaking(false);
+    onEnd?.(spoke);
+  });
   return true;
 }
 
@@ -183,4 +208,5 @@ function halt(): void {
 export function stopSaying(): void {
   line++;
   halt();
+  setSpeaking(false);
 }

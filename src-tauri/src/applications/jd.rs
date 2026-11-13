@@ -117,8 +117,10 @@ const NO_ENGINE: &str = "No AI engine is set up, so the posting was read by keyw
 fn failure_notice(e: &CallError) -> String {
     let reason = match e {
         CallError::Unavailable(m) | CallError::Failed(m) => m.clone(),
+        CallError::TooLong => crate::scoring::run::TOO_LONG.to_string(),
         CallError::Invalid(_) => "The AI's reply couldn't be read.".to_string(),
         CallError::CapReached { .. } => e.cap_words(),
+        CallError::Stopped => "You stopped the AI.".to_string(),
     };
     format!("{reason} The posting was read by keywords only, and the questions come from the general set.")
 }
@@ -691,7 +693,11 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
     let filed = storage.application_target(&rec)?;
     let targets_block = super::target_fit::targets_text(&targets, filed.as_deref());
     let attempt: Result<Reading, String> = match ai {
-        Some(mut ctx) => ai_read(&mut ctx, &rec, &jd, &stories, &profile_text(profile.as_ref()), &targets_block).map_err(|e| failure_notice(&e)),
+        Some(mut ctx) => match ai_read(&mut ctx, &rec, &jd, &stories, &profile_text(profile.as_ref()), &targets_block) {
+            // Stopped by the person: nothing is saved and the screen goes back to the posting.
+            Err(CallError::Stopped) => return Err(StorageError::Invalid(crate::scoring::run::STOPPED.into())),
+            other => other.map_err(|e| failure_notice(&e)),
+        },
         None => Err(NO_ENGINE.to_string()),
     };
     let (reading, notice) = match attempt {

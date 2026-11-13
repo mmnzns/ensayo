@@ -12,6 +12,8 @@ import {
   contextLine,
   detectedLine,
   cloudProviders,
+  chosenModel,
+  unpricedNote,
   explainTestError,
   initialState,
   isLocalAddress,
@@ -38,7 +40,7 @@ import {
   type ProviderInfo,
 } from "./aiSettings";
 import SpeechModelList from "./SpeechModelList";
-import { modelRows, type SpeechModelEntry } from "./speechModels";
+import { modelRows, removedLine, type Removal, type SpeechModelEntry } from "./speechModels";
 import { CheckIcon } from "./parts";
 
 export type TestState = { sig: string; status: "testing" | "ok" | "bad" | "empty"; line: string };
@@ -106,6 +108,7 @@ export function useLocalAi(active: boolean) {
   const [notice, setNotice] = useState("");
   /** The model whose Delete question is open. */
   const [confirming, askDelete] = useState<string | null>(null);
+  const [removeId, askRemove] = useState<string | null>(null);
   const cancelled = useRef(false);
 
   const refresh = () => invoke<LocalAiView>("local_ai_status").then(setStatus, (e) => setError(explainTestError(e)));
@@ -165,7 +168,26 @@ export function useLocalAi(active: boolean) {
       },
     );
   };
-  return { status, busy, error, notice, confirming, askDelete, download, cancel, remove };
+  /** "Remove from this computer": erases the model for every Craft Concepts app, after the person confirmed. */
+  const removeEverywhere = (id: string) => {
+    askRemove(null);
+    setError("");
+    setNotice("");
+    const name = status?.models.find((m) => m.id === id)?.name ?? "The model";
+    invoke<Removal>("remove_model_everywhere", { id }).then(
+      (r) => {
+        const line = removedLine(name, r);
+        (line.problem ? setError : setNotice)(line.text);
+        void refresh();
+        announceAiChange();
+      },
+      (e) => {
+        setError(explainTestError(e));
+        void refresh();
+      },
+    );
+  };
+  return { status, busy, error, notice, confirming, askDelete, download, cancel, remove, removeId, askRemove, removeEverywhere };
 }
 
 type LocalAi = ReturnType<typeof useLocalAi>;
@@ -209,6 +231,9 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
           onCancel={ai.cancel}
           onAskDelete={ai.askDelete}
           onDelete={(id) => ai.remove(id)}
+          removeId={ai.removeId}
+          onAskRemove={ai.askRemove}
+          onRemove={ai.removeEverywhere}
         />
       </div>
       {!here && !rows.some((r) => r.downloadingHere) && <span className="e-meta">{localModelLine(m)}. Until a model is downloaded and in use, you'll get timing notes only.</span>}
@@ -362,6 +387,24 @@ export function useAiEngine(view: AiView) {
 
 export type AiEngine = ReturnType<typeof useAiEngine>;
 
+/** Says so when the chosen cloud model has no listed price. */
+export function UnpricedNote({ kind, model }: { kind: AiKind; model: string }) {
+  const [known, setKnown] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (kind !== "key" || !model) return setKnown(null);
+    let stale = false;
+    invoke<boolean>("model_price_known", { model }).then(
+      (k) => !stale && setKnown(k),
+      () => !stale && setKnown(null),
+    );
+    return () => {
+      stale = true;
+    };
+  }, [kind, model]);
+  const line = unpricedNote(kind, model, known);
+  return line ? <span className="e-meta" role="status">{line}</span> : null;
+}
+
 /** The part of the engine form under the three cards: provider and model, the key and Test, or the built-in local AI. `guided` is the setup step, where "on this computer" means the built-in model. */
 export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: boolean }) {
   const { st, kind, settings, cloud, provider, hasKey, typedKey, otherOpen, setOtherOpen, result, found, problem, local, detect, change, moved } = ai;
@@ -430,6 +473,7 @@ export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: b
               </div>
             )}
           </div>
+          {!builtIn && <UnpricedNote kind={kind} model={chosenModel(provider, settings)} />}
           {builtIn ? (
             <BuiltInPanel ai={local} st={st} change={change} />
           ) : (

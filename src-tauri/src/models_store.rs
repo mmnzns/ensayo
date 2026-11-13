@@ -49,13 +49,26 @@ pub fn begin_start_up() {
 /// Adopts Ensayo's older models, erases what no app uses any more, and lets the commands go on. `used` are the models
 /// this app already knows it uses (`move_in` also marks every model it adopts from Ensayo's own old folder).
 pub fn start_up(used: &[&str]) {
-    match open() {
+    start_up_with(&PHASE, || match open() {
         Ok(store) => log_report(&run_start_up(store, used)),
         Err(e) => log::warn!("{e}"),
+    });
+}
+
+/// Sets the phase to Finished when dropped, so a panic inside start-up still lets every waiting command go on.
+struct FinishGuard<'a>(&'a (Mutex<Phase>, Condvar));
+
+impl Drop for FinishGuard<'_> {
+    fn drop(&mut self) {
+        let (lock, done) = self.0;
+        *lock.lock().unwrap_or_else(|e| e.into_inner()) = Phase::Finished;
+        done.notify_all();
     }
-    let (lock, done) = &PHASE;
-    *lock.lock().unwrap_or_else(|e| e.into_inner()) = Phase::Finished;
-    done.notify_all();
+}
+
+fn start_up_with(phase: &(Mutex<Phase>, Condvar), work: impl FnOnce()) {
+    let _finish = FinishGuard(phase);
+    work();
 }
 
 /// What start-up found, for the log: ids and reasons only.
@@ -222,6 +235,28 @@ pub fn release(store: &SharedStore, id: &str) -> Result<Deleted, String> {
     }
 }
 
+/// What `remove_model_everywhere` answers.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct Removal {
+    /// "erased" (gone for every app), "in_use" (an app has it loaded or is downloading it; nothing was touched) or
+    /// "not_there" (nothing of it was on this computer).
+    pub result: &'static str,
+    /// Old copies that couldn't be deleted yet (a file another program has open, on Windows). They go the next time.
+    pub old_copies_left: usize,
+}
+
+/// Erases `id` from this computer for every app that uses the shared folder (the person asked for "Remove from this
+/// computer"). Never touches anything while another app has the model loaded or is downloading it.
+pub fn remove_everywhere(store: &SharedStore, id: &str) -> Result<Removal, String> {
+    use voice_engine_models::Removed;
+    match store.remove_everywhere(id) {
+        Ok(Removed::Erased { old_copies_left }) => Ok(Removal { result: "erased", old_copies_left }),
+        Ok(Removed::InUse) => Ok(Removal { result: "in_use", old_copies_left: 0 }),
+        Ok(Removed::NotThere) => Ok(Removal { result: "not_there", old_copies_left: 0 }),
+        Err(e) => Err(format!("Ensayo couldn't remove that model from this computer ({}). Close other apps that use it and try again.", e.kind())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,6 +308,62 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = SharedStore::open_at(app, dir.path().to_path_buf()).unwrap();
         (dir, store)
+    }
+
+    #[test]
+    fn a_start_up_that_panics_still_leaves_the_phase_finished() {
+        let phase = (Mutex::new(Phase::Running), Condvar::new());
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| start_up_with(&phase, || panic!("boom"))));
+        assert!(r.is_err());
+        assert!(*phase.0.lock().unwrap() == Phase::Finished);
+        let ok = (Mutex::new(Phase::Running), Condvar::new());
+        start_up_with(&ok, || {});
+        assert!(*ok.0.lock().unwrap() == Phase::Finished);
+    }
+
+    #[test]
+    fn removing_a_model_everywhere_erases_it_for_every_app() {
+        let (dir, mine) = temp_store(App::Ensayo);
+        let talaan = SharedStore::open_at(App::Talaan, dir.path().to_path_buf()).unwrap();
+        install(&mine, "whisper-tiny");
+        mine.use_model("whisper-tiny").unwrap();
+        talaan.use_model("whisper-tiny").unwrap();
+        let mut r = remove_everywhere(&mine, "whisper-tiny");
+        // A lock held for an instant by another test's child process answers "in use"; see `release_until_erased`.
+        for _ in 0..100 {
+            if r != Ok(Removal { result: "in_use", old_copies_left: 0 }) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            r = remove_everywhere(&mine, "whisper-tiny");
+        }
+        assert_eq!(r, Ok(Removal { result: "erased", old_copies_left: 0 }));
+        assert_eq!(state_name(&mine.status("whisper-tiny")), "missing");
+        assert_eq!(state_name(&talaan.status("whisper-tiny")), "missing");
+    }
+
+    #[test]
+    fn removing_a_model_that_is_not_there_says_so() {
+        let (_d, store) = temp_store(App::Ensayo);
+        assert_eq!(remove_everywhere(&store, "whisper-tiny"), Ok(Removal { result: "not_there", old_copies_left: 0 }));
+    }
+
+    #[test]
+    fn a_model_another_app_has_loaded_is_not_removed() {
+        let (dir, mine) = temp_store(App::Ensayo);
+        let talaan = SharedStore::open_at(App::Talaan, dir.path().to_path_buf()).unwrap();
+        install(&mine, "whisper-tiny");
+        talaan.use_model("whisper-tiny").unwrap();
+        let _held = talaan.hold("whisper-tiny").unwrap();
+        assert_eq!(remove_everywhere(&mine, "whisper-tiny"), Ok(Removal { result: "in_use", old_copies_left: 0 }));
+        assert!(is_installed(&mine.status("whisper-tiny")), "nothing was touched");
+    }
+
+    #[test]
+    fn a_bad_id_is_a_plain_error() {
+        let (_d, store) = temp_store(App::Ensayo);
+        let e = remove_everywhere(&store, "../x").unwrap_err();
+        assert!(e.starts_with("Ensayo couldn't remove that model from this computer"), "{e}");
     }
 
     #[test]
