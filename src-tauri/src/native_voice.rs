@@ -71,6 +71,16 @@ pub fn winrt_speaking_rate(rate: f64) -> f64 {
     if rate.is_finite() && rate > 0.0 { rate.clamp(0.5, 3.0) } else { 1.0 }
 }
 
+/// How long a spoken line may take before the player is given up on: twice the length it should take, plus five
+/// seconds. The length comes from the word count at about 150 words a minute at rate 1.0, scaled by the rate, and is
+/// never under 3 seconds. It stops a line waiting forever when the sound device goes away mid-line.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub fn line_time_limit(text: &str, rate: f64) -> std::time::Duration {
+    let words = text.split_whitespace().count() as f64;
+    let expected = (words / (150.0 * winrt_speaking_rate(rate)) * 60.0).max(3.0);
+    std::time::Duration::from_secs_f64(expected * 2.0 + 5.0)
+}
+
 /// Which voice to speak with. `saved` is what Settings stored: an id from the old engine or from this one. An exact
 /// match wins, then the same name ignoring case, then the old System.Speech names ("Microsoft David Desktop") against
 /// the new ones ("Microsoft David"). None means no match, so the caller keeps the system's default voice.
@@ -304,9 +314,9 @@ fn speak(text: &str, voice_id: &str, rate: f64) -> Result<Outcome, String> {
 
 #[cfg(target_os = "windows")]
 mod winrt {
-    use super::{clean_text, resolve_voice, valid_voice_id, winrt_speaking_rate, NativeVoice, Outcome};
+    use super::{clean_text, line_time_limit, resolve_voice, valid_voice_id, winrt_speaking_rate, NativeVoice, Outcome};
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::mpsc::{channel, Sender};
+    use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
     use std::sync::{Mutex, MutexGuard, Once};
     use windows::core::{Error, Interface, Ref, HSTRING};
     use windows::Foundation::TypedEventHandler;
@@ -432,7 +442,15 @@ mod winrt {
             *s = Some((mine, wake, player.clone()));
         }
         player.Play().map_err(text)?;
-        let ended = waiter.recv().unwrap_or(Ended::Stopped);
+        let ended = match waiter.recv_timeout(line_time_limit(line, rate)) {
+            Ok(e) => e,
+            Err(RecvTimeoutError::Timeout) => {
+                log::warn!("voice line timed out");
+                let _ = player.Pause();
+                Ended::Stopped
+            }
+            Err(RecvTimeoutError::Disconnected) => Ended::Stopped,
+        };
         {
             let mut s = slot();
             if s.as_ref().is_some_and(|(n, _, _)| *n == mine) {
@@ -569,6 +587,26 @@ mod tests {
         assert_eq!(windows_rate(0.85), -2);
         assert_eq!(windows_rate(1.0), 0);
         assert_eq!(windows_rate(50.0), 10);
+    }
+
+    #[test]
+    fn a_line_time_limit_is_twice_the_expected_length_plus_five_seconds() {
+        use std::time::Duration;
+        // 150 words at rate 1.0 take a minute: 2 * 60 + 5.
+        let words = vec!["word"; 150].join(" ");
+        assert_eq!(line_time_limit(&words, 1.0), Duration::from_secs(125));
+        // Twice as fast, half as long: 2 * 30 + 5.
+        assert_eq!(line_time_limit(&words, 2.0), Duration::from_secs(65));
+        // Slower takes longer.
+        assert!(line_time_limit(&words, 0.5) > line_time_limit(&words, 1.0));
+    }
+
+    #[test]
+    fn a_short_or_empty_line_still_gets_the_three_second_minimum() {
+        use std::time::Duration;
+        assert_eq!(line_time_limit("Hi", 1.0), Duration::from_secs(11));
+        assert_eq!(line_time_limit("", 1.0), Duration::from_secs(11));
+        assert_eq!(line_time_limit("Hi", f64::NAN), Duration::from_secs(11));
     }
 
     #[test]
