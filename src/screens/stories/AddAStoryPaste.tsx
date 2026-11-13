@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Working from "../applications/Working";
 import { stopLocalAi } from "../../ui/aiStop";
+import { pasteStart } from "./pasteStart";
 import { readStory } from "./readStory";
 import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
@@ -13,7 +14,7 @@ export default function AddAStoryPaste() {
   const store = useStore();
   const { pasteSample } = store.screens.stories;
   const engine = store.engine;
-  const [raw, setRaw] = useState(pasteDraft.raw ?? pasteSample);
+  const [raw, setRaw] = useState(pasteStart(pasteDraft.raw, pasteSample, isApp()));
   const [company, setCompany] = useState(pasteDraft.company);
   const empty = raw.trim() === "";
 

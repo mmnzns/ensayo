@@ -5,14 +5,17 @@ import Link from "../../ui/Link";
 import SearchBox, { NoMatch } from "../../ui/SearchBox";
 import { searchStories, searchTerm } from "../search";
 import { priorityFor } from "./angles";
-import { filterStories, firstUncovered, usageText } from "./helpers";
+import { filterStories, firstUncovered, storyFilters, usageText } from "./helpers";
 import { chooseStory } from "./selection";
 
 export default function Stories() {
   const store = useStore();
   const { stories, methods, applications } = store;
-  const { filters, gapNeed } = store.screens.stories;
-  const [filterId, setFilterId] = useState(filters[0]?.id ?? "all");
+  const { gapNeed } = store.screens.stories;
+  // The chips come from the competencies of your own stories, not a fixed list.
+  const filters = storyFilters(stories);
+  const [chosenFilter, setFilterId] = useState("all");
+  const filterId = filters.some((f) => f.id === chosenFilter) ? chosenFilter : "all";
   const [query, setQuery] = useState("");
   const shown = searchStories(filterStories(stories, filters.find((f) => f.id === filterId)), query);
   const gap = firstUncovered(applications);

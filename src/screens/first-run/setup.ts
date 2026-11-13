@@ -190,3 +190,33 @@ export function parseProblemLine(e: unknown): string {
   const text = message(e).trim();
   return text || "Ensayo couldn't read that one. You can fill the story in yourself, or skip this and add one later.";
 }
+
+// ---------- Finish setting up (Home) ----------
+
+export interface MissingStep {
+  id: "microphone" | "speech" | "engine";
+  title: string;
+  line: string;
+  /** Where to finish it: the setup screen, or Settings where the setup screen would carry on into the story step. */
+  to: string;
+}
+
+/**
+ * The setup steps that are not done, for the "Finish setting up" card on Home. Read from where things stand, not from a
+ * note of what was skipped, so a deleted speech model or a microphone turned off later shows up too. `permission` is
+ * what `mic_permission` said (null until it is read; "unknown" is not asked about), `plan` is the speech step's plan
+ * (null until it is read), and `engineKind` is the feedback engine's kind.
+ */
+export function missingSteps(permission: string | null, plan: SpeechPlan | null, engineKind: "local" | "key" | "timing"): MissingStep[] {
+  const out: MissingStep[] = [];
+  if (permission === "denied" || permission === "restricted" || permission === "undetermined") {
+    out.push({ id: "microphone", title: "Microphone", line: "Ensayo can't hear you until this computer allows the microphone.", to: "1-4-microphone" });
+  }
+  if (plan?.kind === "download") {
+    out.push({ id: "speech", title: "Speech model", line: `Ensayo can't turn your answers into text until the speech model is on this computer. It is ${plan.sizeMb} MB and works offline once it is here.`, to: "1-5-speech" });
+  }
+  if (engineKind === "timing") {
+    out.push({ id: "engine", title: "Feedback engine", line: "Right now Ensayo judges timing, length and filler words. Add an AI engine to hear whether you answered the question.", to: "8-5-settings-ai" });
+  }
+  return out;
+}

@@ -1,27 +1,14 @@
 // Draft generated from Design/screens/html/2-2-home-empty.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
-import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import { liveAvailable } from "../../practice/live";
 import { startQuickDrill } from "../../practice/quick";
-import { useSpeech } from "../first-run/useSpeech";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { longDate } from "./format";
+import FinishSetup from "./FinishSetup";
 import { showEngineNudge } from "./state";
 
 const NUMBER_WORDS: Record<number, string> = { 3: "three", 5: "five", 10: "ten" };
-
-/** In the app, a quiet nudge while no speech model is on this computer: without one Ensayo can't hear an answer. */
-function SpeechReminder() {
-  const { plan } = useSpeech();
-  if (plan?.kind !== "download") return null;
-  return (
-    <section className="e-soft" role="status" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px" }}>
-      <span style={{ flex: "1 1 360px" }} className="e-meta">Ensayo can't hear your answers yet, because the speech model isn't on this computer. It is {plan.sizeMb} MB and works offline once it is here.</span>
-      <Link to="1-5-speech" className="e-btn e-btn-white e-btn-sm">Set up speech</Link>
-    </section>
-  );
-}
 
 export default function HomeEmpty() {
   const store = useStore();
@@ -42,7 +29,7 @@ export default function HomeEmpty() {
         </div>
         <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => startQuickDrill({ targetRole: store.activeTarget?.role ?? profile.targetRole, stories: store.stories, methods: store.methods, target: store.activeTarget }, { count: drill.questions })}>Practice</Link>
       </section>
-      {isApp() ? <SpeechReminder /> : null}
+      <FinishSetup skip="engine" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "20px" }}>
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <span className="e-presence" style={{ width: "44px", height: "44px" }} aria-hidden="true">

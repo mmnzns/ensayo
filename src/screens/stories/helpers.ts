@@ -57,3 +57,28 @@ export const BRANCH_LABELS: Record<string, string> = {
   avoided_failure: "What you avoided",
 };
 export const CORE_BRANCHES = ["data", "failure", "pushback"];
+
+/** "improving a metric" as a chip label: the first letter up. */
+const chipLabel = (c: string): string => c.charAt(0).toUpperCase() + c.slice(1);
+
+/**
+ * The filter chips for the story list, from the user's own stories: All, the `limit` competencies most of them carry
+ * (the most common first, ties in the order they first appear), then Has gaps. Competencies are matched ignoring case.
+ */
+export function storyFilters(stories: Story[], limit = 4): StoryFilter[] {
+  const counts = new Map<string, { label: string; n: number }>();
+  for (const s of stories) {
+    // A story counts once for a competency, however many times it repeats it.
+    for (const c of new Set(s.competencies.map((x) => x.trim().toLowerCase()).filter(Boolean))) {
+      const seen = counts.get(c);
+      if (seen) seen.n += 1;
+      else counts.set(c, { label: chipLabel(s.competencies.find((x) => x.trim().toLowerCase() === c)!.trim()), n: 1 });
+    }
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, limit);
+  return [
+    { id: "all", label: "All" },
+    ...top.map(([c, v]): StoryFilter => ({ id: `competency:${c}`, label: v.label, competency: c })),
+    { id: "gaps", label: "Has gaps", gaps: true },
+  ];
+}

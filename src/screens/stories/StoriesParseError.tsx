@@ -2,13 +2,15 @@ import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
+import { isApp } from "../../data/real";
+import { pasteStart } from "./pasteStart";
 import { getParseFailure, pasteDraft, setBlankReview, setParsedDraft } from "./selection";
 
 /** After "Read it" when the engine could not turn the text into a story. The text the user pasted is kept. */
 export default function StoriesParseError() {
   const store = useStore();
   const { engine } = store;
-  const kept = pasteDraft.raw ?? store.screens.stories.pasteSample;
+  const kept = pasteStart(pasteDraft.raw, store.screens.stories.pasteSample, isApp());
   const reason =
     getParseFailure() ??
     (engine.offline

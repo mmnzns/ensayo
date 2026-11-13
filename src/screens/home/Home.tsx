@@ -10,6 +10,7 @@ import { withParams } from "../../data/selection";
 import { liveAvailable } from "../../practice/live";
 import { startApplicationDrill, startQuickDrill } from "../../practice/quick";
 import { useApplicationExtras } from "../../practice/extras";
+import FinishSetup from "./FinishSetup";
 import HomeEmpty from "./HomeEmpty";
 import { habitCount, showFirstHome } from "./state";
 import { viewSession } from "../../practice/viewing";
@@ -68,6 +69,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
           </span>
         )}
       </header>
+      <FinishSetup />
       {offline && (
         <section className="e-soft" role="status" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 16px", padding: "14px 20px" }}>
           <span className="e-badge">Offline</span>
