@@ -312,6 +312,8 @@ pub struct ProviderLlm {
     /// Set once a provider has refused the schema mode (Claude's `output_config.format`, OpenAI's `json_schema`,
     /// Gemini's `responseJsonSchema`), so later calls go out on the plain path.
     schema_refused: AtomicBool,
+    /// Set once Claude has refused `output_config` itself (an API version without effort), so later calls leave it out.
+    effort_refused: AtomicBool,
 }
 
 // The key never appears in debug output.
@@ -333,6 +335,7 @@ impl ProviderLlm {
             timeout_override: None,
             json_mode_refused: AtomicBool::new(false),
             schema_refused: AtomicBool::new(false),
+            effort_refused: AtomicBool::new(false),
         }
     }
 
@@ -383,11 +386,16 @@ impl ProviderLlm {
 
     fn round_trip(&self, req: &LlmRequest, model: &str, json_mode: bool) -> Result<LlmReply, Failure> {
         let settings = model_settings(self.provider, model, req.tier);
-        let wire = match format_of(self.provider) {
+        let mut wire = match format_of(self.provider) {
             Format::Anthropic => anthropic_request(&self.base, &self.key, model, req, &settings),
             Format::OpenAi => openai_request(self.provider, &self.base, &self.key, model, req, &settings, json_mode),
             Format::Gemini => gemini_request(&self.base, &self.key, model, req, &settings),
         };
+        if self.effort_refused.load(Ordering::Relaxed) {
+            if let Some(body) = wire.body.as_object_mut() {
+                body.remove("output_config");
+            }
+        }
         let timeout = self.timeout_override.unwrap_or_else(|| timeout(self.provider, req.tier));
         let body = self.post_with_retry(&wire, timeout)?;
         match format_of(self.provider) {
@@ -445,6 +453,15 @@ impl Llm for ProviderLlm {
                 self.schema_refused.store(true, Ordering::Relaxed);
                 log::info!("schema mode refused by {}; asking again without it", self.provider.name());
                 req.schema = None;
+                first = self.round_trip(&req, model, json_mode);
+            }
+        }
+        if let Err(f) = &first {
+            // Without the schema, Claude still refused `output_config`: the effort setting goes too.
+            let about_config = f.body.to_string().to_lowercase();
+            if self.provider == Provider::Claude && f.status == Some(400) && (about_config.contains("output_config") || about_config.contains("effort")) && !self.effort_refused.load(Ordering::Relaxed) {
+                self.effort_refused.store(true, Ordering::Relaxed);
+                log::info!("effort setting refused by {}; asking again without it", self.provider.name());
                 first = self.round_trip(&req, model, json_mode);
             }
         }
@@ -906,6 +923,22 @@ mod tests {
         assert_eq!(seen[1].body["response_format"]["type"], "json_object", "today's path");
         assert_eq!(seen[2].body["response_format"]["type"], "json_object", "and later calls skip the schema");
         assert!(pauses.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_claude_400_about_output_config_after_the_schema_goes_drops_the_effort_too() {
+        let refusal = || reply(400, json!({ "error": { "message": "output_config: extra inputs are not permitted" } }));
+        let ok = |n: u32| reply(200, json!({ "content": [{ "type": "text", "text": format!("{{\"n\": {n}}}") }], "usage": { "input_tokens": 1, "output_tokens": 1 } }));
+        let (base, server) = fake_server(vec![refusal(), refusal(), ok(1), ok(2)]);
+        let (llm, _) = llm(Provider::Claude, base, "sk-ant-key-12345678", "claude-sonnet-5-5");
+        let r = schema_request(Tier::Fast);
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 1}");
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 2}");
+        let seen = server.join().unwrap();
+        assert_eq!(seen.len(), 4);
+        assert!(seen[1].body["output_config"].get("format").is_none() && seen[1].body["output_config"].get("effort").is_some(), "first the schema goes");
+        assert!(seen[2].body.get("output_config").is_none(), "then the effort");
+        assert!(seen[3].body.get("output_config").is_none(), "and later calls leave it out");
     }
 
     #[test]
