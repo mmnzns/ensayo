@@ -18,6 +18,9 @@ pub mod targets;
 pub mod trash;
 pub mod versioned;
 
+#[cfg(test)]
+mod from_0_2_0;
+
 use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]

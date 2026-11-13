@@ -518,6 +518,72 @@ mod tests {
         storage.save_story(&story("st_c")).unwrap();
     }
 
+    /// lock.json as 0.2.0 wrote it: the host name, no install id.
+    fn write_0_2_0_lock(storage: &Storage, host: &str, heartbeat: DateTime<Utc>) {
+        let stamp = |t: DateTime<Utc>| t.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let text = format!("{{\n  \"machine\": \"{host}\",\n  \"pid\": 4242,\n  \"started\": \"{}\",\n  \"heartbeat\": \"{}\"\n}}", stamp(heartbeat - Duration::hours(1)), stamp(heartbeat));
+        std::fs::write(storage.root().join("lock.json"), text).unwrap();
+    }
+
+    #[test]
+    fn updating_from_0_2_0_a_lock_this_computer_left_is_ours_fresh_or_stale_and_saving_works() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        let host = machine_name();
+        // 0.2.0 was open a moment ago (a crash, or the update replaced the app without a clean quit).
+        for age in [Duration::seconds(5), Duration::minutes(4), Duration::minutes(20), Duration::hours(30)] {
+            write_0_2_0_lock(&storage, &host, Utc::now() - age);
+            refresh_write_block(&storage);
+            assert_eq!(status_for(storage.root(), storage.root(), &me(), Utc::now()).state, "ready", "{age}");
+            storage.save_story(&story("st_a")).unwrap_or_else(|e| panic!("save refused with a lock {age} old: {e}"));
+            storage.acquire_lock(&me(), Utc::now()).unwrap();
+            let text = std::fs::read_to_string(storage.root().join("lock.json")).unwrap();
+            assert!(text.contains("test-install"), "the lock now carries the install id: {text}");
+            std::fs::remove_file(storage.root().join("lock.json")).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_heartbeat_over_a_0_2_0_lock_from_this_computer_adds_the_id_and_keeps_it_ours() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        write_0_2_0_lock(&storage, &machine_name(), Utc::now() - Duration::minutes(3));
+        storage.heartbeat(&me(), Utc::now()).unwrap();
+        assert!(std::fs::read_to_string(storage.root().join("lock.json")).unwrap().contains("test-install"));
+        assert_eq!(status_for(storage.root(), storage.root(), &me(), Utc::now()).state, "ready");
+    }
+
+    #[test]
+    fn after_the_mac_sleeps_the_focus_check_finds_our_own_stale_lock_ready_and_never_blocked() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        storage.acquire_lock(&me(), Utc::now()).unwrap();
+        // 20 minutes later: the heartbeat could not run, so the lock is stale, and it is still this computer's.
+        let later = Utc::now() + Duration::minutes(20);
+        let st = status_for(storage.root(), storage.root(), &me(), later);
+        assert_eq!(st.state, "ready", "the window shows the page only for other_machine");
+        assert!(!storage.held_by_other(&me(), later).unwrap());
+        storage.heartbeat(&me(), later).unwrap();
+        // Another computer's stale lock is "stale_lock", which the window also treats as open: it is taken, not blocked.
+        storage.acquire_lock("pc", Utc::now() - Duration::minutes(20)).unwrap();
+        assert_eq!(status_for(storage.root(), storage.root(), &me(), Utc::now()).state, "stale_lock");
+        refresh_write_block(&storage);
+        storage.save_story(&story("st_b")).unwrap();
+        storage.acquire_lock(&me(), Utc::now()).unwrap();
+        assert_eq!(status_for(storage.root(), storage.root(), &me(), Utc::now()).state, "ready");
+    }
+
+    #[test]
+    fn a_fresh_0_2_0_lock_from_another_computer_still_refuses_saves() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        write_0_2_0_lock(&storage, "Some-Other-PC", Utc::now() - Duration::minutes(1));
+        refresh_write_block(&storage);
+        let err = plain(storage.save_story(&story("st_a")).unwrap_err());
+        assert!(err.starts_with("Another computer has Ensayo open"), "{err}");
+        assert_eq!(status_for(storage.root(), storage.root(), &me(), Utc::now()).state, "other_machine");
+    }
+
     #[test]
     fn the_lock_names_this_computer_by_its_install_id_and_shows_the_host_name_as_a_label() {
         let dir = tempfile::tempdir().unwrap();

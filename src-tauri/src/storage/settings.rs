@@ -78,6 +78,10 @@ fn new_install_id() -> String {
 /// This install's id. Made and saved the first time it is asked for. Errors (a damaged settings file) are left to
 /// the caller: it must not guess an id, or the lock would say another computer.
 pub fn install_id(path: &Path) -> Result<String> {
+    // Two commands can ask at the same moment on the first start: without this each would make its own id, and the
+    // lock written with one would name a computer that the saved settings no longer know.
+    static MAKING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = MAKING.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = load_for_update(path)?;
     if let Some(id) = s.install_id.as_deref().filter(|i| !i.trim().is_empty()) {
         return Ok(id.to_string());
