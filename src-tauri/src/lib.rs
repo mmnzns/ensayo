@@ -4,6 +4,7 @@ pub mod ai_commands;
 mod application_commands;
 pub mod applications;
 mod audio_retention;
+mod busy;
 pub mod backup;
 mod backup_commands;
 mod commands;

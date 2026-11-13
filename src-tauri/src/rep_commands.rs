@@ -550,7 +550,10 @@ pub(crate) fn with_ai<T>(session_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -
 /// Transcribes the recording, measures it, judges it (when an engine is set up) and saves the rep.
 #[tauri::command]
 pub async fn finish_rep(mut args: FinishArgs, model_id: String) -> Cmd<RepOutcome> {
+    // An update never installs in the middle of saving the answer.
+    let busy = crate::busy::hold();
     blocking(move || {
+        let _busy = busy;
         let _t = crate::logging::Timer::new("finish_rep");
         let storage = open().map_err(plain)?;
         let settings = settings::load(&paths::settings_file());
@@ -642,7 +645,9 @@ pub fn ai_ready() -> bool {
 /// "Keep it" after "Start this rep again?": measure from after the restart.
 #[tauri::command]
 pub async fn rescore_rep(session_id: String, n: u32, keep_restart: bool) -> Cmd<RepOutcome> {
+    let busy = crate::busy::hold();
     blocking(move || {
+        let _busy = busy;
         let _t = crate::logging::Timer::new("rescore_rep");
         let storage = open().map_err(plain)?;
         let (out, unavailable) = with_ai(&session_id, |ai| rescore_with(&storage, &paths::audio_dir(), &session_id, n, keep_restart, ai));

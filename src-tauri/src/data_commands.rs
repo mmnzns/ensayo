@@ -294,7 +294,9 @@ pub async fn set_data_folder(folder: PathBuf) -> Cmd<()> {
 /// in it. Answers "copied" or "existing". The old folder is left as it was. The window reloads afterwards.
 #[tauri::command]
 pub async fn move_data_folder(folder: PathBuf) -> Cmd<&'static str> {
+    let busy = crate::busy::hold();
     blocking(move || {
+        let _busy = busy;
         let _t = crate::logging::Timer::new("move_data_folder");
         let from = data_folder();
         let moved = relocate::prepare_move(&from, &folder).map_err(plain)?;
@@ -364,7 +366,9 @@ fn delete_everything_in(root: &Path, default: &Path, local: &[(&str, PathBuf)], 
 /// error saying the stories were not deleted.
 #[tauri::command]
 pub async fn delete_all_data() -> Cmd<DeleteReport> {
-    blocking(|| {
+    let busy = crate::busy::hold();
+    blocking(move || {
+        let _busy = busy;
         // The built-in local AI holds its model file open (Windows will not delete it then); so may the speech model.
         crate::ai::local::stop_shared();
         crate::speech::loaded::unload();
