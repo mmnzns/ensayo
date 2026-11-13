@@ -868,7 +868,7 @@ pub async fn set_audio_retention(choice: String) -> Cmd<()> {
             return Err("Not a retention choice".to_string());
         }
         let path = paths::settings_file();
-        let mut s = settings::load(&path);
+        let mut s = settings::load_for_update(&path).map_err(plain)?;
         s.audio_retention = Some(choice);
         settings::save(&path, &s).map_err(plain)
     })

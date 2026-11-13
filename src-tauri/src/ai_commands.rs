@@ -219,7 +219,7 @@ pub async fn save_ai_settings(ai: AiSettings) -> Cmd<()> {
             local::stop_shared();
         }
         let path = paths::settings_file();
-        let mut s = settings::load(&path);
+        let mut s = settings::load_for_update(&path).map_err(|e| e.to_string())?;
         s.ai = Some(ai);
         settings::save(&path, &s).map_err(|e| e.to_string())
     })

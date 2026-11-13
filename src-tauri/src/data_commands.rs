@@ -40,14 +40,25 @@ pub fn open_for(root: &Path, default: &Path) -> StorageResult<Storage> {
     }
 }
 
+/// True when the settings file is damaged and has no good copy, so the data folder choice is unknown. Never with
+/// `ENSAYO_DATA_DIR` set: the choice doesn't come from the file then.
+fn settings_damaged() -> bool {
+    std::env::var("ENSAYO_DATA_DIR").map_or(true, |v| v.trim().is_empty()) && settings::is_damaged(&paths::settings_file())
+}
+
 pub(crate) fn open_storage() -> StorageResult<Storage> {
+    // With the choice unknown, the default folder must not be opened (or created empty) in its place.
+    if settings_damaged() {
+        return Err(StorageError::Invalid(settings::DAMAGED_LINE.into()));
+    }
     open_for(&data_folder(), &paths::default_data_dir())
 }
 
 #[derive(Debug, Serialize)]
 pub struct DataStatus {
     pub folder: String,
-    /// "ready", "missing", "other_machine" (another computer has it open), or "stale_lock" (a lock left behind).
+    /// "ready", "missing", "other_machine" (another computer has it open), "stale_lock" (a lock left behind) or "settings_damaged" (the
+    /// settings file can't be read and has no good copy: the person chooses the data folder again).
     pub state: &'static str,
     pub machine: Option<String>,
     pub age_secs: Option<i64>,
@@ -110,7 +121,13 @@ pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Sen
 
 #[tauri::command]
 pub async fn data_status() -> Cmd<DataStatus> {
-    blocking(|| Ok(status_for(&data_folder(), &paths::default_data_dir(), &machine_name(), Utc::now()))).await
+    blocking(|| {
+        if settings_damaged() {
+            return Ok(DataStatus { folder: String::new(), state: "settings_damaged", machine: None, age_secs: None, conflicts: vec![] });
+        }
+        Ok(status_for(&data_folder(), &paths::default_data_dir(), &machine_name(), Utc::now()))
+    })
+    .await
 }
 
 /// Takes the lock for this computer: nobody had it, or the user chose "Open anyway".

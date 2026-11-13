@@ -82,6 +82,7 @@ describe("data folder check", () => {
   });
   it("says when it cannot be found", () => {
     expect(folderCheck({ folder: "/x", state: "missing", machine: null, age_secs: null })).toMatchObject({ state: "fix", fixTo: "8-6-settings-privacy" });
+    expect(folderCheck({ folder: "", state: "settings_damaged", machine: null, age_secs: null })).toMatchObject({ state: "fix", fixTo: "8-6-settings-privacy" });
   });
   it("names the other computer", () => {
     const c = folderCheck({ folder: "/x", state: "other_machine", machine: "Studio", age_secs: 120 });

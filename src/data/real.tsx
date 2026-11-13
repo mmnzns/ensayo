@@ -43,6 +43,7 @@ import type { ApplicationExtras, InterviewNote, NewApplicationDraft } from "./sc
 import { mockDeleteInterviewNote, mockForgetAsked, mockSaveInterviewNote, mockSetAskedFirst } from "./interviews";
 import { TIMING_ONLY, engineStatusOf } from "./engine";
 import { mockStore } from "./mock";
+import { pickFolder } from "../ui/pickFile";
 import { StoreProvider, useStore, type Store } from "./store";
 import type { Application, EngineStatus, Method, Profile, StageId, Story, Target, You } from "./types";
 import * as TS from "./targetState";
@@ -61,7 +62,7 @@ export const BLANK_PROFILE: Profile = { name: "", fullName: "", targetRole: "", 
 
 export interface DataStatus {
   folder: string;
-  state: "ready" | "missing" | "other_machine" | "stale_lock";
+  state: "ready" | "missing" | "other_machine" | "stale_lock" | "settings_damaged";
   machine: string | null;
   age_secs: number | null;
 }
@@ -262,7 +263,20 @@ function Centered({ children }: { children: ReactNode }) {
   );
 }
 
-function Blocked({ status, onRetry, onOpenAnyway }: { status: DataStatus | null; onRetry: () => void; onOpenAnyway: () => void }) {
+function Blocked({ status, onRetry, onOpenAnyway, onChooseFolder }: { status: DataStatus | null; onRetry: () => void; onOpenAnyway: () => void; onChooseFolder: () => void }) {
+  if (status?.state === "settings_damaged") {
+    return (
+      <Centered>
+        <h1 className="e-h2">Ensayo's settings file is damaged</h1>
+        <p className="e-meta" style={{ margin: 0 }}>
+          Ensayo's settings file is damaged. Your data is safe. Choose your data folder again.
+        </p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button type="button" className="e-btn e-btn-primary" onClick={onChooseFolder}>Choose your data folder</button>
+        </div>
+      </Centered>
+    );
+  }
   if (status?.state === "other_machine") {
     const minutes = Math.max(1, Math.round((status.age_secs ?? 0) / 60));
     return (
@@ -548,7 +562,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try {
       const st = await invoke<DataStatus>("data_status");
       setStatus(st);
-      if (st.state === "missing" || st.state === "other_machine") {
+      if (st.state === "missing" || st.state === "other_machine" || st.state === "settings_damaged") {
         setPhase("blocked");
         return;
       }
@@ -580,6 +594,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setPhase("error");
     }
   }, [readAll]);
+
+  /** The settings file was damaged: pick the data folder again. The backend moves the damaged file aside. */
+  const chooseFolderAgain = useCallback(async () => {
+    const folder = await pickFolder();
+    if (!folder) return;
+    try {
+      await invoke("set_data_folder", { folder });
+      await load();
+    } catch (e) {
+      setError(String(e));
+      setPhase("error");
+    }
+  }, [load]);
 
   /** After a command changed targets: take what the backend now holds. */
   const refreshTargets = useCallback(async () => {
@@ -778,7 +805,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const info = useMemo(() => ({ problems }), [problems]);
 
   if (phase === "loading") return <Centered><p className="e-meta" style={{ margin: 0 }}>Opening your data…</p></Centered>;
-  if (phase === "blocked") return <Blocked status={status} onRetry={() => void load()} onOpenAnyway={() => void openAnyway()} />;
+  if (phase === "blocked") return <Blocked status={status} onRetry={() => void load()} onOpenAnyway={() => void openAnyway()} onChooseFolder={() => void chooseFolderAgain()} />;
   if (phase === "error") {
     return (
       <Centered>

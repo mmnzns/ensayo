@@ -71,13 +71,99 @@ pub fn retention_days(s: &LocalSettings) -> Option<u32> {
     }
 }
 
-/// A missing or damaged file is just the defaults: settings must never stop the app from starting.
-pub fn load(path: &Path) -> LocalSettings {
-    read_text(path).ok().flatten().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+/// What the settings file is: not there yet, fine, or there but not readable as settings.
+#[derive(Debug, PartialEq)]
+enum Read {
+    Missing,
+    Good(LocalSettings),
+    Damaged,
 }
 
+fn read(path: &Path) -> Read {
+    match read_text(path) {
+        Ok(None) => Read::Missing,
+        Ok(Some(t)) => serde_json::from_str(&t).map(Read::Good).unwrap_or(Read::Damaged),
+        Err(_) => Read::Damaged,
+    }
+}
+
+/// The plain line shown when the settings file can't be read and there is no good copy.
+pub const DAMAGED_LINE: &str = "Ensayo's settings file is damaged. Your data is safe. Choose your data folder again.";
+
+fn sibling(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(suffix);
+    path.with_file_name(name)
+}
+
+fn backup_path(path: &Path) -> PathBuf {
+    sibling(path, ".bak")
+}
+
+/// Moves a damaged settings file to `settings.json.damaged-<time>`. It is never overwritten in place.
+fn move_aside(path: &Path) {
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let mut target = sibling(path, &format!(".damaged-{stamp}"));
+    let mut n = 2;
+    while target.exists() {
+        target = sibling(path, &format!(".damaged-{stamp}-{n}"));
+        n += 1;
+    }
+    if std::fs::rename(path, &target).is_err() && std::fs::copy(path, &target).is_ok() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// The settings file is damaged: put the last good copy (`.bak`) in its place when that parses, with the damaged
+/// file kept beside it. None when there is no good copy.
+fn restore_from_backup(path: &Path) -> Option<LocalSettings> {
+    let text = read_text(&backup_path(path)).ok().flatten()?;
+    let good: LocalSettings = serde_json::from_str(&text).ok()?;
+    move_aside(path);
+    atomic_write(path, text.as_bytes()).ok()?;
+    log::warn!("The settings file was damaged; the last good copy was restored");
+    Some(good)
+}
+
+/// Settings for reading. A missing file is the defaults; a damaged one is restored from the last good copy when
+/// there is one. When there is none this still answers with defaults (so reading never stops the app), and nothing is
+/// written: callers that change settings use `load_for_update`, and the app asks `is_damaged` at start.
+pub fn load(path: &Path) -> LocalSettings {
+    match read(path) {
+        Read::Missing => LocalSettings::default(),
+        Read::Good(s) => s,
+        Read::Damaged => restore_from_backup(path).unwrap_or_default(),
+    }
+}
+
+/// True when the settings file can't be read and has no good copy to restore. The app then asks for the data folder.
+pub fn is_damaged(path: &Path) -> bool {
+    read(path) == Read::Damaged && restore_from_backup(path).is_none()
+}
+
+/// Settings for load-modify-save. A damaged file with no good copy is an error, so defaults are never written over
+/// it.
+pub fn load_for_update(path: &Path) -> Result<LocalSettings> {
+    match read(path) {
+        Read::Missing => Ok(LocalSettings::default()),
+        Read::Good(s) => Ok(s),
+        Read::Damaged => restore_from_backup(path).ok_or_else(|| StorageError::Invalid(DAMAGED_LINE.into())),
+    }
+}
+
+/// Saves. The current good file is first copied to `settings.json.bak`, so there is always a last good copy. A
+/// damaged file is moved aside first and never overwritten in place.
 pub fn save(path: &Path, settings: &LocalSettings) -> Result<()> {
     let text = serde_json::to_string_pretty(settings).map_err(|e| StorageError::Json(path.to_path_buf(), e.to_string()))?;
+    match read(path) {
+        Read::Good(_) => {
+            if let Ok(Some(current)) = read_text(path) {
+                let _ = atomic_write(&backup_path(path), current.as_bytes());
+            }
+        }
+        Read::Damaged => move_aside(path),
+        Read::Missing => {}
+    }
     atomic_write(path, format!("{text}\n").as_bytes())
 }
 
@@ -97,7 +183,15 @@ pub fn set_data_folder(settings_path: &Path, folder: &Path) -> Result<()> {
     if !folder.is_dir() {
         return Err(StorageError::Unavailable(folder.to_path_buf()));
     }
-    let mut s = load(settings_path);
+    // The way out of a damaged file: it is moved aside and the choice starts a fresh one.
+    let mut s = match read(settings_path) {
+        Read::Damaged => restore_from_backup(settings_path).unwrap_or_else(|| {
+            move_aside(settings_path);
+            LocalSettings::default()
+        }),
+        Read::Good(s) => s,
+        Read::Missing => LocalSettings::default(),
+    };
     s.data_folder = Some(folder.to_string_lossy().into_owned());
     save(settings_path, &s)
 }
@@ -208,5 +302,96 @@ mod tests {
     #[test]
     fn the_default_folder_is_inside_the_app_local_folder() {
         assert!(crate::paths::default_data_dir().starts_with(crate::paths::app_local()));
+    }
+
+    fn damaged_siblings(dir: &Path) -> Vec<String> {
+        let mut v: Vec<String> = fs::read_dir(dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.contains(".damaged-")).collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn a_save_keeps_the_previous_good_file_as_the_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        save(&path, &LocalSettings { data_folder: Some("/one".into()), ..Default::default() }).unwrap();
+        assert!(!dir.path().join("settings.json.bak").exists(), "nothing to back up on the first save");
+        save(&path, &LocalSettings { data_folder: Some("/two".into()), ..Default::default() }).unwrap();
+        assert_eq!(load(&path).data_folder.as_deref(), Some("/two"));
+        let bak: LocalSettings = serde_json::from_str(&fs::read_to_string(dir.path().join("settings.json.bak")).unwrap()).unwrap();
+        assert_eq!(bak.data_folder.as_deref(), Some("/one"));
+    }
+
+    #[test]
+    fn a_missing_file_is_defaults_and_not_damaged() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        assert_eq!(load(&path), LocalSettings::default());
+        assert!(!is_damaged(&path));
+        assert!(load_for_update(&path).is_ok());
+    }
+
+    #[test]
+    fn a_damaged_file_is_restored_from_the_backup_and_kept_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        save(&path, &LocalSettings { data_folder: Some("/one".into()), ..Default::default() }).unwrap();
+        save(&path, &LocalSettings { data_folder: Some("/two".into()), ..Default::default() }).unwrap();
+        fs::write(&path, "{ not json").unwrap();
+        assert!(!is_damaged(&path), "a good backup means no question for the person");
+        assert_eq!(load(&path).data_folder.as_deref(), Some("/one"), "the last good copy");
+        assert_eq!(load(&path).data_folder.as_deref(), Some("/one"), "and it stays restored");
+        let aside = damaged_siblings(dir.path());
+        assert_eq!(aside.len(), 1, "{aside:?}");
+        assert_eq!(fs::read_to_string(dir.path().join(&aside[0])).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn a_damaged_file_without_a_backup_is_flagged_and_never_overwritten_by_an_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, "{ not json").unwrap();
+        assert!(is_damaged(&path));
+        let err = load_for_update(&path).unwrap_err().to_string();
+        assert_eq!(err, DAMAGED_LINE);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ not json", "the file is untouched");
+        assert!(damaged_siblings(dir.path()).is_empty());
+        // Reading still answers, with defaults.
+        assert_eq!(load(&path), LocalSettings::default());
+    }
+
+    #[test]
+    fn a_damaged_backup_does_not_count_as_a_good_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, "nope").unwrap();
+        fs::write(dir.path().join("settings.json.bak"), "also nope").unwrap();
+        assert!(is_damaged(&path));
+    }
+
+    #[test]
+    fn choosing_the_folder_again_moves_the_damaged_file_aside_and_starts_a_fresh_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let folder = dir.path().join("data");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(&path, "{ not json").unwrap();
+        set_data_folder(&path, &folder).unwrap();
+        assert!(!is_damaged(&path));
+        assert_eq!(load(&path).data_folder.as_deref(), Some(folder.to_string_lossy().as_ref()));
+        let aside = damaged_siblings(dir.path());
+        assert_eq!(aside.len(), 1);
+        assert_eq!(fs::read_to_string(dir.path().join(&aside[0])).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn save_never_overwrites_a_damaged_file_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, "{ not json").unwrap();
+        save(&path, &LocalSettings::default()).unwrap();
+        let aside = damaged_siblings(dir.path());
+        assert_eq!(aside.len(), 1);
+        assert_eq!(fs::read_to_string(dir.path().join(&aside[0])).unwrap(), "{ not json");
     }
 }

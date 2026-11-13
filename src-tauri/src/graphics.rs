@@ -146,7 +146,7 @@ pub async fn graphics_card() -> Result<GraphicsCard, String> {
 pub async fn set_graphics_card(on: bool) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let path = paths::settings_file();
-        let mut s = settings::load(&path);
+        let mut s = settings::load_for_update(&path).map_err(|e| e.to_string())?;
         s.gpu = Some(on);
         settings::save(&path, &s).map_err(|e| e.to_string())?;
         crate::speech::loaded::unload();

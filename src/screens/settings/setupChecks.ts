@@ -71,6 +71,8 @@ export function folderCheck(status: DataStatus): SetupCheck {
       return { ...base, detail: `${status.folder} is open here.`, state: "ready" };
     case "missing":
       return { ...base, detail: `Ensayo can't find ${status.folder}. If it lives in a synced drive, wait for the drive to finish syncing.`, state: "fix", fixLabel: "Choose a folder", fixTo: PRIVACY };
+    case "settings_damaged":
+      return { ...base, detail: "Ensayo's settings file is damaged. Your data is safe.", state: "fix", fixLabel: "Choose a folder", fixTo: PRIVACY };
     case "other_machine": {
       const minutes = Math.max(1, Math.round((status.age_secs ?? 0) / 60));
       return {
