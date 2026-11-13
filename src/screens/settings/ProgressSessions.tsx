@@ -9,6 +9,8 @@ import { forgetSession } from "../../practice/live";
 import { TrashIcon } from "../../ui/Icons";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import SearchBox, { NoMatch } from "../../ui/SearchBox";
+import { searchSessions, searchTerm } from "../search";
 import { useStore } from "../../data/store";
 import type { Mode } from "../../data/types";
 import { applicationTarget } from "../../data/targets";
@@ -75,6 +77,7 @@ export default function ProgressSessions() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const choices = progressChoices(targets, [...sessions.map((s) => sessionTargetId(s, applications, targets)), ...applications.map((a) => applicationTarget(a, targets)?.id)]);
   const chosen = choices.some((t) => t.id === targetId) ? targetId : "all";
   const withMarker = targets.filter((t) => !t.archived).length > 1;
@@ -83,7 +86,7 @@ export default function ProgressSessions() {
   const appIds = sessions.map((s) => s.applicationId).filter((id, i, all): id is string => !!id && all.indexOf(id) === i);
   const appName = (id: string) => applications.find((a) => a.id === id)?.company ?? "Application";
 
-  const shown = filterSessionsByTarget(sessions, applications, targets, chosen).filter((s) => (!mode || s.mode === mode) && (!appId || s.applicationId === appId));
+  const shown = searchSessions(filterSessionsByTarget(sessions, applications, targets, chosen), reps, applications, query).filter((s) => (!mode || s.mode === mode) && (!appId || s.applicationId === appId));
   const groups = shown.map((s) => s.group).filter((g, i, all) => all.indexOf(g) === i);
   const lastId = shown[shown.length - 1]?.id;
   const noFilter = !mode && !appId && chosen === "all";
@@ -113,6 +116,7 @@ export default function ProgressSessions() {
           <Link to="7-2-progress-sessions" role="tab" aria-selected="true" className="e-btn e-btn-sm" style={{ background: "var(--e-tint)", color: "var(--e-ink)" }}>Sessions</Link>
         </div>
       </header>
+      <SearchBox value={query} onChange={setQuery} />
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
         {choices.length > 1 && (
           <select className="e-input" style={{ width: "200px", minHeight: "44px" }} aria-label="Target" value={chosen} onChange={(e) => setTargetId(e.target.value)}>
@@ -131,7 +135,8 @@ export default function ProgressSessions() {
       </div>
       <span className="e-small">Drill: a note after every answer, with retries. Mock: a full stage run straight through, notes at the end.</span>
       <section className="e-card" style={{ padding: "4px 28px" }}>
-        {shown.length === 0 && (
+        {shown.length === 0 && searchTerm(query) && <div style={{ padding: "22px 0" }}><NoMatch query={query} onClear={() => setQuery("")} /></div>}
+        {shown.length === 0 && !searchTerm(query) && (
           <p className="e-meta" style={{ margin: "0", padding: "22px 0" }}>No sessions match. Pick All to see every session.</p>
         )}
         {groups.map((g, gi) => (

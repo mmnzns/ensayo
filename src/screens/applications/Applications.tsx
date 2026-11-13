@@ -1,6 +1,8 @@
 import { useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import SearchBox, { NoMatch } from "../../ui/SearchBox";
+import { searchApplications, searchTerm } from "../search";
 import { withParams } from "../../data/selection";
 import { applicationsByTab, nextInterview, useStore } from "../../data/store";
 import { applicationTarget, fitBanner } from "../../data/targets";
@@ -38,7 +40,8 @@ export default function Applications() {
   const now = store.now();
   const [targetId, setTargetId] = useState<string>("all");
   const choices = filterChoices(store.applications, store.targets);
-  const shown = filterByTarget(store.applications, store.targets, choices.some((t) => t.id === targetId) ? targetId : "all");
+  const [query, setQuery] = useState("");
+  const shown = searchApplications(filterByTarget(store.applications, store.targets, choices.some((t) => t.id === targetId) ? targetId : "all"), query);
   const withMarker = store.targets.filter((t) => !t.archived).length > 1;
   const { active, closed } = applicationsByTab(shown);
   const [tab, setTab] = useState<"active" | "closed">("active");
@@ -72,6 +75,7 @@ export default function Applications() {
       )}
       {store.applications.length > 0 && (
         <>
+          <SearchBox value={query} onChange={setQuery} />
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
             <nav style={{ display: "flex", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)" }} aria-label="Filter">
               <button type="button" aria-current={tab === "active" ? "page" : undefined} className={tab === "active" ? "e-btn e-btn-sm" : "e-btn e-btn-sm e-btn-ghost"} style={tabStyle(tab === "active")} onClick={() => setTab("active")}>
@@ -114,7 +118,7 @@ export default function Applications() {
             </div>
             {rows.length === 0 && (
               <div style={{ padding: "28px 0" }}>
-                <span className="e-meta">{shown.length < store.applications.length ? `No ${tab === "active" ? "open" : "closed"} applications under this target.` : tab === "active" ? "Nothing open right now. Add an application when you apply." : "Nothing closed yet."}</span>
+                {searchTerm(query) ? <NoMatch query={query} onClear={() => setQuery("")} /> : <span className="e-meta">{shown.length < store.applications.length ? `No ${tab === "active" ? "open" : "closed"} applications under this target.` : tab === "active" ? "Nothing open right now. Add an application when you apply." : "Nothing closed yet."}</span>}
               </div>
             )}
             {rows.map((a, i) => {

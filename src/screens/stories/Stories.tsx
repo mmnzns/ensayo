@@ -2,6 +2,8 @@ import { useState } from "react";
 import { storyGaps, useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import SearchBox, { NoMatch } from "../../ui/SearchBox";
+import { searchStories, searchTerm } from "../search";
 import { priorityFor } from "./angles";
 import { filterStories, firstUncovered, usageText } from "./helpers";
 import { chooseStory } from "./selection";
@@ -11,7 +13,8 @@ export default function Stories() {
   const { stories, methods, applications } = store;
   const { filters, gapNeed } = store.screens.stories;
   const [filterId, setFilterId] = useState(filters[0]?.id ?? "all");
-  const shown = filterStories(stories, filters.find((f) => f.id === filterId));
+  const [query, setQuery] = useState("");
+  const shown = searchStories(filterStories(stories, filters.find((f) => f.id === filterId)), query);
   const gap = firstUncovered(applications);
   return (
     <AppShell nav="stories">
@@ -22,6 +25,7 @@ export default function Stories() {
         </div>
         <Link to="5-2-add-a-story-paste" className="e-btn e-btn-primary">+ Add a story</Link>
       </header>
+      <SearchBox value={query} onChange={setQuery} />
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
         <div style={{ display: "flex", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)" }} role="tablist">
           <Link to="5-1-stories" role="tab" aria-selected="true" className="e-btn e-btn-sm" style={{ background: "var(--e-tint)", color: "var(--e-ink)" }}>Stories · {stories.length}</Link>
@@ -55,7 +59,8 @@ export default function Stories() {
             </Link>
           );
         })}
-        {shown.length === 0 && (
+        {shown.length === 0 && searchTerm(query) && <NoMatch query={query} onClear={() => setQuery("")} style={{ gridColumn: "1 / -1" }} />}
+        {shown.length === 0 && !searchTerm(query) && (
           <span className="e-meta" style={{ gridColumn: "1 / -1" }}>
             {stories.length === 0 ? "No stories yet. Add one and it will show up here." : "No stories match this filter."}
           </span>
