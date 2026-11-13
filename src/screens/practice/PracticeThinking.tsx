@@ -1,5 +1,5 @@
 // Practice, thinking. Draft from Design/screens/html/3-3-practice-thinking.html. Moves on to the current result after about 2.5 seconds.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
 import type { EngineStatus } from "../../data/types";
@@ -10,6 +10,8 @@ import { SessionHeader } from "./parts";
 import { getAttempt, resultAfterThinking, setFollowUp } from "./practiceFlow";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
+import EndSessionDialog from "./EndSessionDialog";
+import { atStake, escDecision } from "./endSession";
 
 export const THINKING_MS = 2500;
 
@@ -73,8 +75,10 @@ export default function PracticeThinking() {
     onEnd?.();
     go(endTo);
   };
-  useKeys({ esc: end });
   const failed = live && state.phase === "error";
+  const [asking, setAsking] = useState(false);
+  const onEsc = () => (escDecision(atStake("thinking", live, failed)) === "ask" ? setAsking(true) : end());
+  useKeys({ esc: onEsc });
   const judge = live ? judgeLines(store.engine, state.aiReady) : { step: "Picking the one thing to fix", where: thinking.engine, footer: "Your audio stays on this computer. Only the text is checked." };
 
   return (
@@ -120,6 +124,7 @@ export default function PracticeThinking() {
       <div className="e-wrap" style={{ width: "100%" }}>
         <span className="e-small" style={{ textAlign: "center" }}>{judge.footer}</span>
       </div>
+      {asking && <EndSessionDialog stake="scoring" onEnd={end} onKeep={() => setAsking(false)} />}
     </FocusShell>
   );
 }

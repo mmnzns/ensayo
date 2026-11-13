@@ -50,3 +50,14 @@ export function inputOf(stageId: string, d: Draft): InterviewNoteInput {
 export function isBlank(d: Draft): boolean {
   return d.rating === null && !d.asked.trim() && !d.worked.trim() && !d.differently.trim() && !d.spokeTo.trim() && !d.nextStep.trim();
 }
+
+/** True when the fields hold something the saved note (or nothing, when there is none) does not. Spaces at the ends don't count. */
+export function hasUnsavedText(draft: Draft, note: InterviewNote | undefined): boolean {
+  const norm = (d: Draft) => JSON.stringify([d.rating, d.asked.trim(), d.worked.trim(), d.differently.trim(), d.spokeTo.trim(), d.nextStep.trim()]);
+  return norm(draft) !== norm(draftOf(note));
+}
+
+/** What Esc does on the sheet: nothing inside a field (it is for typing), leave at once when nothing is unsaved, otherwise ask first. */
+export function escOnSheet(inField: boolean, unsaved: boolean): "nothing" | "leave" | "ask" {
+  return inField ? "nothing" : unsaved ? "ask" : "leave";
+}

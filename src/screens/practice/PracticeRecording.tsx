@@ -11,6 +11,8 @@ import { ASK, THINK } from "./practiceFlow";
 import { Kbd, SessionHeader } from "./parts";
 import { usePractice } from "./usePractice";
 import { useKeys } from "./useKeys";
+import EndSessionDialog from "./EndSessionDialog";
+import { atStake, escDecision } from "./endSession";
 
 const reduceMotion = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -97,7 +99,9 @@ export default function PracticeRecording() {
     if (live && seconds >= HARD_CAP_SECONDS) stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seconds, live]);
-  useKeys({ space: stop, esc: end });
+  const [asking, setAsking] = useState(false);
+  const onEsc = () => (escDecision(atStake("recording", live)) === "ask" ? setAsking(true) : end());
+  useKeys({ space: stop, esc: onEsc });
 
   const pct = (n: number) => `${Math.min(100, (n / max) * 100)}%`;
   const dot = (
@@ -146,6 +150,7 @@ export default function PracticeRecording() {
           <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={startOver}>Start over</button>
         </div>
       </div>
+      {asking && <EndSessionDialog stake="recording" onEnd={end} onKeep={() => setAsking(false)} />}
     </FocusShell>
   );
 }
