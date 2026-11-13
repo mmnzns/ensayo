@@ -138,13 +138,13 @@ pub enum FollowScored {
     NotAnAnswer,
 }
 
-fn verdict_check(id: &str, v: &Verdict, seconds: Option<u64>) -> Option<Check> {
+fn verdict_check(id: &str, v: &Verdict, seconds: Option<u64>, transcript: &str) -> Option<Check> {
     let passed = match v.result.as_str() {
         "pass" => Some(true),
         "fail" => Some(false),
         _ => return None,
     };
-    Some(Check { id: id.to_string(), passed, evidence: super::criteria::verdict_evidence(v), sentences: v.sentences.clone(), seconds })
+    Some(Check { id: id.to_string(), passed, evidence: super::criteria::verdict_evidence(id, v, transcript), sentences: v.sentences.clone(), seconds })
 }
 
 /// F4 is code: the follow-up should take under half the time the first answer took.
@@ -177,13 +177,15 @@ pub fn score_follow_up(llm: &dyn Llm, i: &FollowScoreInput, budget: &mut Budget)
         return Ok(FollowScored::NotAnAnswer);
     }
     let mut checks = Vec::new();
+    // A quote may come from the follow-up or, for the consistency check, from the first answer.
+    let said = format!("{} {}", super::criteria::plain_text(i.metrics), i.first_transcript);
     for id in ["f1_answer_push", "f2_new_specific", "f3_consistent"] {
-        checks.extend(raw.criteria.get(id).and_then(|v| verdict_check(id, v, None)));
+        checks.extend(raw.criteria.get(id).and_then(|v| verdict_check(id, v, None, &said)));
     }
     checks.push(f4_short(i.metrics.speaking_ms, i.first_speaking_ms));
     // F5 only means something under a skeptic push.
     if i.follow_up_type == "skeptic_push" {
-        checks.extend(raw.criteria.get("f5_held_position").and_then(|v| verdict_check("f5_held_position", v, None)));
+        checks.extend(raw.criteria.get("f5_held_position").and_then(|v| verdict_check("f5_held_position", v, None, &said)));
     }
     // The follow-up's own fillers are measured by code like any answer's.
     checks.extend(i.metrics.checks.iter().filter(|c| c.id == "fillers").cloned());

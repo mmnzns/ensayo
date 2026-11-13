@@ -4,6 +4,7 @@
 //! keeps the model to the ids it was given.
 
 use super::prompts::{get, PromptId};
+use super::criteria::quote_in;
 use super::run::{call_json, Budget, CallError};
 use super::template::{escape_data, Vars};
 use crate::ai::llm::Llm;
@@ -140,6 +141,20 @@ pub fn assess(llm: &dyn Llm, input: &QualityInput, budget: &mut Budget) -> Resul
     for j in &mut q.questions {
         j.reason = clean(&j.reason);
     }
+    // A quote shown as the candidate's words has to be in what they said. One that is not is dropped; the reason stays.
+    let said = format!("{} {}", input.candidate_text, input.answers.iter().flatten().cloned().collect::<Vec<_>>().join(" "));
+    for j in &mut q.questions {
+        if !j.quote.trim().is_empty() && !quote_in(&said, &j.quote) {
+            log::info!("quote dropped (question {})", j.q);
+            j.quote.clear();
+        }
+    }
+    for f in &mut q.must_say_said {
+        if f.quote.as_deref().is_some_and(|x| !quote_in(&said, x)) {
+            log::info!("quote dropped ({})", f.id);
+            f.quote = None;
+        }
+    }
     // Only the items that were asked about come back, once each, in the order they were given.
     q.must_say_said = input
         .must_say
@@ -220,5 +235,17 @@ mod tests {
         assert!(!q.note.contains('\u{2014}') && !q.try_asking.contains('\u{2014}') && !q.questions[0].reason.contains('\u{2014}'));
         let user = &llm.seen.lock().unwrap()[0].user;
         assert!(user.contains("ms-1: Ran lifecycle with no ops team") && user.contains("[A 1.1] I ran lifecycle on my own."), "{user}");
+    }
+
+    #[test]
+    fn a_quote_that_was_not_said_is_dropped_and_the_reason_stays() {
+        let must = vec![MustSay { id: "ms-1".into(), text: "Ran lifecycle".into() }];
+        let answers = vec![vec!["I ran lifecycle on my own.".to_string()]];
+        let found = json!([{"id": "ms-1", "said": true, "where": "[A 1.1]", "quote": "I led a team of forty"}]);
+        let llm = Scripted::new(vec![Ok(&reply(found))]);
+        let q = assess(&llm, &input("How will you judge this hire?", &must, &answers, &[]), &mut budget()).unwrap();
+        assert_eq!(q.must_say_said[0].quote, None);
+        assert!(q.must_say_said[0].said);
+        assert!(q.questions[0].quote.is_empty() && !q.questions[0].reason.is_empty(), "the invented question quote goes, the reason stays");
     }
 }

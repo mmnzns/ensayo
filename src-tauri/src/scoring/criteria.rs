@@ -3,6 +3,7 @@
 //! the tail after the proof are measured in code from the sentence indices the model returned.
 
 use super::score::{ScoreAnswer, Verdict};
+use crate::applications::inputs::norm;
 use crate::metrics::numbers::Number;
 use crate::metrics::{timing, Check, Metrics};
 
@@ -50,19 +51,39 @@ pub fn active_criteria(c: &Ctx) -> Vec<&'static str> {
     out
 }
 
-fn to_check(id: &str, v: &Verdict) -> Option<Check> {
+fn to_check(id: &str, v: &Verdict, transcript: &str) -> Option<Check> {
     let passed = match v.result.as_str() {
         "pass" => Some(true),
         "fail" => Some(false),
         _ => return None,
     };
-    let evidence = verdict_evidence(v);
+    let evidence = verdict_evidence(id, v, transcript);
     Some(Check { id: id.to_string(), passed, evidence, sentences: v.sentences.clone(), seconds: None })
 }
 
+/// The answer as plain text, for checking a model's quote against what was said.
+pub(crate) fn plain_text(m: &Metrics) -> String {
+    m.sentences.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ")
+}
+
+/// True when `quote` is in `transcript`, ignoring case, punctuation, spacing and the filler words "um", "uh" and
+/// "like" (the transcript may keep them where the model tidied them away). An empty quote is not shown.
+pub(crate) fn quote_in(transcript: &str, quote: &str) -> bool {
+    fn words(s: &str) -> String {
+        norm(s).split(' ').filter(|w| !matches!(*w, "" | "um" | "uh" | "like")).collect::<Vec<_>>().join(" ")
+    }
+    let q = words(quote);
+    !q.is_empty() && format!(" {} ", words(transcript)).contains(&format!(" {q} "))
+}
+
 /// The quote the model pointed at, then its reason in plain words, so a check never shows a bare quote or nothing.
-pub(crate) fn verdict_evidence(v: &Verdict) -> String {
-    let quote = v.quote.trim();
+/// A quote that is not in the transcript is dropped (the model made it up or reworded it) and the reason stays.
+pub(crate) fn verdict_evidence(id: &str, v: &Verdict, transcript: &str) -> String {
+    let mut quote = v.quote.trim();
+    if !quote.is_empty() && !quote_in(transcript, quote) {
+        log::info!("quote dropped ({id})");
+        quote = "";
+    }
     let reason = v.reason.trim().replace('\u{2014}', ",");
     match (quote.is_empty(), reason.is_empty()) {
         (false, false) => format!("\"{quote}\" {reason}"),
@@ -98,7 +119,7 @@ pub(super) fn tail_ms(score: &ScoreAnswer, m: &Metrics) -> Option<u64> {
     Some(end.saturating_sub(landed.end_ms).saturating_sub(exempt))
 }
 
-fn proof(score: &ScoreAnswer, m: &Metrics, bank: &[Number]) -> Option<Check> {
+fn proof(score: &ScoreAnswer, m: &Metrics, bank: &[Number], transcript: &str) -> Option<Check> {
     let verdict = score.criteria.get("proof")?;
     if verdict.result == "na" {
         return None;
@@ -119,7 +140,7 @@ fn proof(score: &ScoreAnswer, m: &Metrics, bank: &[Number]) -> Option<Check> {
         Some(n) if !passed => format!("You said {}, which is not in your stories. Check it.", n.text),
         _ if passed => match score.numbers_said.first() {
             Some(n) => format!("You said {}.", n.text),
-            None if !verdict.quote.trim().is_empty() => format!("You gave the result: \"{}\".", verdict.quote.trim()),
+            None if quote_in(transcript, &verdict.quote) => format!("You gave the result: \"{}\".", verdict.quote.trim()),
             None => "You gave a result in words.".to_string(),
         },
         _ => crate::metrics::no_number_evidence(bank),
@@ -131,13 +152,14 @@ fn proof(score: &ScoreAnswer, m: &Metrics, bank: &[Number]) -> Option<Check> {
 /// criteria, and the timing criteria computed from the model's sentence indices.
 pub fn merge(score: &ScoreAnswer, m: &Metrics, active: &[&str], bank: &[Number]) -> Vec<Check> {
     let mut out: Vec<Check> = Vec::new();
+    let transcript = plain_text(m);
     let on = |id: &str| active.contains(&id);
     if on("answer_first") {
-        out.extend(score.criteria.get("answer_first").and_then(|v| to_check("answer_first", v)));
+        out.extend(score.criteria.get("answer_first").and_then(|v| to_check("answer_first", v, &transcript)));
         out.extend(time_to_point(score, m).filter(|_| score.criteria.get("answer_first").is_some_and(|v| v.result != "na")));
     }
     if on("proof") {
-        out.extend(proof(score, m, bank));
+        out.extend(proof(score, m, bank, &transcript));
     }
     if on("clean_stop") {
         let t = tail_ms(score, m);
@@ -153,7 +175,7 @@ pub fn merge(score: &ScoreAnswer, m: &Metrics, active: &[&str], bank: &[Number])
     out.extend(m.checks.iter().filter(|c| c.id == "length" || c.id == "fillers").cloned());
     for id in ["story_fit", "context_short", "ownership", "conviction", "no_complaining", "method_first", "approach_before_action", "jd_fit", "stage_fit", "commitment", "builder_operator", "type_fit"] {
         if on(id) {
-            out.extend(score.criteria.get(id).and_then(|v| to_check(id, v)));
+            out.extend(score.criteria.get(id).and_then(|v| to_check(id, v, &transcript)));
         }
     }
     out
@@ -436,5 +458,24 @@ mod tests {
         assert_eq!(crate::metrics::fix::top_fix(&checks), Some("answer_first"), "but not answer first");
         with_c1(&mut checks, None);
         assert_eq!(checks.iter().filter(|c| c.id == "c1_consistent").count(), 0, "no check when there was nothing to compare");
+    }
+
+    #[test]
+    fn quote_in_ignores_case_punctuation_and_filler_words() {
+        let said = "So, um, we cut churn from 24% to 18%, like, in one quarter.";
+        assert!(quote_in(said, "we cut churn from 24% to 18%"), "an exact quote is kept");
+        assert!(quote_in(said, "WE CUT CHURN, from 24% to 18%!"), "case and punctuation do not matter");
+        assert!(quote_in(said, "we cut churn from 24% to 18% in one quarter"), "a filler the model tidied away does not matter");
+        assert!(quote_in("we cut churn", "we, uh, cut churn"), "a filler the model kept does not matter");
+        assert!(!quote_in(said, "we doubled revenue"), "an invented quote is not in it");
+        assert!(!quote_in(said, "") && !quote_in(said, "um, uh"), "an empty quote is not shown");
+    }
+
+    #[test]
+    fn an_invented_quote_is_dropped_and_the_reason_stays() {
+        let v = |quote: &str| Verdict { result: "pass".into(), sentences: vec![1], quote: quote.into(), reason: "You owned it.".into() };
+        let said = "I owned the launch myself.";
+        assert_eq!(verdict_evidence("ownership", &v("I owned the launch"), said), "\"I owned the launch\" You owned it.");
+        assert_eq!(verdict_evidence("ownership", &v("I led forty people"), said), "You owned it.");
     }
 }
