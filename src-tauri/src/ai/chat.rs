@@ -4,6 +4,7 @@
 //! too. Reasoning models may put `<think>...</think>` in the text; `json::extract_json` strips it.
 
 use super::llm::{Llm, LlmReply, LlmRequest, Tier};
+use crate::scoring::run::{openai_strict_schema, provider_schema};
 use super::providers::{self, AiError, Provider, auth_headers, http_error};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -139,7 +140,11 @@ pub fn anthropic_request(base: &str, key: &str, model: &str, req: &LlmRequest, s
     if is_recent_claude(model) {
         // Thinking counts as output, so the reply keeps its own room; effort keeps the thinking short.
         body["max_tokens"] = json!(req.max_tokens + THINKING_ROOM);
-        body["output_config"] = json!({ "effort": if req.tier == Tier::Fast { "low" } else { "medium" } });
+        let mut config = json!({ "effort": if req.tier == Tier::Fast { "low" } else { "medium" } });
+        if let Some(schema) = &req.schema {
+            config["format"] = json!({ "type": "json_schema", "schema": provider_schema(schema) });
+        }
+        body["output_config"] = config;
     }
     WireRequest { url: format!("{}/messages", base_of(base)), headers: auth_headers(Provider::Claude, key), body }
 }
@@ -165,7 +170,15 @@ pub fn openai_request(provider: Provider, base: &str, key: &str, model: &str, re
         body["reasoning_effort"] = json!(e);
     }
     if json_mode {
-        body["response_format"] = json!({ "type": "json_object" });
+        body["response_format"] = match (&req.schema, provider) {
+            // OpenAI's own API holds the reply to the schema. Strict mode wants every field required, so optional
+            // ones become nullable; a schema that can't be made strict-safe is sent with strict off.
+            (Some(schema), Provider::OpenAi) => match openai_strict_schema(&provider_schema(schema)) {
+                Some(strict) => json!({ "type": "json_schema", "json_schema": { "name": "reply", "strict": true, "schema": strict } }),
+                None => json!({ "type": "json_schema", "json_schema": { "name": "reply", "strict": false, "schema": provider_schema(schema) } }),
+            },
+            _ => json!({ "type": "json_object" }),
+        };
     }
     WireRequest { url: format!("{}/chat/completions", base_of(base)), headers: auth_headers(provider, key), body }
 }
@@ -180,6 +193,9 @@ pub fn gemini_request(base: &str, key: &str, model: &str, req: &LlmRequest, sett
     }
     if req.json {
         config["responseMimeType"] = json!("application/json");
+        if let Some(schema) = &req.schema {
+            config["responseJsonSchema"] = provider_schema(schema);
+        }
     }
     let mut body = json!({
         "contents": [{ "role": "user", "parts": [{ "text": req.user }] }],
@@ -282,6 +298,9 @@ pub struct ProviderLlm {
     timeout_override: Option<Duration>,
     /// Set once a server has refused `response_format`, so later calls skip the doomed first try.
     json_mode_refused: AtomicBool,
+    /// Set once a provider has refused the schema mode (Claude's `output_config.format`, OpenAI's `json_schema`,
+    /// Gemini's `responseJsonSchema`), so later calls go out on the plain path.
+    schema_refused: AtomicBool,
 }
 
 // The key never appears in debug output.
@@ -302,6 +321,7 @@ impl ProviderLlm {
             sleep: Arc::new(std::thread::sleep),
             timeout_override: None,
             json_mode_refused: AtomicBool::new(false),
+            schema_refused: AtomicBool::new(false),
         }
     }
 
@@ -380,6 +400,21 @@ impl ProviderLlm {
     }
 }
 
+/// Which providers take the schema in the request: recent Claude models, OpenAI's own API and Gemini.
+fn schema_applies(provider: Provider, model: &str) -> bool {
+    match provider {
+        Provider::Claude => is_recent_claude(model),
+        Provider::OpenAi | Provider::Gemini => true,
+        _ => false,
+    }
+}
+
+/// A 400 whose body is about the schema mode (the error text names the field it refused).
+fn mentions_schema(body: &Value) -> bool {
+    let text = body.to_string().to_lowercase();
+    ["output_config", "format", "json_schema", "response_format", "responsejsonschema", "schema"].iter().any(|k| text.contains(k))
+}
+
 impl Llm for ProviderLlm {
     fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
         let model = self.model_for(req.tier);
@@ -387,7 +422,23 @@ impl Llm for ProviderLlm {
             return Err(AiError::Unavailable(format!("No model is chosen for {}. Pick one in Settings › AI.", self.provider.name())));
         }
         let json_mode = req.json && !self.json_mode_refused.load(Ordering::Relaxed);
-        let result = self.round_trip(req, model, json_mode).or_else(|f| {
+        // The schema goes to the providers that can hold a reply to it; after a refusal, to none.
+        let mut req = req.clone();
+        let schema_sent = req.schema.is_some() && req.json && schema_applies(self.provider, model) && !self.schema_refused.load(Ordering::Relaxed);
+        if !schema_sent {
+            req.schema = None;
+        }
+        let mut first = self.round_trip(&req, model, json_mode);
+        if let Err(f) = &first {
+            if schema_sent && f.status == Some(400) && mentions_schema(&f.body) {
+                self.schema_refused.store(true, Ordering::Relaxed);
+                log::info!("schema mode refused by {}; asking again without it", self.provider.name());
+                req.schema = None;
+                first = self.round_trip(&req, model, json_mode);
+            }
+        }
+        let req = &req;
+        let result = first.or_else(|f| {
             // Some servers reject `response_format`. Ask again without it; the prompt still asks for JSON.
             let refused = json_mode && format_of(self.provider) == Format::OpenAi && f.status == Some(400) && f.body.to_string().to_lowercase().contains("response_format");
             if !refused {
@@ -516,6 +567,56 @@ mod tests {
         assert!(o.cut_off);
         let g = parse_gemini(&json!({ "candidates": [{ "content": { "parts": [{ "text": "{\"a\":" }] }, "finishReason": "MAX_TOKENS" }] }), "m", &r).unwrap();
         assert!(g.cut_off);
+    }
+
+    fn schema_request(tier: Tier) -> LlmRequest {
+        let schema = json!({ "type": "object", "properties": { "n": { "type": "integer", "minimum": 1 }, "note": { "type": "string", "maxLength": 20 } }, "required": ["n"] });
+        LlmRequest { schema: Some(schema), ..request(true, tier) }
+    }
+
+    #[test]
+    fn claude_gets_the_schema_in_output_config_beside_the_effort_but_only_on_recent_models() {
+        let r = schema_request(Tier::Fast);
+        let s = model_settings(Provider::Claude, "claude-sonnet-5-5", Tier::Fast);
+        let w = anthropic_request("b", "k", "claude-sonnet-5-5", &r, &s);
+        assert_eq!(w.body["output_config"]["effort"], "low");
+        let format = &w.body["output_config"]["format"];
+        assert_eq!(format["type"], "json_schema");
+        assert_eq!(format["schema"]["additionalProperties"], false);
+        assert!(format["schema"]["properties"]["n"].get("minimum").is_none() && format["schema"]["properties"]["note"].get("maxLength").is_none());
+        let old = model_settings(Provider::Claude, "claude-sonnet-4-6", Tier::Fast);
+        let w = anthropic_request("b", "k", "claude-sonnet-4-6", &r, &old);
+        assert!(w.body.get("output_config").is_none());
+    }
+
+    #[test]
+    fn openai_gets_a_strict_json_schema_with_every_field_required() {
+        let r = schema_request(Tier::Fast);
+        let s = model_settings(Provider::OpenAi, "gpt-6-sol", Tier::Fast);
+        let w = openai_request(Provider::OpenAi, "b", "k", "gpt-6-sol", &r, &s, true);
+        let rf = &w.body["response_format"];
+        assert_eq!((rf["type"].as_str(), rf["json_schema"]["strict"].as_bool(), rf["json_schema"]["name"].as_str()), (Some("json_schema"), Some(true), Some("reply")));
+        let schema = &rf["json_schema"]["schema"];
+        assert_eq!(schema["required"], json!(["n", "note"]));
+        assert_eq!(schema["properties"]["note"]["type"], json!(["string", "null"]));
+        assert_eq!(schema["additionalProperties"], false);
+        // Every other chat-completions provider keeps json_object.
+        for p in [Provider::Groq, Provider::Cerebras, Provider::Mistral, Provider::OpenRouter, Provider::Compatible] {
+            let s = model_settings(p, "m", Tier::Fast);
+            let w = openai_request(p, "b", "k", "m", &r, &s, true);
+            assert_eq!(w.body["response_format"], json!({ "type": "json_object" }), "{p:?}");
+        }
+    }
+
+    #[test]
+    fn gemini_gets_the_schema_beside_the_mime_type() {
+        let r = schema_request(Tier::Fast);
+        let s = model_settings(Provider::Gemini, "gemini-3.8-flash", Tier::Fast);
+        let w = gemini_request("b", "k", "gemini-3.8-flash", &r, &s);
+        let config = &w.body["generationConfig"];
+        assert_eq!(config["responseMimeType"], "application/json");
+        assert_eq!(config["responseJsonSchema"]["additionalProperties"], false);
+        assert!(config["responseJsonSchema"]["properties"]["n"].get("minimum").is_none());
     }
 
     #[test]
@@ -756,6 +857,35 @@ mod tests {
         assert!(seen[1].body.get("response_format").is_none(), "retried without it");
         assert!(seen[2].body.get("response_format").is_none(), "and later calls don't try it again");
         assert!(pauses.lock().unwrap().is_empty(), "the fallback is not a timed retry");
+    }
+
+    #[test]
+    fn a_refused_schema_is_asked_again_without_it_once_and_remembered() {
+        let refusal = reply(400, json!({ "error": { "message": "Invalid schema for response_format 'reply'" } }));
+        let (base, server) = fake_server(vec![refusal, openai_ok("{\"n\": 1}"), openai_ok("{\"n\": 2}")]);
+        let (llm, pauses) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol");
+        let r = schema_request(Tier::Fast);
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 1}");
+        assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 2}");
+        let seen = server.join().unwrap();
+        assert_eq!(seen.len(), 3);
+        assert_eq!(seen[0].body["response_format"]["type"], "json_schema");
+        assert_eq!(seen[1].body["response_format"]["type"], "json_object", "today's path");
+        assert_eq!(seen[2].body["response_format"]["type"], "json_object", "and later calls skip the schema");
+        assert!(pauses.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_claude_400_about_output_config_falls_back_to_the_plain_request() {
+        let refusal = reply(400, json!({ "error": { "message": "output_config.format: extra inputs are not permitted" } }));
+        let ok = reply(200, json!({ "content": [{ "type": "text", "text": "{\"n\": 1}" }], "usage": { "input_tokens": 1, "output_tokens": 1 } }));
+        let (base, server) = fake_server(vec![refusal, ok]);
+        let (llm, _) = llm(Provider::Claude, format!("{base}/v1"), "sk-ant-secret-key", "claude-sonnet-5-5");
+        assert!(llm.complete(&schema_request(Tier::Fast)).is_ok());
+        let seen = server.join().unwrap();
+        assert!(seen[0].body["output_config"].get("format").is_some());
+        assert!(seen[1].body["output_config"].get("format").is_none(), "the effort stays, the schema goes");
+        assert!(seen[1].body["output_config"].get("effort").is_some());
     }
 
     #[test]

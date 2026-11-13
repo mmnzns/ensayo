@@ -131,6 +131,7 @@ pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, b
                 continue;
             }
         };
+        drop_optional_nulls(&prompt.schema, &prompt.schema, &mut value);
         match validate(&prompt.schema, &value) {
             Ok(()) => return Ok(Called { value }),
             // Only too long or too many: keep it (lists cut to their limit) rather than lose the whole reply.
@@ -161,6 +162,175 @@ fn without_size_limits(schema: &Value) -> Value {
         ),
         Value::Array(items) => Value::Array(items.iter().map(without_size_limits).collect()),
         other => other.clone(),
+    }
+}
+
+// ---------- the schema as providers accept it ----------
+
+/// Keywords the providers' structured-output modes reject (Claude, OpenAI strict and Gemini each refuse some of
+/// these). Local validation still uses the full schema.
+const PROVIDER_FORBIDDEN: &[&str] = &[
+    "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "minItems", "maxItems", "minLength", "maxLength", "pattern", "format", "$schema", "$id", "description",
+];
+
+/// Keys whose value is a map of name -> schema (the names are not keywords and are kept).
+const SCHEMA_MAPS: &[&str] = &["properties", "$defs", "definitions"];
+/// Keys whose value is one schema.
+const SCHEMA_ONE: &[&str] = &["items", "additionalProperties", "not", "if", "then", "else"];
+/// Keys whose value is a list of schemas.
+const SCHEMA_LISTS: &[&str] = &["anyOf", "oneOf", "allOf", "prefixItems"];
+
+fn is_object_schema(map: &serde_json::Map<String, Value>) -> bool {
+    map.contains_key("properties")
+        || match map.get("type") {
+            Some(Value::String(t)) => t == "object",
+            Some(Value::Array(ts)) => ts.iter().any(|t| t == "object"),
+            _ => false,
+        }
+}
+
+fn provider_node(schema: &Value) -> Value {
+    let Value::Object(map) = schema else { return schema.clone() };
+    let mut out = serde_json::Map::new();
+    for (k, v) in map {
+        if PROVIDER_FORBIDDEN.contains(&k.as_str()) {
+            continue;
+        }
+        let value = if SCHEMA_MAPS.contains(&k.as_str()) {
+            match v {
+                Value::Object(m) => Value::Object(m.iter().map(|(name, s)| (name.clone(), provider_node(s))).collect()),
+                other => other.clone(),
+            }
+        } else if SCHEMA_ONE.contains(&k.as_str()) {
+            provider_node(v)
+        } else if SCHEMA_LISTS.contains(&k.as_str()) {
+            match v {
+                Value::Array(items) => Value::Array(items.iter().map(provider_node).collect()),
+                other => other.clone(),
+            }
+        } else {
+            v.clone()
+        };
+        out.insert(k.clone(), value);
+    }
+    if is_object_schema(&out) {
+        out.insert("additionalProperties".into(), Value::Bool(false));
+    }
+    Value::Object(out)
+}
+
+/// The schema a provider's structured-output mode accepts: no size or pattern rules, no documentation keywords, and
+/// every object closed. The full schema is still checked locally.
+pub fn provider_schema(schema: &Value) -> Value {
+    provider_node(schema)
+}
+
+/// OpenAI strict mode: every property of every object is listed in `required`, and one that wasn't becomes
+/// nullable. Returns None when the schema uses something strict mode can't take (a root that isn't an object, or
+/// `oneOf`/`allOf`/`not`/`if`), so the caller sends `strict: false`.
+pub fn openai_strict_schema(schema: &Value) -> Option<Value> {
+    fn nullable(s: &Value) -> Value {
+        let Value::Object(m) = s else { return s.clone() };
+        let mut m = m.clone();
+        match m.get("type").cloned() {
+            Some(Value::String(t)) => {
+                m.insert("type".into(), serde_json::json!([t, "null"]));
+            }
+            Some(Value::Array(mut ts)) => {
+                if !ts.iter().any(|t| t == "null") {
+                    ts.push("null".into());
+                }
+                m.insert("type".into(), Value::Array(ts));
+            }
+            _ => return serde_json::json!({ "anyOf": [Value::Object(m), { "type": "null" }] }),
+        }
+        if let Some(Value::Array(vals)) = m.get_mut("enum") {
+            if !vals.iter().any(Value::is_null) {
+                vals.push(Value::Null);
+            }
+        }
+        Value::Object(m)
+    }
+    fn walk(s: &Value) -> Option<Value> {
+        let Value::Object(map) = s else { return Some(s.clone()) };
+        if ["oneOf", "allOf", "not", "if", "then", "else", "prefixItems"].iter().any(|k| map.contains_key(*k)) {
+            return None;
+        }
+        let mut out = serde_json::Map::new();
+        for (k, v) in map {
+            let value = match k.as_str() {
+                "properties" => {
+                    let Value::Object(props) = v else { return None };
+                    let required: Vec<&str> = map.get("required").and_then(Value::as_array).map(|r| r.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+                    let mut new = serde_json::Map::new();
+                    for (name, ps) in props {
+                        let inner = walk(ps)?;
+                        new.insert(name.clone(), if required.contains(&name.as_str()) { inner } else { nullable(&inner) });
+                    }
+                    Value::Object(new)
+                }
+                "$defs" | "definitions" => {
+                    let Value::Object(defs) = v else { return None };
+                    Value::Object(defs.iter().map(|(n, d)| walk(d).map(|d| (n.clone(), d))).collect::<Option<_>>()?)
+                }
+                "items" | "additionalProperties" => walk(v)?,
+                "anyOf" => Value::Array(v.as_array()?.iter().map(walk).collect::<Option<_>>()?),
+                "required" => continue,
+                _ => v.clone(),
+            };
+            out.insert(k.clone(), value);
+        }
+        if let Some(Value::Object(props)) = out.get("properties") {
+            out.insert("required".into(), Value::Array(props.keys().map(|k| Value::String(k.clone())).collect()));
+        }
+        Some(Value::Object(out))
+    }
+    if !is_object_schema(schema.as_object()?) {
+        return None;
+    }
+    walk(schema)
+}
+
+/// Looks a `#/$defs/name` reference up in the root schema.
+fn resolve_ref<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
+    match schema.get("$ref").and_then(Value::as_str).and_then(|r| r.strip_prefix('#')) {
+        Some(pointer) => root.pointer(pointer).unwrap_or(schema),
+        None => schema,
+    }
+}
+
+fn allows_null(root: &Value, schema: &Value) -> bool {
+    let s = resolve_ref(root, schema);
+    match s.get("type") {
+        Some(Value::String(t)) => t == "null",
+        Some(Value::Array(ts)) => ts.iter().any(|t| t == "null"),
+        _ => s.get("enum").and_then(Value::as_array).is_some_and(|e| e.iter().any(Value::is_null)) || s.get("anyOf").and_then(Value::as_array).is_some_and(|a| a.iter().any(|x| allows_null(root, x))),
+    }
+}
+
+/// OpenAI strict mode makes the model write every optional field, as null when it has nothing. The schemas say
+/// "absent", not null, so a null in an optional field that doesn't allow null is dropped before the local check.
+pub fn drop_optional_nulls(root: &Value, schema: &Value, value: &mut Value) {
+    let schema = resolve_ref(root, schema);
+    match value {
+        Value::Array(items) => {
+            if let Some(item_schema) = schema.get("items") {
+                for item in items.iter_mut() {
+                    drop_optional_nulls(root, item_schema, item);
+                }
+            }
+        }
+        Value::Object(map) => {
+            let Some(Value::Object(props)) = schema.get("properties") else { return };
+            let required: Vec<&str> = schema.get("required").and_then(Value::as_array).map(|r| r.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+            map.retain(|k, v| !(v.is_null() && !required.contains(&k.as_str()) && props.get(k).is_some_and(|p| !allows_null(root, p))));
+            for (k, v) in map.iter_mut() {
+                if let Some(p) = props.get(k) {
+                    drop_optional_nulls(root, p, v);
+                }
+            }
+        }
+        _ => {}
     }
 }
 
@@ -341,6 +511,68 @@ mod tests {
         assert_eq!(err, CallError::TooLong);
         assert_eq!(llm.calls(), 2);
         assert!(err.notice().contains("The AI's reply was too long to finish."));
+    }
+
+    fn walk_schemas(schema: &Value, f: &mut dyn FnMut(&serde_json::Map<String, Value>)) {
+        let Value::Object(map) = schema else { return };
+        f(map);
+        for key in ["properties", "$defs"] {
+            if let Some(Value::Object(m)) = map.get(key) {
+                m.values().for_each(|s| walk_schemas(s, f));
+            }
+        }
+        for key in ["items", "additionalProperties"] {
+            if let Some(s) = map.get(key) {
+                walk_schemas(s, f);
+            }
+        }
+    }
+
+    #[test]
+    fn provider_schema_drops_every_forbidden_keyword_and_closes_every_object() {
+        for id in PromptId::ALL {
+            let full = &get(id).schema;
+            let slim = provider_schema(full);
+            let mut objects = 0;
+            walk_schemas(&slim, &mut |m| {
+                for k in PROVIDER_FORBIDDEN {
+                    assert!(!m.contains_key(*k), "{id:?}: {k} left in");
+                }
+                if is_object_schema(m) {
+                    objects += 1;
+                    assert_eq!(m.get("additionalProperties"), Some(&Value::Bool(false)), "{id:?}: an open object");
+                }
+            });
+            assert!(objects > 0);
+            assert!(jsonschema::validator_for(&slim).is_ok(), "{id:?}: not a valid schema");
+            // Property names that look like keywords stay ("type" is a field of the posting reader).
+            assert_eq!(slim.get("required"), full.get("required"), "{id:?}");
+        }
+    }
+
+    #[test]
+    fn openai_strict_lists_every_property_as_required() {
+        for id in PromptId::ALL {
+            let strict = openai_strict_schema(&provider_schema(&get(id).schema)).unwrap_or_else(|| panic!("{id:?} can't be made strict"));
+            assert!(jsonschema::validator_for(&strict).is_ok(), "{id:?}");
+            walk_schemas(&strict, &mut |m| {
+                if let Some(Value::Object(props)) = m.get("properties") {
+                    let mut required: Vec<&str> = m["required"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+                    let mut names: Vec<&str> = props.keys().map(String::as_str).collect();
+                    required.sort();
+                    names.sort();
+                    assert_eq!(required, names, "{id:?}");
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn a_null_in_an_optional_field_is_dropped_before_the_local_check() {
+        let schema = serde_json::json!({ "type": "object", "properties": { "a": { "type": "string" }, "b": { "$ref": "#/$defs/s" }, "c": { "type": ["string", "null"] } }, "required": ["a"], "$defs": { "s": { "type": "string" } } });
+        let mut v = serde_json::json!({ "a": "x", "b": null, "c": null });
+        drop_optional_nulls(&schema, &schema, &mut v);
+        assert_eq!(v, serde_json::json!({ "a": "x", "c": null }));
     }
 
     #[test]
