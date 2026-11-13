@@ -4,6 +4,7 @@
 
 import type { ProgressData } from "../data/screens/settings";
 import type { Habit, HabitId, HabitStat, SessionSummary, Streak } from "../data/types";
+import { costLine, sessionCostUsd, sessionModelName } from "./cost";
 
 export interface CheckSummary {
   id: string;
@@ -38,6 +39,8 @@ export interface RepSummary {
   fillers: number;
   tail_ms: number | null;
   ai_cost_usd: number | null;
+  /** The model that judged the answer, as the provider reported it. */
+  ai_model?: string | null;
 }
 
 /** Last N first attempts a pass rate looks at. */
@@ -227,6 +230,7 @@ export function sessionList(reps: RepSummary[], now: Date, companyOf: (applicati
       const company = first.application_id ? companyOf(first.application_id) : undefined;
       const { stuck, of } = fixesStuck(rs);
       const answered = rs.filter((r) => !r.follow_up).length;
+      const sessionCost = costLine(sessionCostUsd(rs));
       const row: SessionSummary = {
         id,
         when: whenText(first.started, now),
@@ -234,6 +238,7 @@ export function sessionList(reps: RepSummary[], now: Date, companyOf: (applicati
         mode: first.mode === "mock" ? "mock" : "drill",
         title: `${stage} · ${company ?? "general questions"}`,
         headline: of > 0 ? `${stuck} of ${of} ${of === 1 ? "fix" : "fixes"} held on the next try` : `${answered} ${answered === 1 ? "answer" : "answers"} · no fix tried again`,
+        ...(sessionCost ? { cost: sessionCost } : {}),
         ...(first.application_id ? { applicationId: first.application_id } : {}),
       };
       return { row, started: first.started };
@@ -270,6 +275,7 @@ export function summaryOfFull(r: FullRep, session: { mode: string; stage: string
     fillers: r.metrics.fillers.count,
     tail_ms: r.metrics.proof.tail_ms,
     ai_cost_usd: r.ai?.cost_usd ?? null,
+    ai_model: r.ai?.model ?? null,
     text: r.metrics.sentences.map((s) => s.text).join(" "),
   };
 }
@@ -301,7 +307,7 @@ export interface DrillView {
   best: { question: string; attempt: number; pointAtSeconds: number | null; note: string; spoken: string; sessionId: string; n: number } | null;
   /** The habit to carry, what this session showed about it, and what to do. */
   nextTime: { habitId: HabitId; evidence: string; advice: string };
-  totals: { answers: number; followUps: number; costCents: number };
+  totals: { answers: number; followUps: number; costUsd: number; engineName: string | null };
   /** A habit that reached the graduation line during this session, if any. */
   graduatedHabit: HabitId | null;
 }
@@ -387,7 +393,7 @@ export function drillView(habits: Habit[], session: (RepSummary & { text?: strin
     fixes: fixesStuck(scored),
     best: best ? { question: best.question_text, attempt: best.attempt, pointAtSeconds: pointCheck?.seconds ?? null, note: bestNote, spoken: (best as { text?: string }).text ?? "", sessionId: best.session_id, n: best.n } : null,
     nextTime: { habitId: carry.id, evidence, advice: ADVICE[carry.id] },
-    totals: { answers: done.length, followUps: scored.filter((r) => r.follow_up).length, costCents: Math.round(scored.reduce((s, r) => s + (r.ai_cost_usd ?? 0), 0) * 100) },
+    totals: { answers: done.length, followUps: scored.filter((r) => r.follow_up).length, costUsd: sessionCostUsd(scored), engineName: sessionModelName(scored) },
     graduatedHabit,
   };
 }

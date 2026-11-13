@@ -121,6 +121,8 @@ mod tests {
             audio_path: "/nonexistent.wav".into(),
             target_id: None,
             stage_id: None,
+            question_index: None,
+            resume: None,
         };
         let long = format!("{said} {}", "and that is what I did over the whole quarter with the team ".repeat(2));
         finish_with(storage, std::path::Path::new("/nonexistent"), &args, words(&long), false, chrono::Utc::now(), None).unwrap();
@@ -138,7 +140,7 @@ mod tests {
     fn own_questions_are_saved_without_checks_and_judged_together_with_the_whole_mock() {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::init(dir.path().to_path_buf()).unwrap();
-        storage.save_session(&Session { extra: Default::default(), id: "ses_m".into(), mode: "mock".into(), stage: "leadership".into(), application_id: None, stage_id: None, started: "2026-10-22T10:00:00Z".into(), target_id: None }).unwrap();
+        storage.save_session(&Session { extra: Default::default(), resume: None, id: "ses_m".into(), mode: "mock".into(), stage: "leadership".into(), application_id: None, stage_id: None, started: "2026-10-22T10:00:00Z".into(), target_id: None }).unwrap();
         rep(&storage, "ses_m", "behavioral", "Tell me about a decision.", "I decided to rebuild onboarding.", false);
         rep(&storage, "ses_m", "candidate_questions", "What questions do you have for me?", "What is the culture like?", false);
         let saved = storage.reps("ses_m").unwrap().items;

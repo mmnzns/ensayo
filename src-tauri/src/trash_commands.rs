@@ -6,7 +6,7 @@
 use crate::audio_retention;
 use crate::data_commands::{blocking, open_storage, plain as plain_storage};
 use crate::paths;
-use crate::storage::trash::TrashedSession;
+use crate::storage::trash::{TrashedApplication, TrashedSession, TrashedStory};
 use crate::storage::{Result as StorageResult, Storage, StorageError};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -128,6 +128,41 @@ pub async fn restore_session(session_id: String) -> Cmd<()> {
     .await
 }
 
+fn say_gone(e: StorageError, what: &str) -> String {
+    match e {
+        StorageError::NotFound(_) => format!("That {what} is no longer here"),
+        other => plain_storage(other),
+    }
+}
+
+#[tauri::command]
+pub async fn trashed_stories() -> Cmd<Vec<TrashedStory>> {
+    blocking(|| open_storage().and_then(|s| s.trashed_stories()).map_err(plain_storage)).await
+}
+
+#[tauri::command]
+pub async fn restore_story(story_id: String) -> Cmd<()> {
+    blocking(move || {
+        let storage = open_storage().map_err(plain_storage)?;
+        storage.restore_story(&story_id).map(|_| ()).map_err(|e| say_gone(e, "story"))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn trashed_applications() -> Cmd<Vec<TrashedApplication>> {
+    blocking(|| open_storage().and_then(|s| s.trashed_applications()).map_err(plain_storage)).await
+}
+
+#[tauri::command]
+pub async fn restore_application(application_id: String) -> Cmd<()> {
+    blocking(move || {
+        let storage = open_storage().map_err(plain_storage)?;
+        storage.restore_application(&application_id).map(|_| ()).map_err(|e| say_gone(e, "application"))
+    })
+    .await
+}
+
 /// Run on start, next to the audio sweep.
 #[tauri::command]
 pub async fn purge_trash() -> Cmd<PurgeResult> {
@@ -165,7 +200,7 @@ mod tests {
     }
 
     fn make(s: &Storage, audio: &Path, id: &str, application: Option<&str>, reps: u32) {
-        s.save_session(&Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: None, started: "2026-10-01T10:00:00Z".into(), target_id: None }).unwrap();
+        s.save_session(&Session { extra: Default::default(), resume: None, id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: None, started: "2026-10-01T10:00:00Z".into(), target_id: None }).unwrap();
         for n in 1..=reps {
             fs::create_dir_all(s.root().join(format!("sessions/{id}/reps/{n}"))).unwrap();
             fs::create_dir_all(audio.join(id)).unwrap();

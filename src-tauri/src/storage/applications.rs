@@ -791,7 +791,7 @@ impl Storage {
                 out.kept_sessions += 1;
             }
         }
-        fs::remove_dir_all(&dir).map_err(|e| StorageError::Io(dir, e.to_string()))?;
+        self.trash_application(id, Utc::now())?;
         Ok(out)
     }
 
@@ -905,7 +905,7 @@ mod tests {
     }
 
     fn session(id: &str, app: Option<&str>, stage: &str, stage_id: Option<&str>) -> Session {
-        Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }
+        Session { extra: Default::default(), resume: None, id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }
     }
 
     // ---------- create ----------

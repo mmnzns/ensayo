@@ -101,21 +101,9 @@ impl Storage {
         Ok(stories)
     }
 
-    /// Deletes a story and takes it out of every method that listed it.
+    /// Deletes a story: it moves to the trash (restorable for seven days) and comes out of every method that listed it.
     pub fn delete_story(&self, id: &str) -> Result<()> {
-        self.ensure_writable()?;
-        let path = self.story_path(checked_id(id)?);
-        if !path.is_file() {
-            return Err(StorageError::NotFound(format!("story {id}")));
-        }
-        fs::remove_file(&path).map_err(|e| StorageError::Io(path, e.to_string()))?;
-        for mut m in self.methods()? {
-            if m.story_ids.iter().any(|s| s == id) {
-                m.story_ids.retain(|s| s != id);
-                self.save_method(&m)?;
-            }
-        }
-        Ok(())
+        self.trash_story(checked_id(id)?, chrono::Utc::now())
     }
 
     /// Ticks or unticks one number of a story ("Checked" in the UI) and recomputes the story's verified flag.

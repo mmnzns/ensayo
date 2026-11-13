@@ -169,6 +169,7 @@ export default function ProgressSessions() {
                     })()}
                   </span>
                   <span className="e-hand" style={{ fontSize: "17px", ...(s.headline.includes("→") ? { color: "var(--e-win)" } : {}) }}>{s.headline}</span>
+                  {s.cost && <span className="e-small" data-cost>{s.cost}</span>}
                   <span className="e-small" style={{ width: "24px" }}>›</span>
                 </Link>
                 <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ padding: "10px" }} aria-label={`Delete the ${s.title} session`} aria-expanded={asking === s.id} onClick={() => { setAsking(asking === s.id ? null : s.id); setDeleteError(""); }}>

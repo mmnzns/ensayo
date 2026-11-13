@@ -258,6 +258,8 @@ export interface SessionSummary {
   mode: Mode;
   title: string;
   headline: string;
+  /** "about 6 cents": what the AI calls cost, when a paid engine was used. */
+  cost?: string;
   applicationId?: string;
   targetId?: string;
 }

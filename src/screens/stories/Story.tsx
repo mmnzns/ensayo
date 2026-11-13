@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { cardHeadline, proofPointsFromRows } from "../../data/actions";
 import { useActions } from "../../data/real";
+import { RESTORE_IN_SETTINGS } from "../../data/trash";
 import { storyGaps, useStore } from "../../data/store";
 import type { Branch, Story as StoryType } from "../../data/types";
 import AppShell from "../../ui/AppShell";
@@ -181,7 +182,7 @@ function StoryEditor({ story }: { story: StoryType }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", borderTop: "1px solid var(--e-line)", paddingTop: "16px" }}>
             {confirmDelete ? (
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
-                <span className="e-meta" style={{ color: "var(--e-ink)" }}>Delete this story? It can't be undone.</span>
+                <span className="e-meta" style={{ color: "var(--e-ink)" }}>{`Delete this story? ${RESTORE_IN_SETTINGS}`}</span>
                 <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={remove}>Yes, delete it</button>
                 <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setConfirmDelete(false)}>Keep it</button>
               </div>

@@ -976,7 +976,7 @@ mod tests {
         use crate::storage::reps::Session;
         let (_d, s, first, second) = two_targets();
         let on_second = s.create_application(NewApplication { company: "A".into(), target_id: Some(second.id.clone()), ..Default::default() }, day()).unwrap();
-        let sess = |app: Option<&str>, target: Option<&str>| Session { extra: Default::default(), id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: app.map(String::from), stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: target.map(String::from) };
+        let sess = |app: Option<&str>, target: Option<&str>| Session { extra: Default::default(), resume: None, id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: app.map(String::from), stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: target.map(String::from) };
         assert_eq!(s.session_target(&sess(None, Some(&second.id))).unwrap(), Some(second.id.clone()));
         assert_eq!(s.session_target(&sess(Some(&on_second.id), None)).unwrap(), Some(second.id.clone()));
         assert_eq!(s.session_target(&sess(None, None)).unwrap(), Some(first.id.clone()), "an old session with no target is the first target's");

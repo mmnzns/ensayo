@@ -1,3 +1,4 @@
+import { costLine, engineNameFor } from "../../practice/cost";
 import { habitStatus, useStore } from "../../data/store";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
@@ -62,6 +63,12 @@ export default function SessionResultsDrill() {
   return <DrillResults results={state.results} />;
 }
 
+/** The end of the totals line: " · about 6 cents with Claude Sonnet 5.5". Empty when no paid engine was used. */
+export function drillCostText(totals: { costUsd: number; engineName: string | null }, engine: { kind: "local" | "key" | "timing"; label: string }): string {
+  const line = costLine(totals.costUsd, engineNameFor(totals.engineName, engine));
+  return line ? ` · ${line}` : "";
+}
+
 function DrillResults({ results }: { results: SessionResults }) {
   const { applications, habits, engine, streak } = useStore();
   const d = results.drill;
@@ -78,7 +85,7 @@ function DrillResults({ results }: { results: SessionResults }) {
   const mid = d.chartMaxSeconds / 2;
   const best = d.bestAnswer;
   const next = d.nextTime;
-  const cost = engine.kind === "local" || d.totals.costCents < 1 ? "" : ` · about ${d.totals.costCents} cents with ${engine.label}`;
+  const cost = drillCostText(d.totals, engine);
   const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   const focusLabel = habitLabel(d.focusHabitId);
   const heroLabel = d.focusHabitId === "to_the_point" ? "Time to your point" : d.focusHabitId === "clean_stop" ? "Time after your number" : focusLabel;
