@@ -58,6 +58,29 @@ describe("Finish setting up", () => {
     expect(html).not.toContain("—");
     expect(renderToString(<FinishSetupView steps={[]} />)).toBe("");
   });
+
+  it("offers Not now only where a dismiss is wired, and calls it", () => {
+    const steps = missingSteps("granted", ready, "timing");
+    expect(renderToString(<FinishSetupView steps={steps} />)).not.toContain("Not now");
+    const calls: string[] = [];
+    const view = FinishSetupView({ steps, onDismiss: () => calls.push("dismissed") });
+    const html = renderToString(view);
+    expect(html).toContain("Not now");
+    // The button is the one with the handler.
+    const find = (n: unknown): { props: { onClick?: () => void } } | null => {
+      if (!n || typeof n !== "object") return null;
+      const el = n as { type?: unknown; props?: { onClick?: () => void; children?: unknown } };
+      if (el.type === "button" && el.props?.onClick) return el as { props: { onClick?: () => void } };
+      const kids = ([] as unknown[]).concat(el.props?.children ?? []);
+      for (const k of kids) {
+        const hit = find(k);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    find(view)?.props.onClick?.();
+    expect(calls).toEqual(["dismissed"]);
+  });
 });
 
 const story = (id: string, competencies: string[], over: Partial<Story> = {}): Story => ({ ...mockStore.stories[0], id, competencies, ...over });

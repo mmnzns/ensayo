@@ -44,11 +44,17 @@ export interface MicPrefs {
   device: string;
 }
 
+export interface SetupPrefs {
+  /** The setup steps (`MissingStep.id`) that were missing when "Finish setting up" was dismissed with "Not now". The card stays hidden while exactly these are missing. Sorted, no repeats. */
+  dismissed: string[];
+}
+
 export interface Prefs {
   practice: PracticePrefs;
   voice: VoicePrefs;
   speech: SpeechPrefs;
   mic: MicPrefs;
+  setup: SetupPrefs;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -56,6 +62,7 @@ export const DEFAULT_PREFS: Prefs = {
   voice: { readAloud: true, voiceUri: "", engine: "browser", speed: "Normal", readTrySaying: true },
   speech: { model: "" },
   mic: { device: "" },
+  setup: { dismissed: [] },
 };
 
 type Store = Pick<Storage, "getItem" | "setItem">;
@@ -125,15 +132,21 @@ function cleanMic(raw: unknown): MicPrefs {
   return { device: typeof r.device === "string" ? r.device : DEFAULT_PREFS.mic.device };
 }
 
+function cleanSetup(raw: unknown): SetupPrefs {
+  const r = isObject(raw) ? raw : {};
+  const ids = Array.isArray(r.dismissed) ? r.dismissed.filter((i): i is string => typeof i === "string") : [];
+  return { dismissed: [...new Set(ids)].sort() };
+}
+
 /** The saved settings, or the defaults for anything missing, damaged or unreadable. */
 export function readPrefs(storage: Store | null = browserStorage()): Prefs {
   try {
     const text = storage?.getItem(PREFS_KEY);
     const raw: unknown = text ? JSON.parse(text) : null;
     const r = isObject(raw) ? raw : {};
-    return { practice: cleanPractice(r.practice), voice: cleanVoice(r.voice), speech: cleanSpeech(r.speech), mic: cleanMic(r.mic) };
+    return { practice: cleanPractice(r.practice), voice: cleanVoice(r.voice), speech: cleanSpeech(r.speech), mic: cleanMic(r.mic), setup: cleanSetup(r.setup) };
   } catch {
-    return { practice: { ...DEFAULT_PREFS.practice }, voice: { ...DEFAULT_PREFS.voice }, speech: { ...DEFAULT_PREFS.speech }, mic: { ...DEFAULT_PREFS.mic } };
+    return { practice: { ...DEFAULT_PREFS.practice }, voice: { ...DEFAULT_PREFS.voice }, speech: { ...DEFAULT_PREFS.speech }, mic: { ...DEFAULT_PREFS.mic }, setup: { dismissed: [] } };
   }
 }
 
@@ -185,6 +198,22 @@ export function updateMic(change: Partial<MicPrefs>, storage: Store | null = bro
   const next: Prefs = { ...now, mic: cleanMic({ ...now.mic, ...change }) };
   writePrefs(next, storage);
   return next;
+}
+
+/** Saves which missing setup steps were dismissed with "Not now" and returns everything as it now stands. */
+export function updateSetup(change: Partial<SetupPrefs>, storage: Store | null = browserStorage()): Prefs {
+  const now = readPrefs(storage);
+  const next: Prefs = { ...now, setup: cleanSetup({ ...now.setup, ...change }) };
+  writePrefs(next, storage);
+  return next;
+}
+
+/** True when the card was dismissed for exactly this set of missing steps. A different set (one was finished, or a new one is missing) shows it again. */
+export function setupDismissed(missingIds: string[], dismissed: string[]): boolean {
+  if (missingIds.length === 0) return false;
+  const a = [...new Set(missingIds)].sort();
+  const b = [...new Set(dismissed)].sort();
+  return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
 // ---------- the voice itself ----------

@@ -10,6 +10,8 @@ import {
   updatePractice,
   clearPrefs,
   updateSpeech,
+  updateSetup,
+  setupDismissed,
   updateVoice,
   voiceChoices,
   voiceOptions,
@@ -188,5 +190,44 @@ describe("the Voice list with system voices", () => {
 
   it("each option parses back to its own engine and voice", () => {
     for (const o of voiceOptions(browser, system)) expect(parseVoiceValue(o.value)).toEqual({ engine: o.engine, voiceUri: o.voiceUri });
+  });
+});
+
+describe("dismissing the finish-setting-up card", () => {
+  it("keeps the dismissed steps in the same prefs, sorted, and reads them back", () => {
+    const s = fakeStorage();
+    expect(readPrefs(s).setup.dismissed).toEqual([]);
+    updateSetup({ dismissed: ["speech", "engine", "engine"] }, s);
+    expect(readPrefs(s).setup.dismissed).toEqual(["engine", "speech"]);
+    expect([...s.data.keys()]).toEqual([PREFS_KEY]);
+    expect(readPrefs(s).practice).toEqual(DEFAULT_PREFS.practice);
+  });
+
+  it("falls back to nothing dismissed for an old save, a wrong shape or blocked storage", () => {
+    expect(readPrefs(fakeStorage(JSON.stringify({ practice: { questions: 3 } }))).setup.dismissed).toEqual([]);
+    expect(readPrefs(fakeStorage(JSON.stringify({ setup: { dismissed: "engine" } }))).setup.dismissed).toEqual([]);
+    expect(readPrefs(fakeStorage(JSON.stringify({ setup: { dismissed: ["engine", 4, null] } }))).setup.dismissed).toEqual(["engine"]);
+    const blocked = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+    expect(readPrefs(blocked).setup.dismissed).toEqual([]);
+    expect(() => updateSetup({ dismissed: ["engine"] }, blocked)).not.toThrow();
+  });
+
+  it("hides the card only while exactly the dismissed steps are missing", () => {
+    expect(setupDismissed(["engine"], ["engine"])).toBe(true);
+    expect(setupDismissed(["speech", "engine"], ["engine", "speech"])).toBe(true);
+    // One was finished, or another went missing: the card comes back.
+    expect(setupDismissed(["engine"], ["engine", "speech"])).toBe(false);
+    expect(setupDismissed(["engine", "microphone"], ["engine"])).toBe(false);
+    expect(setupDismissed(["speech"], ["engine"])).toBe(false);
+    // Nothing missing is nothing to hide; nothing dismissed hides nothing.
+    expect(setupDismissed([], [])).toBe(false);
+    expect(setupDismissed(["engine"], [])).toBe(false);
+  });
+
+  it("is forgotten by Delete all data", () => {
+    const s = { ...fakeStorage(), removeItem: (k: string) => void s.data.delete(k) };
+    updateSetup({ dismissed: ["engine"] }, s);
+    clearPrefs(s);
+    expect(readPrefs(s).setup.dismissed).toEqual([]);
   });
 });
