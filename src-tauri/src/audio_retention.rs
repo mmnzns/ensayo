@@ -9,12 +9,42 @@ pub fn audio_path(root: &Path, session: &str, n: u32) -> PathBuf {
     root.join(session).join(format!("{n}.wav"))
 }
 
+/// How long a loose recording may sit in the audio folder before it counts as left behind by a crash.
+const STRAY_AGE: Duration = Duration::from_secs(600);
+
+/// Removes loose `rec-*.wav` files in the audio root (a recording that never reached a session folder, left by a
+/// crash). Nothing goes while a capture is active. Otherwise a file goes when it is older than ten minutes, or at
+/// once when `at_once` is set (retention "Don't keep"). Returns how many went. Session folders are not touched.
+pub fn remove_stray(root: &Path, now: SystemTime, recording: bool, at_once: bool) -> usize {
+    if recording {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else { return 0 };
+    let limit = now.checked_sub(STRAY_AGE);
+    let mut removed = 0;
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !(name.starts_with("rec-") && name.ends_with(".wav")) || !e.path().is_file() {
+            continue;
+        }
+        let old = match (e.metadata().and_then(|m| m.modified()), limit) {
+            (Ok(t), Some(l)) => t < l,
+            _ => false,
+        };
+        if (at_once || old) && std::fs::remove_file(e.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 /// Removes audio older than `days` that is not in `keep` (`"<session>/<n>"`). Returns how many files went.
-/// Empty session folders are removed too. Anything that is not a numbered `.wav` is left alone.
-pub fn sweep(root: &Path, days: u32, keep: &HashSet<String>, now: SystemTime) -> usize {
+/// Empty session folders are removed too. Anything that is not a numbered `.wav` is left alone. Loose recordings
+/// left by a crash go too (see `remove_stray`); `recording` is true while a capture is active.
+pub fn sweep(root: &Path, days: u32, keep: &HashSet<String>, now: SystemTime, recording: bool) -> usize {
     let Some(limit) = now.checked_sub(Duration::from_secs(u64::from(days) * 86_400)) else { return 0 };
     let Ok(sessions) = std::fs::read_dir(root) else { return 0 };
-    let mut removed = 0;
+    let mut removed = remove_stray(root, now, recording, days == 0);
     for s in sessions.flatten() {
         let dir = s.path();
         if !dir.is_dir() {
@@ -54,9 +84,9 @@ pub fn audio_bytes(root: &Path) -> u64 {
 
 /// Removes every recording, the ones kept for the eval set too: the person asked for all of them to go. The text of
 /// the answers stays. Returns how many files went.
-pub fn remove_all(root: &Path) -> Result<usize, String> {
+pub fn remove_all(root: &Path, now: SystemTime, recording: bool) -> Result<usize, String> {
     let Ok(sessions) = std::fs::read_dir(root) else { return Ok(0) };
-    let mut removed = 0;
+    let mut removed = remove_stray(root, now, recording, false);
     for s in sessions.flatten() {
         let dir = s.path();
         if !dir.is_dir() {
@@ -139,13 +169,13 @@ mod tests {
         let keep: HashSet<String> = ["ses_a/2".to_string()].into();
         // Ninety days from now, a 30-day setting makes everything old.
         let later = SystemTime::now() + Duration::from_secs(90 * 86_400);
-        assert_eq!(sweep(root, 30, &keep, later), 2);
+        assert_eq!(sweep(root, 30, &keep, later, false), 2);
         assert!(!audio_path(root, "ses_a", 1).exists());
         assert!(audio_path(root, "ses_a", 2).exists(), "a labelled rep keeps its audio");
         assert!(root.join("ses_a/notes.txt").exists(), "not an audio file");
         assert!(!root.join("ses_b").exists(), "empty folders go");
         // Today, nothing is old.
-        assert_eq!(sweep(root, 30, &keep, SystemTime::now()), 0);
+        assert_eq!(sweep(root, 30, &keep, SystemTime::now(), false), 0);
     }
 
     #[test]
@@ -156,16 +186,67 @@ mod tests {
         touch(root, "ses_a", "2.wav");
         touch(root, "ses_b", "1.wav");
         assert_eq!(audio_bytes(root), 12);
-        assert_eq!(remove_all(root).unwrap(), 3);
+        assert_eq!(remove_all(root, SystemTime::now(), false).unwrap(), 3);
         assert_eq!(audio_bytes(root), 0);
         assert!(!root.join("ses_a").exists());
-        assert_eq!(remove_all(root).unwrap(), 0);
+        assert_eq!(remove_all(root, SystemTime::now(), false).unwrap(), 0);
     }
 
     #[test]
     fn a_missing_audio_folder_is_fine() {
         assert_eq!(audio_bytes(Path::new("/definitely/not/here")), 0);
-        assert_eq!(remove_all(Path::new("/definitely/not/here")), Ok(0));
-        assert_eq!(sweep(Path::new("/definitely/not/here"), 30, &HashSet::new(), SystemTime::now()), 0);
+        assert_eq!(remove_all(Path::new("/definitely/not/here"), SystemTime::now(), false), Ok(0));
+        assert_eq!(sweep(Path::new("/definitely/not/here"), 30, &HashSet::new(), SystemTime::now(), false), 0);
+    }
+
+    fn loose(root: &Path, name: &str) -> PathBuf {
+        fs::create_dir_all(root).unwrap();
+        let p = root.join(name);
+        fs::write(&p, b"RIFF").unwrap();
+        p
+    }
+
+    #[test]
+    fn a_stray_recording_goes_only_when_it_is_old_and_nothing_is_recording() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let stray = loose(root, "rec-123.wav");
+        let other = loose(root, "notes.wav");
+        touch(root, "ses_a", "rec-9.wav"); // inside a session folder: not a stray
+        // Fresh: kept.
+        assert_eq!(remove_stray(root, SystemTime::now(), false, false), 0);
+        let later = SystemTime::now() + Duration::from_secs(11 * 60);
+        // Old but a capture is active: kept.
+        assert_eq!(remove_stray(root, later, true, false), 0);
+        assert!(stray.exists());
+        assert_eq!(remove_stray(root, later, false, false), 1);
+        assert!(!stray.exists());
+        assert!(other.exists(), "only rec-*.wav");
+        assert!(root.join("ses_a/rec-9.wav").exists());
+    }
+
+    #[test]
+    fn dont_keep_removes_a_stray_at_once_but_never_during_a_capture() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let stray = loose(root, "rec-1.wav");
+        assert_eq!(sweep(root, 0, &HashSet::new(), SystemTime::now(), true), 0);
+        assert!(stray.exists());
+        assert_eq!(sweep(root, 0, &HashSet::new(), SystemTime::now(), false), 1);
+        assert!(!stray.exists());
+    }
+
+    #[test]
+    fn sweep_and_remove_all_clear_old_strays() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let later = SystemTime::now() + Duration::from_secs(20 * 60);
+        let a = loose(root, "rec-1.wav");
+        assert_eq!(sweep(root, 30, &HashSet::new(), later, false), 1);
+        assert!(!a.exists());
+        let b = loose(root, "rec-2.wav");
+        assert_eq!(remove_all(root, SystemTime::now(), false).unwrap(), 0, "fresh stray survives");
+        assert_eq!(remove_all(root, later, false).unwrap(), 1);
+        assert!(!b.exists());
     }
 }

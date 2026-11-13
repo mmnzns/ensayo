@@ -828,11 +828,12 @@ pub async fn list_sessions() -> Cmd<Vec<Session>> {
 
 /// Removes audio older than the retention setting, apart from reps labelled for the eval set. Run on start.
 #[tauri::command]
-pub async fn sweep_audio() -> Cmd<usize> {
-    blocking(|| {
+pub async fn sweep_audio(rec: tauri::State<'_, crate::commands::RecorderState>) -> Cmd<usize> {
+    let recording = rec.is_active();
+    blocking(move || {
         let Some(days) = settings::retention_days(&settings::load(&paths::settings_file())) else { return Ok(0) };
         let keep: HashSet<String> = open().and_then(|s| s.eval_reps()).map(|l| l.items.into_iter().map(|r| format!("{}/{}", r.full.session_id, r.full.rep.n)).collect()).unwrap_or_default();
-        Ok(audio_retention::sweep(&paths::audio_dir(), days, &keep, std::time::SystemTime::now()))
+        Ok(audio_retention::sweep(&paths::audio_dir(), days, &keep, std::time::SystemTime::now(), recording))
     })
     .await
 }
@@ -850,11 +851,12 @@ pub async fn audio_usage_mb() -> Cmd<u64> {
 
 /// Delete every recording now. The transcripts and notes stay.
 #[tauri::command]
-pub async fn delete_all_audio() -> Cmd<usize> {
-    blocking(|| {
+pub async fn delete_all_audio(rec: tauri::State<'_, crate::commands::RecorderState>) -> Cmd<usize> {
+    let recording = rec.is_active();
+    blocking(move || {
         // Recordings waiting in the trash are recordings too: the person asked for all of them to go.
         let _ = std::fs::remove_dir_all(paths::audio_trash_dir());
-        audio_retention::remove_all(&paths::audio_dir())
+        audio_retention::remove_all(&paths::audio_dir(), std::time::SystemTime::now(), recording)
     })
     .await
 }
