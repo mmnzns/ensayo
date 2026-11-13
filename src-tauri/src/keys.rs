@@ -25,11 +25,9 @@ pub fn clear(provider: &str) -> Result<(), String> {
 /// Every account Ensayo stores. The Windows uninstaller deletes the same list (the installer hook is added in M10).
 pub const ACCOUNTS: [&str; 8] = ["claude", "openai", "gemini", "groq", "cerebras", "mistral", "openrouter", "compatible"];
 
-/// "Delete all Ensayo data" removes every key too.
-pub fn clear_all() {
-    for p in ACCOUNTS {
-        let _ = clear(p);
-    }
+/// "Delete all Ensayo data" removes every key too. Returns the accounts that could not be cleared.
+pub fn clear_all() -> Vec<&'static str> {
+    ACCOUNTS.into_iter().filter(|p| clear(p).is_err()).collect()
 }
 
 #[cfg(test)]
@@ -43,6 +41,12 @@ mod tests {
             assert!(ACCOUNTS.contains(&p.key_id()), "{}", p.key_id());
         }
         assert_eq!(ACCOUNTS.len(), Provider::ALL.len(), "no stray accounts");
+    }
+
+    #[test]
+    fn clear_all_reports_nothing_when_every_account_clears() {
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+        assert!(clear_all().is_empty());
     }
 
     #[test]

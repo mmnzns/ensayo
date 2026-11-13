@@ -37,6 +37,13 @@ fn original_stem(stem: &str) -> Option<String> {
     is_safe_id(base).then(|| base.to_string())
 }
 
+/// True when `file_name` is a sync copy of `<base>.json` (`you (1).json`, `you 2.json`, `you (Miguel's conflicted copy).json`).
+pub(crate) fn is_copy_of(file_name: &str, base: &str) -> bool {
+    let Some(stem) = file_name.strip_suffix(".json") else { return false };
+    let Some(rest) = stem.strip_prefix(base).and_then(|r| r.strip_prefix(' ')) else { return false };
+    (rest.starts_with('(') && rest.ends_with(')')) || (!rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+}
+
 fn modified(path: &Path) -> Option<String> {
     let t = fs::metadata(path).ok()?.modified().ok()?;
     Some(DateTime::<Utc>::from(t).to_rfc3339())
@@ -104,6 +111,13 @@ mod tests {
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(&p, text).unwrap();
         p
+    }
+
+    #[test]
+    fn is_copy_of_matches_the_drive_naming_and_nothing_else() {
+        assert!(is_copy_of("you (1).json", "you") && is_copy_of("you 2.json", "you") && is_copy_of("profile.v0 (1).json", "profile.v0"));
+        assert!(is_copy_of("you (Miguel's conflicted copy 2026-10-21).json", "you"));
+        assert!(!is_copy_of("you.json", "you") && !is_copy_of("your notes.json", "you") && !is_copy_of("you x.json", "you") && !is_copy_of("you (1).txt", "you"));
     }
 
     #[test]

@@ -158,15 +158,38 @@ impl Storage {
 
     // ---------- everything ----------
 
-    /// Removes what Ensayo wrote in the data folder. The folder itself and any other file in it stay: it may be a
-    /// synced drive folder the user also uses for other things.
-    pub fn delete_all(&self) -> Result<()> {
-        for name in OWNED {
-            let path = self.root().join(name);
+    /// Removes what Ensayo wrote in the data folder: the owned files and folders, sync conflict copies of the owned
+    /// root files, and restore staging folders. The folder itself and any other file in it stay: it may be a synced
+    /// drive folder the user also uses for other things. Everything is attempted; the names of what could not be
+    /// removed are returned (names only, never a full path).
+    pub fn delete_all_report(&self) -> Vec<String> {
+        let mut left = vec![];
+        let mut remove = |path: PathBuf| {
             let result = if path.is_dir() { fs::remove_dir_all(&path) } else if path.exists() { fs::remove_file(&path) } else { Ok(()) };
-            result.map_err(|e| StorageError::Io(path, e.to_string()))?;
+            if result.is_err() {
+                left.push(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+            }
+        };
+        for name in OWNED {
+            remove(self.root().join(name));
         }
-        Ok(())
+        if let Ok(entries) = fs::read_dir(self.root()) {
+            for e in entries.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let owned_root_file = OWNED.iter().filter_map(|o| o.strip_suffix(".json")).any(|stem| super::conflicts::is_copy_of(&name, stem));
+                if owned_root_file || (name.starts_with(".ensayo-restore-") && e.path().is_dir()) {
+                    remove(e.path());
+                }
+            }
+        }
+        left
+    }
+
+    pub fn delete_all(&self) -> Result<()> {
+        match self.delete_all_report().first() {
+            None => Ok(()),
+            Some(name) => Err(StorageError::Io(self.root().join(name), "couldn't be removed".into())),
+        }
     }
 }
 
@@ -348,6 +371,23 @@ mod tests {
         assert_eq!(fs::read_to_string(s.root().join("notes.txt")).unwrap(), "mine");
         assert_eq!(s.you().unwrap(), None);
         assert!(s.targets().unwrap().is_empty());
+    }
+
+    #[test]
+    fn delete_all_also_removes_conflict_copies_of_owned_root_files_and_restore_staging_folders() {
+        let (_d, s) = fresh();
+        for f in ["you.json", "you (1).json", "profile 2.json", "lock (Miguel's conflicted copy).json", "yours.json", "notes.txt"] {
+            fs::write(s.root().join(f), "x").unwrap();
+        }
+        fs::create_dir_all(s.root().join(".ensayo-restore-20261101-120000/bank")).unwrap();
+        fs::create_dir_all(s.root().join(".other-hidden")).unwrap();
+        assert!(s.delete_all_report().is_empty());
+        for gone in ["you.json", "you (1).json", "profile 2.json", "lock (Miguel's conflicted copy).json", ".ensayo-restore-20261101-120000"] {
+            assert!(!s.root().join(gone).exists(), "{gone}");
+        }
+        for kept in ["yours.json", "notes.txt", ".other-hidden"] {
+            assert!(s.root().join(kept).exists(), "{kept}");
+        }
     }
 
     // ---------- story angles ----------

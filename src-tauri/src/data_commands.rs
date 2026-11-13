@@ -47,7 +47,7 @@ pub(crate) fn open_storage() -> StorageResult<Storage> {
 #[derive(Debug, Serialize)]
 pub struct DataStatus {
     pub folder: String,
-    /// "ready", "missing", "other_machine" (another computer has it open) or "stale_lock" (a lock left behind).
+    /// "ready", "missing", "other_machine" (another computer has it open), or "stale_lock" (a lock left behind).
     pub state: &'static str,
     pub machine: Option<String>,
     pub age_secs: Option<i64>,
@@ -208,16 +208,62 @@ fn release_models(store: &voice_engine_models::SharedStore) -> Cmd<()> {
     store.release_all().map_err(|e| format!("Couldn't remove Ensayo's models ({}). Close other apps that use them and try again.", e.kind()))
 }
 
-/// Delete all Ensayo data: what Ensayo wrote in the data folder, saved keys, answer audio, the models only Ensayo uses
-/// and the machine-local settings. A model another app also uses stays for that app.
+/// What "Delete all Ensayo data" could not remove, in plain words (names only, never paths). Empty means all gone.
+#[derive(Debug, Default, Serialize, PartialEq)]
+pub struct DeleteReport {
+    pub left_behind: Vec<String>,
+}
+
+/// Removes a file or folder; false when it is there and could not be removed.
+fn remove_path(path: &Path) -> bool {
+    let result = if path.is_dir() { std::fs::remove_dir_all(path) } else { std::fs::remove_file(path) };
+    match result {
+        Ok(()) => true,
+        Err(e) => e.kind() == std::io::ErrorKind::NotFound,
+    }
+}
+
+/// The line shown when the data folder could not be opened. The folder's name only, never its full path.
+fn unreachable_line(folder: &Path) -> String {
+    let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "the data folder".into());
+    format!("Ensayo couldn't reach your data folder (\"{name}\"), so your stories and other saved work there were not deleted. Everything stored on this computer was removed. Reconnect the folder and run Delete all Ensayo data again to remove the rest.")
+}
+
+/// The machine-local parts and the data folder, with every location passed in so tests can use temporary folders.
+/// `local` is `(what the person would call it, where)`. The settings file is the pointer to the data folder, so it
+/// is kept when that folder could not be reached: otherwise the folder could not be found again to finish.
+fn delete_everything_in(root: &Path, default: &Path, local: &[(&str, PathBuf)], settings_file: &Path, keys_left: &[&str]) -> Cmd<DeleteReport> {
+    let mut left = vec![];
+    for (label, dir) in local {
+        if !remove_path(dir) {
+            left.push((*label).to_string());
+        }
+    }
+    for account in keys_left {
+        left.push(format!("The saved {account} key"));
+    }
+    let data = open_for(root, default);
+    match &data {
+        Ok(storage) => left.extend(storage.delete_all_report().into_iter().map(|n| format!("{n} in your data folder"))),
+        Err(_) => return Err(unreachable_line(root)),
+    }
+    if !remove_path(settings_file) {
+        left.push("Ensayo's settings file".into());
+    }
+    Ok(DeleteReport { left_behind: left })
+}
+
+/// Delete all Ensayo data: what Ensayo wrote in the data folder, saved keys, answer audio, backups, the models only
+/// Ensayo uses and the machine-local settings. A model another app also uses stays for that app. Returns what it
+/// could not remove; when the data folder can't be reached the machine-local parts are still removed, then it is an
+/// error saying the stories were not deleted.
 #[tauri::command]
-pub async fn delete_all_data() -> Cmd<()> {
+pub async fn delete_all_data() -> Cmd<DeleteReport> {
     blocking(|| {
         // The built-in local AI holds its model file open (Windows will not delete it then); so may the speech model.
         crate::ai::local::stop_shared();
         crate::speech::loaded::unload();
         // Ensayo stops using its models; each is erased unless another app uses it or has it open.
-        // A problem here is reported at the end, after everything else has been removed.
         let models = match crate::models_store::store() {
             Ok(store) => release_models(store),
             Err(e) => {
@@ -225,26 +271,25 @@ pub async fn delete_all_data() -> Cmd<()> {
                 Ok(())
             }
         };
-        if let Ok(storage) = open_storage() {
-            storage.delete_all().map_err(plain)?;
-        }
-        crate::keys::clear_all();
+        let keys_left = crate::keys::clear_all();
         // The log folder goes too, and nothing writes it again until Ensayo restarts.
-        crate::logging::remove_all_in(&paths::logs_dir())?;
+        let logs_ok = crate::logging::remove_all_in(&paths::logs_dir()).is_ok();
         // The old models folder only holds hard links and leftovers after the move to the shared folder.
-        for dir in [paths::audio_dir(), paths::trash_dir(), paths::models_dir()] {
-            match std::fs::remove_dir_all(&dir) {
-                Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(format!("Couldn't remove {}: {e}", dir.display())),
-            }
+        let local = [
+            ("Recordings", paths::audio_dir()),
+            ("Recently deleted items", paths::trash_dir()),
+            ("Models folder", paths::models_dir()),
+            ("Backups made before a restore", paths::app_local().join("backups")),
+        ];
+        let result = delete_everything_in(&data_folder(), &paths::default_data_dir(), &local, &paths::settings_file(), &keys_left);
+        let mut report = result?;
+        if !logs_ok {
+            report.left_behind.push("Log files".into());
         }
-        match std::fs::remove_file(paths::settings_file()) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(format!("Couldn't remove the settings file: {e}")),
+        if models.is_err() {
+            report.left_behind.push("Speech or AI models another app has open".into());
         }
-        models
+        Ok(report)
     })
     .await
 }
@@ -280,6 +325,62 @@ mod tests {
         release_models(&mine).unwrap();
         assert!(!mine.model_dir("whisper-tiny").exists(), "only Ensayo used it");
         assert!(mine.model_dir("whisper-base").exists(), "Talaan still uses it");
+    }
+
+    fn local_dirs(base: &Path) -> Vec<(&'static str, PathBuf)> {
+        ["audio", "trash", "models", "backups"].iter().map(|n| (match *n { "audio" => "Recordings", "trash" => "Recently deleted items", "models" => "Models folder", _ => "Backups made before a restore" }, base.join(n))).collect()
+    }
+
+    #[test]
+    fn delete_all_removes_the_backups_and_every_machine_local_folder_and_reports_nothing_left() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("local");
+        let root = dir.path().join("data");
+        let storage = Storage::init(root.clone()).unwrap();
+        storage.save_story(&story("st_a")).unwrap();
+        let local = local_dirs(&base);
+        for (_, d) in &local {
+            std::fs::create_dir_all(d.join("x")).unwrap();
+            std::fs::write(d.join("x/f"), "1").unwrap();
+        }
+        let settings_file = base.join("settings.json");
+        std::fs::write(&settings_file, "{}").unwrap();
+        let report = delete_everything_in(&root, &root, &local, &settings_file, &[]).unwrap();
+        assert_eq!(report, DeleteReport::default());
+        for (_, d) in &local {
+            assert!(!d.exists());
+        }
+        assert!(!settings_file.exists() && !root.join("bank").exists());
+    }
+
+    #[test]
+    fn delete_all_lists_a_key_it_could_not_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("data");
+        Storage::init(root.clone()).unwrap();
+        let report = delete_everything_in(&root, &root, &[], &dir.path().join("settings.json"), &["claude"]).unwrap();
+        assert_eq!(report.left_behind, vec!["The saved claude key".to_string()]);
+    }
+
+    #[test]
+    fn delete_all_with_an_unreachable_data_folder_still_clears_this_computer_then_says_the_stories_were_not_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("local");
+        let local = local_dirs(&base);
+        for (_, d) in &local {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        let settings_file = base.join("settings.json");
+        std::fs::write(&settings_file, "{}").unwrap();
+        let missing = dir.path().join("Drive").join("EnsayoData");
+        let err = delete_everything_in(&missing, &dir.path().join("default"), &local, &settings_file, &[]).unwrap_err();
+        assert!(err.contains("EnsayoData") && err.contains("not deleted"), "{err}");
+        assert!(!err.contains(dir.path().to_string_lossy().as_ref()), "no full path: {err}");
+        for (_, d) in &local {
+            assert!(!d.exists(), "machine-local parts still go");
+        }
+        assert!(settings_file.exists(), "the pointer to the data folder stays so the delete can be finished");
+        assert!(!missing.exists(), "nothing is created in its place");
     }
 
     #[test]
