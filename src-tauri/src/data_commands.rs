@@ -290,6 +290,17 @@ pub async fn set_data_folder(folder: PathBuf) -> Cmd<()> {
     blocking(move || settings::set_data_folder(&paths::settings_file(), &folder).map_err(plain)).await
 }
 
+/// Switches to `to` as `prepare_move` decides (copy into an empty folder, or use the Ensayo data already there).
+fn move_into(from: &Path, to: &Path, settings_file: &Path) -> Cmd<relocate::Moved> {
+    let moved = relocate::prepare_move(from, to).map_err(plain)?;
+    // Let go of the old folder's "open here" note before switching, or it would read as another computer's.
+    if let Ok(old) = Storage::open(from.to_path_buf()) {
+        let _ = old.release_lock(&me());
+    }
+    settings::set_data_folder(settings_file, to).map_err(plain)?;
+    Ok(moved)
+}
+
 /// Changes the data folder to `folder`: copies the data there when it is empty, or switches to the Ensayo data already
 /// in it. Answers "copied" or "existing". The old folder is left as it was. The window reloads afterwards.
 #[tauri::command]
@@ -298,14 +309,92 @@ pub async fn move_data_folder(folder: PathBuf) -> Cmd<&'static str> {
     blocking(move || {
         let _busy = busy;
         let _t = crate::logging::Timer::new("move_data_folder");
-        let from = data_folder();
-        let moved = relocate::prepare_move(&from, &folder).map_err(plain)?;
-        // Let go of the old folder's "open here" note before switching, or it would read as another computer's.
-        if let Ok(old) = Storage::open(from) {
-            let _ = old.release_lock(&me());
-        }
-        settings::set_data_folder(&paths::settings_file(), &folder).map_err(plain)?;
+        let moved = move_into(&data_folder(), &folder, &paths::settings_file())?;
         Ok(if moved == relocate::Moved::Copied { "copied" } else { "existing" })
+    })
+    .await
+}
+
+/// Whether Home offers to move the data to Documents › Ensayo.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct MoveOffer {
+    /// "none" (nothing to offer), "offer" (data is in the old default folder and Documents › Ensayo is free) or "both"
+    /// (Documents › Ensayo already has data too: Ensayo never merges or overwrites).
+    pub state: &'static str,
+    pub legacy: String,
+    pub target: String,
+}
+
+fn same_folder(a: &Path, b: &Path) -> bool {
+    a == b || matches!((std::fs::canonicalize(a), std::fs::canonicalize(b)), (Ok(x), Ok(y)) if x == y)
+}
+
+/// `root` is the folder in use. Offered only while it is the old default and holds data.
+pub fn move_offer_for(root: &Path, legacy: &Path, documents: Option<&Path>) -> MoveOffer {
+    let mut offer = MoveOffer { state: "none", legacy: legacy.to_string_lossy().into_owned(), target: documents.map(|d| d.to_string_lossy().into_owned()).unwrap_or_default() };
+    if let Some(docs) = documents {
+        if same_folder(root, legacy) && relocate::holds_data(legacy) && !same_folder(docs, legacy) {
+            offer.state = if relocate::holds_data(docs) { "both" } else { "offer" };
+        }
+    }
+    offer
+}
+
+#[tauri::command]
+pub async fn data_move_offer() -> Cmd<MoveOffer> {
+    blocking(|| {
+        let none = MoveOffer { state: "none", legacy: String::new(), target: String::new() };
+        // A folder named by the environment, or an unknown choice, is never moved.
+        if settings_damaged() || std::env::var("ENSAYO_DATA_DIR").is_ok_and(|v| !v.trim().is_empty()) {
+            return Ok(none);
+        }
+        Ok(move_offer_for(&data_folder(), &paths::legacy_default_data_dir(), paths::documents_data_dir().as_deref()))
+    })
+    .await
+}
+
+/// Moves the data from the old default folder to `documents` (Documents › Ensayo): copy, check, save the choice, open
+/// it, and only then set the old folder aside as `data.moved-<date>`. Nothing is deleted. Refused unless the folder in
+/// use is the old default and `documents` has no Ensayo data (never a merge).
+pub fn move_to_documents_in(current: &Path, legacy: &Path, documents: &Path, settings_file: &Path, today: chrono::NaiveDate) -> Cmd<()> {
+    if move_offer_for(current, legacy, Some(documents)).state != "offer" {
+        return Err("Ensayo didn't move anything: your data isn't in the old folder, or Documents › Ensayo already has data.".into());
+    }
+    let made = !documents.exists();
+    std::fs::create_dir_all(documents).map_err(|_| "Ensayo couldn't make the Ensayo folder in Documents.".to_string())?;
+    if let Err(e) = move_into(legacy, documents, settings_file) {
+        // A folder this move made and left empty is not left behind.
+        if made {
+            let _ = std::fs::remove_dir(documents);
+        }
+        return Err(e);
+    }
+    Storage::open(documents.to_path_buf()).map_err(plain)?;
+    // The new folder opens. The old one is kept under another name so it can't be opened by mistake.
+    let name = legacy.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "data".into());
+    let day = today.format("%Y%m%d");
+    let mut aside = legacy.with_file_name(format!("{name}.moved-{day}"));
+    let mut n = 2;
+    while aside.exists() {
+        aside = legacy.with_file_name(format!("{name}.moved-{day}-{n}"));
+        n += 1;
+    }
+    if let Err(e) = std::fs::rename(legacy, &aside) {
+        // The move itself worked and the choice is saved: the old folder just keeps its name.
+        log::warn!("couldn't set the old data folder aside: {e}");
+    }
+    Ok(())
+}
+
+/// The "Move it" button on Home. The window reloads afterwards.
+#[tauri::command]
+pub async fn move_data_to_documents() -> Cmd<()> {
+    let busy = crate::busy::hold();
+    blocking(move || {
+        let _busy = busy;
+        let _t = crate::logging::Timer::new("move_data_to_documents");
+        let docs = paths::documents_data_dir().ok_or_else(|| "Ensayo couldn't find your Documents folder.".to_string())?;
+        move_to_documents_in(&data_folder(), &paths::legacy_default_data_dir(), &docs, &paths::settings_file(), chrono::Local::now().date_naive())
     })
     .await
 }
@@ -762,5 +851,90 @@ mod tests {
         // Nothing is wrong with a healthy folder.
         let ok = Storage::init(dir.path().join("fine")).unwrap();
         assert!(load_all_from(&ok).unwrap().damaged.is_empty());
+    }
+
+    fn legacy_install(d: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let legacy = d.join("local/data");
+        std::fs::create_dir_all(legacy.join("bank/stories")).unwrap();
+        std::fs::write(legacy.join("bank/stories/st_a.json"), "{\"a\":1}").unwrap();
+        std::fs::write(legacy.join("profile.json"), "{}").unwrap();
+        (legacy, d.join("Documents/Ensayo"), d.join("local/settings.json"))
+    }
+
+    #[test]
+    fn the_card_shows_only_while_the_old_default_holds_the_data() {
+        let d = tempfile::tempdir().unwrap();
+        let (legacy, docs, _) = legacy_install(d.path());
+        assert_eq!(move_offer_for(&legacy, &legacy, Some(&docs)).state, "offer");
+        // Another folder in use, no Documents folder, or nothing in the old folder: no card.
+        assert_eq!(move_offer_for(&d.path().join("elsewhere"), &legacy, Some(&docs)).state, "none");
+        assert_eq!(move_offer_for(&legacy, &legacy, None).state, "none");
+        assert_eq!(move_offer_for(&docs, &docs, Some(&docs)).state, "none");
+        let empty = d.path().join("empty/data");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert_eq!(move_offer_for(&empty, &empty, Some(&docs)).state, "none");
+    }
+
+    #[test]
+    fn documents_ensayo_with_data_means_no_move_and_both_folders_are_offered() {
+        let d = tempfile::tempdir().unwrap();
+        let (legacy, docs, settings_file) = legacy_install(d.path());
+        std::fs::create_dir_all(docs.join("bank")).unwrap();
+        std::fs::write(docs.join("profile.json"), "{\"other\":1}").unwrap();
+        let offer = move_offer_for(&legacy, &legacy, Some(&docs));
+        assert_eq!(offer.state, "both");
+        assert!(offer.legacy.ends_with("data") && offer.target.ends_with("Ensayo"));
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 13).unwrap();
+        assert!(move_to_documents_in(&legacy, &legacy, &docs, &settings_file, today).is_err());
+        assert_eq!(std::fs::read_to_string(docs.join("profile.json")).unwrap(), "{\"other\":1}", "never overwritten");
+        assert!(legacy.join("profile.json").exists() && !settings_file.exists(), "nothing moved or saved");
+    }
+
+    #[test]
+    fn moving_to_documents_copies_saves_the_choice_and_sets_the_old_folder_aside() {
+        let d = tempfile::tempdir().unwrap();
+        let (legacy, docs, settings_file) = legacy_install(d.path());
+        std::fs::create_dir_all(docs.parent().unwrap()).unwrap();
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 13).unwrap();
+        move_to_documents_in(&legacy, &legacy, &docs, &settings_file, today).unwrap();
+        assert_eq!(std::fs::read_to_string(docs.join("bank/stories/st_a.json")).unwrap(), "{\"a\":1}");
+        assert!(!relocate::partial_of(&docs).exists());
+        assert_eq!(settings::load(&settings_file).data_folder.as_deref(), Some(docs.to_string_lossy().as_ref()));
+        assert!(!legacy.exists(), "the old folder can't be opened by mistake");
+        assert_eq!(std::fs::read_to_string(d.path().join("local/data.moved-20261113/profile.json")).unwrap(), "{}", "and nothing is lost");
+        // With the choice saved, the folder in use is Documents and the card is gone.
+        let saved = settings::load(&settings_file);
+        let root = settings::resolve_data_folder(None, &saved, &paths::choose_default(&legacy, Some(&docs)));
+        assert_eq!(root, docs);
+        assert_eq!(move_offer_for(&root, &legacy, Some(&docs)).state, "none");
+    }
+
+    #[test]
+    fn an_interrupted_move_to_documents_is_redone_from_the_start() {
+        let d = tempfile::tempdir().unwrap();
+        let (legacy, docs, settings_file) = legacy_install(d.path());
+        // Only the .partial folder was left behind.
+        let partial = relocate::partial_of(&docs);
+        std::fs::create_dir_all(partial.join("bank")).unwrap();
+        std::fs::write(partial.join("profile.json"), "half").unwrap();
+        // The card still shows: a .partial folder is not data in Documents › Ensayo.
+        assert_eq!(move_offer_for(&legacy, &legacy, Some(&docs)).state, "offer");
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 13).unwrap();
+        move_to_documents_in(&legacy, &legacy, &docs, &settings_file, today).unwrap();
+        assert_eq!(std::fs::read_to_string(docs.join("profile.json")).unwrap(), "{}");
+        assert!(!partial.exists());
+    }
+
+    #[test]
+    fn a_failed_move_leaves_the_old_folder_and_the_settings_alone() {
+        let d = tempfile::tempdir().unwrap();
+        let (legacy, docs, settings_file) = legacy_install(d.path());
+        // Documents › Ensayo holds some other file, so the copy is refused.
+        std::fs::create_dir_all(&docs).unwrap();
+        std::fs::write(docs.join("taxes.pdf"), "x").unwrap();
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 13).unwrap();
+        assert!(move_to_documents_in(&legacy, &legacy, &docs, &settings_file, today).is_err());
+        assert!(legacy.join("profile.json").exists() && !settings_file.exists());
+        assert!(docs.join("taxes.pdf").exists(), "a folder that was already there is kept");
     }
 }

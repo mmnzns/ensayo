@@ -6,6 +6,7 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { longDate } from "./format";
 import FinishSetup from "./FinishSetup";
+import MoveDataCard from "./MoveDataCard";
 import { showEngineNudge } from "./state";
 
 const NUMBER_WORDS: Record<number, string> = { 3: "three", 5: "five", 10: "ten" };
@@ -30,6 +31,7 @@ export default function HomeEmpty() {
         <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => startQuickDrill({ targetRole: store.activeTarget?.role ?? profile.targetRole, stories: store.stories, methods: store.methods, target: store.activeTarget }, { count: drill.questions })}>Practice</Link>
       </section>
       <FinishSetup skip="engine" />
+      <MoveDataCard />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "20px" }}>
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <span className="e-presence" style={{ width: "44px", height: "44px" }} aria-hidden="true">

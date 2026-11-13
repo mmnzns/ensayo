@@ -331,8 +331,8 @@ mod tests {
     }
 
     #[test]
-    fn the_default_folder_is_inside_the_app_local_folder() {
-        assert!(crate::paths::default_data_dir().starts_with(crate::paths::app_local()));
+    fn the_old_default_folder_is_inside_the_app_local_folder() {
+        assert!(crate::paths::legacy_default_data_dir().starts_with(crate::paths::app_local()));
     }
 
     fn damaged_siblings(dir: &Path) -> Vec<String> {

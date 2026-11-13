@@ -8,6 +8,10 @@ export const PREFS_KEY = "ensayo.prefs";
 /** When the last backup was made on this computer (an ISO time). Machine-local, so never in the data folder. */
 export const LAST_BACKUP_KEY = "ensayo.lastBackup";
 
+/** Until when (epoch milliseconds) "Not now" hides the Home card about moving the data to Documents. */
+export const MOVE_CARD_KEY = "ensayo.moveCardHiddenUntil";
+export const MOVE_CARD_HIDDEN_DAYS = 30;
+
 export type Speed = "Slower" | "Normal" | "Faster";
 
 export interface PracticePrefs {
@@ -163,6 +167,7 @@ export function clearPrefs(storage: Pick<Storage, "removeItem"> | null = browser
   try {
     storage?.removeItem(PREFS_KEY);
     storage?.removeItem(LAST_BACKUP_KEY);
+    storage?.removeItem(MOVE_CARD_KEY);
   } catch {
     // Storage is blocked; there is nothing to clear.
   }
@@ -214,6 +219,29 @@ export function setupDismissed(missingIds: string[], dismissed: string[]): boole
   const a = [...new Set(missingIds)].sort();
   const b = [...new Set(dismissed)].sort();
   return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+// ---------- the "move your data" card ----------
+
+/** True while "Not now" is still hiding the card. Storage that can't be read means the card shows. */
+export function moveCardHidden(now: number, storage: Pick<Storage, "getItem"> | null = browserStorage()): boolean {
+  try {
+    const until = Number(storage?.getItem(MOVE_CARD_KEY));
+    return Number.isFinite(until) && until > now;
+  } catch {
+    return false;
+  }
+}
+
+/** "Not now": hides the card for 30 days. Returns when it will show again. */
+export function hideMoveCard(now: number, storage: Pick<Storage, "setItem"> | null = browserStorage()): number {
+  const until = now + MOVE_CARD_HIDDEN_DAYS * 24 * 60 * 60 * 1000;
+  try {
+    storage?.setItem(MOVE_CARD_KEY, String(until));
+  } catch {
+    // Storage is blocked; the card is hidden until the window reloads.
+  }
+  return until;
 }
 
 // ---------- the voice itself ----------

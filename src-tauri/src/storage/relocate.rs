@@ -3,6 +3,7 @@
 //! else is refused, so Ensayo never mixes its files in with someone's other work. The old folder is left as it was.
 
 use super::{Result, StorageError};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -33,8 +34,53 @@ fn copy_all(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
+/// True when `dir` holds anything of Ensayo's (a folder Ensayo can use as it is).
+pub fn holds_data(dir: &Path) -> bool {
+    DATA.iter().any(|name| dir.join(name).exists())
+}
+
+/// The suffix of a folder that is still being copied. Such a folder is never a finished move.
+const PARTIAL: &str = ".partial";
+
+/// The sibling folder `to` is copied into first.
+pub fn partial_of(to: &Path) -> std::path::PathBuf {
+    let mut name = to.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(PARTIAL);
+    to.with_file_name(name)
+}
+
+/// Every file under `root` (only the parts that are Ensayo's data) with its size, by path inside `root`.
+fn summary(root: &Path) -> Result<BTreeMap<String, u64>> {
+    fn walk(base: &Path, path: &Path, out: &mut BTreeMap<String, u64>) -> Result<()> {
+        if path.is_dir() {
+            for entry in fs::read_dir(path).map_err(|e| io(path, e))?.flatten() {
+                walk(base, &entry.path(), out)?;
+            }
+        } else {
+            let size = fs::metadata(path).map_err(|e| io(path, e))?.len();
+            out.insert(path.strip_prefix(base).unwrap_or(path).to_string_lossy().replace('\\', "/"), size);
+        }
+        Ok(())
+    }
+    let mut out = BTreeMap::new();
+    for name in DATA {
+        let p = root.join(name);
+        if p.exists() {
+            walk(root, &p, &mut out)?;
+        }
+    }
+    Ok(out)
+}
+
 /// Checks `to` and copies the data from `from` when `to` is empty. Does not change which folder Ensayo uses.
+///
+/// The copy goes into a sibling `<to>.partial` folder first. Only when every file is there with the same size is
+/// `.partial` renamed to `to`, so a move that is interrupted leaves a `.partial` folder and never a half-filled `to`.
+/// The next attempt deletes the `.partial` folder and starts again. A `.partial` folder is never taken as data.
 pub fn prepare_move(from: &Path, to: &Path) -> Result<Moved> {
+    if to.file_name().is_some_and(|n| n.to_string_lossy().ends_with(PARTIAL)) {
+        return Err(StorageError::Invalid("That folder looks like an unfinished copy. Choose another folder.".into()));
+    }
     if !to.is_dir() {
         return Err(StorageError::Unavailable(to.to_path_buf()));
     }
@@ -43,17 +89,38 @@ pub fn prepare_move(from: &Path, to: &Path) -> Result<Moved> {
             return Err(StorageError::Invalid("That is the folder Ensayo already uses.".into()));
         }
     }
-    if DATA.iter().any(|name| to.join(name).exists()) {
+    if holds_data(to) {
         return Ok(Moved::UsedExisting);
     }
     if fs::read_dir(to).map_err(|e| io(to, e))?.next().is_some() {
         return Err(StorageError::Invalid("That folder already has other files in it. Choose an empty folder, or one that already holds your Ensayo data.".into()));
     }
-    for name in DATA {
-        let source = from.join(name);
-        if source.exists() {
-            copy_all(&source, &to.join(name))?;
+    let partial = partial_of(to);
+    if partial.exists() {
+        fs::remove_dir_all(&partial).map_err(|e| io(&partial, e))?;
+    }
+    fs::create_dir(&partial).map_err(|e| io(&partial, e))?;
+    let copied = (|| -> Result<()> {
+        for name in DATA {
+            let source = from.join(name);
+            if source.exists() {
+                copy_all(&source, &partial.join(name))?;
+            }
         }
+        if summary(from)? != summary(&partial)? {
+            return Err(StorageError::Invalid("The copy didn't match your data, so nothing was moved. Try again.".into()));
+        }
+        Ok(())
+    })();
+    if let Err(e) = copied {
+        let _ = fs::remove_dir_all(&partial);
+        return Err(e);
+    }
+    // `to` is empty (checked above): drop it so the finished copy can take its name (Windows won't rename over a folder).
+    fs::remove_dir(to).map_err(|e| io(to, e))?;
+    if let Err(e) = fs::rename(&partial, to) {
+        let _ = fs::create_dir_all(to);
+        return Err(io(to, e));
     }
     Ok(Moved::Copied)
 }
@@ -132,5 +199,45 @@ mod tests {
     fn the_folder_already_in_use_is_refused() {
         let (_d, from) = seeded();
         assert!(prepare_move(&from, &from).unwrap_err().to_string().contains("already uses"));
+    }
+
+    #[test]
+    fn the_copy_goes_through_a_partial_folder_that_is_gone_afterwards() {
+        let (d, from) = seeded();
+        let to = d.path().join("new");
+        fs::create_dir_all(&to).unwrap();
+        assert_eq!(prepare_move(&from, &to).unwrap(), Moved::Copied);
+        assert!(!partial_of(&to).exists(), "renamed into place");
+        assert_eq!(fs::read_to_string(to.join("profile.json")).unwrap(), "{}");
+    }
+
+    #[test]
+    fn an_interrupted_move_is_redone_and_never_accepted() {
+        let (d, from) = seeded();
+        let to = d.path().join("new");
+        fs::create_dir_all(&to).unwrap();
+        // What an interrupted move leaves: a half-filled .partial beside the (empty) target.
+        let partial = partial_of(&to);
+        fs::create_dir_all(partial.join("bank")).unwrap();
+        fs::write(partial.join("profile.json"), "half").unwrap();
+        assert_eq!(prepare_move(&from, &to).unwrap(), Moved::Copied);
+        assert_eq!(fs::read_to_string(to.join("profile.json")).unwrap(), "{}", "redone from the source");
+        assert!(!partial.exists());
+        // A .partial folder is never taken as the destination, even with data in it.
+        fs::create_dir_all(partial.join("bank")).unwrap();
+        assert!(matches!(prepare_move(&from, &partial), Err(StorageError::Invalid(_))));
+    }
+
+    #[test]
+    fn the_copy_check_sees_sizes_and_a_finished_copy_matches_its_source() {
+        let (d, from) = seeded();
+        let a = summary(&from).unwrap();
+        fs::write(from.join("profile.json"), "{ }").unwrap();
+        let b = summary(&from).unwrap();
+        assert_ne!(a, b, "sizes are part of the check");
+        let to = d.path().join("new");
+        fs::create_dir_all(&to).unwrap();
+        assert_eq!(prepare_move(&from, &to).unwrap(), Moved::Copied);
+        assert_eq!(summary(&from).unwrap(), summary(&to).unwrap());
     }
 }
