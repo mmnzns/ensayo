@@ -582,7 +582,7 @@ mod tests {
         let root = d.path().join("data");
         fs::create_dir_all(&root).unwrap();
         put(&root, "you.json", "mine");
-        for (schema, format) in [("1,2", 1), ("1", 2)] {
+        for (schema, format) in [("2,3", 1), ("1", 2)] {
             let z = d.path().join(format!("n{format}.zip"));
             handmade(&z, &[(MANIFEST, &manifest_text(schema, format)), ("you.json", "{}")]);
             assert_eq!(inspect(&z).unwrap_err(), "This backup is from a newer Ensayo. Update the app first.");

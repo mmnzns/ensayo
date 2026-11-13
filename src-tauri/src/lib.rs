@@ -4,6 +4,7 @@ pub mod ai_commands;
 mod application_commands;
 pub mod applications;
 mod audio_retention;
+mod busy;
 pub mod backup;
 mod backup_commands;
 mod commands;
@@ -76,6 +77,18 @@ fn start_up_models() {
     });
 }
 
+/// Removes recordings a crash left loose in the audio folder. Nothing is recording yet at start, so only the age
+/// (or "Don't keep") decides. Off the main thread.
+fn sweep_stray_recordings() {
+    tauri::async_runtime::spawn_blocking(|| {
+        let none = storage::settings::retention_days(&storage::settings::load(&paths::settings_file())) == Some(0);
+        let n = audio_retention::remove_stray(&paths::audio_dir(), std::time::SystemTime::now(), false, none);
+        if n > 0 {
+            log::info!("Removed {n} stray recording(s) left by an earlier crash");
+        }
+    });
+}
+
 pub fn run() {
     let builder = tauri::Builder::default();
     // One Ensayo at a time on Windows: a second launch brings the open window forward instead of starting a second
@@ -108,6 +121,7 @@ pub fn run() {
             graphics::set_app(app.handle().clone());
             graphics::warm();
             start_up_models();
+            sweep_stray_recordings();
             show_main_window(app.handle());
             update_commands::setup(app.handle());
             update_commands::check_at_launch(app.handle());

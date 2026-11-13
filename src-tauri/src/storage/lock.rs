@@ -18,9 +18,45 @@ pub enum LockState {
     Stale { machine: String, age_secs: i64 },
 }
 
+/// Who is asking. `id` tells computers apart; `label` is only a name to show (the host name).
+pub trait Identity {
+    fn id(&self) -> &str;
+    fn label(&self) -> &str;
+}
+
+/// This computer: its install id (made once, kept in the machine-local settings) and its host name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Me {
+    pub id: String,
+    pub label: String,
+}
+
+impl Identity for &Me {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn label(&self) -> &str {
+        &self.label
+    }
+}
+
+/// A bare name is both the id and the label (how the tests name their computers).
+impl Identity for &str {
+    fn id(&self) -> &str {
+        self
+    }
+    fn label(&self) -> &str {
+        self
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct LockFile {
+    /// The host name: only a label. Locks written before install ids existed have nothing else to go on.
     machine: String,
+    /// The install id of the computer that holds the lock. Missing in a lock from an older Ensayo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    install_id: Option<String>,
     pid: u32,
     started: DateTime<Utc>,
     heartbeat: DateTime<Utc>,
@@ -30,9 +66,25 @@ pub fn machine_name() -> String {
     gethostname::gethostname().to_string_lossy().into_owned()
 }
 
+impl LockFile {
+    /// An old lock has no id: it is ours when the host name matches, as before.
+    fn is_mine(&self, me: &impl Identity) -> bool {
+        match &self.install_id {
+            Some(id) => id == me.id(),
+            None => self.machine == me.label(),
+        }
+    }
+}
+
 impl Storage {
     fn lock_path(&self) -> std::path::PathBuf {
         self.root().join("lock.json")
+    }
+
+    /// True when the lock file names another computer that is still in it (not stale): saving now would be two
+    /// computers writing one folder.
+    pub fn held_by_other(&self, me: impl Identity, now: DateTime<Utc>) -> Result<bool> {
+        Ok(matches!(self.lock_state(me, now)?, LockState::Other { .. }))
     }
 
     /// A missing or damaged lock file is `None`: it must never lock the user out of their own data.
@@ -45,9 +97,9 @@ impl Storage {
         atomic_write(&self.lock_path(), text.as_bytes())
     }
 
-    pub fn lock_state(&self, me: &str, now: DateTime<Utc>) -> Result<LockState> {
+    pub fn lock_state(&self, me: impl Identity, now: DateTime<Utc>) -> Result<LockState> {
         let Some(lock) = self.read_lock()? else { return Ok(LockState::Free) };
-        if lock.machine == me {
+        if lock.is_mine(&me) {
             return Ok(LockState::Mine);
         }
         let age_secs = (now - lock.heartbeat).num_seconds().max(0);
@@ -55,14 +107,16 @@ impl Storage {
     }
 
     /// Takes the lock for this computer (the user chose "Open anyway", or nobody had it).
-    pub fn acquire_lock(&self, me: &str, now: DateTime<Utc>) -> Result<()> {
-        self.write_lock(&LockFile { machine: me.to_string(), pid: std::process::id(), started: now, heartbeat: now })
+    pub fn acquire_lock(&self, me: impl Identity, now: DateTime<Utc>) -> Result<()> {
+        self.write_lock(&LockFile { machine: me.label().to_string(), install_id: Some(me.id().to_string()), pid: std::process::id(), started: now, heartbeat: now })
     }
 
     /// Refreshes our lock; does nothing when the lock is someone else's.
-    pub fn heartbeat(&self, me: &str, now: DateTime<Utc>) -> Result<()> {
+    pub fn heartbeat(&self, me: impl Identity, now: DateTime<Utc>) -> Result<()> {
         match self.read_lock()? {
-            Some(mut lock) if lock.machine == me => {
+            Some(mut lock) if lock.is_mine(&me) => {
+                // An old lock gets this computer's id, so the host name stops being what decides.
+                lock.install_id = Some(me.id().to_string());
                 lock.heartbeat = now;
                 self.write_lock(&lock)
             }
@@ -71,9 +125,9 @@ impl Storage {
     }
 
     /// Removes our lock when the app closes; never removes someone else's.
-    pub fn release_lock(&self, me: &str) -> Result<()> {
+    pub fn release_lock(&self, me: impl Identity) -> Result<()> {
         match self.read_lock()? {
-            Some(lock) if lock.machine == me => std::fs::remove_file(self.lock_path()).map_err(|e| StorageError::Io(self.lock_path(), e.to_string())),
+            Some(lock) if lock.is_mine(&me) => std::fs::remove_file(self.lock_path()).map_err(|e| StorageError::Io(self.lock_path(), e.to_string())),
             _ => Ok(()),
         }
     }
@@ -148,5 +202,37 @@ mod tests {
     #[test]
     fn this_computer_has_a_name() {
         assert!(!machine_name().trim().is_empty());
+    }
+
+    #[test]
+    fn two_computers_with_the_same_host_name_are_told_apart_by_their_install_id() {
+        let (_d, s) = fresh();
+        let a = Me { id: "inst_a".into(), label: "MacBook".into() };
+        let b = Me { id: "inst_b".into(), label: "MacBook".into() };
+        s.acquire_lock(&a, t0()).unwrap();
+        assert_eq!(s.lock_state(&a, t0()).unwrap(), LockState::Mine);
+        assert_eq!(s.lock_state(&b, t0() + Duration::seconds(30)).unwrap(), LockState::Other { machine: "MacBook".into(), age_secs: 30 });
+        assert!(s.held_by_other(&b, t0()).unwrap() && !s.held_by_other(&a, t0()).unwrap());
+        // The other one's heartbeat and release change nothing.
+        s.heartbeat(&b, t0() + Duration::minutes(5)).unwrap();
+        s.release_lock(&b).unwrap();
+        assert_eq!(s.lock_state(&a, t0() + Duration::minutes(5)).unwrap(), LockState::Mine);
+        // A host name change does not change who we are.
+        let renamed = Me { id: "inst_a".into(), label: "MacBook-2".into() };
+        assert_eq!(s.lock_state(&renamed, t0()).unwrap(), LockState::Mine);
+        assert!(std::fs::read_to_string(s.root().join("lock.json")).unwrap().contains("inst_a"));
+    }
+
+    #[test]
+    fn an_old_lock_without_an_id_is_still_read_and_compared_by_host_name() {
+        let (_d, s) = fresh();
+        let old = format!(r#"{{"machine": "MacBook", "pid": 1, "started": "{0}", "heartbeat": "{0}"}}"#, t0().to_rfc3339());
+        std::fs::write(s.root().join("lock.json"), old).unwrap();
+        let me = Me { id: "inst_a".into(), label: "MacBook".into() };
+        let other = Me { id: "inst_b".into(), label: "Desktop".into() };
+        assert_eq!(s.lock_state(&me, t0()).unwrap(), LockState::Mine);
+        assert!(matches!(s.lock_state(&other, t0()).unwrap(), LockState::Other { .. }));
+        s.heartbeat(&me, t0() + Duration::minutes(1)).unwrap();
+        assert!(std::fs::read_to_string(s.root().join("lock.json")).unwrap().contains("inst_a"), "the heartbeat adds the id");
     }
 }

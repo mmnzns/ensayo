@@ -6,7 +6,6 @@
 use crate::ai::llm::Llm;
 use crate::applications::hook;
 use crate::audio_retention::{self, audio_path};
-use crate::data_commands::data_folder;
 use crate::metrics::{self, fix, numbers, Inputs, Metrics, Outcome};
 use crate::paths;
 use crate::scoring::pipeline::{self, QuestionInfo, ScoreInput};
@@ -392,14 +391,14 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         }
     }
     if storage.session(&session_id)?.is_none() {
-        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now), target_id: target_id.clone() })?;
+        storage.save_session(&Session { extra: Default::default(), id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now), target_id: target_id.clone() })?;
     }
     let n = storage.next_rep_number(&session_id)?;
     let delta = delta_for(storage, &session_id, &args.question_id, args.attempt, &metrics);
     let restart_offered = metrics.restart_at.is_some();
     let full = FullRep {
         session_id: session_id.clone(),
-        rep: Rep {
+        rep: Rep { extra: Default::default(),
             n,
             question_id: args.question_id.clone(),
             question_text: args.question_text.clone(),
@@ -546,7 +545,7 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
 }
 
 pub(crate) fn open() -> StorageResult<Storage> {
-    crate::data_commands::open_for(&data_folder(), &paths::default_data_dir())
+    crate::data_commands::open_storage()
 }
 
 pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
@@ -582,7 +581,10 @@ pub(crate) fn with_ai<T>(session_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -
 /// Transcribes the recording, measures it, judges it (when an engine is set up) and saves the rep.
 #[tauri::command]
 pub async fn finish_rep(mut args: FinishArgs, model_id: String) -> Cmd<RepOutcome> {
+    // An update never installs in the middle of saving the answer.
+    let busy = crate::busy::hold();
     blocking(move || {
+        let _busy = busy;
         let _t = crate::logging::Timer::new("finish_rep");
         let storage = open().map_err(plain)?;
         let settings = settings::load(&paths::settings_file());
@@ -674,7 +676,9 @@ pub async fn ai_ready() -> bool {
 /// "Keep it" after "Start this rep again?": measure from after the restart.
 #[tauri::command]
 pub async fn rescore_rep(session_id: String, n: u32, keep_restart: bool) -> Cmd<RepOutcome> {
+    let busy = crate::busy::hold();
     blocking(move || {
+        let _busy = busy;
         let _t = crate::logging::Timer::new("rescore_rep");
         let storage = open().map_err(plain)?;
         let (out, unavailable) = with_ai(&session_id, |ai| rescore_with(&storage, &paths::audio_dir(), &session_id, n, keep_restart, ai));
@@ -878,13 +882,33 @@ pub async fn list_sessions() -> Cmd<Vec<Session>> {
 
 /// Removes audio older than the retention setting, apart from reps labelled for the eval set. Run on start.
 #[tauri::command]
-pub async fn sweep_audio() -> Cmd<usize> {
-    blocking(|| {
+pub async fn sweep_audio(rec: tauri::State<'_, crate::commands::RecorderState>) -> Cmd<usize> {
+    let recording = rec.is_active();
+    blocking(move || {
         let Some(days) = settings::retention_days(&settings::load(&paths::settings_file())) else { return Ok(0) };
-        let keep: HashSet<String> = open().and_then(|s| s.eval_reps()).map(|l| l.items.into_iter().map(|r| format!("{}/{}", r.full.session_id, r.full.rep.n)).collect()).unwrap_or_default();
-        Ok(audio_retention::sweep(&paths::audio_dir(), days, &keep, std::time::SystemTime::now()))
+        Ok(sweep_with(open(), &paths::audio_dir(), days, std::time::SystemTime::now(), recording))
     })
     .await
+}
+
+/// The audio sweep, given the result of opening the data folder. Reps labelled for the eval set keep their audio, so
+/// the sweep needs that list: when it can't be read (the folder isn't there, a file in it is damaged) nothing is
+/// swept, because an empty guess would delete audio that has to stay. Returns how many files went.
+pub fn sweep_with(storage: StorageResult<Storage>, audio_root: &Path, days: u32, now: std::time::SystemTime, recording: bool) -> usize {
+    let list = storage.and_then(|s| s.eval_reps());
+    let loaded = match list {
+        Ok(l) if l.problems.is_empty() => l,
+        Ok(l) => {
+            log::warn!("audio sweep skipped: {} file(s) in the eval list could not be read", l.problems.len());
+            return 0;
+        }
+        Err(e) => {
+            log::warn!("audio sweep skipped: the eval list could not be read ({})", e.kind());
+            return 0;
+        }
+    };
+    let keep: HashSet<String> = loaded.items.into_iter().map(|r| format!("{}/{}", r.full.session_id, r.full.rep.n)).collect();
+    audio_retention::sweep(audio_root, days, &keep, now, recording)
 }
 
 #[tauri::command]
@@ -900,11 +924,12 @@ pub async fn audio_usage_mb() -> Cmd<u64> {
 
 /// Delete every recording now. The transcripts and notes stay.
 #[tauri::command]
-pub async fn delete_all_audio() -> Cmd<usize> {
-    blocking(|| {
+pub async fn delete_all_audio(rec: tauri::State<'_, crate::commands::RecorderState>) -> Cmd<usize> {
+    let recording = rec.is_active();
+    blocking(move || {
         // Recordings waiting in the trash are recordings too: the person asked for all of them to go.
         let _ = std::fs::remove_dir_all(paths::audio_trash_dir());
-        audio_retention::remove_all(&paths::audio_dir())
+        audio_retention::remove_all(&paths::audio_dir(), std::time::SystemTime::now(), recording)
     })
     .await
 }
@@ -916,7 +941,7 @@ pub async fn set_audio_retention(choice: String) -> Cmd<()> {
             return Err("Not a retention choice".to_string());
         }
         let path = paths::settings_file();
-        let mut s = settings::load(&path);
+        let mut s = settings::load_for_update(&path).map_err(plain)?;
         s.audio_retention = Some(choice);
         settings::save(&path, &s).map_err(plain)
     })
@@ -935,7 +960,7 @@ mod tests {
     }
 
     fn story(id: &str) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: id.into(),
             title: "Churn".into(),
             employer: "Fernhill".into(),
@@ -1203,7 +1228,7 @@ mod tests {
 
     fn two_targets(storage: &Storage) -> (crate::storage::targets::Target, crate::storage::targets::Target) {
         use crate::storage::targets::Target;
-        storage.save_profile(&crate::storage::model::Profile { name: "Dana".into(), full_name: "".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "I fix activation.".into(), focus_habits: vec![] }).unwrap();
+        storage.save_profile(&crate::storage::model::Profile { extra: Default::default(), name: "Dana".into(), full_name: "".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "I fix activation.".into(), focus_habits: vec![] }).unwrap();
         let first = storage.targets().unwrap().remove(0);
         let ops = storage.save_target(&Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), pitch: "I run the stack.".into(), ..Default::default() }).unwrap();
         (first, ops)
@@ -1805,5 +1830,28 @@ mod tests {
         assert_eq!(c1.passed, Some(false));
         assert!(c1.evidence.starts_with("Your resume says \"31% to 44%\""), "{}", c1.evidence);
         assert_eq!(rep.rep.fix.as_deref(), Some("c1_consistent"));
+    }
+
+    #[test]
+    fn the_audio_sweep_skips_when_it_cannot_read_what_to_keep() {
+        use std::time::{Duration, SystemTime};
+        let dir = tempfile::tempdir().unwrap();
+        let audio = dir.path().join("audio");
+        std::fs::create_dir_all(audio.join("ses_a")).unwrap();
+        std::fs::write(audio.join("ses_a/1.wav"), b"RIFF").unwrap();
+        let later = SystemTime::now() + Duration::from_secs(90 * 86_400);
+        // The data folder isn't there: nothing is swept.
+        assert_eq!(sweep_with(Storage::open(dir.path().join("not-mounted")), &audio, 30, later, false), 0);
+        assert!(audio.join("ses_a/1.wav").is_file());
+        // The folder is there but a file in the eval list is damaged: the keep list can't be trusted.
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        std::fs::create_dir_all(storage.root().join("eval")).unwrap();
+        std::fs::write(storage.root().join("eval/ses_a-1.json"), "{ half a file").unwrap();
+        assert_eq!(sweep_with(Ok(storage.clone()), &audio, 30, later, false), 0);
+        assert!(audio.join("ses_a/1.wav").is_file());
+        // A readable (here empty) list sweeps as before.
+        std::fs::remove_file(storage.root().join("eval/ses_a-1.json")).unwrap();
+        assert_eq!(sweep_with(Ok(storage), &audio, 30, later, false), 1);
+        assert!(!audio.join("ses_a/1.wav").exists());
     }
 }

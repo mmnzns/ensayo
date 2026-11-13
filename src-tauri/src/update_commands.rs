@@ -116,6 +116,9 @@ fn recording(app: &AppHandle) -> bool {
 /// The UI hears how it goes (`update-progress`), failures included (`{ error }`).
 #[tauri::command]
 pub async fn updates_install(app: AppHandle) -> Result<(), String> {
+    if let Some(line) = crate::busy::install_refusal(crate::busy::count()) {
+        return Err(line.into());
+    }
     let state = app.state::<UpdateState>();
     let Some(_installing) = state.installing.begin() else {
         return Err("An update is already installing.".into());
@@ -164,7 +167,11 @@ async fn install(app: &AppHandle) -> Result<(), String> {
         .await
         .inspect_err(|e| log::error!("update download failed: {e}"))
         .map_err(|e| format!("The update didn't download: {e}"))?;
-    // Last look before the installer quits Ensayo.
+    // Last look before the installer quits Ensayo: nothing is being saved either.
+    if let Some(line) = crate::busy::install_refusal(crate::busy::count()) {
+        log::warn!("update not installed: something is being saved");
+        return Err(line.into());
+    }
     if recording(app) {
         log::warn!("update not installed: a recording is running");
         return Err(STOP.into());

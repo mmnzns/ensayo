@@ -17,7 +17,9 @@ fn safety_dir() -> PathBuf {
 /// Writes a zip of the data folder to `path` and says what went in.
 #[tauri::command]
 pub async fn backup_data(path: PathBuf) -> Cmd<Manifest> {
+    let busy = crate::busy::hold();
     blocking(move || {
+        let _busy = busy;
         let storage = open_storage().map_err(plain)?;
         backup::create_backup(storage.root(), &path, Utc::now())
     })
@@ -33,7 +35,9 @@ pub async fn inspect_backup(path: PathBuf) -> Cmd<BackupInfo> {
 /// `mode` is "merge" or "replace". The window reloads its data afterwards.
 #[tauri::command]
 pub async fn restore_backup(path: PathBuf, mode: String) -> Cmd<RestoreReport> {
+    let busy = crate::busy::hold();
     blocking(move || {
+        let _busy = busy;
         let mode = Mode::parse(&mode)?;
         let storage = open_storage().map_err(plain)?;
         backup::restore(&path, storage.root(), mode, &safety_dir(), Utc::now())

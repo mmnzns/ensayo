@@ -91,6 +91,9 @@ pub struct You {
     /// Set by the migration, cleared by `ack_targets_note`. The screens never send it: saving `you` keeps what is stored.
     #[serde(default)]
     pub targets_note_pending: bool,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -133,11 +136,14 @@ pub struct Target {
     pub pay_range: Option<PayRange>,
     pub archived: bool,
     pub created_at: String,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Default for Target {
     fn default() -> Self {
-        Target {
+        Target { extra: Default::default(),
             id: String::new(),
             name: String::new(),
             color: TARGET_COLORS[0].into(),
@@ -229,13 +235,13 @@ pub fn migrate_profile(p: &Profile, now: &str) -> (You, Target) {
         created_at: now.into(),
         ..Target::default()
     };
-    let you = You { name: p.name.clone(), full_name: p.full_name.clone(), focus_habits: p.focus_habits.clone(), active_target_id: Some(target.id.clone()), targets_note_pending: true };
+    let you = You { extra: Default::default(), name: p.name.clone(), full_name: p.full_name.clone(), focus_habits: p.focus_habits.clone(), active_target_id: Some(target.id.clone()), targets_note_pending: true };
     (you, target)
 }
 
 /// The v0 view of a person: the name and habits from `you`, the job fields from `target`.
 pub fn merged_profile(you: &You, target: Option<&Target>) -> Profile {
-    Profile {
+    Profile { extra: Default::default(),
         name: you.name.clone(),
         full_name: you.full_name.clone(),
         target_role: target.map(|t| t.role.clone()).unwrap_or_default(),
@@ -293,11 +299,15 @@ impl Storage {
     /// Saves your name, full name and habits. The active target is only taken when it is a target you can use, and the
     /// one-time note flag stays as stored (the screens do not know it).
     pub fn save_you(&self, you: &You) -> Result<You> {
-        let stored = self.you()?;
+        // A damaged you.json is replaced (it is kept aside by the save); one from a newer Ensayo is never touched.
+        let stored = match self.you() {
+            Err(StorageError::Json(..)) => None,
+            other => other?,
+        };
         let targets = self.targets()?;
         let usable = |id: &String| targets.iter().any(|t| &t.id == id && !t.archived);
         let active = you.active_target_id.clone().filter(usable).or_else(|| stored.as_ref().and_then(|s| s.active_target_id.clone()).filter(usable)).or_else(|| targets.iter().find(|t| !t.archived).map(|t| t.id.clone()));
-        let saved = You {
+        let saved = You { extra: stored.as_ref().map(|s| s.extra.clone()).unwrap_or_else(|| you.extra.clone()),
             name: you.name.trim().to_string(),
             full_name: you.full_name.trim().to_string(),
             focus_habits: you.focus_habits.clone(),
@@ -594,7 +604,7 @@ impl Storage {
     /// there is none that is in use).
     pub fn save_profile(&self, p: &Profile) -> Result<()> {
         let stored = self.you()?;
-        let mut you = stored.clone().unwrap_or(You { name: String::new(), full_name: String::new(), focus_habits: vec![], active_target_id: None, targets_note_pending: false });
+        let mut you = stored.clone().unwrap_or(You { extra: Default::default(), name: String::new(), full_name: String::new(), focus_habits: vec![], active_target_id: None, targets_note_pending: false });
         you.name = p.name.trim().to_string();
         you.full_name = p.full_name.trim().to_string();
         you.focus_habits = p.focus_habits.clone();
@@ -663,11 +673,11 @@ mod tests {
     }
 
     fn profile() -> Profile {
-        Profile { name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Senior Lifecycle Marketing Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I find where activation breaks and build the fix.".into(), focus_habits: vec!["to_the_point".into(), "numbers".into()] }
+        Profile { extra: Default::default(), name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Senior Lifecycle Marketing Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I find where activation breaks and build the fix.".into(), focus_habits: vec!["to_the_point".into(), "numbers".into()] }
     }
 
     fn story(id: &str) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: id.into(),
             title: id.into(),
             employer: "".into(),
@@ -726,7 +736,7 @@ mod tests {
         let (_d, s) = fresh();
         let saved = s.save_target(&Target { role: "Head of Growth".into(), ..Target::default() }).unwrap();
         let text = fs::read_to_string(s.root().join(format!("targets/{}.json", saved.id))).unwrap();
-        assert!(text.contains("\"schema_version\": 1") && text.contains("\"roleFamily\"") && text.contains("\"pinnedStoryIds\"") && text.contains("\"createdAt\""), "{text}");
+        assert!(text.contains("\"schema_version\": 2") && text.contains("\"roleFamily\"") && text.contains("\"pinnedStoryIds\"") && text.contains("\"createdAt\""), "{text}");
         assert_eq!(s.target(&saved.id).unwrap(), saved);
         assert_eq!(s.targets().unwrap(), vec![saved]);
     }
@@ -736,7 +746,7 @@ mod tests {
         let (_d, s) = v0();
         assert!(s.you().unwrap().unwrap().targets_note_pending);
         let text = fs::read_to_string(s.root().join("you.json")).unwrap();
-        assert!(text.contains("\"fullName\"") && text.contains("\"focusHabits\"") && text.contains("\"activeTargetId\"") && text.contains("\"targetsNotePending\": true") && text.contains("\"schema_version\": 1"), "{text}");
+        assert!(text.contains("\"fullName\"") && text.contains("\"focusHabits\"") && text.contains("\"activeTargetId\"") && text.contains("\"targetsNotePending\": true") && text.contains("\"schema_version\": 2"), "{text}");
         // The screens send you without the flag.
         let sent: You = serde_json::from_str(r#"{"name":"Dana D","fullName":"Dana Ortiz","focusHabits":["clean_stop"],"activeTargetId":"tg_1"}"#).unwrap();
         let saved = s.save_you(&sent).unwrap();
@@ -966,7 +976,7 @@ mod tests {
         use crate::storage::reps::Session;
         let (_d, s, first, second) = two_targets();
         let on_second = s.create_application(NewApplication { company: "A".into(), target_id: Some(second.id.clone()), ..Default::default() }, day()).unwrap();
-        let sess = |app: Option<&str>, target: Option<&str>| Session { id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: app.map(String::from), stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: target.map(String::from) };
+        let sess = |app: Option<&str>, target: Option<&str>| Session { extra: Default::default(), id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: app.map(String::from), stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: target.map(String::from) };
         assert_eq!(s.session_target(&sess(None, Some(&second.id))).unwrap(), Some(second.id.clone()));
         assert_eq!(s.session_target(&sess(Some(&on_second.id), None)).unwrap(), Some(second.id.clone()));
         assert_eq!(s.session_target(&sess(None, None)).unwrap(), Some(first.id.clone()), "an old session with no target is the first target's");
@@ -1050,7 +1060,7 @@ mod tests {
     #[test]
     fn the_legacy_save_makes_a_target_when_every_one_is_archived_or_missing() {
         let (_d, s) = fresh();
-        s.save_you(&You { name: "Dana".into(), full_name: "".into(), focus_habits: vec![], active_target_id: None, targets_note_pending: false }).unwrap();
+        s.save_you(&You { extra: Default::default(), name: "Dana".into(), full_name: "".into(), focus_habits: vec![], active_target_id: None, targets_note_pending: false }).unwrap();
         s.save_profile(&profile()).unwrap();
         assert_eq!(s.targets().unwrap().len(), 1);
     }
@@ -1196,8 +1206,8 @@ mod tests {
         let (_d, s) = fresh();
         let text = r#"{"schema_version": 99, "name": "From the future"}"#;
         fs::write(s.root().join("profile.json"), text).unwrap();
-        assert!(matches!(s.you(), Err(StorageError::TooNew(_, 99, 1))));
-        assert!(matches!(s.targets(), Err(StorageError::TooNew(_, 99, 1))));
+        assert!(matches!(s.you(), Err(StorageError::TooNew(_, 99, 2))));
+        assert!(matches!(s.targets(), Err(StorageError::TooNew(_, 99, 2))));
         assert_eq!(fs::read_to_string(s.root().join("profile.json")).unwrap(), text);
         assert!(!s.root().join("you.json").exists() && !s.root().join("targets").exists() && !s.root().join("profile.v0.json").exists());
     }
@@ -1252,7 +1262,7 @@ mod tests {
     #[test]
     fn methods_are_untouched_by_all_of_this() {
         let (_d, s, _a, _b) = two_targets();
-        s.save_method(&Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
+        s.save_method(&Method { extra: Default::default(), situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
         assert_eq!(s.methods().unwrap().len(), 1);
     }
 }
@@ -1261,5 +1271,5 @@ mod tests {
 #[cfg(test)]
 pub fn story_for_tests(id: &str) -> Story {
     use super::model::Usage;
-    Story { id: id.into(), title: id.into(), employer: "".into(), best_for: vec![], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec![], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None, angles: vec![] }
+    Story { extra: Default::default(), id: id.into(), title: id.into(), employer: "".into(), best_for: vec![], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec![], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None, angles: vec![] }
 }

@@ -73,7 +73,7 @@ mod tests {
     use crate::storage::model::{ProofPoint, Usage};
 
     fn story() -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: "st_onboarding".into(),
             title: "Onboarding drop-off".into(),
             employer: "Fernhill".into(),

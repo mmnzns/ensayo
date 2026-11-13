@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeGuarded as invoke, LOCK_LOST_EVENT } from "./lockGuard";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   allVerified,
@@ -43,6 +43,8 @@ import type { ApplicationExtras, InterviewNote, NewApplicationDraft } from "./sc
 import { mockDeleteInterviewNote, mockForgetAsked, mockSaveInterviewNote, mockSetAskedFirst } from "./interviews";
 import { TIMING_ONLY, engineStatusOf } from "./engine";
 import { mockStore } from "./mock";
+import { DamagedFilesBanner, type DamagedFile } from "./damagedFiles";
+import { pickFolder } from "../ui/pickFile";
 import { StoreProvider, useStore, type Store } from "./store";
 import type { Application, EngineStatus, Method, Profile, StageId, Story, Target, You } from "./types";
 import * as TS from "./targetState";
@@ -61,7 +63,7 @@ export const BLANK_PROFILE: Profile = { name: "", fullName: "", targetRole: "", 
 
 export interface DataStatus {
   folder: string;
-  state: "ready" | "missing" | "other_machine" | "stale_lock";
+  state: "ready" | "missing" | "other_machine" | "stale_lock" | "settings_damaged";
   machine: string | null;
   age_secs: number | null;
 }
@@ -80,6 +82,8 @@ interface LoadAll extends Partial<TargetsBundle> {
   applications: Application[];
   application_extras: Record<string, ApplicationExtras>;
   problems: string[];
+  /** Files that could not be read and were left out (you.json, a method): named in a banner with Show file. */
+  damaged?: DamagedFile[];
 }
 
 /** What the screens can change. Each one saves first (in the app) and then updates what is on screen. */
@@ -262,7 +266,20 @@ function Centered({ children }: { children: ReactNode }) {
   );
 }
 
-function Blocked({ status, onRetry, onOpenAnyway }: { status: DataStatus | null; onRetry: () => void; onOpenAnyway: () => void }) {
+function Blocked({ status, onRetry, onOpenAnyway, onChooseFolder }: { status: DataStatus | null; onRetry: () => void; onOpenAnyway: () => void; onChooseFolder: () => void }) {
+  if (status?.state === "settings_damaged") {
+    return (
+      <Centered>
+        <h1 className="e-h2">Ensayo's settings file is damaged</h1>
+        <p className="e-meta" style={{ margin: 0 }}>
+          Ensayo's settings file is damaged. Your data is safe. Choose your data folder again.
+        </p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button type="button" className="e-btn e-btn-primary" onClick={onChooseFolder}>Choose your data folder</button>
+        </div>
+      </Centered>
+    );
+  }
   if (status?.state === "other_machine") {
     const minutes = Math.max(1, Math.round((status.age_secs ?? 0) / 60));
     return (
@@ -461,6 +478,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DataStatus | null>(null);
   const [error, setError] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
+  const [damaged, setDamaged] = useState<DamagedFile[]>([]);
   const [reps, setReps] = useState<RepSummary[]>([]);
   const [trashed, setTrashed] = useState<TrashedSession[]>([]);
   const [engine, setEngine] = useState<EngineStatus>(TIMING_ONLY);
@@ -533,6 +551,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTg({ you: all.you ?? null, targets: all.targets ?? [], notePending: all.targetsNotePending ?? false });
     setApps({ applications: all.applications ?? [], extras: all.application_extras ?? {} });
     setProblems(all.problems);
+    setDamaged(all.damaged ?? []);
     await readReps();
     await readEngine();
     setPhase("ready");
@@ -548,7 +567,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try {
       const st = await invoke<DataStatus>("data_status");
       setStatus(st);
-      if (st.state === "missing" || st.state === "other_machine") {
+      if (st.state === "missing" || st.state === "other_machine" || st.state === "settings_damaged") {
         setPhase("blocked");
         return;
       }
@@ -564,12 +583,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
     void load();
   }, [load]);
 
-  // Keep the "this computer has it open" lock fresh while the app is open.
+  /** Looks at the lock again. When another computer now holds the folder, the "open on another computer" page replaces
+   *  the screens (the backend refuses saves meanwhile), and Open anyway takes it back. */
+  const recheckLock = useCallback(async () => {
+    try {
+      const st = await invoke<DataStatus>("data_status");
+      if (st.state === "other_machine") {
+        setStatus(st);
+        setPhase("blocked");
+      }
+    } catch {
+      // Not being able to look is not a reason to block: the backend still refuses a save that would clash.
+    }
+  }, []);
+
+  // Keep the "this computer has it open" lock fresh while the app is open, and look at it again whenever the window
+  // gets focus (a computer may have taken the folder meanwhile) or a save was refused because it did.
   useEffect(() => {
     if (!app || phase !== "ready") return;
-    const t = window.setInterval(() => void invoke("data_heartbeat").catch(() => {}), HEARTBEAT_MS);
-    return () => window.clearInterval(t);
-  }, [app, phase]);
+    const t = window.setInterval(() => void invoke("data_heartbeat").catch(() => {}).then(recheckLock), HEARTBEAT_MS);
+    const onFocus = () => void recheckLock();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener(LOCK_LOST_EVENT, onFocus);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(LOCK_LOST_EVENT, onFocus);
+    };
+  }, [app, phase, recheckLock]);
 
   const openAnyway = useCallback(async () => {
     try {
@@ -580,6 +621,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setPhase("error");
     }
   }, [readAll]);
+
+  /** The settings file was damaged: pick the data folder again. The backend moves the damaged file aside. */
+  const chooseFolderAgain = useCallback(async () => {
+    const folder = await pickFolder();
+    if (!folder) return;
+    try {
+      await invoke("set_data_folder", { folder });
+      await load();
+    } catch (e) {
+      setError(String(e));
+      setPhase("error");
+    }
+  }, [load]);
 
   /** After a command changed targets: take what the backend now holds. */
   const refreshTargets = useCallback(async () => {
@@ -778,7 +832,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const info = useMemo(() => ({ problems }), [problems]);
 
   if (phase === "loading") return <Centered><p className="e-meta" style={{ margin: 0 }}>Opening your data…</p></Centered>;
-  if (phase === "blocked") return <Blocked status={status} onRetry={() => void load()} onOpenAnyway={() => void openAnyway()} />;
+  if (phase === "blocked") return <Blocked status={status} onRetry={() => void load()} onOpenAnyway={() => void openAnyway()} onChooseFolder={() => void chooseFolderAgain()} />;
   if (phase === "error") {
     return (
       <Centered>
@@ -795,7 +849,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           <TrashContext.Provider value={trashed}>
           <TargetsNoteContext.Provider value={app && tg.notePending}>
           <SetupContext.Provider value={app && state.profile === null && tg.you === null}>
-            <StoreProvider store={store}>{children}</StoreProvider>
+            <StoreProvider store={store}>{app && <DamagedFilesBanner files={damaged} />}{children}</StoreProvider>
           </SetupContext.Provider>
           </TargetsNoteContext.Provider>
           </TrashContext.Provider>

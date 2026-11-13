@@ -33,6 +33,32 @@ pub fn load_record<T: DeserializeOwned>(path: &Path, migrate: impl Fn(Value) -> 
     }
 }
 
+/// What is in the way of a save. A file from a newer Ensayo is never written over. A file that isn't JSON at all
+/// (damaged) is moved to `<name>.damaged-<time>` first, so a save never destroys what was there.
+fn guard_existing(path: &Path) -> Result<()> {
+    let Some(old) = io::read_text(path).ok().flatten() else { return Ok(()) };
+    match serde_json::from_str::<Value>(&old) {
+        Ok(v) => match v.get("schema_version").and_then(Value::as_u64) {
+            Some(found) if found > CURRENT => Err(StorageError::TooNew(path.to_path_buf(), found as u32, CURRENT as u32)),
+            _ => Ok(()),
+        },
+        Err(_) => {
+            let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+            let mut name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+            name.push(format!(".damaged-{stamp}"));
+            let mut aside = path.with_file_name(&name);
+            let mut n = 2;
+            while aside.exists() {
+                let mut again = name.clone();
+                again.push(format!("-{n}"));
+                aside = path.with_file_name(again);
+                n += 1;
+            }
+            std::fs::rename(path, &aside).map_err(|e| StorageError::Io(path.to_path_buf(), e.to_string()))
+        }
+    }
+}
+
 /// Writes the record as readable JSON with `schema_version` first, atomically.
 pub fn save_record<T: Serialize>(path: &Path, record: &T) -> Result<()> {
     let body = serde_json::to_value(record).map_err(|e| StorageError::Json(path.to_path_buf(), e.to_string()))?;
@@ -43,6 +69,7 @@ pub fn save_record<T: Serialize>(path: &Path, record: &T) -> Result<()> {
     } else {
         return Err(StorageError::Invalid("a record must serialize to a JSON object".into()));
     }
+    guard_existing(path)?;
     let mut text = serde_json::to_string_pretty(&Value::Object(out)).map_err(|e| StorageError::Json(path.to_path_buf(), e.to_string()))?;
     text.push('\n');
     io::atomic_write(path, text.as_bytes())
@@ -96,7 +123,7 @@ mod tests {
         let s: Story = load_record_from_str(V0, migrate_story).unwrap();
         save_record(&path, &s).unwrap();
         let text = fs::read_to_string(&path).unwrap();
-        assert!(text.contains("\"schema_version\": 1"), "{text}");
+        assert!(text.contains("\"schema_version\": 2"), "{text}");
         let back: Story = load_record(&path, migrate_story).unwrap().unwrap();
         assert_eq!(back, s);
     }
@@ -108,7 +135,7 @@ mod tests {
         let text = r#"{"schema_version": 99, "id": "x", "title": "From the future"}"#;
         fs::write(&path, text).unwrap();
         let err = load_record::<Story>(&path, migrate_story).unwrap_err();
-        assert!(matches!(err, StorageError::TooNew(_, 99, 1)), "{err:?}");
+        assert!(matches!(err, StorageError::TooNew(_, 99, 2)), "{err:?}");
         assert_eq!(fs::read_to_string(&path).unwrap(), text);
     }
 
@@ -119,5 +146,62 @@ mod tests {
         let bad = dir.path().join("bad.json");
         fs::write(&bad, "this is not json").unwrap();
         assert!(matches!(load_record::<Story>(&bad, migrate_story).unwrap_err(), StorageError::Json(_, _)));
+    }
+
+    #[test]
+    fn a_format_1_file_still_reads_and_is_written_as_format_2() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("st_a.json");
+        fs::write(&path, r#"{"schema_version": 1, "id": "st_a", "title": "Old but current", "headline": "Kept as is", "proof_points": []}"#).unwrap();
+        let s: Story = load_record(&path, migrate_story).unwrap().unwrap();
+        assert_eq!((s.title.as_str(), s.headline.as_str()), ("Old but current", "Kept as is"));
+        assert_eq!(fs::read_to_string(&path).unwrap().matches("\"schema_version\": 1").count(), 1, "reading never rewrites");
+        save_record(&path, &s).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"schema_version\": 2") && !text.contains("\"schema_version\": 1"), "{text}");
+    }
+
+    #[test]
+    fn fields_this_build_does_not_know_survive_a_save() {
+        use crate::storage::model::{Method, Profile};
+        use crate::storage::migrate::unchanged;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("st_a.json");
+        fs::write(&path, r#"{"schema_version": 2, "id": "st_a", "title": "T", "mood": "calm", "nested": {"a": [1, 2]}}"#).unwrap();
+        let s: Story = load_record(&path, migrate_story).unwrap().unwrap();
+        save_record(&path, &s).unwrap();
+        let back: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(back["mood"], "calm");
+        assert_eq!(back["nested"]["a"][1], 2);
+        // A record with nothing extra writes nothing extra.
+        let m = Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![], extra: Default::default() };
+        save_record(&path, &m).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("extra"), "{text}");
+        // Profile and Method keep them too.
+        let pp = dir.path().join("p.json");
+        fs::write(&pp, r#"{"schema_version": 2, "name": "D", "fullName": "", "targetRole": "", "seniority": "", "industry": "", "sellsTo": "", "identityStatement": "", "focusHabits": [], "futureThing": true}"#).unwrap();
+        let p: Profile = load_record(&pp, unchanged).unwrap().unwrap();
+        save_record(&pp, &p).unwrap();
+        assert!(fs::read_to_string(&pp).unwrap().contains("futureThing"));
+    }
+
+    #[test]
+    fn saving_never_writes_over_a_newer_file_and_keeps_a_damaged_one_aside() {
+        use crate::storage::model::Method;
+        let dir = tempfile::tempdir().unwrap();
+        let m = Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![], extra: Default::default() };
+        let newer = dir.path().join("newer.json");
+        let text = r#"{"schema_version": 99, "situation": "motivation", "spoken": "future"}"#;
+        fs::write(&newer, text).unwrap();
+        assert!(matches!(save_record(&newer, &m), Err(StorageError::TooNew(_, 99, 2))));
+        assert_eq!(fs::read_to_string(&newer).unwrap(), text);
+        let damaged = dir.path().join("damaged.json");
+        fs::write(&damaged, "{ half a file").unwrap();
+        save_record(&damaged, &m).unwrap();
+        assert!(fs::read_to_string(&damaged).unwrap().contains("\"spoken\": \"x\""));
+        let aside: Vec<_> = fs::read_dir(dir.path()).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with("damaged.json.damaged-")).collect();
+        assert_eq!(aside.len(), 1, "{aside:?}");
+        assert_eq!(fs::read_to_string(dir.path().join(&aside[0])).unwrap(), "{ half a file");
     }
 }

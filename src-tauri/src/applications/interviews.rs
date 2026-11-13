@@ -276,7 +276,7 @@ mod tests {
         let saved = save_note(&s, &id, input("stg_1", &["What is your notice period?"]), day()).unwrap();
         assert_eq!(saved.held_on, "2026-10-14");
         let raw: Value = serde_json::from_str(&s.application_text(&id, "interviews.json").unwrap().unwrap()).unwrap();
-        assert_eq!(raw["schema_version"], 1);
+        assert_eq!(raw["schema_version"], 2);
         assert_eq!(raw["notes"][0]["stage_id"], "stg_1");
         assert_eq!(raw["notes"][0]["rating"], 4);
         let again = save_note(&s, &id, NoteInput { worked: "Changed".into(), ..input("stg_1", &["What is your notice period?"]) }, day()).unwrap();

@@ -9,7 +9,7 @@ import Link from "../../ui/Link";
 import { formatSize } from "./format";
 import { SettingsLayout, useLater } from "./parts";
 import { privacySetup, type AiView } from "./aiSettings";
-import { deleteFailedLine, folderChangedLine, folderPathProblem, folderProblemLine, leavesRows, retentionChoice, retentionLabel } from "./privacy";
+import { deleteFailedLine, leftBehindLine, folderChangedLine, folderPathProblem, folderProblemLine, leavesRows, retentionChoice, retentionLabel } from "./privacy";
 import { clearPrefs, readPrefs } from "./prefs";
 import BackupSection from "./BackupSection";
 import { inUseModel, type SpeechModelEntry } from "./speechModels";
@@ -37,6 +37,7 @@ export default function SettingsPrivacy() {
   const [folderError, setFolderError] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [leftBehind, setLeftBehind] = useState("");
   const [folderDone, setFolderDone] = useState("");
 
   // In the app the choice is the real one, kept on this computer; in the browser preview it is just local state.
@@ -99,15 +100,18 @@ export default function SettingsPrivacy() {
   };
   const deleteEverything = async () => {
     setAsking(null);
+    let note: string | null = null;
     if (app) {
       try {
-        await invoke("delete_all_data");
+        note = leftBehindLine(await invoke("delete_all_data"));
       } catch (e) {
         return setDeleteError(deleteFailedLine(e));
       }
       clearPrefs();
-      reopen();
+      // Something left behind stays on screen: reloading now would hide it.
+      if (!note) reopen();
     }
+    setLeftBehind(note ?? "");
     setAllDeleted(true);
     setRecordingsMb(0);
   };
@@ -194,7 +198,7 @@ export default function SettingsPrivacy() {
             {asking !== "all" && !allDeleted && (
               <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={() => { setAsking("all"); setTyped(""); }}>Delete all Ensayo data</button>
             )}
-            {allDeleted && <span className="e-meta" role="status">{app ? "Everything is deleted. Ensayo is starting over." : "Everything is deleted. Prototype: nothing was actually removed."}</span>}
+            {allDeleted && <span className="e-meta" role="status">{leftBehind || (app ? "Everything is deleted. Ensayo is starting over." : "Everything is deleted. Prototype: nothing was actually removed.")}</span>}
             {asking === "all" && (
               <div style={{ flexBasis: "100%", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
                 <input className="e-input" style={{ width: "200px" }} placeholder="Type DELETE" aria-label="Type DELETE to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} />

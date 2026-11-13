@@ -100,3 +100,15 @@ export function folderProblemLine(e: unknown): string {
 export function deleteFailedLine(e: unknown): string {
   return sentence(e) || "That didn't finish. Try again in a moment.";
 }
+
+/** What "Delete all Ensayo data" answers: the things it could not remove (names only). */
+export interface DeleteReport {
+  left_behind: string[];
+}
+
+/** The note shown after Delete all Ensayo data when something is still there; null when everything went. */
+export function leftBehindLine(report: unknown): string | null {
+  const list = (report as DeleteReport | null | undefined)?.left_behind;
+  if (!Array.isArray(list) || list.length === 0) return null;
+  return `Most of it is deleted, but these are still on this computer: ${list.join(", ")}. Close anything that may be using them and try again.`;
+}

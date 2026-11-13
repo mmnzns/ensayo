@@ -103,6 +103,7 @@ impl Storage {
 
     /// Deletes a story and takes it out of every method that listed it.
     pub fn delete_story(&self, id: &str) -> Result<()> {
+        self.ensure_writable()?;
         let path = self.story_path(checked_id(id)?);
         if !path.is_file() {
             return Err(StorageError::NotFound(format!("story {id}")));
@@ -138,6 +139,24 @@ impl Storage {
         Ok(out)
     }
 
+    /// Every saved method. A file that can't be read is reported (its name only, never its path) and skipped, so
+    /// one damaged method never hides the others.
+    pub fn load_methods(&self) -> Loaded<Method> {
+        let mut out = Loaded::<Method>::default();
+        for situation in SITUATIONS {
+            let path = self.method_path(situation);
+            match load_record::<Method>(&path, migrate::unchanged) {
+                Ok(Some(m)) => out.items.push(m),
+                Ok(None) => {}
+                Err(e) => {
+                    out.problems.push(super::damaged_line(&path, &e));
+                    out.files.push(path);
+                }
+            }
+        }
+        out
+    }
+
     pub fn save_method(&self, method: &Method) -> Result<()> {
         if !SITUATIONS.contains(&method.situation.as_str()) {
             return Err(StorageError::Invalid(format!("\"{}\" is not a situation", method.situation)));
@@ -146,6 +165,7 @@ impl Storage {
     }
 
     pub fn delete_method(&self, situation: &str) -> Result<()> {
+        self.ensure_writable()?;
         if !SITUATIONS.contains(&situation) {
             return Err(StorageError::Invalid(format!("\"{situation}\" is not a situation")));
         }
@@ -158,15 +178,38 @@ impl Storage {
 
     // ---------- everything ----------
 
-    /// Removes what Ensayo wrote in the data folder. The folder itself and any other file in it stay: it may be a
-    /// synced drive folder the user also uses for other things.
-    pub fn delete_all(&self) -> Result<()> {
-        for name in OWNED {
-            let path = self.root().join(name);
+    /// Removes what Ensayo wrote in the data folder: the owned files and folders, sync conflict copies of the owned
+    /// root files, and restore staging folders. The folder itself and any other file in it stay: it may be a synced
+    /// drive folder the user also uses for other things. Everything is attempted; the names of what could not be
+    /// removed are returned (names only, never a full path).
+    pub fn delete_all_report(&self) -> Vec<String> {
+        let mut left = vec![];
+        let mut remove = |path: PathBuf| {
             let result = if path.is_dir() { fs::remove_dir_all(&path) } else if path.exists() { fs::remove_file(&path) } else { Ok(()) };
-            result.map_err(|e| StorageError::Io(path, e.to_string()))?;
+            if result.is_err() {
+                left.push(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+            }
+        };
+        for name in OWNED {
+            remove(self.root().join(name));
         }
-        Ok(())
+        if let Ok(entries) = fs::read_dir(self.root()) {
+            for e in entries.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let owned_root_file = OWNED.iter().filter_map(|o| o.strip_suffix(".json")).any(|stem| super::conflicts::is_copy_of(&name, stem));
+                if owned_root_file || (name.starts_with(".ensayo-restore-") && e.path().is_dir()) {
+                    remove(e.path());
+                }
+            }
+        }
+        left
+    }
+
+    pub fn delete_all(&self) -> Result<()> {
+        match self.delete_all_report().first() {
+            None => Ok(()),
+            Some(name) => Err(StorageError::Io(self.root().join(name), "couldn't be removed".into())),
+        }
     }
 }
 
@@ -182,7 +225,7 @@ mod tests {
     }
 
     fn story(id: &str, title: &str) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: id.into(),
             title: title.into(),
             employer: "Fernhill".into(),
@@ -207,7 +250,7 @@ mod tests {
     }
 
     fn profile() -> Profile {
-        Profile { name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix funnels.".into(), focus_habits: vec!["to_the_point".into()] }
+        Profile { extra: Default::default(), name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix funnels.".into(), focus_habits: vec!["to_the_point".into()] }
     }
 
     fn fresh() -> (tempfile::TempDir, Storage) {
@@ -313,7 +356,7 @@ mod tests {
     #[test]
     fn methods_round_trip_in_situation_order_and_only_known_situations_are_accepted() {
         let (_d, s) = fresh();
-        let m = |sit: &str, text: &str| Method { situation: sit.into(), spoken: text.into(), story_ids: vec!["st_a".into()] };
+        let m = |sit: &str, text: &str| Method { extra: Default::default(), situation: sit.into(), spoken: text.into(), story_ids: vec!["st_a".into()] };
         s.save_method(&m("influence", "Make it cheap to say yes.")).unwrap();
         s.save_method(&m("problem_solving", "Find where people drop.")).unwrap();
         let got: Vec<_> = s.methods().unwrap().into_iter().map(|x| x.situation).collect();
@@ -328,7 +371,7 @@ mod tests {
         let (_d, s) = fresh();
         s.save_story(&story("st_a", "A")).unwrap();
         s.save_story(&story("st_b", "B")).unwrap();
-        s.save_method(&Method { situation: "problem_solving".into(), spoken: "x".into(), story_ids: vec!["st_a".into(), "st_b".into()] }).unwrap();
+        s.save_method(&Method { extra: Default::default(), situation: "problem_solving".into(), spoken: "x".into(), story_ids: vec!["st_a".into(), "st_b".into()] }).unwrap();
         s.delete_story("st_a").unwrap();
         assert_eq!(s.methods().unwrap()[0].story_ids, vec!["st_b"]);
     }
@@ -348,6 +391,23 @@ mod tests {
         assert_eq!(fs::read_to_string(s.root().join("notes.txt")).unwrap(), "mine");
         assert_eq!(s.you().unwrap(), None);
         assert!(s.targets().unwrap().is_empty());
+    }
+
+    #[test]
+    fn delete_all_also_removes_conflict_copies_of_owned_root_files_and_restore_staging_folders() {
+        let (_d, s) = fresh();
+        for f in ["you.json", "you (1).json", "profile 2.json", "lock (Miguel's conflicted copy).json", "yours.json", "notes.txt"] {
+            fs::write(s.root().join(f), "x").unwrap();
+        }
+        fs::create_dir_all(s.root().join(".ensayo-restore-20261101-120000/bank")).unwrap();
+        fs::create_dir_all(s.root().join(".other-hidden")).unwrap();
+        assert!(s.delete_all_report().is_empty());
+        for gone in ["you.json", "you (1).json", "profile 2.json", "lock (Miguel's conflicted copy).json", ".ensayo-restore-20261101-120000"] {
+            assert!(!s.root().join(gone).exists(), "{gone}");
+        }
+        for kept in ["yours.json", "notes.txt", ".other-hidden"] {
+            assert!(s.root().join(kept).exists(), "{kept}");
+        }
     }
 
     // ---------- story angles ----------
@@ -432,7 +492,7 @@ mod tests {
         let (_d, s) = fresh();
         s.save_profile(&profile()).unwrap();
         s.save_story(&story("st_a", "A")).unwrap();
-        s.save_method(&Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
+        s.save_method(&Method { extra: Default::default(), situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
         fs::write(s.root().join("notes.txt"), "my own notes").unwrap();
         fs::create_dir_all(s.root().join("applications/app_x")).unwrap();
         fs::write(s.root().join("applications/app_x/application.json"), "{}").unwrap();
