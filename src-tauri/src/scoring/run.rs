@@ -18,9 +18,14 @@ pub enum CallError {
     Failed(String),
     /// The model answered twice without valid JSON for the schema.
     Invalid(String),
+    /// The model's reply was cut off at the token limit twice, even with double the room the second time.
+    TooLong,
     /// The session's estimated cost reached the cap set in Settings: what it had spent, and the cap, in US dollars.
     CapReached { spent: f64, cap: f64 },
 }
+
+/// The plain-words reason every screen gives when a reply was cut off twice.
+pub const TOO_LONG: &str = "The AI's reply was too long to finish.";
 
 /// What a rep keeps when the AI can't judge it, and what it loses.
 const TIMING_ONLY: &str = "This answer got the measured checks only: the number, the stop, the length and filler words. Answering first, ownership and story fit weren't judged, and there's no coach note.";
@@ -31,6 +36,7 @@ impl CallError {
         match self {
             CallError::Unavailable(m) | CallError::Failed(m) => format!("{m} {TIMING_ONLY}"),
             CallError::Invalid(_) => format!("The AI answered twice in a shape Ensayo couldn't read. {TIMING_ONLY} Try the next answer; if it keeps happening, choose another model in Settings › AI."),
+            CallError::TooLong => format!("{TOO_LONG} {TIMING_ONLY} Try the next answer; if it keeps happening, choose another model in Settings › AI."),
             CallError::CapReached { .. } => format!("{} {TIMING_ONLY} The rest of this session works the same way.", self.cap_words()),
         }
     }
@@ -102,11 +108,21 @@ pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, b
     let (system, user) = prompt.render(vars);
     let system = with_schema(&system, &prompt.schema);
     let mut last = String::new();
+    // Whether the previous reply was cut off at the token limit: the retry then gets twice the room.
+    let mut cut_off = false;
     for attempt in 0..2 {
         budget.check()?;
-        let user = if attempt == 0 { user.clone() } else { format!("{user}\n\nYour last reply was rejected: {last}. Return only one JSON object that matches the JSON Schema in the reply format: its field names, required fields and allowed values.") };
-        let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, schema: Some(prompt.schema.clone()), max_tokens, tier: prompt.tier }).map_err(from_ai)?;
+        let limit = if cut_off { max_tokens.saturating_mul(2) } else { max_tokens };
+        let user = if attempt == 0 {
+            user.clone()
+        } else if cut_off {
+            format!("{user}\n\nYour last reply was cut off before it finished. Reply again with one JSON object that matches the JSON Schema in the reply format, and keep the text in each field short.")
+        } else {
+            format!("{user}\n\nYour last reply was rejected: {last}. Return only one JSON object that matches the JSON Schema in the reply format: its field names, required fields and allowed values.")
+        };
+        let reply: LlmReply = llm.complete(&LlmRequest { system: system.clone(), user, json: true, schema: Some(prompt.schema.clone()), max_tokens: limit, tier: prompt.tier }).map_err(from_ai)?;
         budget.spend.add_from(budget.provider, &reply);
+        cut_off = reply.cut_off;
         let mut value = match extract_json(&reply.text) {
             Ok(v) => v,
             Err(e) => {
@@ -129,7 +145,11 @@ pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, b
             }
         }
     }
-    Err(CallError::Invalid(last))
+    if cut_off {
+        Err(CallError::TooLong)
+    } else {
+        Err(CallError::Invalid(last))
+    }
 }
 
 /// The schemas cap text length and list size to keep replies tidy. A verbose model (GPT-6 Luna reading a long story)
@@ -186,13 +206,17 @@ pub mod testing {
 
     /// Replies in order; records every request.
     pub struct Scripted {
-        pub replies: Mutex<VecDeque<Result<String, AiError>>>,
+        pub replies: Mutex<VecDeque<Result<(String, bool), AiError>>>,
         pub seen: Mutex<Vec<LlmRequest>>,
     }
 
     impl Scripted {
         pub fn new(replies: Vec<Result<&str, AiError>>) -> Scripted {
-            Scripted { replies: Mutex::new(replies.into_iter().map(|r| r.map(String::from)).collect()), seen: Mutex::new(vec![]) }
+            Scripted { replies: Mutex::new(replies.into_iter().map(|r| r.map(|t| (String::from(t), false))).collect()), seen: Mutex::new(vec![]) }
+        }
+        /// Replies that say whether the provider cut them off at the token limit.
+        pub fn with_cut_offs(replies: Vec<(&str, bool)>) -> Scripted {
+            Scripted { replies: Mutex::new(replies.into_iter().map(|(t, c)| Ok((String::from(t), c))).collect()), seen: Mutex::new(vec![]) }
         }
         pub fn calls(&self) -> usize {
             self.seen.lock().unwrap().len()
@@ -203,7 +227,7 @@ pub mod testing {
         fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
             self.seen.lock().unwrap().push(req.clone());
             let next = self.replies.lock().unwrap().pop_front().expect("the script ran out of replies");
-            next.map(|text| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into() })
+            next.map(|(text, cut_off)| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off })
         }
     }
 }
@@ -284,6 +308,39 @@ mod tests {
         assert!(matches!(err, CallError::Invalid(_)), "{err:?}");
         assert_eq!(llm.calls(), 2);
         assert!(err.notice().contains("measured checks only") && err.notice().contains("Settings › AI"));
+    }
+
+    #[test]
+    fn a_cut_off_reply_is_retried_with_twice_the_room_and_told_why() {
+        let llm = Scripted::with_cut_offs(vec![(r#"{"type":"tech"#, true), (GOOD, false)]);
+        let out = call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap();
+        assert_eq!(out.value["type"], "technical");
+        let seen = llm.seen.lock().unwrap();
+        assert_eq!((seen[0].max_tokens, seen[1].max_tokens), (400, 800));
+        assert!(seen[1].user.contains("cut off before it finished") && !seen[1].user.contains("rejected"));
+    }
+
+    #[test]
+    fn a_plain_bad_reply_is_retried_with_the_same_room() {
+        let llm = Scripted::new(vec![Ok("nope"), Ok(GOOD)]);
+        call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap();
+        assert_eq!(llm.seen.lock().unwrap()[1].max_tokens, 400);
+    }
+
+    #[test]
+    fn a_valid_reply_that_hit_the_limit_is_still_used() {
+        let llm = Scripted::with_cut_offs(vec![(GOOD, true)]);
+        assert!(call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).is_ok());
+        assert_eq!(llm.calls(), 1);
+    }
+
+    #[test]
+    fn two_cut_offs_in_a_row_are_too_long() {
+        let llm = Scripted::with_cut_offs(vec![(r#"{"type":"#, true), (r#"{"type":"tech"#, true)]);
+        let err = call_json(&llm, get(PromptId::Classify), &vars(), 400, &mut budget()).unwrap_err();
+        assert_eq!(err, CallError::TooLong);
+        assert_eq!(llm.calls(), 2);
+        assert!(err.notice().contains("The AI's reply was too long to finish."));
     }
 
     #[test]

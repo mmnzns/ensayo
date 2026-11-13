@@ -280,7 +280,7 @@ impl Llm for LocalLlm {
         if reply.text.trim().is_empty() {
             return Err(AiError::Failed(if reply.truncated { "The built-in local AI ran out of room before it finished answering." } else { "The built-in local AI sent back an empty answer." }.into()));
         }
-        Ok(LlmReply { text: reply.text, input_tokens: reply.prompt_tokens, output_tokens: reply.output_tokens, model: self.model_name.clone() })
+        Ok(LlmReply { text: reply.text, input_tokens: reply.prompt_tokens, output_tokens: reply.output_tokens, model: self.model_name.clone(), cut_off: reply.truncated })
     }
 }
 

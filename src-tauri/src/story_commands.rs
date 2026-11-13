@@ -13,6 +13,7 @@ const NO_ENGINE: &str = "Reading pasted text needs a feedback engine. Choose one
 fn story_message(e: &CallError) -> String {
     match e {
         CallError::Unavailable(m) | CallError::Failed(m) => m.clone(),
+        CallError::TooLong => format!("{} Try Read it again, or fill it in yourself.", crate::scoring::run::TOO_LONG),
         CallError::Invalid(_) => "The AI's reply couldn't be read this time. Try Read it again, or fill it in yourself.".into(),
         CallError::CapReached { .. } => format!("{} Or fill it in yourself.", e.cap_words()),
     }

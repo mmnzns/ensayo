@@ -136,6 +136,11 @@ pub fn anthropic_request(base: &str, key: &str, model: &str, req: &LlmRequest, s
     if let Some(t) = settings.temperature {
         body["temperature"] = json!(t);
     }
+    if is_recent_claude(model) {
+        // Thinking counts as output, so the reply keeps its own room; effort keeps the thinking short.
+        body["max_tokens"] = json!(req.max_tokens + THINKING_ROOM);
+        body["output_config"] = json!({ "effort": if req.tier == Tier::Fast { "low" } else { "medium" } });
+    }
     WireRequest { url: format!("{}/messages", base_of(base)), headers: auth_headers(Provider::Claude, key), body }
 }
 
@@ -205,7 +210,7 @@ fn finish(provider: Provider, model: &str, req: &LlmRequest, text: String, usage
     }
     let input_tokens = usage.0.unwrap_or_else(|| estimate_tokens(&req.system).saturating_add(estimate_tokens(&req.user)));
     let output_tokens = usage.1.unwrap_or_else(|| estimate_tokens(&text));
-    Ok(LlmReply { text, input_tokens, output_tokens, model: model.to_string() })
+    Ok(LlmReply { text, input_tokens, output_tokens, model: model.to_string(), cut_off })
 }
 
 pub fn parse_anthropic(body: &Value, model: &str, req: &LlmRequest) -> Result<LlmReply, AiError> {
@@ -476,12 +481,41 @@ mod tests {
         assert!(w.headers.contains(&("x-api-key".into(), "sk-ant-key".into())));
         assert!(w.headers.iter().any(|(k, _)| k == "anthropic-version"));
         assert_eq!(w.body["model"], "claude-sonnet-5-5");
-        assert_eq!(w.body["max_tokens"], 500);
+        assert_eq!(w.body["max_tokens"], 500 + THINKING_ROOM);
         assert_eq!(w.body["system"], "Be brief.");
         assert_eq!(w.body["messages"], json!([{ "role": "user", "content": "Score this answer." }]));
         assert!(w.body.get("temperature").is_none());
         let old = model_settings(Provider::Claude, "claude-haiku-4-5", Tier::Fast);
         assert_eq!(anthropic_request("b", "k", "claude-haiku-4-5", &request(false, Tier::Fast), &old).body["temperature"], 0.0);
+    }
+
+    #[test]
+    fn recent_claude_models_get_room_to_think_and_an_effort_by_tier() {
+        for m in ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"] {
+            let s = model_settings(Provider::Claude, m, Tier::Fast);
+            let fast = anthropic_request("b", "k", m, &request(true, Tier::Fast), &s);
+            assert_eq!(fast.body["max_tokens"], 500 + THINKING_ROOM, "{m}");
+            assert_eq!(fast.body["output_config"]["effort"], "low", "{m}");
+            let strong = anthropic_request("b", "k", m, &request(true, Tier::Strong), &s);
+            assert_eq!(strong.body["output_config"]["effort"], "medium", "{m}");
+        }
+        let old = model_settings(Provider::Claude, "claude-sonnet-4-6", Tier::Strong);
+        let w = anthropic_request("b", "k", "claude-sonnet-4-6", &request(true, Tier::Strong), &old);
+        assert_eq!(w.body["max_tokens"], 500);
+        assert!(w.body.get("output_config").is_none());
+    }
+
+    #[test]
+    fn parsers_flag_a_reply_cut_off_at_the_limit_even_with_text() {
+        let r = request(true, Tier::Fast);
+        let a = parse_anthropic(&json!({ "content": [{ "type": "text", "text": "{\"a\":" }], "stop_reason": "max_tokens" }), "m", &r).unwrap();
+        assert!(a.cut_off);
+        let a = parse_anthropic(&json!({ "content": [{ "type": "text", "text": "{}" }], "stop_reason": "end_turn" }), "m", &r).unwrap();
+        assert!(!a.cut_off);
+        let o = parse_openai(Provider::OpenAi, &json!({ "choices": [{ "message": { "content": "{\"a\":" }, "finish_reason": "length" }] }), "m", &r).unwrap();
+        assert!(o.cut_off);
+        let g = parse_gemini(&json!({ "candidates": [{ "content": { "parts": [{ "text": "{\"a\":" }] }, "finishReason": "MAX_TOKENS" }] }), "m", &r).unwrap();
+        assert!(g.cut_off);
     }
 
     #[test]
@@ -533,7 +567,7 @@ mod tests {
     fn anthropic_reply_joins_text_parts_and_reads_usage() {
         let body = json!({ "content": [{ "type": "thinking", "thinking": "..." }, { "type": "text", "text": "{\"a\":" }, { "type": "text", "text": "1}" }], "usage": { "input_tokens": 120, "output_tokens": 30 } });
         let r = parse_anthropic(&body, "claude-sonnet-5-5", &request(true, Tier::Fast)).unwrap();
-        assert_eq!(r, LlmReply { text: "{\"a\":1}".into(), input_tokens: 120, output_tokens: 30, model: "claude-sonnet-5-5".into() });
+        assert_eq!(r, LlmReply { text: "{\"a\":1}".into(), input_tokens: 120, output_tokens: 30, model: "claude-sonnet-5-5".into(), cut_off: false });
     }
 
     #[test]
@@ -663,9 +697,9 @@ mod tests {
         assert_eq!(seen[0].header("x-api-key"), Some("sk-ant-secret-key"));
         assert_eq!(seen[0].header("anthropic-version"), Some("2023-06-01"));
         assert_eq!(seen[0].body["system"], "Be brief.");
-        assert_eq!(seen[0].body["max_tokens"], 500);
+        assert_eq!(seen[0].body["max_tokens"], 500 + THINKING_ROOM);
         assert_eq!(seen[0].body["messages"][0]["content"], "Score this answer.");
-        assert_eq!(r, LlmReply { text: "{\"score\": 5}".into(), input_tokens: 21, output_tokens: 6, model: "claude-sonnet-5-5".into() });
+        assert_eq!(r, LlmReply { text: "{\"score\": 5}".into(), input_tokens: 21, output_tokens: 6, model: "claude-sonnet-5-5".into(), cut_off: false });
         assert!(pauses.lock().unwrap().is_empty());
     }
 

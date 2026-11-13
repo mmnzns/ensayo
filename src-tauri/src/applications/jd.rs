@@ -117,6 +117,7 @@ const NO_ENGINE: &str = "No AI engine is set up, so the posting was read by keyw
 fn failure_notice(e: &CallError) -> String {
     let reason = match e {
         CallError::Unavailable(m) | CallError::Failed(m) => m.clone(),
+        CallError::TooLong => crate::scoring::run::TOO_LONG.to_string(),
         CallError::Invalid(_) => "The AI's reply couldn't be read.".to_string(),
         CallError::CapReached { .. } => e.cap_words(),
     };

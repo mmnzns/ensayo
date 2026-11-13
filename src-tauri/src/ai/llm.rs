@@ -31,6 +31,8 @@ pub struct LlmReply {
     pub output_tokens: u32,
     /// The model id that answered, for the cost table and the score log.
     pub model: String,
+    /// The provider stopped because it hit the token limit, even if some text came back.
+    pub cut_off: bool,
 }
 
 pub trait Llm: Send + Sync {

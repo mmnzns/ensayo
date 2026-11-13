@@ -144,7 +144,7 @@ mod tests {
     use super::*;
 
     fn reply(model: &str, input: u32, output: u32) -> LlmReply {
-        LlmReply { text: String::new(), input_tokens: input, output_tokens: output, model: model.into() }
+        LlmReply { text: String::new(), input_tokens: input, output_tokens: output, model: model.into(), cut_off: false }
     }
 
     #[test]

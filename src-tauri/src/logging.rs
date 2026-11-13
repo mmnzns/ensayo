@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn a_logged_model_call_passes_the_reply_through_unchanged() {
-        let reply = LlmReply { text: "hello".into(), input_tokens: 3, output_tokens: 1, model: "m".into() };
+        let reply = LlmReply { text: "hello".into(), input_tokens: 3, output_tokens: 1, model: "m".into(), cut_off: false };
         let llm = LoggedLlm::new(Box::new(Fake(Ok(reply.clone()))), "test");
         let req = LlmRequest { system: "s".into(), user: "u".into(), json: false, schema: None, max_tokens: 10, tier: Tier::Fast };
         assert_eq!(llm.complete(&req).unwrap(), reply);
