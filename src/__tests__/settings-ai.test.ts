@@ -302,6 +302,9 @@ describe("the built-in local AI", () => {
     expect(withLocalModel(status, { ...builtIn, fast_model: "qwen3.5-9b" }, "qwen3.5-4b").fast_model).toBe("");
     expect(withLocalModel(status, builtIn, "qwen3.5-9b")).toEqual({ ...builtIn, fast_model: "qwen3.5-9b" });
     expect(withLocalModel(status, builtIn, "nope")).toBe(builtIn);
+    const small = { ...status, models: status.models.map((m) => (m.id === "qwen3.5-9b" ? { ...m, too_small_here: true } : m)) };
+    expect(withLocalModel(small, builtIn, "qwen3.5-9b")).toBe(builtIn);
+    expect(localModelOf(small, { ...builtIn, fast_model: "qwen3.5-9b" })?.id).toBe("qwen3.5-4b");
   });
 
   it("says in plain words where a model stands", () => {

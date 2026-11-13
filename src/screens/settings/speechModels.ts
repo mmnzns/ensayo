@@ -28,7 +28,11 @@ export interface SpeechModelEntry {
   state: "ready" | "on_this_computer" | "missing" | "partial" | "downloading" | "downloading_elsewhere";
   /** How much is on disk, for "partial" and the two "downloading" states. */
   fraction?: number;
+  /** A local AI model that needs more memory than this computer has: shown greyed out, never downloaded or chosen. */
+  too_small_here?: boolean;
 }
+
+export const TOO_BIG_LINE = "Needs more memory than this computer has";
 
 const here = (m: SpeechModelEntry) => m.state === "ready" || m.state === "on_this_computer";
 
@@ -68,7 +72,10 @@ export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadi
     const inUse = m.id === inUseId;
     const downloadingHere = m.state === "downloading" || m.id === downloadingId;
     const elsewhere = m.state === "downloading_elsewhere";
-    const status = inUse
+    const tooBig = !!m.too_small_here;
+    const status = tooBig
+      ? TOO_BIG_LINE
+      : inUse
       ? "In use"
       : downloadingHere
         ? "Downloading"
@@ -85,8 +92,8 @@ export function modelRows(models: SpeechModelEntry[], inUseId: string, downloadi
       ...m,
       inUse,
       status,
-      canUse: here(m) && !inUse,
-      fetch: downloadingHere || elsewhere ? null : m.state === "missing" ? "Download" : m.state === "partial" ? "Resume" : null,
+      canUse: here(m) && !inUse && !tooBig,
+      fetch: tooBig || downloadingHere || elsewhere ? null : m.state === "missing" ? "Download" : m.state === "partial" ? "Resume" : null,
       elsewhere,
       downloadingHere,
       canDelete: here(m),

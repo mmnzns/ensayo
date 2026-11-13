@@ -267,6 +267,8 @@ export interface LocalModel {
   /** "ready" (Ensayo uses it), "on_this_computer" (a copy another app downloaded, used where it is), "missing", "partial" (an interrupted download), "downloading" (here) or "downloading_elsewhere" (another app is fetching it). */
   state: "ready" | "on_this_computer" | "missing" | "partial" | "downloading" | "downloading_elsewhere";
   fraction?: number;
+  /** Needs more memory than this computer has: greyed out in Settings, cannot be downloaded or chosen. */
+  too_small_here?: boolean;
 }
 
 /** What `local_ai_status` returns. */
@@ -279,13 +281,14 @@ export interface LocalAiView {
 /** The model the settings mean: the saved one, or the recommended one when none (or one that is not a local model) is saved. Null before the list is known. */
 export function localModelOf(status: LocalAiView | null, s: AiSettings): LocalModel | null {
   const models = status?.models ?? [];
-  return models.find((m) => m.id === s.fast_model) ?? models.find((m) => m.recommended) ?? models[0] ?? null;
+  const fits = models.filter((m) => !m.too_small_here);
+  return fits.find((m) => m.id === s.fast_model) ?? models.find((m) => m.recommended) ?? models[0] ?? null;
 }
 
 /** The recommended model is stored as empty, so it keeps following the recommendation. */
 export function withLocalModel(status: LocalAiView, s: AiSettings, id: string): AiSettings {
   const m = status.models.find((x) => x.id === id);
-  if (!m) return s;
+  if (!m || m.too_small_here) return s;
   return { ...s, fast_model: m.recommended ? "" : m.id };
 }
 

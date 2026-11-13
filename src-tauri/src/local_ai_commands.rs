@@ -50,6 +50,12 @@ pub fn download_model(id: Option<&str>, store: &SharedStore, cancel: &AtomicBool
 #[tauri::command]
 pub async fn download_local_ai(app: AppHandle, id: Option<String>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
+        // A model this computer can't hold is refused, not swapped for another one.
+        if let Some(m) = id.as_deref().and_then(local_models::find) {
+            if m.too_small_for(crate::diagnostics::total_memory_bytes().unwrap_or(0)) {
+                return Err("That model needs more memory than this computer has.".to_string());
+            }
+        }
         let model_id = local_models::choose(id.as_deref().unwrap_or("")).info.id;
         let store = models_store::store()?;
         let cancel = ACTIVE.begin("The local AI model is already downloading.")?;

@@ -3,6 +3,7 @@
 //! recommended one, 9B is an optional larger size. They live in the shared models folder like the speech models
 //! (`models_store`), so a copy another Craft Concepts app downloaded is used in place.
 
+use crate::ai::local;
 use crate::models_store;
 use crate::speech::models::Offered;
 use serde::Serialize;
@@ -43,8 +44,25 @@ pub fn find(id: &str) -> Option<&'static LocalModel> {
 
 /// The model a settings value names. The value is `AiSettings::fast_model`; empty, or left over from a cloud
 /// provider ("claude-haiku-5-5"), means the recommended one.
+/// A model whose context on this computer is under this many tokens cannot hold a job posting and an answer.
+pub const MIN_USABLE_CONTEXT: u32 = 12_288;
+
+/// This computer's memory in bytes; 0 when the system won't say (the safe, smallest tier).
+fn memory_here() -> u64 {
+    crate::diagnostics::total_memory_bytes().unwrap_or(0)
+}
+
+/// The model a settings value names, unless it is too small here (see `choose_with_memory`).
 pub fn choose(setting: &str) -> &'static LocalModel {
-    find(setting.trim()).unwrap_or_else(recommended)
+    choose_with_memory(setting, memory_here())
+}
+
+/// `choose` for a computer with `total_memory_bytes`. A model that needs more memory than this computer has is never
+/// returned: the recommended one is used instead. If even that is too small it is kept, and the engine's
+/// `PromptTooLong` error speaks for it.
+pub fn choose_with_memory(setting: &str, total_memory_bytes: u64) -> &'static LocalModel {
+    let named = find(setting.trim()).unwrap_or_else(recommended);
+    if named.too_small_for(total_memory_bytes) { recommended() } else { named }
 }
 
 impl LocalModel {
@@ -58,6 +76,14 @@ impl LocalModel {
         match status {
             Status::Installed { dir, .. } => Some(dir.join(self.engine().files[0].name)),
             _ => None,
+        }
+    }
+
+    /// True when the context this model gets on a computer with `total_memory_bytes` is under `MIN_USABLE_CONTEXT`.
+    pub fn too_small_for(&self, total_memory_bytes: u64) -> bool {
+        match self.engine().llm.as_ref() {
+            Some(info) => local::context_for(info, total_memory_bytes) < MIN_USABLE_CONTEXT,
+            None => false,
         }
     }
 
@@ -82,9 +108,16 @@ pub struct LocalAiStatus {
     /// How much is on disk, for "partial" and the two "downloading" states.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fraction: Option<f32>,
+    /// True when this model needs more memory than this computer has. Settings greys it out; it cannot be downloaded
+    /// or chosen.
+    pub too_small_here: bool,
 }
 
 pub fn status_in(store: &SharedStore) -> Vec<LocalAiStatus> {
+    status_with_memory(store, memory_here())
+}
+
+pub fn status_with_memory(store: &SharedStore, total_memory_bytes: u64) -> Vec<LocalAiStatus> {
     CATALOG
         .iter()
         .map(|m| {
@@ -99,6 +132,7 @@ pub fn status_in(store: &SharedStore) -> Vec<LocalAiStatus> {
                 recommended: m.recommended,
                 state: models_store::state_name(&status),
                 fraction: models_store::fraction_of(&status),
+                too_small_here: m.too_small_for(total_memory_bytes),
             }
         })
         .collect()
@@ -137,7 +171,8 @@ mod tests {
 
     #[test]
     fn a_settings_value_picks_a_model_and_anything_else_means_the_recommended_one() {
-        assert_eq!(choose("qwen3.5-9b").info.id, "qwen3.5-9b");
+        let big = 32 * (1u64 << 30);
+        assert_eq!(choose_with_memory("qwen3.5-9b", big).info.id, "qwen3.5-9b");
         assert_eq!(choose(" qwen3.5-4b ").info.id, "qwen3.5-4b");
         assert_eq!(choose("").info.id, "qwen3.5-4b");
         assert_eq!(choose("claude-haiku-5-5").info.id, "qwen3.5-4b", "left over from a cloud provider");
@@ -199,5 +234,22 @@ mod tests {
         assert_eq!(s.state, "partial");
         assert!((s.fraction.unwrap() - 0.5).abs() < 0.01);
         assert!(m.file_in(&store.status(m.info.id)).is_none());
+    }
+
+    #[test]
+    fn a_model_too_big_for_the_memory_is_flagged_and_never_chosen() {
+        let gib = 1u64 << 30;
+        let data = tempfile::tempdir().unwrap();
+        let store = temp_store(App::Ensayo, data.path());
+        let at8 = status_with_memory(&store, 8 * gib);
+        assert_eq!((at8[0].id, at8[0].too_small_here), ("qwen3.5-4b", false));
+        assert_eq!((at8[1].id, at8[1].too_small_here), ("qwen3.5-9b", true));
+        assert_eq!((at8[2].id, at8[2].too_small_here), ("granite-4.2-3b", false));
+        assert!(status_with_memory(&store, 16 * gib).iter().all(|s| !s.too_small_here));
+        assert_eq!(choose_with_memory("qwen3.5-9b", 8 * gib).info.id, "qwen3.5-4b", "falls back to the recommended one");
+        assert_eq!(choose_with_memory("qwen3.5-9b", 16 * gib).info.id, "qwen3.5-9b");
+        assert_eq!(choose_with_memory("granite-4.2-3b", 8 * gib).info.id, "granite-4.2-3b");
+        assert_eq!(choose_with_memory("qwen3.5-9b", 0).info.id, "qwen3.5-4b");
+        assert_eq!(serde_json::to_value(&at8[1]).unwrap()["too_small_here"], true);
     }
 }

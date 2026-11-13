@@ -56,6 +56,16 @@ describe("the speech model rows", () => {
     expect(html).toContain("Keep it");
   });
 
+  it("greys out a model that needs more memory than this computer has: no Download, no Use", () => {
+    const html = list([entry("a", "ready"), entry("big", "missing", { recommended: false, too_small_here: true })], { showAll: true });
+    expect(html).toContain("Needs more memory than this computer has");
+    expect(html).not.toContain("Not downloaded");
+    expect(html.match(/>Download</g)).toBeNull();
+    const row = modelRows([entry("big", "ready", { too_small_here: true })], "")[0];
+    expect(row.canUse).toBe(false);
+    expect(row.fetch).toBeNull();
+  });
+
   it("keeps the other models behind Show all models, and lists them when asked", () => {
     const models = [entry("a", "ready"), entry("b", "missing", { recommended: false })];
     const closed = list(models);

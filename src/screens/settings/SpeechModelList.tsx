@@ -32,7 +32,7 @@ export default function SpeechModelList(p: SpeechModelListProps) {
         const percent = progressPercent(m.downloadingHere ? p.fraction : (m.fraction ?? 0));
         const asking = p.confirmId === m.id;
         return (
-          <div key={m.id} className="e-rowline" style={{ padding: "12px 0", flexWrap: "wrap", ...(i === shown.length - 1 && hidden === 0 ? { borderBottom: "none" } : {}) }}>
+          <div key={m.id} className="e-rowline" aria-disabled={m.too_small_here || undefined} style={{ padding: "12px 0", flexWrap: "wrap", ...(m.too_small_here ? { opacity: 0.55 } : {}), ...(i === shown.length - 1 && hidden === 0 ? { borderBottom: "none" } : {}) }}>
             {m.inUse ? <span className="e-dot" aria-hidden="true" /> : <span style={ring(have ? "var(--e-muted)" : "var(--e-line)")} />}
             <span style={{ flex: "1 1 220px", display: "flex", flexDirection: "column", gap: "2px", ...(have ? {} : { color: "var(--e-muted)" }) }}>
               {m.name}
