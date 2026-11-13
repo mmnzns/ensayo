@@ -17,6 +17,9 @@ import { atStake, escDecision } from "./endSession";
 
 const reduceMotion = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** The bars' height change: smooth, or instant when the system asks for reduced motion. */
+export const barTransition = (reduce: boolean): string => (reduce ? "none" : "height 130ms ease-out");
+
 /** Bars that move like a voice level. Heights breathe around the resting shape from the data. */
 function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
   const [tick, setTick] = useState(0);
@@ -32,7 +35,7 @@ function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
         const wave = 0.65 + 0.35 * Math.sin(tick * 0.9 + i * 1.3);
         const height = Math.max(8, Math.min(100, h * wave * (level === undefined ? 1 : Math.max(0.15, Math.min(1, level * 3)))));
         const opacity = [0.5, 0.6, 0.7][i] ?? ([0.8, 0.6, 0.5][i - (last - 2)] ?? 1);
-        return <span key={i} style={{ width: "6px", height: `${height}%`, borderRadius: "3px", background: "var(--e-primary)", opacity, transition: "height 130ms ease-out" }} />;
+        return <span key={i} style={{ width: "6px", height: `${height}%`, borderRadius: "3px", background: "var(--e-primary)", opacity, transition: barTransition(reduceMotion()) }} />;
       })}
     </div>
   );

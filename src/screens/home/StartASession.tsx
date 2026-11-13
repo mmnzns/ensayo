@@ -8,6 +8,8 @@ import { earlierStages } from "../../practice/questions";
 import { checkAi, liveAvailable, startLive } from "../../practice/live";
 import { practiceTargetFor } from "../../practice/sessionTarget";
 import FocusShell from "../../ui/FocusShell";
+import Dialog from "../states/Dialog";
+import { go } from "../../ui/router";
 import { TargetChoice, TargetMarker } from "../../ui/TargetSwitcher";
 import Link from "../../ui/Link";
 import { readPrefs } from "../settings/prefs";
@@ -117,12 +119,25 @@ export default function StartASession() {
   const dim = (off: boolean): React.CSSProperties => (off ? { opacity: 0.5, cursor: "not-allowed" } : { cursor: "pointer" });
 
   return (
-    <FocusShell style={{ background: "rgba(43,39,34,0.32)", alignItems: "center", justifyContent: "center", padding: "40px 16px" }}>
-      <div role="dialog" aria-modal="true" aria-labelledby="ss-title" className="e-card" style={{ width: "100%", maxWidth: "680px", padding: "36px", display: "flex", flexDirection: "column", gap: "24px", boxShadow: "0 24px 64px rgba(43,39,34,0.18)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-          <h1 id="ss-title" className="e-h2" style={{ fontSize: "24px" }}>Start a session</h1>
-          <Link to="2-1-home" className="e-btn e-btn-ghost e-btn-sm" aria-label="Close">✕</Link>
-        </div>
+    <FocusShell>
+      <Dialog
+        title="Start a session"
+        onClose={() => go("2-1-home")}
+        width={680}
+        actions={
+          <>
+            <Link to="2-1-home" className="e-btn e-btn-ghost">Cancel</Link>
+            {needsText ? (
+              <button type="button" className="e-btn e-btn-primary e-btn-big" disabled style={{ opacity: 0.5, cursor: "not-allowed" }}>
+                Start
+              </button>
+            ) : (
+              <Link to={startTo} onClick={() => (noPosting && next ? rememberBlocked(next.application.id, next.stage.id) : beginLive())} className="e-btn e-btn-primary e-btn-big">Start</Link>
+            )}
+          </>
+        }
+      >
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         {sessionTarget && (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div className="e-soft" style={{ background: "var(--e-ground)", display: "flex", alignItems: "center", gap: "12px", padding: "14px 18px" }}>
@@ -279,17 +294,8 @@ export default function StartASession() {
         {focusHabit && (
           <span className="e-small" style={{ marginTop: "-8px" }}>{FOCUS_HINT}</span>
         )}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-          <Link to="2-1-home" className="e-btn e-btn-ghost">Cancel</Link>
-          {needsText ? (
-            <button type="button" className="e-btn e-btn-primary e-btn-big" disabled style={{ opacity: 0.5, cursor: "not-allowed" }}>
-              Start
-            </button>
-          ) : (
-            <Link to={startTo} onClick={() => (noPosting && next ? rememberBlocked(next.application.id, next.stage.id) : beginLive())} className="e-btn e-btn-primary e-btn-big">Start</Link>
-          )}
-        </div>
       </div>
+      </Dialog>
     </FocusShell>
   );
 }

@@ -23,6 +23,9 @@ const TOTALS: { label: string; key: keyof Streak; color?: string }[] = [
   { label: "Follow-ups handled", key: "followUps" },
 ];
 
+/** What a cell of the strip says besides its colour: a tick for a pass, a dot for anything else. */
+export const habitMark = (pass: boolean | null): "✓" | "·" => (pass ? "✓" : "·");
+
 /** The last 10 first tries as ten small blocks, oldest first, padded on the left when there are fewer. */
 function LastTen({ results }: { results: boolean[] }) {
   const last = results.slice(-10);
@@ -31,7 +34,9 @@ function LastTen({ results }: { results: boolean[] }) {
   return (
     <div style={{ display: "flex", gap: "6px" }} aria-label={`Last ${of} answers: ${passes} passed`}>
       {cells.map((c, i) => (
-        <span key={i} style={{ flex: "1", height: "28px", borderRadius: "6px", background: c ? "var(--e-primary)" : "var(--e-line)" }} />
+        <span key={i} data-mark={habitMark(c)} aria-hidden="true" style={{ flex: "1", height: "28px", borderRadius: "6px", background: c ? "var(--e-primary)" : "var(--e-line)", color: c ? "var(--e-primary-ink)" : "var(--e-muted)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.875rem", fontWeight: 700, lineHeight: 1 }}>
+          {habitMark(c)}
+        </span>
       ))}
     </div>
   );
