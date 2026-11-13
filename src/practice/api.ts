@@ -12,7 +12,8 @@ export interface SessionDetail {
 }
 
 export interface RepApi {
-  startRecording(): Promise<void>;
+  /** Starts the microphone chosen in Settings. Resolves with the name of the device that opened (fakes may give none). */
+  startRecording(): Promise<string | void>;
   stopRecording(): Promise<{ path: string; duration_ms: number }>;
   level(): Promise<{ level: number; elapsed_ms: number } | null>;
   /** `run` is the token of this request (session and counter). The backend does not need it; the caller uses it to ignore a late result. */
@@ -57,9 +58,7 @@ export async function tauriApi(): Promise<RepApi> {
     return id;
   };
   return {
-    startRecording: async () => {
-      await invoke("start_recording", {});
-    },
+    startRecording: () => invoke<string>("start_recording", { device: readPrefs().mic.device || null }),
     stopRecording: () => invoke("stop_recording"),
     level: () => invoke("recording_level"),
     finishRep: async (args) => invoke("finish_rep", { args, modelId: await pickModel() }),

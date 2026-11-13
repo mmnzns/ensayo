@@ -23,6 +23,15 @@ pub struct Capture {
     writer: JoinHandle<io::Result<u64>>,
 }
 
+/// Why `start_within` gave nothing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StartError {
+    /// The device opened with an error, in plain words.
+    Failed(String),
+    /// The device didn't answer in time.
+    TimedOut,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Recorded {
     pub path: PathBuf,
@@ -79,6 +88,39 @@ impl Capture {
             }
         };
         Ok(Capture { mic, mic_name, path: path.to_path_buf(), stop, level, started: Instant::now(), writer })
+    }
+
+    /// Like `start`, but gives up after `limit` when the device never answers (a mic that hangs while opening). The open
+    /// runs on its own thread; if it finishes after the limit, the late capture is stopped and its file removed.
+    pub fn start_within(mic: Box<dyn AudioSource>, path: &Path, limit: Duration) -> Result<Capture, StartError> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let path = path.to_path_buf();
+        let worker_path = path.clone();
+        std::thread::Builder::new()
+            .name("ensayo-mic-open".into())
+            .spawn(move || {
+                if let Err(std::sync::mpsc::SendError(Ok(late))) = tx.send(Capture::start(mic, &worker_path)) {
+                    late.discard();
+                }
+            })
+            .map_err(|e| StartError::Failed(e.to_string()))?;
+        match rx.recv_timeout(limit) {
+            Ok(Ok(cap)) => Ok(cap),
+            Ok(Err(e)) => Err(StartError::Failed(e)),
+            Err(_) => {
+                drop(rx);
+                // A late open removes its own file; if it already created one and never finishes, this is the cleanup.
+                let _ = std::fs::remove_file(&path);
+                Err(StartError::TimedOut)
+            }
+        }
+    }
+
+    /// Stops and throws the recording away.
+    pub fn discard(self) {
+        let path = self.path.clone();
+        let _ = self.stop();
+        let _ = std::fs::remove_file(path);
     }
 
     pub fn mic_name(&self) -> &str {
@@ -186,6 +228,64 @@ mod tests {
         let cap = Capture::start(Box::new(Silent), &path).unwrap();
         assert!(cap.stop().is_err());
         assert!(!path.exists(), "no empty file left behind");
+    }
+
+    #[test]
+    fn a_mic_that_never_answers_times_out_and_the_late_capture_is_cleaned_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hang.wav");
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        struct Hangs(std::sync::mpsc::Receiver<()>);
+        impl AudioSource for Hangs {
+            fn start(&mut self, _: SharedFeed) -> Result<String, String> {
+                let _ = self.0.recv(); // never answers until released
+                Ok("Late mic".into())
+            }
+            fn restart(&mut self) -> Result<String, String> {
+                Ok("Late mic".into())
+            }
+            fn stop(&mut self) {}
+        }
+        let began = Instant::now();
+        let err = Capture::start_within(Box::new(Hangs(wait)), &path, Duration::from_millis(150)).err().unwrap();
+        assert_eq!(err, StartError::TimedOut);
+        assert!(began.elapsed() < Duration::from_secs(2));
+        // Let it finish late: nobody is waiting, so the capture is stopped and the file goes.
+        drop(release);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!path.exists(), "a late capture leaves no file");
+    }
+
+    #[test]
+    fn a_mic_that_answers_in_time_is_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ok.wav");
+        struct Quick;
+        impl AudioSource for Quick {
+            fn start(&mut self, _: SharedFeed) -> Result<String, String> {
+                Ok("Quick".into())
+            }
+            fn restart(&mut self) -> Result<String, String> {
+                Ok("Quick".into())
+            }
+            fn stop(&mut self) {}
+        }
+        let cap = Capture::start_within(Box::new(Quick), &path, Duration::from_secs(5)).unwrap();
+        assert_eq!(cap.mic_name(), "Quick");
+        cap.discard();
+        let err = Capture::start_within(Box::new(Broken2), &path, Duration::from_secs(5)).err().unwrap();
+        assert_eq!(err, StartError::Failed("No microphone".into()));
+    }
+
+    struct Broken2;
+    impl AudioSource for Broken2 {
+        fn start(&mut self, _: SharedFeed) -> Result<String, String> {
+            Err("No microphone".into())
+        }
+        fn restart(&mut self) -> Result<String, String> {
+            Err("no".into())
+        }
+        fn stop(&mut self) {}
     }
 
     #[test]

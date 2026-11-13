@@ -6,6 +6,7 @@ import type { SpeechModel } from "../../data/screens/settings";
 import { formatSize } from "./format";
 import { GRAPHICS_TITLE, graphicsHint, useGraphicsCard } from "./graphicsCard";
 import { KeyResult, SettingsLayout, ToggleRow, useKeyTests, useLater } from "./parts";
+import MicrophoneCard from "./MicrophoneCard";
 import SpeechModelList from "./SpeechModelList";
 import { modelRows, modelsSize } from "./speechModels";
 import { useSpeechModels } from "./useSpeechModels";
@@ -28,6 +29,7 @@ function SpeechLive() {
   return (
     <SettingsLayout active="8-4-settings-speech">
       <div style={{ flex: "999 1 480px", minWidth: "0", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <MicrophoneCard />
         <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingBottom: "10px" }}>
             <span className="e-h2">Speech to text</span>

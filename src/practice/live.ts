@@ -56,6 +56,8 @@ export interface LiveState {
   followUps: boolean;
   phase: Phase;
   recordingPath: string | null;
+  /** The microphone that opened for the answer being recorded, as the recorder named it; null before it opens. */
+  micName: string | null;
   /** What each attempt at the current question showed, index 0 is attempt 1. */
   attempts: PracticeAttempt[];
   outcomes: RepOutcome[];
@@ -98,6 +100,7 @@ const INITIAL: LiveState = {
   followUps: true,
   phase: "idle",
   recordingPath: null,
+  micName: null,
   attempts: [],
   outcomes: [],
   restartOffered: false,
@@ -377,8 +380,8 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export async function beginRecording() {
   try {
     const api = await repApi();
-    await api.startRecording();
-    set({ phase: "recording", error: null });
+    const name = await api.startRecording();
+    set({ phase: "recording", error: null, micName: typeof name === "string" && name ? name : null });
     // Load the speech model while you talk; if it can't, the transcript says why when you stop.
     void api.warmSpeech?.().catch(() => {});
   } catch (e) {
@@ -396,8 +399,8 @@ export async function restartRecording() {
     const a = await repApi();
     const rec = await a.stopRecording();
     await a.discardRecording(rec.path);
-    await a.startRecording();
-    set({ phase: "recording", error: null });
+    const name = await a.startRecording();
+    set({ phase: "recording", error: null, micName: typeof name === "string" && name ? name : null });
   } catch (e) {
     set({ phase: "error", error: message(e) });
   }

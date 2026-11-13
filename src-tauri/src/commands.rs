@@ -3,7 +3,7 @@
 
 use crate::models_store::{self, DownloadSlot};
 use crate::paths;
-use crate::recorder::capture::Capture;
+use crate::recorder::capture::{Capture, StartError};
 use crate::recorder::mic::{input_devices, MicSource};
 use crate::speech::{models, transcribe};
 use serde::Serialize;
@@ -200,13 +200,17 @@ pub async fn start_recording(app: AppHandle, state: State<'_, RecorderState>, de
         state.end();
         return Err("Ensayo is installing an update. Try again in a moment.".into());
     }
-    let started = (|| {
+    let device = device.unwrap_or_default();
+    // The device opens on a blocking thread with a time limit: a microphone that never answers must not hang the app.
+    let started = tauri::async_runtime::spawn_blocking(move || {
         std::fs::create_dir_all(paths::audio_dir()).map_err(|e| e.to_string())?;
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
         let path = paths::audio_dir().join(format!("rec-{stamp}.wav"));
-        let mic = MicSource::with_device(device.as_deref().unwrap_or(""));
-        Capture::start(Box::new(mic), &path)
-    })();
+        open_capture(Box::new(MicSource::with_device(&device)), &path, OPEN_LIMIT)
+    })
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(|r| r);
     match started {
         Ok(cap) => {
             let name = cap.mic_name().to_string();
@@ -218,6 +222,22 @@ pub async fn start_recording(app: AppHandle, state: State<'_, RecorderState>, de
             Err(e)
         }
     }
+}
+
+/// How long a microphone gets to open before Ensayo gives up.
+const OPEN_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+const MIC_TIMEOUT: &str = "The microphone didn't respond. Unplug it and plug it back in, or choose another in Settings › Speech.";
+
+/// Opens the capture within `limit`; on a timeout the capture state is not taken, and the person gets the plain line.
+fn open_capture(mic: Box<dyn crate::recorder::source::AudioSource>, path: &std::path::Path, limit: std::time::Duration) -> Result<Capture, String> {
+    Capture::start_within(mic, path, limit).map_err(|e| match e {
+        StartError::Failed(msg) => msg,
+        StartError::TimedOut => {
+            log::warn!("mic open timed out after {} ms", limit.as_millis());
+            MIC_TIMEOUT.to_string()
+        }
+    })
 }
 
 #[derive(Serialize)]
@@ -259,6 +279,37 @@ pub async fn transcribe_recording(path: PathBuf, model_id: String) -> Result<tra
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_microphone_that_never_answers_ends_the_capture_state_with_a_plain_line() {
+        use crate::recorder::source::{AudioSource, SharedFeed};
+        struct Never(std::sync::mpsc::Receiver<()>);
+        impl AudioSource for Never {
+            fn start(&mut self, _: SharedFeed) -> Result<String, String> {
+                let _ = self.0.recv();
+                Ok("never".into())
+            }
+            fn restart(&mut self) -> Result<String, String> {
+                Ok("never".into())
+            }
+            fn stop(&mut self) {}
+        }
+        let state = RecorderState::default();
+        state.begin().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let (keep, wait) = std::sync::mpsc::channel::<()>();
+        let err = match open_capture(Box::new(Never(wait)), &dir.path().join("x.wav"), std::time::Duration::from_millis(100)) {
+            Ok(_) => panic!("should time out"),
+            Err(e) => {
+                state.end();
+                e
+            }
+        };
+        assert_eq!(err, "The microphone didn't respond. Unplug it and plug it back in, or choose another in Settings › Speech.");
+        assert!(!state.is_active(), "the capture state is free again");
+        assert!(state.begin().is_ok());
+        drop(keep);
+    }
 
     #[test]
     fn a_second_start_while_recording_is_refused() {

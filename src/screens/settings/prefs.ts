@@ -39,16 +39,23 @@ export interface SpeechPrefs {
   model: string;
 }
 
+export interface MicPrefs {
+  /** The microphone chosen in setup or Settings, Speech, by the name `list_input_devices` gave; empty means the system default. */
+  device: string;
+}
+
 export interface Prefs {
   practice: PracticePrefs;
   voice: VoicePrefs;
   speech: SpeechPrefs;
+  mic: MicPrefs;
 }
 
 export const DEFAULT_PREFS: Prefs = {
   practice: { stage: "hiring_manager", questions: 5, tries: 3, timer: true, followUps: true, autoStop: false },
   voice: { readAloud: true, voiceUri: "", engine: "browser", speed: "Normal", readTrySaying: true },
   speech: { model: "" },
+  mic: { device: "" },
 };
 
 type Store = Pick<Storage, "getItem" | "setItem">;
@@ -113,15 +120,20 @@ function cleanSpeech(raw: unknown): SpeechPrefs {
   return { model: typeof r.model === "string" ? r.model : DEFAULT_PREFS.speech.model };
 }
 
+function cleanMic(raw: unknown): MicPrefs {
+  const r = isObject(raw) ? raw : {};
+  return { device: typeof r.device === "string" ? r.device : DEFAULT_PREFS.mic.device };
+}
+
 /** The saved settings, or the defaults for anything missing, damaged or unreadable. */
 export function readPrefs(storage: Store | null = browserStorage()): Prefs {
   try {
     const text = storage?.getItem(PREFS_KEY);
     const raw: unknown = text ? JSON.parse(text) : null;
     const r = isObject(raw) ? raw : {};
-    return { practice: cleanPractice(r.practice), voice: cleanVoice(r.voice), speech: cleanSpeech(r.speech) };
+    return { practice: cleanPractice(r.practice), voice: cleanVoice(r.voice), speech: cleanSpeech(r.speech), mic: cleanMic(r.mic) };
   } catch {
-    return { practice: { ...DEFAULT_PREFS.practice }, voice: { ...DEFAULT_PREFS.voice }, speech: { ...DEFAULT_PREFS.speech } };
+    return { practice: { ...DEFAULT_PREFS.practice }, voice: { ...DEFAULT_PREFS.voice }, speech: { ...DEFAULT_PREFS.speech }, mic: { ...DEFAULT_PREFS.mic } };
   }
 }
 
@@ -163,6 +175,14 @@ export function updateVoice(change: Partial<VoicePrefs>, storage: Store | null =
 export function updateSpeech(change: Partial<SpeechPrefs>, storage: Store | null = browserStorage()): Prefs {
   const now = readPrefs(storage);
   const next: Prefs = { ...now, speech: cleanSpeech({ ...now.speech, ...change }) };
+  writePrefs(next, storage);
+  return next;
+}
+
+/** Saves the microphone to use ("" is the system default) and returns everything as it now stands. */
+export function updateMic(change: Partial<MicPrefs>, storage: Store | null = browserStorage()): Prefs {
+  const now = readPrefs(storage);
+  const next: Prefs = { ...now, mic: cleanMic({ ...now.mic, ...change }) };
   writePrefs(next, storage);
   return next;
 }

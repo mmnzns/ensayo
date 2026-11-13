@@ -40,7 +40,7 @@ function LevelBars({ bars, level }: { bars: number[]; level?: number }) {
 export default function PracticeRecording() {
   const { timerMaxSeconds, levelBars } = useStore().screens.practice;
   const { live, session, question, targetSeconds, endTo, onEnd } = usePractice();
-  const { mode, phase } = useLive();
+  const { mode, phase, micName } = useLive();
   // Mock is like the real call, so no clock. In a Drill the clock follows "Show the timer in Drill" in Settings.
   const [showTimer] = useState(() => readPrefs().practice.timer);
   const noClock = live && (mode === "mock" || !showTimer);
@@ -125,6 +125,7 @@ export default function PracticeRecording() {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", width: "100%", maxWidth: "420px" }}>
           {/* A Mock is like the real call: no clock and no target while you talk (the four minute cap still stops it). */}
           {!noClock && <span style={{ fontSize: "44px", fontWeight: "600", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{clock(seconds)}</span>}
+          {live && micName && <span className="e-small" data-testid="mic-name">{micName}</span>}
           <div style={{ position: "relative", width: "100%", height: "8px", borderRadius: "999px", background: "var(--e-line)", display: noClock ? "none" : undefined }} aria-label={`${seconds} seconds, target ${targetSeconds.from} to ${targetSeconds.to}`}>
             <span style={{ position: "absolute", left: "0", top: "0", height: "8px", width: pct(seconds), borderRadius: "999px", background: "var(--e-primary)" }} />{" "}
             <span style={{ position: "absolute", left: pct(targetSeconds.from), top: "-4px", width: pct(targetSeconds.to - targetSeconds.from), height: "16px", borderRadius: "6px", boxShadow: "inset 0 0 0 2px var(--e-win)" }} />
