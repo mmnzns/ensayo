@@ -9,6 +9,8 @@ import type { FinishArgs, FollowUpQuestion, FullRep, RepOutcome } from "./types"
 export interface SessionDetail {
   session: { id: string; mode: string; stage: string; application_id: string | null; started: string };
   reps: FullRep[];
+  /** The numbers of the reps whose transcript the person fixed. Missing from fakes and older builds. */
+  edited?: number[];
 }
 
 /** What the recorder says while it records. */
@@ -34,6 +36,8 @@ export interface RepApi {
   /** Loads the speech model while the answer is recorded, so the transcript doesn't wait for it. Optional: fakes skip it. */
   warmSpeech?(): Promise<void>;
   rescoreRep(sessionId: string, n: number, keepRestart: boolean, run?: string): Promise<RepOutcome>;
+  /** Scores a rep again on edited transcript lines (one text per line). Optional: fakes skip it. */
+  rescoreRepWithText?(sessionId: string, n: number, lines: string[], run?: string): Promise<RepOutcome>;
   deleteRep(sessionId: string, n: number): Promise<void>;
   labelRep(sessionId: string, n: number, wrong: boolean): Promise<void>;
   nextFollowUp(sessionId: string, parentN: number): Promise<FollowUpQuestion>;
@@ -89,6 +93,7 @@ export async function tauriApi(): Promise<RepApi> {
     finishRep: async (args) => invoke("finish_rep", { args, modelId: await pickModel() }),
     warmSpeech: async () => invoke("warm_speech_model", { modelId: await pickModel() }),
     rescoreRep: (sessionId, n, keepRestart) => invoke("rescore_rep", { sessionId, n, keepRestart }),
+    rescoreRepWithText: (sessionId, n, lines) => invoke("rescore_rep_with_text", { sessionId, n, lines }),
     deleteRep: (sessionId, n) => invoke("delete_rep", { sessionId, n }),
     labelRep: (sessionId, n, wrong) => invoke("label_rep", { sessionId, n, wrong }),
     nextFollowUp: (sessionId, parentN) => invoke("next_follow_up", { sessionId, parentN }),

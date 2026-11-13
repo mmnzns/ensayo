@@ -719,6 +719,26 @@ export async function rescoreAfterCap(key: string): Promise<boolean> {
   return true;
 }
 
+/** "Fix a word", Save: the transcript lines as edited, scored again on the rep on screen. The speech model does not run again.
+ *  On a failure the result stays on screen with the reason; nothing is lost. Returns false when there was nothing to fix. */
+export async function fixTranscript(lines: string[]): Promise<boolean> {
+  const rep = currentRep();
+  if (!rep || state.phase !== "result") return false;
+  const before = { notice: state.notice };
+  set({ phase: "thinking", measured: rep.transcript.length, thinkingSince: Date.now() });
+  const run = newRun();
+  try {
+    const api = await repApi();
+    if (!api.rescoreRepWithText) throw new Error("Fixing a word works in the Ensayo app.");
+    const out = await api.rescoreRepWithText(rep.session_id, rep.n, lines, run);
+    if (!isCurrentRun(run)) return true;
+    await apply(out, run);
+  } catch (e) {
+    if (isCurrentRun(run)) set({ phase: "result", notice: message(e) || before.notice });
+  }
+  return true;
+}
+
 /** The words the backend puts on a rep when the person pressed Stop on the AI. */
 export const STOPPED_NOTICE_MARK = "You stopped the AI.";
 

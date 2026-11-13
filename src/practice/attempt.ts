@@ -268,6 +268,7 @@ export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
       rows: rows(rep),
       footnote: rep.ai ? "" : "Only the timing checks ran on this answer. Answering first, saying what you decided and story fit need an AI engine: your own key or the local AI, in Settings under AI.",
       judgedBy: judgedByLine(rep),
+      ...(o.transcript_edited ? { transcriptEdited: true } : {}),
     },
   };
 }

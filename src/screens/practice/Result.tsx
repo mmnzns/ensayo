@@ -3,13 +3,14 @@ import { useEffect, useState } from "react";
 import { clock, type DetailRow, type PracticeAttempt, type TranscriptLine } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
 import { consistencyCheckOf, consistencySentences } from "../../practice/applied";
-import { anotherFollowUp, currentRep, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, requestFollowUp, savedLabels, scoreWithAi, stoppedByUser, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
+import { anotherFollowUp, currentRep, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, fixTranscript, requestFollowUp, savedLabels, scoreWithAi, stoppedByUser, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
 import { Kbd, SessionHeader } from "./parts";
 import { ASK, FOLLOW_UP, MAX_ATTEMPTS, nextAttempt, nextQuestion, RECORD, setAttempt, THINK } from "./practiceFlow";
 import { hush, speak, speakTrySaying } from "./speak";
 import { usePractice } from "./usePractice";
+import { FIXED_LINE, FIX_SAVED_HINT, lineText, linesChanged } from "./fixWord";
 import { useKeys } from "./useKeys";
 
 export interface ResultOptions {
@@ -101,6 +102,7 @@ function DetailsCard({ details, onHide, labeling }: { details: PracticeAttempt["
       )}
       {details.footnote && <p className="e-small" style={{ margin: "8px 0 0" }}>{details.footnote}</p>}
       {details.judgedBy && <p className="e-small" style={{ margin: "4px 0 0" }}>{details.judgedBy}</p>}
+      {details.transcriptEdited && <p className="e-small" style={{ margin: "4px 0 0" }}>{FIXED_LINE}</p>}
     </section>
   );
 }
@@ -118,6 +120,8 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const [labelOn, setLabelOn] = useState(false);
   const [labels, setLabels] = useState<Labels>({});
   const [labelsSaved, setLabelsSaved] = useState(false);
+  // "Fix a word": the transcript lines being edited, or null when the transcript is just shown.
+  const [fixing, setFixing] = useState<string[] | null>(null);
   const repKey = live ? `${state.sessionId}/${state.attempt}/${inFollowUp ? state.followUp?.number : 0}` : "";
   useEffect(() => {
     setLabelOn(false);
@@ -335,6 +339,8 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
               <span style={{ fontSize: "15px", fontWeight: "600" }}>
                 Your answer <span style={{ color: "var(--e-muted)", fontWeight: "400" }}>· {clock(attempt.durationSeconds)}</span>
               </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {live && fixing === null && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setFixing(attempt.transcript.map(lineText))}>Fix a word</button>}
               <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={listen}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M3 14v-2a9 9 0 0 1 18 0v2" />
@@ -343,11 +349,45 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
                 </svg>
                 Listen
               </button>
+              </span>
             </div>
             {live && noAudio && <p className="e-small" role="status" style={{ margin: "0 0 8px" }}>The audio is no longer on this computer. The words are still here.</p>}
-            {attempt.transcript.map((line, i) => (
-              <TranscriptLineView key={i} line={line} last={i === lastLine} />
-            ))}
+            {fixing !== null ? (
+              <form
+                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!linesChanged(attempt.transcript.map(lineText), fixing)) return setFixing(null);
+                  const scoring = fixTranscript(fixing);
+                  setFixing(null);
+                  go(THINK);
+                  void scoring;
+                }}
+              >
+                <span className="e-small">{FIX_SAVED_HINT}</span>
+                {fixing.map((text, i) => (
+                  <input
+                    key={i}
+                    className="e-input"
+                    aria-label={`Line ${i + 1} of ${fixing.length} of your answer`}
+                    value={text}
+                    onChange={(e) => setFixing(fixing.map((t, j) => (j === i ? e.target.value : t)))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setFixing(null);
+                      }
+                    }}
+                  />
+                ))}
+                <span style={{ display: "flex", gap: "8px" }}>
+                  <button type="submit" className="e-btn e-btn-primary e-btn-sm">Save and score again</button>
+                  <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setFixing(null)}>Cancel</button>
+                </span>
+              </form>
+            ) : (
+              attempt.transcript.map((line, i) => <TranscriptLineView key={i} line={line} last={i === lastLine} />)
+            )}
             {attempt.highlightCaption && <p className="e-small" style={{ margin: "8px 0 0" }}>{attempt.highlightCaption}</p>}
             {detailsInAside ? (
               <div style={{ marginTop: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "10px", borderTop: "1px solid var(--e-line)", paddingTop: "12px" }}>

@@ -14,6 +14,7 @@ use crate::scoring::prompts::{get, PromptId};
 use crate::scoring::run::Budget;
 use crate::speech::words::Word;
 use crate::speech::transcribe;
+use crate::transcript_edit;
 use crate::storage::model::Story;
 use crate::scoring::followup::{self, FollowScoreInput, FollowScored, GenInput};
 use crate::scoring::inputs::{transcript_text, transcript_text_first};
@@ -95,6 +96,8 @@ pub struct RepOutcome {
     pub notice: Option<String>,
     /// What was said, for a clarifying question (the interviewer's reply is generated from it).
     pub transcript_text: Option<String>,
+    /// The person fixed a mis-heard word in this transcript; the words as first heard are kept beside it.
+    pub transcript_edited: bool,
 }
 
 /// The numbers a story's proof points stand for: before and after, with their unit.
@@ -294,7 +297,7 @@ fn delta_for(storage: &Storage, session: &str, question_id: &str, attempt: u32, 
 }
 
 fn outcome_without_rep(name: &'static str, session_id: String) -> RepOutcome {
-    RepOutcome { outcome: name, session_id, rep: None, delta: None, restart_offered: false, audio_kept: false, notice: None, transcript_text: None }
+    RepOutcome { outcome: name, session_id, rep: None, delta: None, restart_offered: false, audio_kept: false, notice: None, transcript_text: None, transcript_edited: false }
 }
 
 /// Measures and saves one rep from its words. The audio file moves to `audio_root/<session>/<n>.wav` (or is deleted
@@ -429,7 +432,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
     if !audio_kept {
         let _ = std::fs::remove_file(&args.audio_path);
     }
-    Ok(RepOutcome { outcome: "scored", session_id, rep: Some(full), delta, restart_offered, audio_kept, notice, transcript_text: None })
+    Ok(RepOutcome { outcome: "scored", session_id, rep: Some(full), delta, restart_offered, audio_kept, notice, transcript_text: None, transcript_edited: false })
 }
 
 fn move_audio(from: &Path, to: &Path) -> bool {
@@ -501,7 +504,20 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
     }
     let delta = delta_for(storage, session_id, &full.rep.question_id, full.rep.attempt, &full.metrics);
     let audio_kept = audio_path(audio_root, session_id, n).is_file();
-    Ok(RepOutcome { outcome: "scored", session_id: session_id.to_string(), rep: Some(full), delta, restart_offered: false, audio_kept, notice, transcript_text: None })
+    let transcript_edited = transcript_edit::is_edited(storage, session_id, n);
+    Ok(RepOutcome { outcome: "scored", session_id: session_id.to_string(), rep: Some(full), delta, restart_offered: false, audio_kept, notice, transcript_text: None, transcript_edited })
+}
+
+/// Fixes a mis-heard word: `lines` is the edited text of each line of the transcript, in order. The words are rebuilt
+/// keeping their times (see `transcript_edit`), the words as first heard are kept beside the rep, and the answer is
+/// measured and judged again on the corrected words, as a rescore is. The speech model does not run again.
+pub fn rescore_with_text(storage: &Storage, audio_root: &Path, session_id: &str, n: u32, lines: &[String], ai: Option<AiCtx>) -> StorageResult<RepOutcome> {
+    let mut full = storage.rep(session_id, n)?.ok_or_else(|| StorageError::NotFound(format!("rep {n} of {session_id}")))?;
+    let edited = transcript_edit::edit_words(&full.metrics.words, &full.metrics.sentences, lines).map_err(StorageError::Invalid)?;
+    transcript_edit::keep_original(storage, session_id, n, &full.transcript).map_err(StorageError::Invalid)?;
+    full.transcript = edited;
+    storage.save_rep(session_id, &full)?;
+    rescore_with(storage, audio_root, session_id, n, false, ai)
 }
 
 /// Scores a saved rep again with the current scorer, for the eval harness: the same measuring and judging as a new
@@ -671,6 +687,22 @@ pub async fn rescore_rep(session_id: String, n: u32, keep_restart: bool) -> Cmd<
     .await
 }
 
+/// "Fix a word" then Save: the edited lines of the transcript, scored again.
+#[tauri::command]
+pub async fn rescore_rep_with_text(session_id: String, n: u32, lines: Vec<String>) -> Cmd<RepOutcome> {
+    blocking(move || {
+        let _t = crate::logging::Timer::new("rescore_rep_with_text");
+        let storage = open().map_err(plain)?;
+        let (out, unavailable) = with_ai(&session_id, |ai| rescore_with_text(&storage, &paths::audio_dir(), &session_id, n, &lines, ai));
+        let mut out = out.map_err(plain)?;
+        if out.notice.is_none() {
+            out.notice = unavailable;
+        }
+        Ok(out)
+    })
+    .await
+}
+
 /// "Start again" after the restart offer, or any rep the user throws away: the words, the numbers and the audio.
 #[tauri::command]
 pub async fn delete_rep(session_id: String, n: u32) -> Cmd<()> {
@@ -745,6 +777,8 @@ pub struct SessionDetail {
     pub session: Session,
     pub reps: Vec<FullRep>,
     pub problems: Vec<String>,
+    /// The numbers of the reps whose transcript the person fixed.
+    pub edited: Vec<u32>,
 }
 
 #[tauri::command]
@@ -753,7 +787,8 @@ pub async fn load_session(session_id: String) -> Cmd<Option<SessionDetail>> {
         let storage = open().map_err(plain)?;
         let Some(session) = storage.session(&session_id).map_err(plain)? else { return Ok(None) };
         let reps = storage.reps(&session_id).map_err(plain)?;
-        Ok(Some(SessionDetail { session, reps: reps.items, problems: reps.problems }))
+        let edited = transcript_edit::edited_reps(&storage, &session_id);
+        Ok(Some(SessionDetail { session, reps: reps.items, problems: reps.problems, edited }))
     })
     .await
 }
@@ -1295,6 +1330,77 @@ mod tests {
         let out = ai_run(&llm, &a, &storage, &tmp.join("audio"), words(40));
         assert_eq!(llm.calls(), 3);
         assert_eq!(out.rep.unwrap().rep.question_type, "technical");
+    }
+
+    fn heard(text: &str, tail: usize) -> Vec<Word> {
+        let mut v: Vec<Word> = words(tail);
+        for (i, t) in text.split(' ').enumerate() {
+            v[i].text = t.into();
+        }
+        v
+    }
+
+    fn proof_passed(rep: &FullRep) -> Option<bool> {
+        rep.metrics.checks.iter().find(|c| c.id == "proof").and_then(|c| c.passed)
+    }
+
+    #[test]
+    fn fixing_a_mis_heard_number_makes_said_your_number_pass_and_keeps_the_original_words() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let audio = tmp.join("audio");
+        let out = finish_with(&storage, &audio, &args(&tmp, 1, None), heard("We cut churn from 14% to 81%.", 40), true, now(), None).unwrap();
+        let rep = out.rep.unwrap();
+        assert_eq!(proof_passed(&rep), Some(false));
+        assert!(!out.transcript_edited);
+        assert!(!transcript_edit::is_edited(&storage, &out.session_id, 1));
+        let original = rep.transcript.clone();
+        let mut lines: Vec<String> = rep.metrics.sentences.iter().map(|s| s.text.clone()).collect();
+        lines[0] = "We cut churn from 24% to 18%.".into();
+        let fixed = rescore_with_text(&storage, &audio, &out.session_id, 1, &lines, None).unwrap();
+        assert!(fixed.transcript_edited);
+        let now_rep = fixed.rep.unwrap();
+        assert_eq!(proof_passed(&now_rep), Some(true));
+        assert_eq!(now_rep.transcript.len(), original.len());
+        assert!(now_rep.transcript.windows(2).all(|p| p[0].start_ms <= p[1].start_ms));
+        assert_eq!(now_rep.transcript[4].text, "24%");
+        assert_eq!(now_rep.transcript[4].start_ms, original[4].start_ms);
+        // What was saved is the fixed text; the words as heard are on file.
+        let saved = storage.rep(&out.session_id, 1).unwrap().unwrap();
+        assert_eq!(saved.transcript, now_rep.transcript);
+        let kept = transcript_edit::original_words(&storage, &out.session_id, 1).unwrap();
+        assert_eq!(kept, original);
+        assert_eq!(transcript_edit::edited_reps(&storage, &out.session_id), vec![1]);
+        // Fixing again never replaces the original.
+        let mut again: Vec<String> = now_rep.metrics.sentences.iter().map(|s| s.text.clone()).collect();
+        again[0] = "We cut churn from 24% to 19%.".into();
+        let second = rescore_with_text(&storage, &audio, &out.session_id, 1, &again, None).unwrap();
+        assert_eq!(proof_passed(&second.rep.unwrap()), Some(true));
+        assert_eq!(transcript_edit::original_words(&storage, &out.session_id, 1).unwrap(), original);
+        // A scoring again keeps saying it was fixed.
+        assert!(rescore_with_text(&storage, &audio, &out.session_id, 1, &again, None).unwrap().transcript_edited);
+    }
+
+    #[test]
+    fn a_line_count_that_no_longer_matches_is_refused_and_changes_nothing() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let audio = tmp.join("audio");
+        let out = finish_with(&storage, &audio, &args(&tmp, 1, None), words(40), true, now(), None).unwrap();
+        assert!(rescore_with_text(&storage, &audio, &out.session_id, 1, &["just one".into()], None).is_err());
+        assert!(!transcript_edit::is_edited(&storage, &out.session_id, 1));
+    }
+
+    #[test]
+    fn a_rep_saved_before_fixing_existed_loads_and_is_not_marked_fixed() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let out = finish_with(&storage, &tmp.join("audio"), &args(&tmp, 1, None), words(40), true, now(), None).unwrap();
+        // No transcript.original.json beside it: the rep loads, and rescoring says it was not fixed.
+        assert!(storage.rep(&out.session_id, 1).unwrap().is_some());
+        let r = rescore_with(&storage, &tmp.join("audio"), &out.session_id, 1, false, None).unwrap();
+        assert!(!r.transcript_edited);
+        assert!(transcript_edit::edited_reps(&storage, &out.session_id).is_empty());
     }
 
     #[test]

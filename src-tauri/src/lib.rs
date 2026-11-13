@@ -29,6 +29,7 @@ mod trash_commands;
 mod target_commands;
 mod recorder;
 pub mod scoring;
+pub mod transcript_edit;
 mod speech;
 mod update_commands;
 pub mod update_notice;
@@ -158,6 +159,7 @@ pub fn run() {
             rep_commands::finish_rep,
             rep_commands::warm_speech_model,
             rep_commands::rescore_rep,
+            rep_commands::rescore_rep_with_text,
             rep_commands::delete_rep,
             rep_commands::label_rep,
             rep_commands::next_follow_up,

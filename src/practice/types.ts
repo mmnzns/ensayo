@@ -127,6 +127,8 @@ export interface RepOutcome {
   notice: string | null;
   /** What was said, for a clarifying question. */
   transcript_text: string | null;
+  /** The person fixed a mis-heard word in this transcript. Missing in answers from before fixing existed. */
+  transcript_edited?: boolean;
 }
 
 export interface FinishArgs {

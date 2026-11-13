@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { RepApi } from "../practice/api";
-import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute, practiceStory, rehearseQuestion, startStoryDrill, startQuestionDrill, ASKING_SCREEN, rescoreAfterCap, CAP_NOTICE_MARK, noteMeasured, scoreWithAi, stoppedByUser, STOPPED_NOTICE_MARK } from "../practice/live";
+import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute, practiceStory, rehearseQuestion, startStoryDrill, startQuestionDrill, ASKING_SCREEN, rescoreAfterCap, CAP_NOTICE_MARK, noteMeasured, fixTranscript, scoreWithAi, stoppedByUser, STOPPED_NOTICE_MARK } from "../practice/live";
 import { liveContextOf } from "../practice/quick";
 import { storyFit } from "../practice/questions";
 import type { FinishArgs, FullRep, RepOutcome } from "../practice/types";
+import { attemptFromOutcome } from "../practice/attempt";
+import { FIXED_LINE, lineText, linesChanged } from "../screens/practice/fixWord";
 
 function rep(attempt: number, fix: string | null = "length"): FullRep {
   return {
@@ -566,5 +568,51 @@ describe("real progress and Stop", () => {
     expect(stoppedByUser()).toBe(false);
     expect(await scoreWithAi()).toBe(false);
     expect(a.calls.some((c) => c.startsWith("rescore"))).toBe(false);
+  });
+});
+
+describe("fixing a mis-heard word", () => {
+  it("sends the edited lines for the rep on screen, then shows the rescored answer marked as fixed", async () => {
+    const a = fake([scored(1, "length")]);
+    const sent: { n: number; lines: string[] }[] = [];
+    a.api.rescoreRepWithText = async (_s, n, lines) => (sent.push({ n, lines }), { ...scored(1, null), transcript_edited: true });
+    setRepApi(a.api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    expect(getLive().attempts[0].details.transcriptEdited).toBeUndefined();
+    const run = fixTranscript(["We cut churn by 18%.", "Done."]);
+    expect(getLive()).toMatchObject({ phase: "thinking", measured: 0 });
+    await run;
+    expect(sent).toEqual([{ n: 1, lines: ["We cut churn by 18%.", "Done."] }]);
+    expect(getLive().phase).toBe("result");
+    expect(getLive().attempts[0].details.transcriptEdited).toBe(true);
+    expect(FIXED_LINE).toBe("You fixed the transcript.");
+  });
+
+  it("stays on the result with the reason when the scoring fails", async () => {
+    const a = fake([scored(1, "length")]);
+    a.api.rescoreRepWithText = async () => Promise.reject(new Error("The transcript changed while you were editing it. Open it again."));
+    setRepApi(a.api);
+    begin();
+    await beginRecording();
+    await stopAndFinish();
+    await fixTranscript(["x"]);
+    expect(getLive()).toMatchObject({ phase: "result", notice: "The transcript changed while you were editing it. Open it again." });
+    expect(getLive().attempts).toHaveLength(1);
+  });
+
+  it("does nothing when there is no answer on screen", async () => {
+    begin();
+    expect(await fixTranscript(["x"])).toBe(false);
+  });
+
+  it("knows when the lines were changed, and reads a line with pieces as plain text", () => {
+    expect(linesChanged(["a b", "c"], ["a  b", "c "])).toBe(false);
+    expect(linesChanged(["a b", "c"], ["a b", "d"])).toBe(true);
+    expect(linesChanged(["a"], ["a", "b"])).toBe(true);
+    expect(lineText({ text: [{ text: "um" }, { text: " so", circle: true }], tone: "normal" })).toBe("um so");
+    expect(attemptFromOutcome(scored(1, "length")).details.transcriptEdited).toBeUndefined();
+    expect(attemptFromOutcome({ ...scored(1, "length"), transcript_edited: false }).details.transcriptEdited).toBeUndefined();
   });
 });
