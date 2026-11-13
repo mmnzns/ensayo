@@ -14,6 +14,9 @@ pub struct Profile {
     pub sells_to: String,
     pub identity_statement: String,
     pub focus_habits: Vec<String>,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -100,6 +103,9 @@ pub struct Story {
     /// headline may only carry the numbers in `proof_points` (checked when the story is saved).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub angles: Vec<StoryAngle>,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// A story's way in for one target (`StoryAngle` in `src/data/types.ts`: snake_case like the story).
@@ -121,6 +127,9 @@ pub struct Method {
     pub spoken: String,
     #[serde(default, rename = "storyIds")]
     pub story_ids: Vec<String>,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// The six situations, in the order the Methods screen lists them.

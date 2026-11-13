@@ -4,8 +4,10 @@
 use super::{Result, StorageError};
 use serde_json::{json, Value};
 
-/// The format Ensayo writes today.
-pub const CURRENT: u64 = 1;
+/// The format Ensayo writes today. Format 2 (Ensayo 0.3.0) changed no field: it keeps unknown fields on every record
+/// (`extra`) and marks the files so an older Ensayo, which would drop what it doesn't know, refuses them instead.
+/// A format 1 file is read as it is (the v1 to v2 step does nothing) and is written as format 2 on the next save.
+pub const CURRENT: u64 = 2;
 
 fn version_of(v: &Value) -> u64 {
     v.get("schema_version").and_then(Value::as_u64).unwrap_or(0)
@@ -24,7 +26,8 @@ fn text(v: &Value, key: &str) -> String {
 /// no branches, competencies, usage or scale. They become proof points that are not verified, with the card headline
 /// rebuilt from the first number.
 pub fn story(mut v: Value) -> Result<Value> {
-    if version_of(&v) >= CURRENT {
+    // Format 1 and up already have the current shape (1 to 2 is a no-op); only format 0 needs rebuilding.
+    if version_of(&v) >= 1 {
         return Ok(v);
     }
     let obj = v.as_object_mut().ok_or_else(|| StorageError::Invalid("a story file must hold a JSON object".into()))?;
@@ -77,7 +80,7 @@ pub fn unchanged(v: Value) -> Result<Value> {
 }
 
 /// An application's record and the files next to it (`analysis.json`, `claims.json`, `resume/resume.json`...).
-/// Format 1 is the first, so nothing changes yet. When one of these files changes shape, bump `CURRENT` and add the
+/// Formats 1 and 2 have the same shape, so nothing changes yet. When one of these files changes shape, bump `CURRENT` and add the
 /// step here: a file older than `CURRENT` is moved forward in memory and rewritten when the user next saves it.
 pub fn application(v: Value) -> Result<Value> {
     Ok(v)

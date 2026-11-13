@@ -596,7 +596,7 @@ mod tests {
     }
 
     fn story(id: &str, title: &str, verified: bool) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: id.into(),
             title: title.into(),
             employer: "Fernhill".into(),
@@ -725,7 +725,7 @@ mod tests {
     fn answers_practiced_counts_reps_and_each_stage_counts_its_own_sessions() {
         let (_d, s, app) = setup();
         let mk = |id: &str, stage: &str, stage_id: Option<&str>, reps: u32, app_id: Option<&str>| {
-            s.save_session(&Session { id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app_id.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }).unwrap();
+            s.save_session(&Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app_id.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }).unwrap();
             for n in 1..=reps {
                 std::fs::create_dir_all(s.root().join(format!("sessions/{id}/reps/{n}"))).unwrap();
             }

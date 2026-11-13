@@ -5,7 +5,7 @@
 use crate::applications::view::{self, ApplicationView, ExtrasView};
 use crate::paths;
 use crate::storage::conflicts::{Conflict, Keep};
-use crate::storage::lock::{machine_name, LockState};
+use crate::storage::lock::{machine_name, Identity, LockState, Me};
 use crate::storage::model::{Method, Profile, Story};
 use crate::storage::relocate;
 use crate::storage::targets::{Target, You};
@@ -43,7 +43,41 @@ pub fn open_for(root: &Path, default: &Path) -> StorageResult<Storage> {
 /// True when the settings file is damaged and has no good copy, so the data folder choice is unknown. Never with
 /// `ENSAYO_DATA_DIR` set: the choice doesn't come from the file then.
 fn settings_damaged() -> bool {
+    // Tests never read the real settings file.
+    if cfg!(test) {
+        return false;
+    }
     std::env::var("ENSAYO_DATA_DIR").map_or(true, |v| v.trim().is_empty()) && settings::is_damaged(&paths::settings_file())
+}
+
+/// This computer, as the lock file knows it: its install id and its host name (a label only).
+pub fn me() -> Me {
+    Me { id: install_id(), label: machine_name() }
+}
+
+fn install_id() -> String {
+    // Tests never touch the real settings file.
+    #[cfg(test)]
+    return "test-install".into();
+    #[cfg(not(test))]
+    {
+        static ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+        if let Some(id) = ID.get() {
+            return id.clone();
+        }
+        match settings::install_id(&paths::settings_file()) {
+            Ok(id) => ID.get_or_init(|| id).clone(),
+            // A damaged settings file is dealt with at start; until then the host name is the id the old locks used.
+            Err(_) => machine_name(),
+        }
+    }
+}
+
+/// Tells the storage layer whether another computer holds this folder, so every save in it is refused while that is
+/// so. Read from the lock each time a command opens the folder, so a save always sees the lock as it is now.
+fn refresh_write_block(storage: &Storage) {
+    let other = storage.held_by_other(&me(), Utc::now()).unwrap_or(false);
+    crate::storage::io::set_write_block(storage.root(), other);
 }
 
 pub(crate) fn open_storage() -> StorageResult<Storage> {
@@ -51,7 +85,9 @@ pub(crate) fn open_storage() -> StorageResult<Storage> {
     if settings_damaged() {
         return Err(StorageError::Invalid(settings::DAMAGED_LINE.into()));
     }
-    open_for(&data_folder(), &paths::default_data_dir())
+    let storage = open_for(&data_folder(), &paths::default_data_dir())?;
+    refresh_write_block(&storage);
+    Ok(storage)
 }
 
 #[derive(Debug, Serialize)]
@@ -65,7 +101,7 @@ pub struct DataStatus {
     pub conflicts: Vec<Conflict>,
 }
 
-pub fn status_for(root: &Path, default: &Path, me: &str, now: DateTime<Utc>) -> DataStatus {
+pub fn status_for(root: &Path, default: &Path, me: impl Identity, now: DateTime<Utc>) -> DataStatus {
     let folder = root.to_string_lossy().into_owned();
     let Ok(storage) = open_for(root, default) else { return DataStatus { folder, state: "missing", machine: None, age_secs: None, conflicts: vec![] } };
     let (state, machine, age_secs) = match storage.lock_state(me, now) {
@@ -125,7 +161,11 @@ pub async fn data_status() -> Cmd<DataStatus> {
         if settings_damaged() {
             return Ok(DataStatus { folder: String::new(), state: "settings_damaged", machine: None, age_secs: None, conflicts: vec![] });
         }
-        Ok(status_for(&data_folder(), &paths::default_data_dir(), &machine_name(), Utc::now()))
+        let root = data_folder();
+        let status = status_for(&root, &paths::default_data_dir(), &me(), Utc::now());
+        // The window asks when it gets focus and before saving: the answer also decides whether saves are refused.
+        crate::storage::io::set_write_block(&root, status.state == "other_machine");
+        Ok(status)
     })
     .await
 }
@@ -133,12 +173,12 @@ pub async fn data_status() -> Cmd<DataStatus> {
 /// Takes the lock for this computer: nobody had it, or the user chose "Open anyway".
 #[tauri::command]
 pub async fn acquire_data_lock() -> Cmd<()> {
-    blocking(|| open_storage().and_then(|s| s.acquire_lock(&machine_name(), Utc::now())).map_err(plain)).await
+    blocking(|| open_storage().and_then(|s| s.acquire_lock(&me(), Utc::now())).map_err(plain)).await
 }
 
 #[tauri::command]
 pub async fn data_heartbeat() -> Cmd<()> {
-    blocking(|| open_storage().and_then(|s| s.heartbeat(&machine_name(), Utc::now())).map_err(plain)).await
+    blocking(|| open_storage().and_then(|s| s.heartbeat(&me(), Utc::now())).map_err(plain)).await
 }
 
 #[tauri::command]
@@ -149,7 +189,7 @@ pub async fn release_data_lock() -> Cmd<()> {
 /// Gives the data folder back. Run when Ensayo quits, so the other computer can open it straight away instead of
 /// seeing "open on another computer" until the lock goes stale. Only ever removes this computer's own lock.
 pub fn release_lock_now() -> Cmd<()> {
-    open_storage().and_then(|s| s.release_lock(&machine_name())).map_err(plain)
+    open_storage().and_then(|s| s.release_lock(&me())).map_err(plain)
 }
 
 #[tauri::command]
@@ -212,7 +252,7 @@ pub async fn move_data_folder(folder: PathBuf) -> Cmd<&'static str> {
         let moved = relocate::prepare_move(&from, &folder).map_err(plain)?;
         // Let go of the old folder's "open here" note before switching, or it would read as another computer's.
         if let Ok(old) = Storage::open(from) {
-            let _ = old.release_lock(&machine_name());
+            let _ = old.release_lock(&me());
         }
         settings::set_data_folder(&paths::settings_file(), &folder).map_err(plain)?;
         Ok(if moved == relocate::Moved::Copied { "copied" } else { "existing" })
@@ -322,7 +362,7 @@ mod tests {
     }
 
     fn story(id: &str) -> Story {
-        Story { id: id.into(), title: id.into(), employer: "".into(), best_for: vec![], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec![], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None, angles: vec![] }
+        Story { extra: Default::default(), id: id.into(), title: id.into(), employer: "".into(), best_for: vec![], direct_answer: "".into(), context: "".into(), approach: "".into(), action: "".into(), ownership: "".into(), result: "".into(), proof_points: vec![], scale: "".into(), competencies: vec![], great_eight: vec![], branches: vec![], verified: false, headline: "".into(), usage: Usage::default(), year: None, angles: vec![] }
     }
 
     #[test]
@@ -401,6 +441,42 @@ mod tests {
     }
 
     #[test]
+    fn saves_are_refused_while_another_computer_holds_the_lock_and_allowed_when_it_is_ours_free_or_stale() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        // Nobody holds it: saving works.
+        refresh_write_block(&storage);
+        storage.save_story(&story("st_a")).unwrap();
+        // Another computer took it a moment ago.
+        storage.acquire_lock("pc", Utc::now()).unwrap();
+        refresh_write_block(&storage);
+        let err = plain(storage.save_story(&story("st_b")).unwrap_err());
+        assert!(err.starts_with("Another computer has Ensayo open"), "{err}");
+        assert!(storage.delete_story("st_a").is_err(), "deleting is a save too");
+        assert!(storage.save_method(&Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![], extra: Default::default() }).is_err());
+        assert!(!storage.root().join("bank/stories/st_b.json").exists());
+        assert!(storage.root().join("bank/stories/st_a.json").exists());
+        // Its lock is old: it closed without releasing.
+        storage.acquire_lock("pc", Utc::now() - Duration::minutes(30)).unwrap();
+        refresh_write_block(&storage);
+        storage.save_story(&story("st_b")).unwrap();
+        // Ours again.
+        storage.acquire_lock(&me(), Utc::now()).unwrap();
+        refresh_write_block(&storage);
+        storage.save_story(&story("st_c")).unwrap();
+    }
+
+    #[test]
+    fn the_lock_names_this_computer_by_its_install_id_and_shows_the_host_name_as_a_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Storage::init(dir.path().join("data")).unwrap();
+        storage.acquire_lock(&me(), Utc::now()).unwrap();
+        let text = std::fs::read_to_string(storage.root().join("lock.json")).unwrap();
+        assert!(text.contains("test-install") && text.contains(&machine_name()), "{text}");
+        assert_eq!(status_for(storage.root(), storage.root(), &me(), Utc::now()).state, "ready");
+    }
+
+    #[test]
     fn the_default_folder_is_created_on_first_run_but_a_chosen_missing_folder_is_not() {
         let dir = tempfile::tempdir().unwrap();
         let default = dir.path().join("default");
@@ -439,14 +515,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::init(dir.path().join("data")).unwrap();
         storage.save_story(&story("st_a")).unwrap();
-        storage.save_method(&Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
+        storage.save_method(&Method { extra: Default::default(), situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
         std::fs::write(storage.root().join("bank/stories/st_bad.json"), "nope").unwrap();
         let all = load_all_from(&storage).unwrap();
         assert!(all.profile.is_none());
         assert_eq!(all.stories.len(), 1);
         assert_eq!(all.methods.len(), 1);
         assert_eq!(all.problems.len(), 1);
-        let p = Profile { name: "D".into(), full_name: "D O".into(), target_role: "".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] };
+        let p = Profile { extra: Default::default(), name: "D".into(), full_name: "D O".into(), target_role: "".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] };
         storage.save_profile(&p).unwrap();
         assert_eq!(load_all_from(&storage).unwrap().profile, Some(p));
     }
@@ -458,7 +534,7 @@ mod tests {
         let storage = Storage::init(dir.path().join("data")).unwrap();
         let before = serde_json::to_value(load_all_from(&storage).unwrap()).unwrap();
         assert!(before["you"].is_null() && before["profile"].is_null() && before["targets"] == serde_json::json!([]) && before["targetsNotePending"] == false, "{before}");
-        storage.save_profile(&Profile { name: "D".into(), full_name: "D O".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix funnels.".into(), focus_habits: vec!["numbers".into()] }).unwrap();
+        storage.save_profile(&Profile { extra: Default::default(), name: "D".into(), full_name: "D O".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix funnels.".into(), focus_habits: vec!["numbers".into()] }).unwrap();
         let second = storage.save_target(&Target { role: "Marketing Operations Manager".into(), sells_to: "b2b".into(), pitch: "I run the stack.".into(), ..Target::default() }).unwrap();
         let json = serde_json::to_value(load_all_from(&storage).unwrap()).unwrap();
         assert_eq!(json["you"]["name"], "D");
@@ -477,13 +553,13 @@ mod tests {
         use crate::storage::reps::{Rep, Session};
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::init(dir.path().join("data")).unwrap();
-        storage.save_profile(&Profile { name: "D".into(), full_name: "".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] }).unwrap();
+        storage.save_profile(&Profile { extra: Default::default(), name: "D".into(), full_name: "".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] }).unwrap();
         let target = storage.targets().unwrap().remove(0);
         storage.save_story(&story("st_a")).unwrap();
-        storage.save_session(&Session { id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: Some(target.id.clone()) }).unwrap();
+        storage.save_session(&Session { extra: Default::default(), id: "ses_1".into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-20T10:00:00Z".into(), target_id: Some(target.id.clone()) }).unwrap();
         let words: Vec<crate::speech::words::Word> = (0..12).map(|i| crate::speech::words::Word { text: "word".into(), start_ms: i * 500, end_ms: i * 500 + 400 }).collect();
         let metrics = crate::metrics::compute(crate::metrics::Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: vec![], keep_restart: false });
-        let rep = Rep { n: 1, question_id: "q".into(), question_text: "?".into(), question_type: "behavioral".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-20T10:00:00Z".into(), story_ids: vec!["st_a".into()], fix: None, note: None, rewrite: None, ai: None, follow_up: None, feedback: None };
+        let rep = Rep { extra: Default::default(), n: 1, question_id: "q".into(), question_text: "?".into(), question_type: "behavioral".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-20T10:00:00Z".into(), story_ids: vec!["st_a".into()], fix: None, note: None, rewrite: None, ai: None, follow_up: None, feedback: None };
         storage.save_rep("ses_1", &crate::storage::reps::FullRep { session_id: "ses_1".into(), rep, transcript: words, metrics }).unwrap();
         let all = load_all_from(&storage).unwrap();
         assert_eq!(all.stories[0].usage.by_target.get(&target.id), Some(&1));
@@ -499,7 +575,7 @@ mod tests {
     fn load_all_reports_the_pending_note_after_a_migration_and_a_target_file_that_cannot_be_read() {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::init(dir.path().join("data")).unwrap();
-        crate::storage::versioned::save_record(&storage.root().join("profile.json"), &Profile { name: "D".into(), full_name: "D O".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] }).unwrap();
+        crate::storage::versioned::save_record(&storage.root().join("profile.json"), &Profile { extra: Default::default(), name: "D".into(), full_name: "D O".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "".into(), focus_habits: vec![] }).unwrap();
         std::fs::create_dir_all(storage.root().join("targets")).unwrap();
         std::fs::write(storage.root().join("targets/tg_bad.json"), "nope").unwrap();
         let all = load_all_from(&storage).unwrap();

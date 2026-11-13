@@ -34,9 +34,38 @@ pub fn is_safe_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+/// Data folders whose lock another computer holds. While a folder is in here, nothing in it is saved (the lock file
+/// itself aside): two computers writing one folder is how stories get out of step. Set from the lock when a command
+/// opens the folder.
+static BLOCKED: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+pub const OTHER_COMPUTER_LINE: &str = "Another computer has Ensayo open on this data folder, so this change was not saved. Close Ensayo there, or reopen Ensayo here.";
+
+/// Marks a data folder as locked by another computer (or clears it).
+pub fn set_write_block(root: &Path, blocked: bool) {
+    let mut list = BLOCKED.lock().unwrap_or_else(|e| e.into_inner());
+    list.retain(|p| p != root);
+    if blocked {
+        list.push(root.to_path_buf());
+    }
+}
+
+/// Refuses a write inside a blocked data folder. The lock file is exempt: taking the lock back is how the block ends.
+pub fn writable(path: &Path) -> Result<()> {
+    if path.file_name().is_some_and(|n| n == "lock.json") {
+        return Ok(());
+    }
+    let list = BLOCKED.lock().unwrap_or_else(|e| e.into_inner());
+    if list.iter().any(|root| path.starts_with(root)) {
+        return Err(StorageError::Invalid(OTHER_COMPUTER_LINE.into()));
+    }
+    Ok(())
+}
+
 /// Writes to a temp file in the same folder, flushes it to disk, then renames it over the target. A crash or a sync
 /// in the middle never leaves a half-written file.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+    writable(path)?;
     let io = |e: std::io::Error| StorageError::Io(path.to_path_buf(), e.to_string());
     let parent = path.parent().ok_or_else(|| StorageError::Invalid(format!("{} has no folder", path.display())))?;
     fs::create_dir_all(parent).map_err(io)?;
@@ -215,5 +244,20 @@ mod tests {
         for bad in ["", "../x", "a/b", "a\\b", ".hidden", "a b", "x.json"] {
             assert!(!is_safe_id(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_blocked_data_folder_refuses_writes_except_the_lock_file_and_other_folders_are_free() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocked = dir.path().join("blocked-data");
+        let free = dir.path().join("free-data");
+        set_write_block(&blocked, true);
+        let err = atomic_write(&blocked.join("bank/stories/st_a.json"), b"{}").unwrap_err();
+        assert_eq!(err.to_string(), OTHER_COMPUTER_LINE);
+        assert!(!blocked.join("bank").exists(), "nothing is created");
+        assert!(atomic_write(&blocked.join("lock.json"), b"{}").is_ok());
+        assert!(atomic_write(&free.join("bank/st.json"), b"{}").is_ok());
+        set_write_block(&blocked, false);
+        assert!(atomic_write(&blocked.join("bank/stories/st_a.json"), b"{}").is_ok());
     }
 }

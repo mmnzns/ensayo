@@ -30,6 +30,9 @@ pub struct Session {
     /// else the first target that is not archived, decided when it is read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_id: Option<String>,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,6 +80,9 @@ pub struct Rep {
     #[serde(default)]
     pub ai: Option<AiMeta>,
     pub feedback: Option<Feedback>,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -269,6 +275,7 @@ impl Storage {
     /// "That note was wrong": records it on the rep and copies the rep into `eval/`. Tapping again with `false`
     /// removes the tap, and the copy too unless it has the user's own labels.
     pub fn label_rep(&self, session: &str, n: u32, wrong: bool, at: &str) -> Result<()> {
+        self.ensure_writable()?;
         let mut full = self.rep(session, n)?.ok_or_else(|| StorageError::NotFound(format!("rep {n} of {session}")))?;
         let eval = self.eval_path(session, n);
         let existing = self.eval_record(session, n)?;
@@ -321,6 +328,7 @@ impl Storage {
 
     /// Removes a rep's transcript, measurements and eval copy. The caller removes the audio.
     pub fn delete_rep(&self, session: &str, n: u32) -> Result<()> {
+        self.ensure_writable()?;
         let dir = self.rep_dir(checked(session)?, n);
         if !dir.is_dir() {
             return Err(StorageError::NotFound(format!("rep {n} of {session}")));
@@ -335,6 +343,7 @@ impl Storage {
 
     /// Removes a whole session and every eval copy that came from it. The caller removes the audio.
     pub fn delete_session(&self, session: &str) -> Result<()> {
+        self.ensure_writable()?;
         for n in self.rep_numbers(checked(session)?) {
             let eval = self.eval_path(session, n);
             if eval.exists() {
@@ -369,7 +378,7 @@ mod tests {
     }
 
     fn session(id: &str, started: &str) -> Session {
-        Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: started.into(), target_id: None }
+        Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: started.into(), target_id: None }
     }
 
     fn rep(n: u32) -> FullRep {
@@ -377,7 +386,7 @@ mod tests {
         let metrics = compute(Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: numbers::extract("24%"), keep_restart: false });
         FullRep {
             session_id: "ses_a".into(),
-            rep: Rep { n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), note: None, rewrite: None, ai: None, follow_up: None, feedback: None },
+            rep: Rep { extra: Default::default(), n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), note: None, rewrite: None, ai: None, follow_up: None, feedback: None },
             transcript: words,
             metrics,
         }
@@ -389,7 +398,7 @@ mod tests {
         let (_d, s) = storage();
         let a = s.save_target(&Target::default()).unwrap();
         let b = s.save_target(&Target::default()).unwrap();
-        let sess = |id: &str, target: Option<&str>| Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-21T09:00:00Z".into(), target_id: target.map(String::from) };
+        let sess = |id: &str, target: Option<&str>| Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: None, stage_id: None, started: "2026-10-21T09:00:00Z".into(), target_id: target.map(String::from) };
         s.save_session(&sess("ses_a", Some(&a.id))).unwrap();
         s.save_session(&sess("ses_b", Some(&b.id))).unwrap();
         s.save_session(&sess("ses_old", None)).unwrap();

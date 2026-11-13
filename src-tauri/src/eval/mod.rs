@@ -189,7 +189,7 @@ mod tests {
         EvalRecord {
             full: FullRep {
                 session_id: "ses_a".into(),
-                rep: Rep {
+                rep: Rep { extra: Default::default(),
                     n,
                     question_id: "q".into(),
                     question_text: "Q".into(),

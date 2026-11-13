@@ -109,7 +109,7 @@ pub fn parse_story(llm: &dyn Llm, raw_story: &str, employer_hint: &str, budget: 
         }
     }
 
-    let story = Story {
+    let story = Story { extra: Default::default(),
         id: crate::storage::io::new_id("st"),
         title: clean(&raw.title),
         employer: if raw.employer.trim().is_empty() { employer_hint.trim().to_string() } else { raw.employer.trim().to_string() },

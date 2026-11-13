@@ -1030,7 +1030,7 @@ mod tests {
     const DANA: &str = include_str!("../../../prompts/examples/resume/resume.txt");
 
     fn story(verified: bool) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: "st_onboarding".into(),
             title: "Onboarding drop-off".into(),
             employer: "Fernhill".into(),

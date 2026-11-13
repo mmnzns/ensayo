@@ -103,6 +103,7 @@ impl Storage {
 
     /// Deletes a story and takes it out of every method that listed it.
     pub fn delete_story(&self, id: &str) -> Result<()> {
+        self.ensure_writable()?;
         let path = self.story_path(checked_id(id)?);
         if !path.is_file() {
             return Err(StorageError::NotFound(format!("story {id}")));
@@ -146,6 +147,7 @@ impl Storage {
     }
 
     pub fn delete_method(&self, situation: &str) -> Result<()> {
+        self.ensure_writable()?;
         if !SITUATIONS.contains(&situation) {
             return Err(StorageError::Invalid(format!("\"{situation}\" is not a situation")));
         }
@@ -205,7 +207,7 @@ mod tests {
     }
 
     fn story(id: &str, title: &str) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: id.into(),
             title: title.into(),
             employer: "Fernhill".into(),
@@ -230,7 +232,7 @@ mod tests {
     }
 
     fn profile() -> Profile {
-        Profile { name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix funnels.".into(), focus_habits: vec!["to_the_point".into()] }
+        Profile { extra: Default::default(), name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Lifecycle".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I fix funnels.".into(), focus_habits: vec!["to_the_point".into()] }
     }
 
     fn fresh() -> (tempfile::TempDir, Storage) {
@@ -336,7 +338,7 @@ mod tests {
     #[test]
     fn methods_round_trip_in_situation_order_and_only_known_situations_are_accepted() {
         let (_d, s) = fresh();
-        let m = |sit: &str, text: &str| Method { situation: sit.into(), spoken: text.into(), story_ids: vec!["st_a".into()] };
+        let m = |sit: &str, text: &str| Method { extra: Default::default(), situation: sit.into(), spoken: text.into(), story_ids: vec!["st_a".into()] };
         s.save_method(&m("influence", "Make it cheap to say yes.")).unwrap();
         s.save_method(&m("problem_solving", "Find where people drop.")).unwrap();
         let got: Vec<_> = s.methods().unwrap().into_iter().map(|x| x.situation).collect();
@@ -351,7 +353,7 @@ mod tests {
         let (_d, s) = fresh();
         s.save_story(&story("st_a", "A")).unwrap();
         s.save_story(&story("st_b", "B")).unwrap();
-        s.save_method(&Method { situation: "problem_solving".into(), spoken: "x".into(), story_ids: vec!["st_a".into(), "st_b".into()] }).unwrap();
+        s.save_method(&Method { extra: Default::default(), situation: "problem_solving".into(), spoken: "x".into(), story_ids: vec!["st_a".into(), "st_b".into()] }).unwrap();
         s.delete_story("st_a").unwrap();
         assert_eq!(s.methods().unwrap()[0].story_ids, vec!["st_b"]);
     }
@@ -472,7 +474,7 @@ mod tests {
         let (_d, s) = fresh();
         s.save_profile(&profile()).unwrap();
         s.save_story(&story("st_a", "A")).unwrap();
-        s.save_method(&Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
+        s.save_method(&Method { extra: Default::default(), situation: "motivation".into(), spoken: "x".into(), story_ids: vec![] }).unwrap();
         fs::write(s.root().join("notes.txt"), "my own notes").unwrap();
         fs::create_dir_all(s.root().join("applications/app_x")).unwrap();
         fs::write(s.root().join("applications/app_x/application.json"), "{}").unwrap();

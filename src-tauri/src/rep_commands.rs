@@ -6,7 +6,6 @@
 use crate::ai::llm::Llm;
 use crate::applications::hook;
 use crate::audio_retention::{self, audio_path};
-use crate::data_commands::data_folder;
 use crate::metrics::{self, fix, numbers, Inputs, Metrics, Outcome};
 use crate::paths;
 use crate::scoring::pipeline::{self, QuestionInfo, ScoreInput};
@@ -374,14 +373,14 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         }
     }
     if storage.session(&session_id)?.is_none() {
-        storage.save_session(&Session { id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now), target_id: target_id.clone() })?;
+        storage.save_session(&Session { extra: Default::default(), id: session_id.clone(), mode: args.mode.clone(), stage: args.stage.clone(), application_id: app_ctx.as_ref().map(|c| c.rec.id.clone()).or_else(|| args.application_id.clone()), stage_id: app_ctx.as_ref().map(|c| c.stage_id.clone()), started: stamp(now), target_id: target_id.clone() })?;
     }
     let n = storage.next_rep_number(&session_id)?;
     let delta = delta_for(storage, &session_id, &args.question_id, args.attempt, &metrics);
     let restart_offered = metrics.restart_at.is_some();
     let full = FullRep {
         session_id: session_id.clone(),
-        rep: Rep {
+        rep: Rep { extra: Default::default(),
             n,
             question_id: args.question_id.clone(),
             question_text: args.question_text.clone(),
@@ -515,7 +514,7 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
 }
 
 pub(crate) fn open() -> StorageResult<Storage> {
-    crate::data_commands::open_for(&data_folder(), &paths::default_data_dir())
+    crate::data_commands::open_storage()
 }
 
 pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Cmd<T> + Send + 'static) -> Cmd<T> {
@@ -887,7 +886,7 @@ mod tests {
     }
 
     fn story(id: &str) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: id.into(),
             title: "Churn".into(),
             employer: "Fernhill".into(),
@@ -1148,7 +1147,7 @@ mod tests {
 
     fn two_targets(storage: &Storage) -> (crate::storage::targets::Target, crate::storage::targets::Target) {
         use crate::storage::targets::Target;
-        storage.save_profile(&crate::storage::model::Profile { name: "Dana".into(), full_name: "".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "I fix activation.".into(), focus_habits: vec![] }).unwrap();
+        storage.save_profile(&crate::storage::model::Profile { extra: Default::default(), name: "Dana".into(), full_name: "".into(), target_role: "Lifecycle Manager".into(), seniority: "senior".into(), industry: "".into(), sells_to: "b2c".into(), identity_statement: "I fix activation.".into(), focus_habits: vec![] }).unwrap();
         let first = storage.targets().unwrap().remove(0);
         let ops = storage.save_target(&Target { role: "Marketing Operations Manager".into(), role_family: "marketing_ops".into(), sells_to: "b2b".into(), pitch: "I run the stack.".into(), ..Default::default() }).unwrap();
         (first, ops)

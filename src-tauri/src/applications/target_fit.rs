@@ -479,7 +479,7 @@ mod tests {
         let first = s
             .save_target(&Target { role: "Senior Lifecycle Marketing Manager".into(), role_family: "lifecycle".into(), sells_to: "b2c".into(), industry: "Fintech".into(), pitch: "I find where activation breaks and build the fix.".into(), default_process: vec!["recruiter".into(), "panel".into()], ..Target::default() })
             .unwrap();
-        s.save_you(&crate::storage::targets::You { name: "Dana".into(), full_name: "".into(), focus_habits: vec![], active_target_id: Some(first.id.clone()), targets_note_pending: false }).unwrap();
+        s.save_you(&crate::storage::targets::You { extra: Default::default(), name: "Dana".into(), full_name: "".into(), focus_habits: vec![], active_target_id: Some(first.id.clone()), targets_note_pending: false }).unwrap();
         let app = s.create_application(NewApplication { company: "Northpine".into(), role: "Senior Marketing Operations Manager".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
         s.save_application_text(&app.id, "jd.txt", B2B_OPS).unwrap();
         (dir, s, first, app.id)

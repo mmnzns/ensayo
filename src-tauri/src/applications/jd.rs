@@ -876,7 +876,7 @@ mod tests {
     const INJECTION: &str = include_str!("../../tests/fixtures/jd/injection.txt");
 
     fn story(id: &str, title: &str, headline: &str) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: id.into(),
             title: title.into(),
             employer: "Fernhill".into(),
@@ -905,7 +905,7 @@ mod tests {
         let s = Storage::init(dir.path().join("data")).unwrap();
         s.save_story(&story("st_onboarding", "Onboarding drop-off", "7-day activation 31% → 44%")).unwrap();
         s.save_story(&story("st_reactivation", "Reactivation program", "Reactivation 2.1% → 4.8%")).unwrap();
-        s.save_profile(&Profile { name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Senior Lifecycle Marketing Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I find where activation breaks and build the fix.".into(), focus_habits: vec![] }).unwrap();
+        s.save_profile(&Profile { extra: Default::default(), name: "Dana".into(), full_name: "Dana Ortiz".into(), target_role: "Senior Lifecycle Marketing Manager".into(), seniority: "senior".into(), industry: "Fintech".into(), sells_to: "b2c".into(), identity_statement: "I find where activation breaks and build the fix.".into(), focus_habits: vec![] }).unwrap();
         let app = s.create_application(NewApplication { company: "Kestrel Pay".into(), role: "Senior Lifecycle Marketing Manager".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
         s.save_application_text(&app.id, "jd.txt", KESTREL).unwrap();
         (dir, s, app.id)

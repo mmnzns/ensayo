@@ -408,7 +408,7 @@ mod tests {
     use chrono::NaiveDate;
 
     fn story(verified: bool) -> Story {
-        Story {
+        Story { extra: Default::default(),
             id: "st_onboarding".into(),
             title: "Onboarding drop-off".into(),
             employer: "Fernhill".into(),
@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(load_locked(&s, &id, "stg_2").unwrap().unwrap(), again);
         assert_eq!((again.opener.as_str(), again.opener_prompt.as_str(), again.questions.len()), ("A shorter opener.", "Walk me through your background", 1));
         let file = std::fs::read_to_string(s.application_path(&id, "locked.json").unwrap()).unwrap();
-        assert!(file.contains("\"schema_version\": 1") && file.contains("stg_2"), "{file}");
+        assert!(file.contains("\"schema_version\": 2") && file.contains("stg_2"), "{file}");
     }
 
     #[test]

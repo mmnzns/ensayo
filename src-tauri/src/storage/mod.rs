@@ -83,4 +83,10 @@ impl Storage {
     pub fn root(&self) -> &Path {
         &self.root
     }
+
+    /// An error when another computer holds this folder (see `io::set_write_block`). Called by the changes that
+    /// delete or move files; saving goes through `io::atomic_write`, which checks the same thing.
+    pub fn ensure_writable(&self) -> Result<()> {
+        io::writable(&self.root.join("x"))
+    }
 }

@@ -68,6 +68,7 @@ impl Storage {
 
     /// Moves a session's folder into the trash and stamps it. The eval copies stay where they are.
     pub fn trash_session(&self, id: &str, now: DateTime<Utc>) -> Result<()> {
+        self.ensure_writable()?;
         let src = self.root().join("sessions").join(checked(id)?);
         if !src.is_dir() {
             return Err(StorageError::NotFound(format!("session {id}")));
@@ -114,6 +115,7 @@ impl Storage {
     /// Moves a session back into `sessions/`. When its application was deleted in the meantime it comes back as
     /// practice without an application. `NotFound` when it is no longer in the trash (the other computer purged it).
     pub fn restore_session(&self, id: &str) -> Result<Session> {
+        self.ensure_writable()?;
         let src = self.trashed_dir(checked(id)?);
         if !src.is_dir() {
             return Err(StorageError::NotFound(format!("session {id}")));
@@ -142,6 +144,7 @@ impl Storage {
     /// Removes sessions that have been in the trash for more than seven days, by their stamp. A folder with no
     /// readable stamp (a sync cut it short) gets a fresh one, so its seven days start now.
     pub fn purge_trash(&self, now: DateTime<Utc>) -> Result<Purged> {
+        self.ensure_writable()?;
         let mut out = Purged::default();
         let Ok(rd) = fs::read_dir(self.trash_sessions_dir()) else { return Ok(out) };
         for entry in rd.flatten() {
@@ -164,6 +167,7 @@ impl Storage {
 
     /// Removes everything in the trash now.
     pub fn empty_trash(&self) -> Result<()> {
+        self.ensure_writable()?;
         let dir = self.trash_dir();
         match fs::remove_dir_all(&dir) {
             Ok(()) => Ok(()),
@@ -186,7 +190,7 @@ mod tests {
     }
 
     fn session(id: &str, application: Option<&str>, started: &str) -> Session {
-        Session { id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: application.map(|_| "stg_1".to_string()), started: started.into(), target_id: None }
+        Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: "recruiter".into(), application_id: application.map(String::from), stage_id: application.map(|_| "stg_1".to_string()), started: started.into(), target_id: None }
     }
 
     /// A session folder with `reps` numbered rep folders (a file each) and a debrief.

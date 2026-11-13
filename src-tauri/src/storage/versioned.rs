@@ -96,7 +96,7 @@ mod tests {
         let s: Story = load_record_from_str(V0, migrate_story).unwrap();
         save_record(&path, &s).unwrap();
         let text = fs::read_to_string(&path).unwrap();
-        assert!(text.contains("\"schema_version\": 1"), "{text}");
+        assert!(text.contains("\"schema_version\": 2"), "{text}");
         let back: Story = load_record(&path, migrate_story).unwrap().unwrap();
         assert_eq!(back, s);
     }
@@ -108,7 +108,7 @@ mod tests {
         let text = r#"{"schema_version": 99, "id": "x", "title": "From the future"}"#;
         fs::write(&path, text).unwrap();
         let err = load_record::<Story>(&path, migrate_story).unwrap_err();
-        assert!(matches!(err, StorageError::TooNew(_, 99, 1)), "{err:?}");
+        assert!(matches!(err, StorageError::TooNew(_, 99, 2)), "{err:?}");
         assert_eq!(fs::read_to_string(&path).unwrap(), text);
     }
 
@@ -119,5 +119,43 @@ mod tests {
         let bad = dir.path().join("bad.json");
         fs::write(&bad, "this is not json").unwrap();
         assert!(matches!(load_record::<Story>(&bad, migrate_story).unwrap_err(), StorageError::Json(_, _)));
+    }
+
+    #[test]
+    fn a_format_1_file_still_reads_and_is_written_as_format_2() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("st_a.json");
+        fs::write(&path, r#"{"schema_version": 1, "id": "st_a", "title": "Old but current", "headline": "Kept as is", "proof_points": []}"#).unwrap();
+        let s: Story = load_record(&path, migrate_story).unwrap().unwrap();
+        assert_eq!((s.title.as_str(), s.headline.as_str()), ("Old but current", "Kept as is"));
+        assert_eq!(fs::read_to_string(&path).unwrap().matches("\"schema_version\": 1").count(), 1, "reading never rewrites");
+        save_record(&path, &s).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"schema_version\": 2") && !text.contains("\"schema_version\": 1"), "{text}");
+    }
+
+    #[test]
+    fn fields_this_build_does_not_know_survive_a_save() {
+        use crate::storage::model::{Method, Profile};
+        use crate::storage::migrate::unchanged;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("st_a.json");
+        fs::write(&path, r#"{"schema_version": 2, "id": "st_a", "title": "T", "mood": "calm", "nested": {"a": [1, 2]}}"#).unwrap();
+        let s: Story = load_record(&path, migrate_story).unwrap().unwrap();
+        save_record(&path, &s).unwrap();
+        let back: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(back["mood"], "calm");
+        assert_eq!(back["nested"]["a"][1], 2);
+        // A record with nothing extra writes nothing extra.
+        let m = Method { situation: "motivation".into(), spoken: "x".into(), story_ids: vec![], extra: Default::default() };
+        save_record(&path, &m).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("extra"), "{text}");
+        // Profile and Method keep them too.
+        let pp = dir.path().join("p.json");
+        fs::write(&pp, r#"{"schema_version": 2, "name": "D", "fullName": "", "targetRole": "", "seniority": "", "industry": "", "sellsTo": "", "identityStatement": "", "focusHabits": [], "futureThing": true}"#).unwrap();
+        let p: Profile = load_record(&pp, unchanged).unwrap().unwrap();
+        save_record(&pp, &p).unwrap();
+        assert!(fs::read_to_string(&pp).unwrap().contains("futureThing"));
     }
 }

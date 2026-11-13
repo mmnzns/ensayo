@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeGuarded as invoke, LOCK_LOST_EVENT } from "./lockGuard";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   allVerified,
@@ -578,12 +578,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
     void load();
   }, [load]);
 
-  // Keep the "this computer has it open" lock fresh while the app is open.
+  /** Looks at the lock again. When another computer now holds the folder, the "open on another computer" page replaces
+   *  the screens (the backend refuses saves meanwhile), and Open anyway takes it back. */
+  const recheckLock = useCallback(async () => {
+    try {
+      const st = await invoke<DataStatus>("data_status");
+      if (st.state === "other_machine") {
+        setStatus(st);
+        setPhase("blocked");
+      }
+    } catch {
+      // Not being able to look is not a reason to block: the backend still refuses a save that would clash.
+    }
+  }, []);
+
+  // Keep the "this computer has it open" lock fresh while the app is open, and look at it again whenever the window
+  // gets focus (a computer may have taken the folder meanwhile) or a save was refused because it did.
   useEffect(() => {
     if (!app || phase !== "ready") return;
-    const t = window.setInterval(() => void invoke("data_heartbeat").catch(() => {}), HEARTBEAT_MS);
-    return () => window.clearInterval(t);
-  }, [app, phase]);
+    const t = window.setInterval(() => void invoke("data_heartbeat").catch(() => {}).then(recheckLock), HEARTBEAT_MS);
+    const onFocus = () => void recheckLock();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener(LOCK_LOST_EVENT, onFocus);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(LOCK_LOST_EVENT, onFocus);
+    };
+  }, [app, phase, recheckLock]);
 
   const openAnyway = useCallback(async () => {
     try {

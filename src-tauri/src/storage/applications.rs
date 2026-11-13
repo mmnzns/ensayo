@@ -128,6 +128,9 @@ pub struct AppRecord {
     /// application moves to another target or its posting changes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fit_dismissed_for: Option<String>,
+    /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
+    #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -455,7 +458,7 @@ impl Storage {
         if status == Status::Closed && new.closed_reason.is_none() {
             return Err(StorageError::Invalid(NEEDS_REASON.into()));
         }
-        let mut rec = AppRecord {
+        let mut rec = AppRecord { extra: Default::default(),
             id: new_id("app"),
             company,
             role: new.role.trim().to_string(),
@@ -769,6 +772,7 @@ impl Storage {
     /// in which case they go to the trash, where they can be restored for seven days (the result lists them so the
     /// caller can move their audio there too).
     pub fn delete_application(&self, id: &str, delete_reps: bool) -> Result<DeleteOutcome> {
+        self.ensure_writable()?;
         let dir = self.application_dir(id)?;
         if !dir.is_dir() {
             return Err(StorageError::NotFound(format!("application {id}")));
@@ -823,6 +827,7 @@ impl Storage {
     }
 
     pub fn remove_application_file(&self, id: &str, rel: &str) -> Result<()> {
+        self.ensure_writable()?;
         let path = self.application_path(id, rel)?;
         match fs::remove_file(&path) {
             Ok(()) => Ok(()),
@@ -900,7 +905,7 @@ mod tests {
     }
 
     fn session(id: &str, app: Option<&str>, stage: &str, stage_id: Option<&str>) -> Session {
-        Session { id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }
+        Session { extra: Default::default(), id: id.into(), mode: "drill".into(), stage: stage.into(), application_id: app.map(String::from), stage_id: stage_id.map(String::from), started: "2026-10-20T10:00:00Z".into(), target_id: None }
     }
 
     // ---------- create ----------
@@ -915,7 +920,7 @@ mod tests {
         assert_eq!(a.applied_on, "2026-10-06");
         assert!(a.edited_by_user.is_empty(), "what the user typed when adding it is not an edit");
         let text = std::fs::read_to_string(s.root().join("applications").join(&a.id).join("application.json")).unwrap();
-        assert!(text.contains("\"schema_version\": 1"), "{text}");
+        assert!(text.contains("\"schema_version\": 2"), "{text}");
         assert_eq!(s.application(&a.id).unwrap(), a);
     }
 

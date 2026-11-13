@@ -19,7 +19,7 @@ pub fn diagnostics_text(speech_model: Option<&str>) -> String {
     let has_key = provider_key.is_some_and(|id| keys::get(id).is_some());
     // Every saved key, so a key that ended up anywhere in the text is blanked.
     let secrets: Vec<String> = keys::ACCOUNTS.iter().filter_map(|a| keys::get(a)).collect();
-    let data_state = data_commands::status_for(&data_commands::data_folder(), &paths::default_data_dir(), &crate::storage::lock::machine_name(), chrono::Utc::now()).state;
+    let data_state = data_commands::status_for(&data_commands::data_folder(), &paths::default_data_dir(), &crate::data_commands::me(), chrono::Utc::now()).state;
     let tail = logging::read_tail(&paths::logs_dir(), LOG_LINES);
     // Looking at the models folder never changes it, and works even when the folder couldn't be opened for writing.
     let root = models_store::store().map(|s| s.root().to_path_buf()).unwrap_or_else(|_| SharedStore::default_dir().unwrap_or_default());

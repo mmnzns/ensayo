@@ -56,9 +56,36 @@ pub struct LocalSettings {
     /// with a discrete card). Machine-local, since the card is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpu: Option<bool>,
+    /// Which computer this is, made once and kept here (machine-local, never in the data folder). The lock file uses
+    /// it instead of the host name, which two computers can share and one computer can change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub install_id: Option<String>,
     /// Keys a newer Ensayo wrote. Kept so an older build does not delete them when it saves.
     #[serde(flatten)]
     pub other: Map<String, Value>,
+}
+
+/// A new random install id. The standard library seeds each `RandomState` from the system's random source.
+fn new_install_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut id = String::from("inst_");
+    for _ in 0..2 {
+        id.push_str(&format!("{:016x}", std::collections::hash_map::RandomState::new().build_hasher().finish()));
+    }
+    id
+}
+
+/// This install's id. Made and saved the first time it is asked for. Errors (a damaged settings file) are left to
+/// the caller: it must not guess an id, or the lock would say another computer.
+pub fn install_id(path: &Path) -> Result<String> {
+    let mut s = load_for_update(path)?;
+    if let Some(id) = s.install_id.as_deref().filter(|i| !i.trim().is_empty()) {
+        return Ok(id.to_string());
+    }
+    let id = new_install_id();
+    s.install_id = Some(id.clone());
+    save(path, &s)?;
+    Ok(id)
 }
 
 /// Days to keep answer audio. None means forever; Some(0) means do not keep it at all.
@@ -393,5 +420,28 @@ mod tests {
         let aside = damaged_siblings(dir.path());
         assert_eq!(aside.len(), 1);
         assert_eq!(fs::read_to_string(dir.path().join(&aside[0])).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn the_install_id_is_made_once_kept_and_not_lost_by_other_saves() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let id = install_id(&path).unwrap();
+        assert!(id.starts_with("inst_") && id.len() > 20);
+        assert_eq!(install_id(&path).unwrap(), id);
+        let mut s = load_for_update(&path).unwrap();
+        s.audio_retention = Some("7".into());
+        save(&path, &s).unwrap();
+        assert_eq!(install_id(&path).unwrap(), id);
+        assert_ne!(install_id(&dir.path().join("other.json")).unwrap(), id, "each install gets its own");
+    }
+
+    #[test]
+    fn the_install_id_is_never_guessed_over_a_damaged_settings_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, "{ nope").unwrap();
+        assert!(install_id(&path).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ nope");
     }
 }
