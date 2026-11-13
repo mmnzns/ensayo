@@ -26,15 +26,10 @@ artifact (the installer). The build still says 0.1.4; the version goes up at rel
    Radeon. Parakeet Ultra runs on DirectML on the RTX (the log's backend and device), at least the processor's 57x.
 4. **Local AI on the card.** Score one rep with Qwen 3.5 4B. The reply comes from the Vulkan helper; compare its time
    with the processor's 4.96 s.
-5. **Fallback.** Quit Ensayo, set `VOICE_ENGINE_GPU=fail` (this build's helpers read `VOICE_ENGINE_*`, not
-   `ENSAYO_*`), start it, score a rep. The one-time notice appears and the reply still arrives on the processor. Then
-   remove the variable and restart: the failure is remembered, so the AI stays on the processor with no notice (by
-   design, the notice is only for a card that just failed). Turn the switch off and on: the next reply is on the card
-   again, without a restart.
-6. **Switch off.** Speech and AI run on the processor, with no notice.
-7. **Delete per model.** Delete a model no other app uses: it is erased. Delete one Talaan or Parlato also uses: it is
+5. **Switch off.** Speech and AI run on the processor, with no notice.
+6. **Delete per model.** Delete a model no other app uses: it is erased. Delete one Talaan or Parlato also uses: it is
    kept for them.
-8. **Ollama and LM Studio.** If either is installed and running, its models and context sizes appear in Settings.
-9. **Windows look** (the windows-polish fixes): dark title bar, Windows scrollbars, a real 1366x768 screen (the window
+7. **Ollama and LM Studio.** If either is installed and running, its models and context sizes appear in Settings.
+8. **Windows look** (the windows-polish fixes): dark title bar, Windows scrollbars, a real 1366x768 screen (the window
    fits and remembers its size and place), and the 5 interviewer voices.
-10. **Do not** run Delete all data on real data.
+9. **Do not** run Delete all data on real data.
