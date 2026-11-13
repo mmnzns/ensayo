@@ -244,7 +244,7 @@ mod tests {
             c.insert(k.to_string(), v.clone());
         }
         let mut base = json!({
-            "rubric_version": 1, "clarifying_question": false, "not_an_answer": false, "restart_at_sentence": null, "story_id": "st_onboarding",
+            "rubric_version": 2, "clarifying_question": false, "not_an_answer": false, "restart_at_sentence": null, "story_id": "st_onboarding",
             "first_answer_sentence": null, "proof_landed_sentence": null, "tail_exempt_sentences": [], "approach_sentence": null, "action_sentence": null,
             "numbers_said": numbers_said, "criteria": c
         });
@@ -288,6 +288,12 @@ mod tests {
         assert!(!f.contains(&"story_fit") && !f.contains(&"context_short") && !f.contains(&"proof") && !f.contains(&"type_fit") && !f.contains(&"method_first"));
         let g = ctx(|c| c.question_type = "gap");
         assert!(g.contains(&"type_fit") && !g.contains(&"method_first"));
+    }
+
+    #[test]
+    fn a_self_assessment_gets_type_fit_and_no_method_first() {
+        let s = ctx(|c| c.question_type = "self_assessment");
+        assert!(s.contains(&"type_fit") && s.contains(&"proof") && !s.contains(&"method_first"));
     }
 
     #[test]

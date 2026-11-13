@@ -219,6 +219,18 @@ mod tests {
     }
 
     #[test]
+    fn the_classify_schema_accepts_self_assessment_and_the_rubric_version_agrees_everywhere() {
+        let v = jsonschema::validator_for(&get(PromptId::Classify).schema).unwrap();
+        let reply = |t: &str| serde_json::json!({"type": t, "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "is_major_story": false, "competencies": ["self awareness"]});
+        assert!(v.is_valid(&reply("self_assessment")));
+        assert!(!v.is_valid(&reply("made_up_kind")));
+        for id in [PromptId::Score, PromptId::ScoreFollowUp] {
+            assert_eq!(get(id).schema["properties"]["rubric_version"]["const"], crate::metrics::RUBRIC_VERSION, "{}", get(id).id);
+        }
+        assert!(RUBRIC.contains(&format!("rubric_version: {}", crate::metrics::RUBRIC_VERSION)));
+    }
+
+    #[test]
     fn worked_examples_are_part_of_the_system_prompt() {
         assert!(get(PromptId::Classify).system_template().contains("behavioral implementation") || get(PromptId::Classify).system_template().contains("Have you done a behavioral implementation"));
     }

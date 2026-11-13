@@ -21,10 +21,11 @@ const q = (id: string, over: Partial<BankQuestion> = {}): BankQuestion => ({
 
 describe("the real bank", () => {
   it("loads the general set, and a role pack only for a matching role", () => {
-    expect(banksFor("Accountant").length).toBe(109);
-    expect(banksFor("Senior Lifecycle Marketing Manager").length).toBe(179);
-    expect(banksFor("Head of Growth").length).toBe(179);
-    expect(banksFor("Senior Product Marketing Manager").length).toBe(179);
+    expect(banksFor("Accountant").length).toBe(121);
+    expect(banksFor("Senior Lifecycle Marketing Manager").length).toBe(194);
+    expect(banksFor("Head of Growth").length).toBe(191);
+    expect(banksFor("Senior Product Marketing Manager").length).toBe(191);
+    expect(banksFor("Head of Revenue Operations").length).toBe(191);
   });
 
   it("has enough drill questions in every stage", () => {

@@ -23,6 +23,18 @@ describe("question bank", () => {
     expect(ok).toBe(true);
   });
 
+  it("includes the GTM and revenue ops pack, with its own set id", () => {
+    expect(files).toContain("pack-gtm-revops.json");
+    expect(read("questions/pack-gtm-revops.json").set_id).toBe("gtm-revops");
+  });
+
+  it("uses the self_assessment type and never gives it a behavioral situation", () => {
+    const all = files.flatMap((f) => read(`questions/${f}`).questions as { type: string; behavioral_situation: string | null }[]);
+    const own = all.filter((q) => q.type === "self_assessment");
+    expect(own.length).toBeGreaterThan(0);
+    expect(own.every((q) => q.behavioral_situation === null)).toBe(true);
+  });
+
   it("never reuses a question id across files", () => {
     const ids = files.flatMap((f) => read(`questions/${f}`).questions.map((q: { id: string }) => q.id));
     expect(new Set(ids).size).toBe(ids.length);
@@ -63,7 +75,31 @@ describe("score fixtures", () => {
 
   it("the example question is a valid question type", () => {
     const q = read("prompts/examples/question.json");
-    const types = ["behavioral", "tell_me_about_yourself", "technical", "factual", "future_looking", "gap", "motivation"];
+    const types = ["behavioral", "tell_me_about_yourself", "technical", "factual", "future_looking", "gap", "motivation", "self_assessment"];
     expect(types).toContain(q.classification.type);
+  });
+});
+
+describe("rubric version 2 fixtures", () => {
+  const fx = read("prompts/examples/rubric2/score.json");
+  const criteria = Object.keys(read("prompts/schemas/score-answer.schema.json").properties.criteria.properties);
+  const types: string[] = read("prompts/schemas/classify-question.schema.json").properties.type.enum;
+
+  it("names real criteria and real verdicts, and sends no pitch", () => {
+    expect(fx.rubric_version).toBe(2);
+    for (const [name, c] of Object.entries(fx.cases) as [string, { target_pitch: string; classification: { type: string }; assert: { criteria: Record<string, string> } }][]) {
+      expect(c.target_pitch, name).toBe("");
+      expect(types, name).toContain(c.classification.type);
+      for (const [k, v] of Object.entries(c.assert.criteria)) {
+        expect(criteria, `${name} ${k}`).toContain(k);
+        expect(["pass", "fail", "na"]).toContain(v);
+      }
+    }
+  });
+
+  it("has a self_assessment case, a gap answered yes with proof, and the classify cases use real types", () => {
+    expect(fx.cases.self_assessment_weakness.classification.type).toBe("self_assessment");
+    expect(fx.cases.gap_yes_with_proof.assert.criteria.type_fit).toBe("pass");
+    for (const c of Object.values(fx.classify_cases) as { expected: { type: string } }[]) expect(types).toContain(c.expected.type);
   });
 });

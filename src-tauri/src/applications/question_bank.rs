@@ -53,6 +53,11 @@ fn lifecycle_pack() -> &'static Vec<BankQuestion> {
     P.get_or_init(|| load(include_str!("../../../questions/pack-lifecycle-marketing-ops.json")))
 }
 
+fn gtm_pack() -> &'static Vec<BankQuestion> {
+    static P: OnceLock<Vec<BankQuestion>> = OnceLock::new();
+    P.get_or_init(|| load(include_str!("../../../questions/pack-gtm-revops.json")))
+}
+
 fn growth_pack() -> &'static Vec<BankQuestion> {
     static P: OnceLock<Vec<BankQuestion>> = OnceLock::new();
     P.get_or_init(|| load(include_str!("../../../questions/pack-growth.json")))
@@ -64,11 +69,11 @@ fn product_marketing_pack() -> &'static Vec<BankQuestion> {
 }
 
 /// The general set, plus the pack for a kind of role (the same table as `PACKS` in src/practice/questions.ts): lifecycle and
-/// marketing ops share one pack, and GTM and revenue ops uses it too (the same systems work); "other" gets the general
-/// set only.
+/// marketing ops share one pack, GTM and revenue ops has its own; "other" gets the general set only.
 pub fn banks_for_family(family: &str) -> Vec<&'static BankQuestion> {
     let pack: &[BankQuestion] = match family {
-        "lifecycle" | "marketing_ops" | "gtm" => lifecycle_pack(),
+        "lifecycle" | "marketing_ops" => lifecycle_pack(),
+        "gtm" => gtm_pack(),
         "growth" => growth_pack(),
         "product_marketing" => product_marketing_pack(),
         _ => &[],
@@ -120,6 +125,7 @@ pub fn pick<'a>(bank: &[&'a BankQuestion], stage: &str, priorities: &[String], s
     };
     if stage == "recruiter" {
         take_first(&mut out, &|q| q.kind == "factual", &mut pool);
+        // Only the pitch question: a `self_assessment` ("what is your biggest weakness") is not a pitch.
         take_first(&mut out, &|q| q.kind == "tell_me_about_yourself", &mut pool);
         take_first(&mut out, &|q| q.kind == "motivation", &mut pool);
     }
@@ -164,6 +170,25 @@ mod tests {
         assert!(has("Head of Growth", "gro-") && !has("Head of Growth", "lmo-"));
         assert!(has("Senior Product Marketing Manager", "pmm-") && !has("Senior Product Marketing Manager", "gro-"));
         assert_eq!(banks_for_family("other").len(), pool("Product designer").len());
+    }
+
+    #[test]
+    fn gtm_gets_its_own_pack_and_lifecycle_keeps_the_lifecycle_one() {
+        let ids = |family: &str, prefix: &str| banks_for_family(family).iter().filter(|q| q.id.starts_with(prefix)).count();
+        assert_eq!(ids("gtm", "gtm-"), 70);
+        assert_eq!(ids("gtm", "lmo-"), 0);
+        assert!(ids("lifecycle", "lmo-") > 0 && ids("lifecycle", "gtm-") == 0);
+        assert!(ids("marketing_ops", "lmo-") > 0 && ids("marketing_ops", "gtm-") == 0);
+        assert_eq!(banks_for_family("gtm").len(), banks_for_family("other").len() + 70);
+    }
+
+    #[test]
+    fn a_self_assessment_is_not_the_pitch_question() {
+        let mut used = HashSet::new();
+        let picked = pick(&pool("Designer"), "recruiter", &[], false, 3, &mut used);
+        assert!(picked.iter().filter(|q| q.kind == "tell_me_about_yourself").count() <= 1);
+        let own: Vec<_> = pool("Designer").into_iter().filter(|q| q.kind == "self_assessment").collect();
+        assert!(!own.is_empty() && own.iter().all(|q| q.behavioral_situation.is_none()));
     }
 
     #[test]

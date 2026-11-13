@@ -10,6 +10,7 @@ use crate::data_commands::data_folder;
 use crate::metrics::{self, fix, numbers, Inputs, Metrics, Outcome};
 use crate::paths;
 use crate::scoring::pipeline::{self, QuestionInfo, ScoreInput};
+use crate::scoring::prompts::{get, PromptId};
 use crate::scoring::run::Budget;
 use crate::speech::words::Word;
 use crate::speech::transcribe;
@@ -261,7 +262,7 @@ fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &F
                 fix,
                 note: coach.note,
                 rewrite: coach.rewrite,
-                meta: AiMeta { prompts: vec!["score-follow-up v1".into(), "coach-note v2".into()], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd },
+                meta: AiMeta { prompts: vec![format!("score-follow-up v{}", get(PromptId::ScoreFollowUp).version), format!("coach-note v{}", get(PromptId::Coach).version)], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd },
                 question_type: parent.rep.question_type.clone(),
             }
         }
@@ -1127,7 +1128,7 @@ mod tests {
         for (id, r) in results {
             c.insert((*id).into(), json!({"result": r, "sentences": [1], "quote": "We cut churn", "reason": "t"}));
         }
-        json!({"rubric_version": 1, "clarifying_question": clarifying, "not_an_answer": false, "restart_at_sentence": null, "story_id": "st_a",
+        json!({"rubric_version": 2, "clarifying_question": clarifying, "not_an_answer": false, "restart_at_sentence": null, "story_id": "st_a",
                "first_answer_sentence": first, "proof_landed_sentence": landed, "tail_exempt_sentences": [], "approach_sentence": null, "action_sentence": null,
                "numbers_said": [{"text": "24 to 18 percent", "sentence": 1, "metric": "churn", "matches_bank": "st_a.churn", "conflicts_with_bank": null, "not_in_bank": false}],
                "criteria": c})
@@ -1230,7 +1231,7 @@ mod tests {
         assert_eq!(rep.rep.note.as_deref(), Some("You kept going long after the number. Stop once it lands."));
         assert!(rep.metrics.checks.iter().any(|c| c.id == "ownership" && c.passed == Some(false)), "the AI's checks are in the saved metrics");
         assert!(rep.metrics.checks.iter().any(|c| c.id == "time_to_point"));
-        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v2", "coach-note v2"]);
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "coach-note v2"]);
         assert!(out.notice.is_none());
         let saved = storage.rep(&out.session_id, 1).unwrap().unwrap();
         assert_eq!(saved.rep.note, rep.rep.note);
@@ -1303,7 +1304,7 @@ mod tests {
 
     fn follow_score_json(fail: &[&str]) -> String {
         let v = |id: &str| json!({"result": if fail.contains(&id) { "fail" } else { "pass" }, "sentences": [1], "quote": "I owned it", "reason": "t"});
-        json!({"rubric_version": 1, "clarifying_question": false, "not_an_answer": false, "first_answer_sentence": 1,
+        json!({"rubric_version": 2, "clarifying_question": false, "not_an_answer": false, "first_answer_sentence": 1,
                "criteria": {"f1_answer_push": v("f1_answer_push"), "f2_new_specific": v("f2_new_specific"), "f3_consistent": v("f3_consistent"), "f5_held_position": v("f5_held_position")}})
         .to_string()
     }
@@ -1472,7 +1473,7 @@ mod tests {
         let rep = out.rep.unwrap();
         assert_eq!(llm.calls(), 3);
         assert!(rep.metrics.checks.iter().all(|c| c.id != "c1_consistent"), "nothing earlier to compare with");
-        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v2", "coach-note v2", "extract-claims v1"]);
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "coach-note v2", "extract-claims v1"]);
         let claims = saved_claims(&storage, &id);
         assert_eq!(claims.len(), 1);
         assert_eq!((claims[0].stage.as_str(), claims[0].stage_ref.as_str(), claims[0].value.as_str()), ("stg_1", "recruiter", "four weeks"));

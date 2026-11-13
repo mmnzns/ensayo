@@ -2,7 +2,7 @@
   "bank_version": 1,
   "set_id": "product-marketing",
   "set_name": "Product marketing pack",
-  "description": "DRAFT, drafted by Opus on 2026-10-22, not yet reviewed by Miguel. Product marketing roles: positioning and messaging, launches, competitive intelligence, sales enablement, pricing and packaging input, customer and market research, and go to market.",
+  "description": "Product marketing roles: positioning and messaging, launches, competitive intelligence, sales enablement, pricing and packaging input, customer and market research, and go to market.",
   "questions": [
     {
       "id": "pmm-001",
@@ -1769,7 +1769,7 @@
     {
       "id": "pmm-067",
       "text": "Are you more drawn to positioning and strategy, or to the hands-on work of launches and content?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "hiring_manager",
@@ -1790,7 +1790,7 @@
         "when did you last write the copy yourself",
         "what did you ship"
       ],
-      "notes": "Builder vs operator in product marketing wording. Scored on the literal answer first."
+      "notes": "Builder vs operator in product marketing wording. Scored on the literal answer first. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "pmm-068",

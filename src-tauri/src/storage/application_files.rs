@@ -139,7 +139,7 @@ pub struct QuestionRec {
     /// The stage type (`recruiter`...), kept for the practice screens.
     pub stage: String,
     pub text: String,
-    /// The classifier's types: `behavioral`, `tell_me_about_yourself`, `technical`, `factual`, `future_looking`, `gap`, `motivation`.
+    /// The classifier's types: `behavioral`, `tell_me_about_yourself`, `technical`, `factual`, `future_looking`, `gap`, `motivation`, `self_assessment`.
     #[serde(rename = "type")]
     pub kind: String,
     #[serde(default)]

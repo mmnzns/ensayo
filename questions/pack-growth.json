@@ -2,7 +2,7 @@
   "bank_version": 1,
   "set_id": "growth",
   "set_name": "Growth marketing pack",
-  "description": "DRAFT, drafted by Opus on 2026-10-22, not yet reviewed by Miguel. Growth marketing, acquisition, demand generation, experimentation, paid and organic channels, funnel and unit economics, and product-led growth roles.",
+  "description": "Growth marketing, acquisition, demand generation, experimentation, paid and organic channels, funnel and unit economics, and product-led growth roles.",
   "questions": [
     {
       "id": "gro-001",
@@ -1768,7 +1768,7 @@
     {
       "id": "gro-067",
       "text": "Do you set the growth strategy, or are you the one running the campaigns day to day?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "hiring_manager",
@@ -1789,7 +1789,7 @@
         "when were you last in an ad account",
         "what did you change there"
       ],
-      "notes": "Builder vs operator in growth wording. Scored on the literal answer first."
+      "notes": "Builder vs operator in growth wording. Scored on the literal answer first. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gro-068",

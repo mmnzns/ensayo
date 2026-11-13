@@ -783,7 +783,7 @@ pub struct QuestionInput {
     pub id: Option<String>,
     pub stage_id: String,
     pub text: String,
-    /// The classifier's type, or the screen's own name for it (`about_you`, `future`).
+    /// The classifier's type, or the screen's own name for it (`about_you`, `future`, `self`).
     pub kind: String,
 }
 
@@ -791,7 +791,8 @@ fn question_kind(kind: &str) -> StorageResult<String> {
     Ok(match kind {
         "about_you" => "tell_me_about_yourself",
         "future" => "future_looking",
-        "behavioral" | "tell_me_about_yourself" | "technical" | "factual" | "future_looking" | "gap" | "motivation" => kind,
+        "self" => "self_assessment",
+        "behavioral" | "tell_me_about_yourself" | "technical" | "factual" | "future_looking" | "gap" | "motivation" | "self_assessment" => kind,
         other => return Err(StorageError::Invalid(format!("\"{other}\" is not a kind of question."))),
     }
     .to_string())
@@ -938,7 +939,7 @@ mod tests {
         let out = run(&s, &id, &llm);
         assert_eq!((out.source.as_str(), out.notice.clone()), ("ai", None));
         let file = s.load_application_part::<AnalysisFile>(&id, "analysis.json").unwrap().unwrap();
-        assert_eq!((file.prompt.as_str(), file.engine.as_str()), ("analyse-jd v2", "ai"));
+        assert_eq!((file.prompt.as_str(), file.engine.as_str()), ("analyse-jd v3", "ai"));
         assert_eq!(file.raw.as_ref().unwrap()["summary"], serde_json::from_str::<Value>(REPLY).unwrap()["summary"], "the reply is kept as it was returned");
         let d = file.derived;
         assert_eq!(d.priorities.iter().map(|p| p.title.as_str()).collect::<Vec<_>>(), vec!["Keep customers", "Do more with less", "Win customers"]);

@@ -68,7 +68,7 @@ pub fn score_reply(first: usize, landed: usize, exempt: &[usize], results: &[(&s
     for (id, r) in results {
         c.insert((*id).into(), verdict(r, &[]));
     }
-    json!({"rubric_version": 1, "clarifying_question": false, "not_an_answer": false, "restart_at_sentence": null, "story_id": "st_onboarding",
+    json!({"rubric_version": 2, "clarifying_question": false, "not_an_answer": false, "restart_at_sentence": null, "story_id": "st_onboarding",
            "first_answer_sentence": first, "proof_landed_sentence": landed, "tail_exempt_sentences": exempt, "approach_sentence": null, "action_sentence": null,
            "numbers_said": numbers_said, "criteria": c})
     .to_string()

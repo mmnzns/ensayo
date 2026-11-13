@@ -7,7 +7,7 @@
   "$defs": {
     "g8": {"enum": ["generate_revenue", "reduce_costs", "market_share", "attract_customers", "retain_customers", "productivity", "develop_people", "compliance"]},
     "stage": {"enum": ["recruiter", "hiring_manager", "technical", "panel", "leadership"]},
-    "qtype": {"enum": ["behavioral", "tell_me_about_yourself", "technical", "factual", "future_looking", "gap", "motivation"]}
+    "qtype": {"enum": ["behavioral", "tell_me_about_yourself", "self_assessment", "technical", "factual", "future_looking", "gap", "motivation"]}
   },
   "properties": {
     "company_stage": {"enum": ["early_startup", "growth", "scale_up", "enterprise", "unknown"]},

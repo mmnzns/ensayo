@@ -1762,7 +1762,7 @@
     {
       "id": "lmo-068",
       "text": "Do you see yourself more as a strategist, or as the person in the tools every day?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "hiring_manager",
@@ -1783,7 +1783,7 @@
         "when were you last in the tools",
         "what did you change there"
       ],
-      "notes": "Builder vs operator in lifecycle wording. Scored on the literal answer first."
+      "notes": "Builder vs operator in lifecycle wording. Scored on the literal answer first. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "lmo-069",
@@ -1837,6 +1837,82 @@
       ],
       "moment": "candidate_questions",
       "notes": "Candidate's-own-questions moment. No type in the enum fits a prompt that hands the floor to the candidate; typed motivation as closest (it shows interest and preparation). The spoken reply is scored by question_quality (prompt 10), not the normal rubric."
+    },
+    {
+      "id": "lmo-071",
+      "text": "Have you used Klaviyo?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-072",
+      "text": "Have you worked in Customer.io?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers from what you have used",
+        "what would you check first in our setup"
+      ]
+    },
+    {
+      "id": "lmo-073",
+      "text": "Have you worked with a data warehouse directly, like Snowflake or BigQuery?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling",
+        "data"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you query",
+        "who owned the models"
+      ]
     }
   ]
 }

@@ -18,7 +18,7 @@
     }
   },
   "properties": {
-    "rubric_version": {"const": 1},
+    "rubric_version": {"const": 2},
     "clarifying_question": {"type": "boolean"},
     "not_an_answer": {"type": "boolean"},
     "first_answer_sentence": {"type": ["integer", "null"], "minimum": 1},

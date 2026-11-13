@@ -26,14 +26,14 @@ export interface BankQuestion {
 
 // Question packs by kind of role (a target's `roleFamily`). The general set is always asked. A pack is a file in
 // questions/ named below; one that does not exist yet adds nothing. Lifecycle and marketing ops share one pack;
-// growth and product marketing have their own (drafts awaiting Miguel's review); other roles get the general set only.
+// growth, product marketing and GTM and revenue ops have their own; other roles get the general set only.
 // Drop a file in questions/ and the pack starts to apply, with no code change.
 const PACK_FILE: Partial<Record<RoleFamily, string>> = {
   lifecycle: "pack-lifecycle-marketing-ops",
   marketing_ops: "pack-lifecycle-marketing-ops",
   growth: "pack-growth",
   product_marketing: "pack-product-marketing",
-  gtm: "pack-lifecycle-marketing-ops",
+  gtm: "pack-gtm-revops",
 };
 const PACK_FILES = import.meta.glob<{ questions: BankQuestion[] }>("../../questions/pack-*.json", { eager: true, import: "default" });
 const packFor = (family: RoleFamily): BankQuestion[] => {
@@ -144,7 +144,7 @@ export interface ExtraQuestion {
   id: string;
   /** The application's process stage this question belongs to. */
   stageId: string;
-  /** The screens' names: `about_you` and `future` stand for `tell_me_about_yourself` and `future_looking`. */
+  /** The screens' names: `about_you`, `future` and `self` stand for `tell_me_about_yourself`, `future_looking` and `self_assessment`. */
   type: string;
   text: string;
   bestStoryId?: string | null;
@@ -158,7 +158,7 @@ export interface ExtraQuestion {
 /** How many questions asked at earlier stages lead a later stage's Drill. */
 export const ASKED_FIRST_MAX = 2;
 
-const ENGINE_TYPE: Record<string, string> = { about_you: "tell_me_about_yourself", future: "future_looking" };
+const ENGINE_TYPE: Record<string, string> = { about_you: "tell_me_about_yourself", future: "future_looking", self: "self_assessment" };
 
 /** An application question as a bank question, so the rest of the practice loop treats both the same way. `stageType` is the stage kind (`recruiter`...). */
 export function bankQuestionFromExtra(e: ExtraQuestion, stageType: string): BankQuestion {

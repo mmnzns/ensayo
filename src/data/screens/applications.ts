@@ -1,7 +1,7 @@
 // Screen-specific sample data for the "applications" group. Owned by that group's agent; shared entities live in ../mock/.
 import type { StageId } from "../types";
 
-export type QuestionType = "behavioral" | "about_you" | "technical" | "factual" | "future" | "gap" | "motivation";
+export type QuestionType = "behavioral" | "about_you" | "technical" | "factual" | "future" | "gap" | "motivation" | "self";
 
 export interface QuestionTypeInfo {
   id: QuestionType;
@@ -144,6 +144,7 @@ export const applicationsData: ApplicationsData = {
     { id: "future", label: "Future looking", hint: "What you would do in the job, and how you would decide." },
     { id: "gap", label: "Gap", hint: "Something the posting asks for that your stories don't show yet." },
     { id: "motivation", label: "Motivation", hint: "Why this company, why this work, why now." },
+    { id: "self", label: "About you, one trait", hint: "A strength, a weakness or a style. Name it, then show it once." },
   ],
   newApplication: {
     company: "Kestrel Pay",

@@ -1,0 +1,1891 @@
+{
+  "bank_version": 1,
+  "set_id": "gtm-revops",
+  "set_name": "GTM and revenue operations pack",
+  "description": "GTM engineering, revenue operations and sales operations roles: lead routing, CRM data, pipeline and forecasting, attribution, systems integration, outbound tooling and automation.",
+  "questions": [
+    {
+      "id": "gtm-001",
+      "text": "How would you set up lead routing so the right rep gets a lead within minutes?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lead routing",
+        "systems"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what happens when the owner is out",
+        "how do you test a routing change"
+      ]
+    },
+    {
+      "id": "gtm-002",
+      "text": "A lead comes in from a company we already sell to. How should your system handle it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lead to account matching",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you match it to the account",
+        "who gets told"
+      ]
+    },
+    {
+      "id": "gtm-003",
+      "text": "How do you define the stages a lead moves through before sales takes it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "lifecycle stages",
+        "process"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who agreed to the definitions",
+        "what happens when a lead goes backwards"
+      ]
+    },
+    {
+      "id": "gtm-004",
+      "text": "How would you build a lead or account score that sales actually trusts?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "scoring",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how do you know it works",
+        "what made reps ignore the last one"
+      ]
+    },
+    {
+      "id": "gtm-005",
+      "text": "How do you decide whether a new field belongs in the CRM?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data governance",
+        "systems"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who can ask for one",
+        "what do you do with fields nobody uses"
+      ]
+    },
+    {
+      "id": "gtm-006",
+      "text": "How do you keep duplicate records under control?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data quality",
+        "systems"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you merge automatically",
+        "what needs a person"
+      ]
+    },
+    {
+      "id": "gtm-007",
+      "text": "How would you decide which enrichment data is worth paying for?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "enrichment",
+        "data"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you measure whether it helped",
+        "what happens when two sources disagree"
+      ]
+    },
+    {
+      "id": "gtm-008",
+      "text": "How would you set up territories and account ownership so reps stop fighting over accounts?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "territories",
+        "process"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how do you handle a rep leaving",
+        "who settles disputes"
+      ]
+    },
+    {
+      "id": "gtm-009",
+      "text": "What should have to be true before a deal can move to the next pipeline stage?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "pipeline",
+        "process"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you enforce it",
+        "what do reps push back on"
+      ]
+    },
+    {
+      "id": "gtm-010",
+      "text": "How do you build a forecast leadership can rely on?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "forecasting",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what do you do when reps sandbag",
+        "how far off were you last quarter"
+      ]
+    },
+    {
+      "id": "gtm-011",
+      "text": "How much pipeline coverage do you want going into a quarter, and how do you work it out?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "pipeline",
+        "forecasting"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes it",
+        "what do you do when it's short"
+      ]
+    },
+    {
+      "id": "gtm-012",
+      "text": "Marketing's attribution report and sales' report disagree on where deals came from. How do you sort it out?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "attribution",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "which one do you trust",
+        "who decides the definition"
+      ]
+    },
+    {
+      "id": "gtm-013",
+      "text": "How do you measure speed to lead, and what would you do if it's slow?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "funnel",
+        "lead routing"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "where does the time usually go",
+        "what number would you aim for"
+      ]
+    },
+    {
+      "id": "gtm-014",
+      "text": "Where would you look first if conversion from meeting to opportunity dropped?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "funnel",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's the first cut of the data",
+        "what if it's one team only"
+      ]
+    },
+    {
+      "id": "gtm-015",
+      "text": "How would you set up quoting so deals don't stall waiting for approvals?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "quote to cash",
+        "process"
+      ],
+      "great_eight": [
+        "generate_revenue",
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who approves discounts",
+        "how do you stop exceptions becoming the rule"
+      ]
+    },
+    {
+      "id": "gtm-016",
+      "text": "How would you make sure renewals never surprise the account team?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "renewals",
+        "process"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how early do you flag one",
+        "what data tells you a renewal is at risk"
+      ]
+    },
+    {
+      "id": "gtm-017",
+      "text": "How do you connect the CRM, marketing automation and the data warehouse so they agree?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "integration",
+        "systems"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "which one is the source of truth",
+        "what breaks most often"
+      ]
+    },
+    {
+      "id": "gtm-018",
+      "text": "When would you push data from the warehouse back into the CRM, and what can go wrong?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "reverse ETL",
+        "systems"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you stop it overwriting rep edits",
+        "how often should it sync"
+      ]
+    },
+    {
+      "id": "gtm-019",
+      "text": "The overnight sync between the CRM and another system failed. What do you do in the morning?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "integration",
+        "incident handling"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who do you tell first",
+        "how do you stop it happening again"
+      ]
+    },
+    {
+      "id": "gtm-020",
+      "text": "How would you set up outbound sequences so they don't burn through the market?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "outbound",
+        "process"
+      ],
+      "great_eight": [
+        "attract_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you decide when to stop a sequence",
+        "how do you keep it from spamming the same company"
+      ]
+    },
+    {
+      "id": "gtm-021",
+      "text": "Where do AI agents belong in revenue operations work, and where don't they?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "AI",
+        "systems"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how do you check what they did",
+        "what would you never let one do"
+      ]
+    },
+    {
+      "id": "gtm-022",
+      "text": "How do you check the output of an AI tool before it touches CRM data?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "AI",
+        "data quality"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you catch last time",
+        "who reviews it"
+      ]
+    },
+    {
+      "id": "gtm-023",
+      "text": "How do you roll out a change to the sales process so reps actually follow it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "change management",
+        "process"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how do you know they're following it",
+        "what do you do with the ones who don't"
+      ]
+    },
+    {
+      "id": "gtm-024",
+      "text": "How do you document a CRM setup so someone else could run it tomorrow?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "documentation",
+        "systems"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "where does it live",
+        "how do you keep it current"
+      ]
+    },
+    {
+      "id": "gtm-025",
+      "text": "Sales leaders keep asking for new fields and reports. How do you decide what to build?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization",
+        "stakeholder management"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you say no to",
+        "how do you say no"
+      ]
+    },
+    {
+      "id": "gtm-026",
+      "text": "How do you decide whether to build something in the CRM or buy a tool for it?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "build or buy",
+        "systems"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the hidden cost of building",
+        "when was the last time you bought"
+      ]
+    },
+    {
+      "id": "gtm-027",
+      "text": "What would you put in front of the revenue leadership team every week?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "reporting",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you leave off",
+        "what do you do when a number looks wrong"
+      ]
+    },
+    {
+      "id": "gtm-028",
+      "text": "How do you handle consent and opt-outs across the CRM and outbound tools?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "compliance",
+        "data"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what happens when someone opts out in one tool",
+        "how do you prove it"
+      ]
+    },
+    {
+      "id": "gtm-029",
+      "text": "How do you manage who can see and change what in the CRM?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "permissions",
+        "systems"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how often do you review access",
+        "what happens when someone leaves"
+      ]
+    },
+    {
+      "id": "gtm-030",
+      "text": "How do you test a CRM change before it reaches the sales team?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "testing",
+        "systems"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "do you have a sandbox",
+        "what slipped through last time"
+      ]
+    },
+    {
+      "id": "gtm-031",
+      "text": "How would you hand leads from a product sign-up to sales without losing the good ones?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "product led growth",
+        "lead routing"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what makes a sign-up worth a rep's time",
+        "what happens to the rest"
+      ]
+    },
+    {
+      "id": "gtm-032",
+      "text": "How do you decide when a customer should move from sales to customer success?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "handoffs",
+        "process"
+      ],
+      "great_eight": [
+        "retain_customers"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what has to be filled in",
+        "what goes wrong most"
+      ]
+    },
+    {
+      "id": "gtm-033",
+      "text": "How would you work out what a sales rep's time is actually spent on?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "productivity",
+        "data"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you change first",
+        "how do you get reps to trust the numbers"
+      ]
+    },
+    {
+      "id": "gtm-034",
+      "text": "How do you keep sales and marketing using the same definition of a qualified lead?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "definitions",
+        "stakeholder management"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who owns the definition",
+        "what happens when it changes"
+      ]
+    },
+    {
+      "id": "gtm-035",
+      "text": "How would you set up the systems for a new product line or new market?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "systems",
+        "planning"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you copy from today",
+        "what would you do differently"
+      ]
+    },
+    {
+      "id": "gtm-036",
+      "text": "How do you know your data is good enough to report on?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "data quality",
+        "reporting"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you check first",
+        "what do you say when it isn't"
+      ]
+    },
+    {
+      "id": "gtm-037",
+      "text": "How would you measure whether a new tool paid for itself?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "measurement",
+        "build or buy"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you measure last time",
+        "what would make you switch it off"
+      ]
+    },
+    {
+      "id": "gtm-038",
+      "text": "How do you keep the CRM from slowing down as it grows?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "systems",
+        "admin debt"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what do you clean up first",
+        "how often"
+      ]
+    },
+    {
+      "id": "gtm-039",
+      "text": "Tell me about a routing or data fix you made that moved a number.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "systems",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what was it before",
+        "what was your part specifically",
+        "how did you know it wasn't something else"
+      ]
+    },
+    {
+      "id": "gtm-040",
+      "text": "Tell me about a forecast that turned out to be wrong.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "forecasting",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what did you miss",
+        "what did you change afterwards"
+      ]
+    },
+    {
+      "id": "gtm-041",
+      "text": "Tell me about a time sales and marketing disagreed on a definition and you had to settle it.",
+      "type": "behavioral",
+      "behavioral_situation": "disagreement",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "stakeholder management",
+        "definitions"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who was unhappy at the end",
+        "how did you make it stick"
+      ]
+    },
+    {
+      "id": "gtm-042",
+      "text": "Tell me about a CRM or system you inherited in a mess.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "systems",
+        "admin debt"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you fix first",
+        "what did you leave alone"
+      ]
+    },
+    {
+      "id": "gtm-043",
+      "text": "Tell me about an automation you built that broke something.",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "technical",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "systems",
+        "incident handling"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how did you find out",
+        "what do you do differently now"
+      ]
+    },
+    {
+      "id": "gtm-044",
+      "text": "Tell me about a request from a sales leader that you turned down.",
+      "type": "behavioral",
+      "behavioral_situation": "influence",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "stakeholder management",
+        "prioritization"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what did you offer instead",
+        "how did they take it"
+      ]
+    },
+    {
+      "id": "gtm-045",
+      "text": "Tell me about a rollout that reps pushed back on.",
+      "type": "behavioral",
+      "behavioral_situation": "leading_team",
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "change management",
+        "influence"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what did they object to",
+        "what did you change"
+      ]
+    },
+    {
+      "id": "gtm-046",
+      "text": "Tell me about a report you built that changed a decision.",
+      "type": "behavioral",
+      "behavioral_situation": "serving_customers",
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "reporting",
+        "data"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who made the decision",
+        "what would have happened without it"
+      ]
+    },
+    {
+      "id": "gtm-047",
+      "text": "Tell me about a time you ran revenue operations without a team around you.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you drop",
+        "what did you automate"
+      ]
+    },
+    {
+      "id": "gtm-048",
+      "text": "Tell me about a process you shut down.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "prioritization",
+        "change management"
+      ],
+      "great_eight": [
+        "reduce_costs"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who wanted to keep it",
+        "what replaced it"
+      ]
+    },
+    {
+      "id": "gtm-049",
+      "text": "Have you done Salesforce admin work yourself, like flows and permissions?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what's the most complex flow you built",
+        "what would you check first in our org"
+      ]
+    },
+    {
+      "id": "gtm-050",
+      "text": "Have you run HubSpot as the main CRM, or mostly as a marketing tool?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what transfers",
+        "what would you need to learn"
+      ]
+    },
+    {
+      "id": "gtm-051",
+      "text": "Have you used Clay or another enrichment tool?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you enrich",
+        "how did you check the data"
+      ]
+    },
+    {
+      "id": "gtm-052",
+      "text": "Have you run Outreach or Salesloft for a sales team?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you own in it",
+        "what would you set up first"
+      ]
+    },
+    {
+      "id": "gtm-053",
+      "text": "Have you worked with a quoting or CPQ tool?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you configure",
+        "what broke"
+      ]
+    },
+    {
+      "id": "gtm-054",
+      "text": "How comfortable are you writing SQL on your own?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what's the last query you wrote",
+        "what would you ask a data person for"
+      ]
+    },
+    {
+      "id": "gtm-055",
+      "text": "Have you worked with dbt or directly in a data warehouse?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you build",
+        "who owned the models"
+      ]
+    },
+    {
+      "id": "gtm-056",
+      "text": "Have you used a reverse ETL tool like Hightouch or Census?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you sync",
+        "what went wrong"
+      ]
+    },
+    {
+      "id": "gtm-057",
+      "text": "Have you supported an enterprise sales team, or mostly smaller deals?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes with longer deals",
+        "what would you need to learn"
+      ]
+    },
+    {
+      "id": "gtm-058",
+      "text": "Have you led a CRM migration?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you do first",
+        "what would you never migrate"
+      ]
+    },
+    {
+      "id": "gtm-059",
+      "text": "Which CRMs have you run?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "tooling"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "which one most recently",
+        "which one do you prefer"
+      ]
+    },
+    {
+      "id": "gtm-060",
+      "text": "How big a sales team have you supported?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "scope"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "how many systems",
+        "how many regions"
+      ]
+    },
+    {
+      "id": "gtm-061",
+      "text": "How many years have you worked in revenue or sales operations?",
+      "type": "factual",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "experience"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what before that",
+        "what made you move into it"
+      ]
+    },
+    {
+      "id": "gtm-062",
+      "text": "What would your first 90 days in this role look like?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "planning",
+        "systems"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would you audit first",
+        "what's your first early win"
+      ]
+    },
+    {
+      "id": "gtm-063",
+      "text": "Our forecast has been off by a lot for two quarters. Where would you start?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "forecasting",
+        "planning"
+      ],
+      "great_eight": [
+        "generate_revenue"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you ask the sales leader",
+        "what would you look at first in the data"
+      ]
+    },
+    {
+      "id": "gtm-064",
+      "text": "Reps say the CRM slows them down. What would you do?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "systems",
+        "change management"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "how would you find out what slows them",
+        "what would you change first"
+      ]
+    },
+    {
+      "id": "gtm-065",
+      "text": "If we're setting up revenue operations from almost nothing, how would you start?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit",
+        "systems"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would you run yourself",
+        "what number would you move first"
+      ],
+      "founder_variant": true
+    },
+    {
+      "id": "gtm-066",
+      "text": "What would you need from sales, marketing and finance to do this job well?",
+      "type": "future_looking",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "stakeholder management",
+        "planning"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "who would you meet first",
+        "what would you ask finance for"
+      ]
+    },
+    {
+      "id": "gtm-067",
+      "text": "Are you more of a systems builder, or the person running the process day to day?",
+      "type": "self_assessment",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": true,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "when were you last in the admin settings",
+        "what did you change there"
+      ],
+      "notes": "Builder vs operator in revenue operations wording. Scored on the literal answer first."
+    },
+    {
+      "id": "gtm-068",
+      "text": "Give me the version of your background that matters for a revenue operations role.",
+      "type": "tell_me_about_yourself",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "positioning",
+        "systems"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why that move",
+        "what you want next"
+      ]
+    },
+    {
+      "id": "gtm-069",
+      "text": "Why operations, and not sales or marketing itself?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "why now",
+        "what would make you say no"
+      ]
+    },
+    {
+      "id": "gtm-070",
+      "text": "Before we finish, what would you like to ask me about how revenue operations works here?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "curiosity",
+        "systems"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "anything else"
+      ],
+      "moment": "candidate_questions",
+      "notes": "Candidate's-own-questions moment, routed by moment; the reply is scored by question_quality (prompt 10), not the normal rubric."
+    }
+  ]
+}

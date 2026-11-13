@@ -48,7 +48,7 @@ pub struct ScoreInput<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AiScore {
     pub rubric_version: u32,
-    /// "score-answer v2", "coach-note v2": which prompts judged this, so old scores keep their meaning.
+    /// "score-answer v3", "coach-note v2": which prompts judged this, so old scores keep their meaning.
     pub prompts: Vec<String>,
     pub story_id: Option<String>,
     /// The interviewer should answer; this was not an answer to score.
@@ -268,7 +268,7 @@ mod tests {
         let r = out.rewrite.unwrap();
         assert_eq!(r.position, "open");
         assert!(r.text.contains("44"));
-        assert_eq!(out.prompts, vec!["score-answer v2", "coach-note v2"]);
+        assert_eq!(out.prompts, vec!["score-answer v3", "coach-note v2"]);
         // The coach was told the fix, the evidence and the measurement, in fix mode.
         let seen = llm.seen.lock().unwrap();
         assert_eq!(seen.len(), 2);
@@ -383,6 +383,8 @@ mod tests {
         assert!(!run(&behavioral, Some("tg_b2c")).contains("angle_headline"));
         let tmay = QuestionInfo { question_type: "tell_me_about_yourself".into(), ..question() };
         assert!(run(&tmay, None).contains("I turn a messy stack into a pipeline."));
+        let own = QuestionInfo { question_type: "self_assessment".into(), ..question() };
+        assert!(!run(&own, None).contains("I turn a messy stack"), "a self assessment gets no pitch");
     }
 
     #[test]

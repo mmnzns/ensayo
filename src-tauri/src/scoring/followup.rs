@@ -321,7 +321,7 @@ mod tests {
 
     fn follow_reply(f1: &str, f2: &str, f3: &str, f5: &str) -> String {
         let v = |r: &str| json!({"result": r, "sentences": [1], "quote": "I owned the trigger", "reason": "t"});
-        json!({"rubric_version": 1, "clarifying_question": false, "not_an_answer": false, "first_answer_sentence": 1,
+        json!({"rubric_version": 2, "clarifying_question": false, "not_an_answer": false, "first_answer_sentence": 1,
                "criteria": {"f1_answer_push": v(f1), "f2_new_specific": v(f2), "f3_consistent": v(f3), "f5_held_position": v(f5)}})
         .to_string()
     }

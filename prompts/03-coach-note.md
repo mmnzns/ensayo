@@ -1,7 +1,7 @@
 ---
 id: coach-note
 version: 2
-rubric_version: 1
+rubric_version: 2
 model_tier: strong
 schema: schemas/coach-note.schema.json
 inputs: [mode, question, question_type, stage, transcript, top_fix, top_fix_evidence, measurements, stories, story_angles, method, target_pitch]

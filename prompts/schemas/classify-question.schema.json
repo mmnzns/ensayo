@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["type", "behavioral_situation", "commitment_check", "builder_operator_check", "is_major_story", "competencies"],
   "properties": {
-    "type": {"enum": ["behavioral", "tell_me_about_yourself", "technical", "factual", "future_looking", "gap", "motivation"]},
+    "type": {"enum": ["behavioral", "tell_me_about_yourself", "self_assessment", "technical", "factual", "future_looking", "gap", "motivation"]},
     "behavioral_situation": {"enum": ["problem_solving", "disagreement", "influence", "serving_customers", "leading_team", "motivation", "other", null]},
     "commitment_check": {"type": "boolean"},
     "builder_operator_check": {"type": "boolean"},

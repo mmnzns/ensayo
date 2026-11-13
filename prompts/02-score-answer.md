@@ -1,7 +1,7 @@
 ---
 id: score-answer
-version: 2
-rubric_version: 1
+version: 3
+rubric_version: 2
 model_tier: fast
 schema: schemas/score-answer.schema.json
 inputs: [rubric, question, question_type, behavioral_situation, commitment_check, builder_operator_check, stage, founder_variant, active_criteria, transcript, stories, method, jd_summary, target_pitch, story_angles]
@@ -39,7 +39,8 @@ How to work:
      null.
    - `not_an_answer`: true if the transcript is empty, unrelated to the question, or only filler.
      If true, set every criterion to `na`. "I don't know" or "I haven't used that" IS an answer:
-     judge it with `type_fit` as a gap answer.
+     judge it with `type_fit` as a gap answer. A gap question answered "yes" with proof is judged
+     the same way: a yes in the first sentence, then how long and one result, passes `type_fit`.
 3. Identify the story used, if any. `story_id` is the id of the bank story it matches, or null if
    no bank story matches or no story was told.
 4. List every number or measurable outcome the candidate said in `numbers_said`, including
@@ -50,7 +51,8 @@ How to work:
    even a small one. Set `not_in_bank` true when the bank has stories but none of them contains
    this metric. With an empty bank, `not_in_bank` is false.
 5. The target. The candidate is practicing for one kind of job, and two inputs can come from it:
-   - `target_pitch`: sent only for tell me about yourself questions. It is the candidate's own
+   - `target_pitch`: sent only for tell me about yourself questions (never for `self_assessment`).
+     For `self_assessment`, judge `type_fit` by the rubric's self-assessment rule instead. It is the candidate's own
      one-sentence pitch for this kind of job, and it is the identity statement the rubric's
      `type_fit` refers to. Pass `type_fit` when the pitch, or its meaning in other words, lands in
      the answer; put the sentence where it first lands first in `sentences` (code checks that it

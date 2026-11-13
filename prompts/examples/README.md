@@ -56,3 +56,11 @@ prompts: with no target input sent, 02, 03, 09 and 11 behave as before.
   against both targets, plus Ledgerline against the B2C target alone (`best_target_id` null).
 - `resume.json` (prompt 11): which lead-with points fit the Kestrel Pay posting, for each target,
   and the empty result when no posting has been read.
+
+## Added 2026-11-13 (rubric version 2)
+
+`rubric2/score.json`: cases for prompt 02 v3 and prompt 01 v2. Two `self_assessment` answers to
+"What is your greatest weakness?" (a real weakness with an example and a fix passes `type_fit`; a
+strength in disguise fails it), a gap question answered "yes with proof" (a pass, not a fail for
+missing an acknowledgment), and `classify_cases` for prompt 01 (the self assessment and
+"behavioral implementation" trap questions). No pitch is sent for a `self_assessment` question.

@@ -1,7 +1,7 @@
 ---
 id: score-follow-up
 version: 1
-rubric_version: 1
+rubric_version: 2
 model_tier: fast
 schema: schemas/score-follow-up.schema.json
 inputs: [rubric, original_question, first_transcript, follow_up_type, follow_up_question, follow_up_transcript, stories]

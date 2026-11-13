@@ -1,7 +1,7 @@
 ---
 id: extract-claims
 version: 1
-rubric_version: 1
+rubric_version: 2
 model_tier: fast
 schema: schemas/extract-claims.schema.json
 inputs: [stage, question, transcript, claims_log, stories]

@@ -165,7 +165,7 @@ pub struct PrepQuestionView {
     pub id: String,
     #[serde(rename = "stageId")]
     pub stage_id: String,
-    /// The screens' names: `behavioral`, `about_you`, `technical`, `factual`, `future`, `gap`, `motivation`.
+    /// The screens' names: `behavioral`, `about_you`, `technical`, `factual`, `future`, `gap`, `motivation`, `self`.
     #[serde(rename = "type")]
     pub kind: String,
     pub text: String,
@@ -482,6 +482,7 @@ fn ts_question_kind(kind: &str) -> String {
     match kind {
         "tell_me_about_yourself" => "about_you",
         "future_looking" => "future",
+        "self_assessment" => "self",
         other => other,
     }
     .to_string()

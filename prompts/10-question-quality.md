@@ -1,7 +1,7 @@
 ---
 id: question-quality
 version: 1
-rubric_version: 1
+rubric_version: 2
 model_tier: fast
 schema: schemas/question-quality.schema.json
 inputs: [stage, company, role, jd_summary, priorities, interviewer_said, candidate_questions, must_say, mock_transcript]

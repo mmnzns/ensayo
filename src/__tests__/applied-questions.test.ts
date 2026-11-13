@@ -16,6 +16,7 @@ describe("an extras question as a bank question", () => {
     expect(bankQuestionFromExtra(extra("a", { type: "about_you" }), "recruiter").type).toBe("tell_me_about_yourself");
     expect(bankQuestionFromExtra(extra("b", { type: "future" }), "recruiter").type).toBe("future_looking");
     expect(bankQuestionFromExtra(extra("c", { type: "gap" }), "recruiter").type).toBe("gap");
+    expect(bankQuestionFromExtra(extra("d", { type: "self" }), "recruiter").type).toBe("self_assessment");
   });
 
   it("drops an empty or missing situation, so the engine classifies by type", () => {

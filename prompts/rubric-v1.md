@@ -1,5 +1,5 @@
 ---
-rubric_version: 1
+rubric_version: 2
 ---
 
 # Rubric v1
@@ -84,12 +84,19 @@ never penalised: a clean pause to find a word reads as deliberate.
 The answer does what this question type needs:
 - `tell_me_about_yourself`: the identity statement from the profile (or its meaning) lands in the
   first 30 seconds. Code checks the timing from the returned sentence index.
+- `self_assessment` (added in rubric version 2): the first sentence answers the literal question:
+  it names the strength, weakness or style, or picks a side. Then one concrete example of it. A
+  weakness ends on what the speaker does about it now. Fails on a list of traits with no example,
+  on a weakness that is a strength in disguise ("I care too much", "I work too hard"), and on an
+  answer that never picks a side. The identity statement is not expected here.
 - `technical`: names a concrete approach or mechanism, not just principles.
 - `future_looking`: provisional language ("my first hypothesis would be", "I'd want to validate")
   plus a concrete first step. Fails on a confident diagnosis of a company from the outside.
 - `gap` (and any "I don't know" or "I haven't used that"): the gap is acknowledged once, in one
   clause, then the answer redirects to what transfers, and it ends on capability or approach,
-  never on the gap. "I don't know" is an answer, never `not_an_answer`.
+  never on the gap. "I don't know" is an answer, never `not_an_answer`. When the candidate has the
+  experience (rubric version 2): yes in the first sentence, then how long or how much, and one
+  result. Pass. Do not fail a yes for not acknowledging a gap that isn't there.
 - `motivation`: positive, specific to this company or role, forward-looking.
 - `behavioral` and `factual`: `na` (covered by other criteria).
 

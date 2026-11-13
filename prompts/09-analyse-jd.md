@@ -1,6 +1,6 @@
 ---
 id: analyse-jd
-version: 2
+version: 3
 model_tier: strong
 schema: schemas/analyse-jd.schema.json
 inputs: [jd_text, company, role, process, profile, bank_index, startup_flag, targets]

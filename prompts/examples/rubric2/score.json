@@ -1,0 +1,89 @@
+{
+  "prompt": "02-score-answer v3",
+  "rubric_version": 2,
+  "_how_to_use": "Rubric version 2 cases for prompt 02 (same shape as ../targets/score.json). Dana Ortiz and Fernhill are fictional. Only the fields under assert are checked; quote and reason are free text. No bank stories are sent in these cases and no target pitch: neither question is a tell me about yourself question.",
+  "cases": {
+    "self_assessment_weakness": {
+      "description": "What is your greatest weakness? The first sentence names a real weakness, then one concrete example of it, then what she does about it now. type_fit passes. The answer is not a strength in disguise and no pitch is expected.",
+      "question": "What is your greatest weakness?",
+      "classification": {"type": "self_assessment", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "is_major_story": true},
+      "stage": "hiring_manager",
+      "active_criteria": ["answer_first", "proof", "story_fit", "context_short", "clean_stop", "ownership", "conviction", "no_complaining", "stage_fit", "type_fit", "approach_before_action"],
+      "target_pitch": "",
+      "answer": {
+        "duration_s": 31.0,
+        "sentences": [
+          {"i": 1, "start": 0.0, "end": 5.0, "text": "My weakness is that I wait too long to hand work off, because I want it to be right."},
+          {"i": 2, "start": 5.0, "end": 12.5, "text": "At Fernhill I rebuilt the welcome emails myself for three weeks when our junior marketer could have taken half of them."},
+          {"i": 3, "start": 12.5, "end": 19.0, "text": "The launch slipped by a week, and that was on me, not on the team."},
+          {"i": 4, "start": 19.0, "end": 26.0, "text": "Now I write down what good looks like on day one and hand over the first draft within two days."},
+          {"i": 5, "start": 26.0, "end": 31.0, "text": "The last two launches went out on the planned date."}
+        ]
+      },
+      "assert": {
+        "not_an_answer": false,
+        "first_answer_sentence": 1,
+        "criteria": {
+          "answer_first": "pass",
+          "ownership": "pass",
+          "conviction": "pass",
+          "no_complaining": "pass",
+          "type_fit": "pass"
+        },
+        "type_fit_sentences_includes": [1]
+      },
+      "never": "type_fit must not be judged against an identity statement or pitch: none is sent."
+    },
+    "self_assessment_disguised_strength": {
+      "description": "Same question, a strength in disguise and no example. type_fit fails.",
+      "question": "What is your greatest weakness?",
+      "classification": {"type": "self_assessment", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "is_major_story": true},
+      "stage": "hiring_manager",
+      "active_criteria": ["answer_first", "proof", "story_fit", "context_short", "clean_stop", "ownership", "conviction", "no_complaining", "stage_fit", "type_fit", "approach_before_action"],
+      "target_pitch": "",
+      "answer": {
+        "duration_s": 12.0,
+        "sentences": [
+          {"i": 1, "start": 0.0, "end": 5.0, "text": "I would say I care too much and I work too hard."},
+          {"i": 2, "start": 5.0, "end": 12.0, "text": "I just want every project to be perfect for the customer."}
+        ]
+      },
+      "assert": {
+        "not_an_answer": false,
+        "criteria": {"type_fit": "fail"}
+      }
+    },
+    "gap_yes_with_proof": {
+      "description": "Have you run lifecycle programs in Braze? She has: yes in the first sentence, then how long, then one result. Rubric version 2: this is a pass, never a fail for not acknowledging a gap that is not there.",
+      "question": "Have you run lifecycle programs in Braze before?",
+      "classification": {"type": "gap", "behavioral_situation": null, "commitment_check": false, "builder_operator_check": false, "is_major_story": false},
+      "stage": "recruiter",
+      "active_criteria": ["answer_first", "proof", "story_fit", "context_short", "clean_stop", "ownership", "conviction", "no_complaining", "stage_fit", "type_fit"],
+      "target_pitch": "",
+      "answer": {
+        "duration_s": 14.0,
+        "sentences": [
+          {"i": 1, "start": 0.0, "end": 3.0, "text": "Yes, I have run lifecycle programs in Braze for four years."},
+          {"i": 2, "start": 3.0, "end": 9.0, "text": "At Fernhill I built and owned the whole onboarding series there."},
+          {"i": 3, "start": 9.0, "end": 14.0, "text": "It took seven-day activation from 31 to 44 percent."}
+        ]
+      },
+      "assert": {
+        "not_an_answer": false,
+        "first_answer_sentence": 1,
+        "criteria": {
+          "answer_first": "pass",
+          "conviction": "pass",
+          "type_fit": "pass"
+        }
+      },
+      "never": "type_fit must not fail because the answer does not acknowledge a gap."
+    }
+  },
+  "classify_cases": {
+    "weakness": {"question": "What's your greatest weakness?", "expected": {"type": "self_assessment", "behavioral_situation": null}},
+    "builder_or_operator": {"question": "Are you a builder or an operator?", "expected": {"type": "self_assessment", "behavioral_situation": null, "builder_operator_check": true}},
+    "tell_me_about_yourself": {"question": "Tell me about yourself.", "expected": {"type": "tell_me_about_yourself"}},
+    "trap_behavioral_implementation": {"question": "Have you done a behavioral implementation in Braze before?", "expected": {"type": "technical"}}
+  }
+}

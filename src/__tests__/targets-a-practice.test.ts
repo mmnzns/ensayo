@@ -17,27 +17,35 @@ const t = (id: string, over: Partial<Target> = {}): Target => ({
 describe("the question pack follows the target's kind of role", () => {
   const general = banksFor(t("x", { roleFamily: "other", role: "Chef" })).length;
   it("gives lifecycle the lifecycle pack and the general set", () => {
-    expect(banksFor(t("a")).length).toBe(general + 70);
+    expect(banksFor(t("a")).length).toBe(general + 73);
   });
   it("gives marketing ops the same pack, which covers both kinds of role", () => {
-    expect(banksFor(t("a", { roleFamily: "marketing_ops" })).length).toBe(general + 70);
+    expect(banksFor(t("a", { roleFamily: "marketing_ops" })).length).toBe(general + 73);
   });
   it("gives growth and product marketing their own packs on top of the general set", () => {
     expect(banksFor(t("a", { roleFamily: "growth" })).length).toBe(general + 70);
     expect(banksFor(t("a", { roleFamily: "product_marketing" })).length).toBe(general + 70);
   });
+  it("gives GTM and revenue ops its own pack, not the lifecycle one", () => {
+    const gtm = banksFor(t("a", { roleFamily: "gtm" }));
+    expect(gtm.length).toBe(general + 70);
+    expect(gtm.some((q) => q.id.startsWith("gtm-"))).toBe(true);
+    expect(gtm.some((q) => q.id.startsWith("lmo-"))).toBe(false);
+    expect(banksFor(t("a")).some((q) => q.id.startsWith("gtm-"))).toBe(false);
+  });
   it("gives the other kinds the general set, since no pack exists for them yet", () => {
     expect(banksFor(t("a", { roleFamily: "other" })).length).toBe(general);
   });
   it("says how big each pack is, none for a kind of role without one", () => {
-    expect(packSize("lifecycle")).toBe(70);
-    expect(packSize("marketing_ops")).toBe(70);
+    expect(packSize("lifecycle")).toBe(73);
+    expect(packSize("marketing_ops")).toBe(73);
     expect(packSize("growth")).toBe(70);
     expect(packSize("product_marketing")).toBe(70);
+    expect(packSize("gtm")).toBe(70);
     expect(packSize("other")).toBe(0);
   });
   it("still takes a role in words, as before", () => {
-    expect(banksFor("Senior Lifecycle Marketing Manager").length).toBe(general + 70);
+    expect(banksFor("Senior Lifecycle Marketing Manager").length).toBe(general + 73);
     expect(banksFor("Accountant").length).toBe(general);
   });
 });

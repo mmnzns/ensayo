@@ -62,7 +62,7 @@
   },
   "properties": {
     "rubric_version": {
-      "const": 1
+      "const": 2
     },
     "clarifying_question": {
       "type": "boolean"

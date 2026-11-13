@@ -89,7 +89,7 @@
     {
       "id": "gen-004",
       "text": "What should I know about you that isn't on your resume?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "hiring_manager",
@@ -110,12 +110,13 @@
       "follow_up_angles": [
         "why that move",
         "what you want next"
-      ]
+      ],
+      "notes": "Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-005",
       "text": "How would the people you work with describe you?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "hiring_manager",
@@ -137,7 +138,7 @@
         "give me an example of that",
         "what would a critic say"
       ],
-      "notes": "Self-description, not a past example, so typed tell_me_about_yourself."
+      "notes": "Self-description, not a past example, so typed tell_me_about_yourself. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-006",
@@ -167,7 +168,7 @@
     {
       "id": "gen-007",
       "text": "What's your biggest strength?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "recruiter",
@@ -187,12 +188,13 @@
       "follow_up_angles": [
         "give me an example",
         "where has that strength gotten you into trouble"
-      ]
+      ],
+      "notes": "Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-008",
       "text": "What's your greatest weakness?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "hiring_manager",
@@ -214,12 +216,12 @@
         "give me a recent example",
         "what are you doing about it now"
       ],
-      "notes": "No enum type for self-assessment; tell_me_about_yourself is closest. Not a past-example question."
+      "notes": "No enum type for self-assessment; tell_me_about_yourself is closest. Not a past-example question. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-009",
       "text": "Is there anything we haven't covered that you'd want me to know?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "hiring_manager",
@@ -239,7 +241,7 @@
       "follow_up_angles": [
         "why does that matter for this role"
       ],
-      "notes": "Closing prompt. Tests whether the candidate fills a gap in the evidence instead of repeating."
+      "notes": "Closing prompt. Tests whether the candidate fills a gap in the evidence instead of repeating. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-010",
@@ -625,7 +627,7 @@
     {
       "id": "gen-025",
       "text": "Are you a builder or an operator?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "leadership"
@@ -646,12 +648,12 @@
         "what number moved"
       ],
       "founder_variant": true,
-      "notes": "Typed tell_me_about_yourself as closest (self-description). Scored on the literal answer first, then an operator example."
+      "notes": "Typed tell_me_about_yourself as closest (self-description). Scored on the literal answer first, then an operator example. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-026",
       "text": "Are you more of a systems person, or do you run things day to day?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "leadership",
@@ -672,12 +674,12 @@
         "when did you last run something yourself",
         "what did you change week to week"
       ],
-      "notes": "Rewording of builder vs operator, the way it is often asked in practice."
+      "notes": "Rewording of builder vs operator, the way it is often asked in practice. Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-027",
       "text": "Once something's built, do you stay and run it until the number moves, or hand it off?",
-      "type": "tell_me_about_yourself",
+      "type": "self_assessment",
       "behavioral_situation": null,
       "stages": [
         "leadership"
@@ -698,7 +700,8 @@
         "how long did you run it",
         "what did you change along the way"
       ],
-      "founder_variant": true
+      "founder_variant": true,
+      "notes": "Self-assessment: judged on whether the first sentence answers the literal question (names the trait or picks a side), then one concrete example. Not judged against the target pitch."
     },
     {
       "id": "gen-028",
@@ -2747,6 +2750,325 @@
       "follow_up_angles": [
         "how did it go",
         "what would you do differently"
+      ]
+    },
+    {
+      "id": "gen-110",
+      "text": "What do you know about us?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "preparation",
+        "motivation"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "where did you read that",
+        "what would you want to know more about"
+      ]
+    },
+    {
+      "id": "gen-111",
+      "text": "How are you using AI in your work today?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "technical",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "AI",
+        "ways of working"
+      ],
+      "great_eight": [
+        "productivity"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did it get wrong last time",
+        "what would you never hand to it"
+      ]
+    },
+    {
+      "id": "gen-112",
+      "text": "Tell me about a time an AI tool gave you something wrong. How did you catch it?",
+      "type": "behavioral",
+      "behavioral_situation": "problem_solving",
+      "stages": [
+        "hiring_manager",
+        "technical"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "AI",
+        "judgment"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would have happened if you hadn't",
+        "what do you check now"
+      ]
+    },
+    {
+      "id": "gen-113",
+      "text": "There's a gap on your resume here. What were you doing?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "career story"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what did you learn in that time",
+        "why come back now"
+      ],
+      "notes": "Answer plainly in one or two sentences, then move to what is next. Not an apology."
+    },
+    {
+      "id": "gen-114",
+      "text": "Why did your last role end?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "career story"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what would your manager say",
+        "what did you take from it"
+      ],
+      "notes": "Covers layoffs and short stays. Scored as motivation: short, factual, no knocks on the old company, ends looking forward."
+    },
+    {
+      "id": "gen-115",
+      "text": "This role looks more junior than your last one. Why do you want it?",
+      "type": "motivation",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "motivation",
+        "commitment"
+      ],
+      "great_eight": [],
+      "commitment_check": true,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "will you be bored in six months",
+        "what about pay"
+      ]
+    },
+    {
+      "id": "gen-116",
+      "text": "How do you like to be managed?",
+      "type": "self_assessment",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "working style"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what didn't work with a past manager",
+        "how would I know you need help"
+      ]
+    },
+    {
+      "id": "gen-117",
+      "text": "What's your management style?",
+      "type": "self_assessment",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "leadership",
+        "working style"
+      ],
+      "great_eight": [
+        "develop_people"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what would your team say",
+        "when did that style not work"
+      ]
+    },
+    {
+      "id": "gen-118",
+      "text": "How do you work with people in other time zones, or people you rarely meet?",
+      "type": "technical",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "panel"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "collaboration",
+        "ways of working"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what goes wrong",
+        "how do you keep decisions from stalling"
+      ]
+    },
+    {
+      "id": "gen-119",
+      "text": "Tell me about a time you were asked to do something you thought was wrong.",
+      "type": "behavioral",
+      "behavioral_situation": "other",
+      "stages": [
+        "hiring_manager",
+        "panel",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "integrity",
+        "judgment"
+      ],
+      "great_eight": [
+        "compliance"
+      ],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "hard",
+      "follow_up_angles": [
+        "what did you say",
+        "what happened afterwards"
+      ]
+    },
+    {
+      "id": "gen-120",
+      "text": "You'd be the only person doing this here. Have you worked without a team around you?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "hiring_manager",
+        "leadership"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "operating fit",
+        "ownership"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what did you drop",
+        "what did you automate"
+      ]
+    },
+    {
+      "id": "gen-121",
+      "text": "Have you worked at a company our size?",
+      "type": "gap",
+      "behavioral_situation": null,
+      "stages": [
+        "recruiter",
+        "hiring_manager"
+      ],
+      "modes": [
+        "drill",
+        "mock"
+      ],
+      "competencies": [
+        "context"
+      ],
+      "great_eight": [],
+      "commitment_check": false,
+      "builder_operator_check": false,
+      "difficulty": "standard",
+      "follow_up_angles": [
+        "what changes at our size",
+        "what would you need to learn"
       ]
     },
     {

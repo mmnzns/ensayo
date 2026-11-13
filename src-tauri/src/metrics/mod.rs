@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use timing::{Length, Pause, Proof, Window};
 
 /// Bumped when a criterion changes; stored with every score so trends can mark the change.
-pub const RUBRIC_VERSION: u32 = 1;
+pub const RUBRIC_VERSION: u32 = 2;
 
 pub struct Inputs<'a> {
     pub words: Vec<Word>,

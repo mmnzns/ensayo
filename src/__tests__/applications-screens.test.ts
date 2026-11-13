@@ -53,7 +53,7 @@ describe("applications screens", () => {
     expect(qs.length).toBeGreaterThanOrEqual(8);
     expect(qs.length).toBeLessThanOrEqual(12);
     const labels = mockStore.screens.applications.questionTypes.map((t) => t.label);
-    expect(labels).toEqual(["Behavioral", "Tell me about yourself", "Technical", "Factual", "Future looking", "Gap", "Motivation"]);
+    expect(labels).toEqual(["Behavioral", "Tell me about yourself", "Technical", "Factual", "Future looking", "Gap", "Motivation", "About you, one trait"]);
   });
 
   it("copy follows the house rules: no em dashes, no framework names", () => {
