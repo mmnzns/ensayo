@@ -1,9 +1,14 @@
 // One tap to a real Drill, for the places that only say "Practice": Home, its empty state and the end of setup.
 // In the browser preview (no real loop) this does nothing and the screen keeps its sample walk-through.
 
-import type { Application, ProcessStage } from "../data/types";
+import type { Application, Method, ProcessStage, Story, Target } from "../data/types";
 import { checkAi, liveAvailable, startLive, type LiveContext } from "./live";
 import { earlierStages, type ExtraQuestion } from "./questions";
+
+/** What a session needs from the person, as the practice buttons outside Start a session give it: the role and target being practised now. */
+export function liveContextOf(store: { activeTarget?: Target; profile: { targetRole: string }; stories: Story[]; methods: Method[] }): LiveContext {
+  return { targetRole: store.activeTarget?.role ?? store.profile.targetRole, stories: store.stories, methods: store.methods, target: store.activeTarget };
+}
 
 /** A first run asks three questions; Home's usual Drill asks five. */
 export const FIRST_DRILL = 3;

@@ -262,6 +262,40 @@ export function startLive(o: StartOptions, ctx: LiveContext) {
   listeners.forEach((l) => l());
 }
 
+/** Questions in a Drill for one story. */
+export const STORY_DRILL = 3;
+export const ASKING_SCREEN = "3-1-practice-interviewer-asking";
+
+/** A Drill for one story: the three questions in the bank that fit it best (`storyFit`; fewer fit, the best of the rest
+ *  fill in). True when a real session started; false in the browser preview, which keeps its sample walk-through. */
+export function startStoryDrill(story: Story, ctx: LiveContext, count = STORY_DRILL): boolean {
+  if (!liveAvailable()) return false;
+  const stories = ctx.stories.some((s) => s.id === story.id) ? ctx.stories : [...ctx.stories, story];
+  startLive({ mode: "drill", stage: "hiring_manager", count, source: "story", storyId: story.id }, { ...ctx, stories });
+  void checkAi();
+  return true;
+}
+
+/** A one-question Drill on exactly this question text. True when a real session started. */
+export function startQuestionDrill(text: string, ctx: LiveContext): boolean {
+  if (!liveAvailable() || !text.trim()) return false;
+  startLive({ mode: "drill", stage: "hiring_manager", count: 1, source: "own", ownQuestion: text }, ctx);
+  void checkAi();
+  return true;
+}
+
+/** What "Practice this story" does: start the Drill, then open the asking screen (the preview opens it too, with its sample). */
+export function practiceStory(story: Story, ctx: LiveContext, open: (screen: string) => void): void {
+  startStoryDrill(story, ctx);
+  open(ASKING_SCREEN);
+}
+
+/** What "Rehearse" does on a question: a one-question Drill, then the asking screen. */
+export function rehearseQuestion(text: string, ctx: LiveContext, open: (screen: string) => void): void {
+  startQuestionDrill(text, ctx);
+  open(ASKING_SCREEN);
+}
+
 export const currentQuestion = (): BankQuestion | undefined => state.questions[state.index];
 
 export function liveSession(): PracticeSession {

@@ -6,6 +6,8 @@ import type { Branch, Story as StoryType } from "../../data/types";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
+import { practiceStory } from "../../practice/live";
+import { liveContextOf } from "../../practice/quick";
 import { BRANCH_LABELS, CORE_BRANCHES, numberText } from "./helpers";
 import { FIELD_HELP } from "./fieldHelp";
 import Numbers, { type NumberRow } from "./Numbers";
@@ -50,7 +52,8 @@ function Field({ id, label, help, missing, children }: { id: string; label: stri
 const linkButton = { background: "none", border: "none", padding: "0", font: "inherit", color: "var(--e-primary)", textDecoration: "underline", cursor: "pointer" } as const;
 
 function StoryEditor({ story }: { story: StoryType }) {
-  const { screens } = useStore();
+  const store = useStore();
+  const { screens } = store;
   const telling = screens.stories.telling[story.id];
 
   const { saveStory, deleteStory } = useActions();
@@ -136,7 +139,7 @@ function StoryEditor({ story }: { story: StoryType }) {
           </div>
           <span className="e-meta">{story.year ? `${story.employer} · ${story.year}` : story.employer}</span>
         </div>
-        <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary">Practice this story</Link>
+        <button type="button" className="e-btn e-btn-primary" onClick={() => practiceStory(story, liveContextOf(store), go)}>Practice this story</button>
       </header>
       <StoryTabs story={story} current="story" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>

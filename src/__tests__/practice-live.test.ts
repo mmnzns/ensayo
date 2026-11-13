@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
 import type { RepApi } from "../practice/api";
-import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute } from "../practice/live";
+import { anotherFollowUp, checkAi, endFollowUp, requestFollowUp, labelCriteria, savedLabels, cancelLive, getLive, HARD_CAP_SECONDS, liveSession, markWrong, nextLiveQuestion, resetLive, setRepApi, startLive, stopAndFinish, tryAgain, beginRecording, keepAfterRestart, startOverAfterRestart, resultRoute, practiceStory, rehearseQuestion, startStoryDrill, startQuestionDrill, ASKING_SCREEN } from "../practice/live";
+import { liveContextOf } from "../practice/quick";
+import { storyFit } from "../practice/questions";
 import type { FinishArgs, FullRep, RepOutcome } from "../practice/types";
 
 function rep(attempt: number, fix: string | null = "length"): FullRep {
@@ -438,5 +440,50 @@ describe("a Mock", () => {
     expect(s.mockFinished).toBe(true);
     expect(s.phase).toBe("idle");
     expect(s.lastSessionId).toBe("ses_a");
+  });
+});
+
+describe("controls that start a session", () => {
+  const ctx = liveContextOf({ profile: { targetRole: "Senior Lifecycle Marketing Manager" }, stories: mockStore.stories, methods: mockStore.methods });
+
+  it("Practice this story starts a Drill of the three questions that fit it best, then opens the asking screen", () => {
+    setRepApi(fake([]).api);
+    const story = mockStore.stories[0];
+    const opened: string[] = [];
+    practiceStory(story, ctx, (screen) => opened.push(screen));
+    const s = getLive();
+    expect(s.active).toBe(true);
+    expect(s.mode).toBe("drill");
+    expect(s.questions).toHaveLength(3);
+    const fits = s.questions.map((q) => storyFit(q, story));
+    expect([...fits].sort((a, b) => b - a)).toEqual(fits);
+    expect(opened).toEqual([ASKING_SCREEN]);
+  });
+
+  it("Rehearse starts a one-question Drill on that exact question, then opens the asking screen", () => {
+    setRepApi(fake([]).api);
+    const opened: string[] = [];
+    rehearseQuestion("Why did the launch slip?", ctx, (screen) => opened.push(screen));
+    const s = getLive();
+    expect(s.questions.map((q) => q.text)).toEqual(["Why did the launch slip?"]);
+    expect(s.phase).toBe("asking");
+    expect(opened).toEqual([ASKING_SCREEN]);
+  });
+
+  it("in the browser preview nothing starts, and the screen still opens with its sample", () => {
+    setRepApi(null);
+    const opened: string[] = [];
+    expect(startStoryDrill(mockStore.stories[0], ctx)).toBe(false);
+    expect(startQuestionDrill("Anything", ctx)).toBe(false);
+    practiceStory(mockStore.stories[0], ctx, (screen) => opened.push(screen));
+    expect(getLive().active).toBe(false);
+    expect(opened).toEqual([ASKING_SCREEN]);
+  });
+
+  it("a story that is not in the list yet is still practised, and a blank question starts nothing", () => {
+    setRepApi(fake([]).api);
+    const fresh = { ...mockStore.stories[0], id: "new-one" };
+    expect(startStoryDrill(fresh, ctx)).toBe(true);
+    expect(startQuestionDrill("   ", ctx)).toBe(false);
   });
 });

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useStore } from "../../data/store";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
+import { go } from "../../ui/router";
+import { rehearseQuestion } from "../../practice/live";
+import { liveContextOf } from "../../practice/quick";
 import Wordmark from "../../ui/Wordmark";
 import { clock, ListenButton, stageWithKind } from "./speak";
 import type { MockDebriefData } from "../../data/screens/results";
@@ -39,7 +42,8 @@ export default function SessionResultsMockDebrief() {
 
 /** `saves`: a real Mock, where "X is right now" changes what the application remembers (and is left out where it cannot). The preview keeps its sample walk-through. */
 export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefData; notice?: string | null; saves?: boolean }) {
-  const { applications } = useStore();
+  const store = useStore();
+  const { applications } = store;
   const app = applications.find((a) => a.id === d.applicationId);
   const updateClaim = useClaimUpdater();
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -177,7 +181,7 @@ export function Debrief({ d, notice = null, saves = false }: { d: MockDebriefDat
                   )}
                 </div>
                 {r.rehearse ? (
-                  <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-sm">Rehearse</Link>
+                  <button type="button" className="e-btn e-btn-primary e-btn-sm" onClick={() => rehearseQuestion(r.prompt, liveContextOf(store), go)}>Rehearse</button>
                 ) : (
                   <ListenButton text={r.listen} />
                 )}

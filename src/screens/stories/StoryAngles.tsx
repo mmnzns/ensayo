@@ -8,6 +8,9 @@ import type { Story, StoryAngle, Target } from "../../data/types";
 import { TargetMark } from "../applications/TargetMark";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
+import { go } from "../../ui/router";
+import { practiceStory } from "../../practice/live";
+import { liveContextOf } from "../../practice/quick";
 import { chosenStory } from "./selection";
 import StoryTabs from "./StoryTabs";
 
@@ -98,7 +101,7 @@ function Angles({ story }: { story: Story }) {
           </div>
           <span className="e-meta">{story.year ? `${story.employer} · ${story.year}` : story.employer}</span>
         </div>
-        <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary">Practice this story</Link>
+        <button type="button" className="e-btn e-btn-primary" onClick={() => practiceStory(story, liveContextOf(store), go)}>Practice this story</button>
       </header>
       <StoryTabs story={story} current="angles" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>

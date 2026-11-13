@@ -108,7 +108,8 @@ export function pickQuestions(o: PickOptions): BankQuestion[] {
   const ranked = story ? [...source].sort((a, b) => storyFit(b, story) - storyFit(a, story) || a.id.localeCompare(b.id)) : shuffle(source, o.seed ?? 1);
   const openers = ranked.filter((q) => q.moment === "opener");
   const rest = ranked.filter((q) => q.moment !== "opener");
-  return [...openers.slice(0, 1), ...rest, ...openers.slice(1)].slice(0, o.count);
+  // With a story the fit decides the order: an opener that does not fit the story does not jump the queue.
+  return (story ? ranked : [...openers.slice(0, 1), ...rest, ...openers.slice(1)]).slice(0, o.count);
 }
 
 /** The interviewer's closing "what questions do you have for me?" for a stage. Its type is the Mock's own-questions moment, which is judged together at the end rather than as an answer. */
