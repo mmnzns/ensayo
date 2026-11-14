@@ -53,7 +53,16 @@ jobs:
           # (STATUS_ENTRYPOINT_NOT_FOUND, 2026-11-14) though the release app builds. The release build stays, for the
           # baseline check below.
           cargo test --manifest-path src-tauri/Cargo.toml --workspace
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ($LASTEXITCODE -ne 0) {
+            # Which DLLs the test program needs and where each would load from (diagnosis for STATUS_ENTRYPOINT_NOT_FOUND).
+            $exe = Get-ChildItem src-tauri/target/debug/deps -Filter 'ensayo_lib-*.exe' | Select-Object -First 1
+            $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+            $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+            & $dumpbin.FullName /dependents $exe.FullName
+            Get-ChildItem src-tauri/target/debug/deps -Filter *.dll | ForEach-Object { "{0} -> {1} ({2})" -f $_.Name, $_.Target, $_.Length }
+            Get-Item C:\Windows\System32\DirectML.dll -ErrorAction SilentlyContinue | ForEach-Object { "System32 DirectML.dll " + $_.VersionInfo.FileVersion }
+            exit 1
+          }
           cargo build --release --manifest-path src-tauri/Cargo.toml --workspace
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
