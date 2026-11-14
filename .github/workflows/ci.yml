@@ -49,31 +49,21 @@ jobs:
         shell: pwsh
         run: |
           . ./scripts/cpu-baseline.ps1
-          # Tests in debug, like Talaan's CI: the release test program stops at start on this runner image
-          # (STATUS_ENTRYPOINT_NOT_FOUND, 2026-11-14) though the release app builds. The release build stays, for the
-          # baseline check below.
-          cargo test --manifest-path src-tauri/Cargo.toml --workspace
-          if ($LASTEXITCODE -ne 0) {
-            # Which DLLs the test program needs and where each would load from (diagnosis for STATUS_ENTRYPOINT_NOT_FOUND).
-            $exe = Get-ChildItem src-tauri/target/debug/deps -Filter 'ensayo_lib-*.exe' | Select-Object -First 1
-            $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-            $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
-            & $dumpbin.FullName /dependents $exe.FullName
-            Get-ChildItem src-tauri/target/debug/deps -Filter *.dll | ForEach-Object { "{0} -> {1} ({2})" -f $_.Name, $_.Target, $_.Length }
-            Get-Item C:\Windows\System32\DirectML.dll -ErrorAction SilentlyContinue | ForEach-Object { "System32 DirectML.dll " + $_.VersionInfo.FileVersion }
-            # Every imported function that Windows can't find, by name.
-            Add-Type -Name K -Namespace W -MemberDefinition '[DllImport("kernel32", SetLastError=true, CharSet=CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string n); [DllImport("kernel32", CharSet=CharSet.Ansi)] public static extern IntPtr GetProcAddress(IntPtr h, string n);'
-            Push-Location $exe.DirectoryName
-            $dll = $null
-            foreach ($line in (& $dumpbin.FullName /imports $exe.FullName)) {
-              if ($line -match '^\s{4}(\S+\.dll)\s*$') { $dll = $Matches[1]; $h = [W.K]::LoadLibraryW($dll); if ($h -eq [IntPtr]::Zero) { "CANNOT LOAD $dll" }; continue }
-              if ($dll -and $line -match '^\s+[0-9A-F]+\s+(\S+)\s*$' -and $h -ne [IntPtr]::Zero) {
-                if ([W.K]::GetProcAddress($h, $Matches[1]) -eq [IntPtr]::Zero) { "MISSING $dll!$($Matches[1])" }
-              }
-            }
-            Pop-Location
-            exit 1
+          # The test programs have no application manifest, so Windows gives them the old common controls, which lack
+          # TaskDialogIndirect (pulled in by Tauri), and on this runner image (2026-11-03) they stop at start with
+          # STATUS_ENTRYPOINT_NOT_FOUND. The app itself carries Tauri's manifest. Build the tests, give each the
+          # common-controls manifest with mt.exe, then run them.
+          cargo test --release --manifest-path src-tauri/Cargo.toml --workspace --no-run
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $manifest = Join-Path $env:RUNNER_TEMP 'tests.manifest'
+          Set-Content -Path $manifest -Encoding ascii -Value '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"><dependency><dependentAssembly><assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/></dependentAssembly></dependency></assembly>'
+          $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter mt.exe | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          Get-ChildItem src-tauri/target/release/deps -Filter *.exe | Where-Object { $_.Name -match '^(ensayo_lib|ensayo|ensayo_eval|ensayo_llm|process)-[0-9a-f]+\.exe$' } | ForEach-Object {
+            & $mt.FullName -nologo -manifest $manifest "-outputresource:$($_.FullName);#1"
+            if ($LASTEXITCODE -ne 0) { Write-Error "mt.exe failed on $($_.Name)"; exit 1 }
           }
+          cargo test --release --manifest-path src-tauri/Cargo.toml --workspace
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           cargo build --release --manifest-path src-tauri/Cargo.toml --workspace
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
