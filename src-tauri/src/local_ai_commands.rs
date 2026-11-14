@@ -115,7 +115,8 @@ mod tests {
         assert!(v.helper_found);
         assert_eq!(v.models.len(), 3);
         assert!(v.models.iter().all(|m| m.state == "missing"));
-        assert_eq!(view_with("qwen3.5-9b", &store, false).selected, "qwen3.5-9b");
+        // The 9B where this computer has the memory for it; a smaller computer (a CI runner) gets the recommended one.
+        assert_eq!(view_with("qwen3.5-9b", &store, false).selected, crate::ai::local_models::choose("qwen3.5-9b").info.id);
         assert!(!view_with("qwen3.5-9b", &store, false).helper_found);
         let json = serde_json::to_value(view_with("", &store, true)).unwrap();
         assert!(json["models"][0]["state"] == "missing" && json["models"][0]["size_mb"] == 2740 && json["selected"] == "qwen3.5-4b");

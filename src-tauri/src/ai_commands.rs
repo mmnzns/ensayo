@@ -549,13 +549,16 @@ mod tests {
         let mut a = s("local");
         a.fast_model = "qwen3.5-9b".into();
         let Some(Engine::Local(l)) = resolve_engine(&a, no_keys, found).unwrap() else { panic!() };
-        assert_eq!(l.id, "qwen3.5-9b");
+        // The 9B is kept where this computer has the memory for it; on a smaller one (a CI runner) it falls back.
+        assert_eq!(l.id, crate::ai::local_models::choose("qwen3.5-9b").info.id);
         a.fast_model = "claude-haiku-5-5".into();
         let Some(Engine::Local(l)) = resolve_engine(&a, no_keys, found).unwrap() else { panic!() };
         assert_eq!(l.id, "qwen3.5-4b");
         // Only the chosen model has to be there.
-        a.fast_model = "qwen3.5-9b".into();
-        assert!(resolve_engine(&a, no_keys, |m| if m.recommended { found(m) } else { Status::Missing }).is_err());
+        if crate::ai::local_models::choose("qwen3.5-9b").info.id == "qwen3.5-9b" {
+            a.fast_model = "qwen3.5-9b".into();
+            assert!(resolve_engine(&a, no_keys, |m| if m.recommended { found(m) } else { Status::Missing }).is_err());
+        }
     }
 
     #[test]

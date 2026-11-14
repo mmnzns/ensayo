@@ -119,6 +119,9 @@ jobs:
       # The app's own whisper.cpp must be built for the AVX2 baseline, not this runner's CPU. The signing key makes the
       # installer's .sig (tauri.conf.json: bundle.createUpdaterArtifacts). The helpers are not built here, so only the
       # app's whisper.cpp cache is left to check (Test-GgmlBaseline).
+      - name: Folders the ONNX Runtime build step copies its libraries into
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path src-tauri/target/release/examples, src-tauri/target/release/deps, src-tauri/target/debug/examples, src-tauri/target/debug/deps | Out-Null
       - name: Build the installer
         shell: pwsh
         env:
@@ -290,6 +293,10 @@ jobs:
         run: |
           '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan"]}}' |
             Set-Content -Path "$env:RUNNER_TEMP/tauri.release.conf.json" -Encoding ascii
+      - name: Folders the ONNX Runtime build step copies its libraries into
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path src-tauri/target/release/examples, src-tauri/target/release/deps, src-tauri/target/debug/examples, src-tauri/target/debug/deps | Out-Null
       - name: Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
