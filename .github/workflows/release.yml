@@ -61,9 +61,9 @@ jobs:
   # so that helper is skipped. Same tag in `engine-ref` and after the @.
   helpers:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.3.3
+    uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.3.4
     with:
-      engine-ref: v0.3.3
+      engine-ref: v0.3.4
       helpers: "llm,llm-vulkan"
       targets: "aarch64-apple-darwin,x86_64-pc-windows-msvc"
       llm-name: ensayo-llm
@@ -82,7 +82,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -119,9 +119,6 @@ jobs:
       # The app's own whisper.cpp must be built for the AVX2 baseline, not this runner's CPU. The signing key makes the
       # installer's .sig (tauri.conf.json: bundle.createUpdaterArtifacts). The helpers are not built here, so only the
       # app's whisper.cpp cache is left to check (Test-GgmlBaseline).
-      - name: Folders the ONNX Runtime build step copies its libraries into
-        shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path src-tauri/target/release/examples, src-tauri/target/release/deps, src-tauri/target/debug/examples, src-tauri/target/debug/deps | Out-Null
       - name: Build the installer
         shell: pwsh
         env:
@@ -161,7 +158,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
@@ -251,7 +248,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -293,10 +290,6 @@ jobs:
         run: |
           '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan"]}}' |
             Set-Content -Path "$env:RUNNER_TEMP/tauri.release.conf.json" -Encoding ascii
-      - name: Folders the ONNX Runtime build step copies its libraries into
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path src-tauri/target/release/examples, src-tauri/target/release/deps, src-tauri/target/debug/examples, src-tauri/target/debug/deps | Out-Null
       - name: Windows installer
         if: runner.os == 'Windows'
         shell: pwsh

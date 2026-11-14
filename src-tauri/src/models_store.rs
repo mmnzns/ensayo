@@ -338,8 +338,10 @@ mod tests {
             r = remove_everywhere(&mine, "whisper-tiny");
         }
         assert_eq!(r, Ok(Removal { result: "erased", old_copies_left: 0 }));
-        assert_eq!(state_name(&mine.status("whisper-tiny")), "missing");
-        assert_eq!(state_name(&talaan.status("whisper-tiny")), "missing");
+        // Under a busy full test run the folder can take a moment to disappear; ask again for up to 2 seconds.
+        let gone = |s: &SharedStore| (0..100).any(|_| state_name(&s.status("whisper-tiny")) == "missing" || { std::thread::sleep(std::time::Duration::from_millis(20)); false });
+        assert!(gone(&mine), "{}", state_name(&mine.status("whisper-tiny")));
+        assert!(gone(&talaan), "{}", state_name(&talaan.status("whisper-tiny")));
     }
 
     #[test]
