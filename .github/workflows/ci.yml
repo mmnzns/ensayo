@@ -49,6 +49,13 @@ jobs:
         shell: pwsh
         run: |
           . ./scripts/cpu-baseline.ps1
+          # ONNX Runtime's build step copies its DLLs (onnxruntime.dll, DirectML.dll) next to the app only, not into
+          # deps where the test programs run, when it can't symlink across drives; the test program then loads
+          # Windows' older DirectML.dll and stops with STATUS_ENTRYPOINT_NOT_FOUND. Build, put the DLLs beside the tests, run.
+          cargo test --release --manifest-path src-tauri/Cargo.toml --workspace --no-run
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem src-tauri/target/release -Filter *.dll | ForEach-Object { Write-Host "copying $($_.Name) beside the tests"; Copy-Item $_.FullName src-tauri/target/release/deps -Force }
           cargo test --release --manifest-path src-tauri/Cargo.toml --workspace
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
           if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }
