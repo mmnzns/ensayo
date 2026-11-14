@@ -62,9 +62,16 @@ jobs:
             & $mt.FullName -nologo -manifest $manifest "-outputresource:$($_.FullName);#1"
             if ($LASTEXITCODE -ne 0) { Write-Error "mt.exe failed on $($_.Name)"; exit 1 }
           }
-          cargo test --release --manifest-path src-tauri/Cargo.toml --workspace
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          cargo build --release --manifest-path src-tauri/Cargo.toml --workspace
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Run them directly: a second `cargo test` relinks them and drops the manifest. Each runs from its own crate.
+          Get-ChildItem src-tauri/target/release/deps -Filter *.exe | Where-Object { $_.Name -match '^(ensayo_lib|ensayo|ensayo_eval|ensayo_llm|process)-[0-9a-f]+\.exe$' } | ForEach-Object {
+            $crate = if ($_.Name -like 'ensayo_llm-*') { 'src-tauri/llm' } else { 'src-tauri' }
+            $env:CARGO_MANIFEST_DIR = (Resolve-Path $crate).Path
+            Write-Host "running $($_.Name)"
+            Push-Location $crate
+            & $_.FullName
+            $code = $LASTEXITCODE
+            Pop-Location
+            if ($code -ne 0) { Write-Error "$($_.Name) failed ($code)"; exit 1 }
+          }
           $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
           if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }
