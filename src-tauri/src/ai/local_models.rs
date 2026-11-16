@@ -31,6 +31,12 @@ pub static CATALOG: &[LocalModel] = &[
         info: Offered { id: "granite-4.2-3b", name: "Granite 4.2 3B", maker: "IBM", note: "Smaller and lighter than Qwen. A choice for an older computer; its notes are a little less thorough." },
         recommended: false,
     },
+    // Needs 16 GB of memory for a long context: the engine's catalog says only a context of 4096 tokens fits on 8 GB,
+    // under `MIN_USABLE_CONTEXT`, so `too_small_for` greys it out there and `choose` falls back to the recommended one.
+    LocalModel {
+        info: Offered { id: "gemma-4-e4b", name: "Gemma 4 E4B", maker: "Google", note: "A larger download from Google. Needs 16 GB of memory; on a computer with 8 GB it cannot be used." },
+        recommended: false,
+    },
 ];
 
 /// The model most people should use.
@@ -155,7 +161,7 @@ mod tests {
     #[test]
     fn the_catalog_has_the_recommended_small_model_then_the_larger_one_then_granite() {
         let ids: Vec<&str> = CATALOG.iter().map(|m| m.info.id).collect();
-        assert_eq!(ids, ["qwen3.5-4b", "qwen3.5-9b", "granite-4.2-3b"]);
+        assert_eq!(ids, ["qwen3.5-4b", "qwen3.5-9b", "granite-4.2-3b", "gemma-4-e4b"]);
         assert_eq!(CATALOG.iter().filter(|m| m.recommended).count(), 1);
         assert_eq!(recommended().info.id, "qwen3.5-4b");
         assert!(CATALOG[1].engine().size() > CATALOG[0].engine().size());
@@ -213,7 +219,7 @@ mod tests {
         sparse(&data.path().join(m.info.id).join(m.engine().files[0].name), m.engine().files[0].size);
         store.use_model(m.info.id).unwrap();
         let s = status_in(&store);
-        assert_eq!(s.len(), 3);
+        assert_eq!(s.len(), 4);
         assert_eq!(s[2].state, "missing");
         assert_eq!((s[0].id, s[0].state, s[0].recommended), ("qwen3.5-4b", "missing", true));
         assert_eq!((s[1].id, s[1].state), ("qwen3.5-9b", "ready"));
@@ -245,7 +251,11 @@ mod tests {
         assert_eq!((at8[0].id, at8[0].too_small_here), ("qwen3.5-4b", false));
         assert_eq!((at8[1].id, at8[1].too_small_here), ("qwen3.5-9b", true));
         assert_eq!((at8[2].id, at8[2].too_small_here), ("granite-4.2-3b", false));
+        assert_eq!((at8[3].id, at8[3].too_small_here), ("gemma-4-e4b", true), "Gemma fits only a context of 4096 on 8 GB");
         assert!(status_with_memory(&store, 16 * gib).iter().all(|s| !s.too_small_here));
+        assert_eq!(choose_with_memory("gemma-4-e4b", 8 * gib).info.id, "qwen3.5-4b", "falls back to the recommended one");
+        assert_eq!(choose_with_memory("gemma-4-e4b", 16 * gib).info.id, "gemma-4-e4b");
+        assert_eq!(recommended().info.id, "qwen3.5-4b", "Qwen stays the default");
         assert_eq!(choose_with_memory("qwen3.5-9b", 8 * gib).info.id, "qwen3.5-4b", "falls back to the recommended one");
         assert_eq!(choose_with_memory("qwen3.5-9b", 16 * gib).info.id, "qwen3.5-9b");
         assert_eq!(choose_with_memory("granite-4.2-3b", 8 * gib).info.id, "granite-4.2-3b");

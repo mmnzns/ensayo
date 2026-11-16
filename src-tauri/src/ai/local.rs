@@ -556,7 +556,7 @@ mod tests {
     fn the_context_follows_this_computers_memory_and_the_catalogs_sizes() {
         let gb = |n: u64| n * GIB;
         // Per model on 8, 16 and 32 GB, from the engine's catalog, capped at 16384.
-        for (id, want) in [("qwen3.5-4b", [16_384, 16_384, 16_384]), ("qwen3.5-9b", [4_096, 16_384, 16_384]), ("granite-4.2-3b", [16_384, 16_384, 16_384])] {
+        for (id, want) in [("qwen3.5-4b", [16_384, 16_384, 16_384]), ("qwen3.5-9b", [4_096, 16_384, 16_384]), ("granite-4.2-3b", [16_384, 16_384, 16_384]), ("gemma-4-e4b", [4_096, 16_384, 16_384])] {
             for (memory, want) in [8, 16, 32].into_iter().zip(want) {
                 assert_eq!(context_for(info(id), gb(memory)), want, "{id} on {memory} GB");
             }

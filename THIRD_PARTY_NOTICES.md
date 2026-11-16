@@ -51,10 +51,12 @@ Models are downloaded on demand from their sources, not bundled or redistributed
 | NVIDIA Parakeet TDT 0.6B v2 (ONNX export by istupakov) | CC-BY-4.0, © NVIDIA | https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2, https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx |
 | Parakeet Ultra (Parakeet TDT 0.6B v3 further trained by Moondream; ONNX export by Olicorne) | CC-BY-4.0 | https://huggingface.co/moondream/parakeet-ultra, https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx |
 | NVIDIA Parakeet Unified EN 0.6B (ONNX export by bobNight) | NVIDIA Open Model License | https://huggingface.co/nvidia/parakeet-unified-en-0.6b, https://huggingface.co/bobNight/parakeet-unified-en-0.6b-onnx, license text: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/ |
+| NVIDIA Parakeet Unified 0.6B, 25 languages (ONNX export by altunenes for parakeet-rs) | OpenMDW-1.1, © NVIDIA | https://huggingface.co/altunenes/parakeet-rs (`nemotron-labs-unified-asr-0.6b/`), license text: https://openmdw.ai/license |
 | NVIDIA Nemotron 3.5 ASR Streaming 0.6B (ONNX export by altunenes for parakeet-rs) | OpenMDW-1.1, © NVIDIA | https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b, https://huggingface.co/altunenes/parakeet-rs (`nemotron-3.5-asr-streaming-0.6b-onnx/`), license text: https://openmdw.ai/license |
 | OpenAI Whisper large-v3-turbo, large-v3, large-v2, medium, small, base, tiny (ggml conversions) | MIT | https://github.com/openai/whisper, https://huggingface.co/ggerganov/whisper.cpp |
 | Qwen3.5 4B, Q4_K_M GGUF by Unsloth (built-in local AI, recommended) | Apache-2.0, © Alibaba Cloud (Qwen) | https://huggingface.co/Qwen/Qwen3.5-4B, https://huggingface.co/unsloth/Qwen3.5-4B-GGUF |
 | Qwen3.5 9B, Q4_K_M GGUF by Unsloth (built-in local AI, optional larger size) | Apache-2.0, © Alibaba Cloud (Qwen) | https://huggingface.co/Qwen/Qwen3.5-9B, https://huggingface.co/unsloth/Qwen3.5-9B-GGUF |
+| Gemma 4 E4B, Q4_0 QAT GGUF by Google (built-in local AI, optional) | Apache-2.0, © Google, license text: https://ai.google.dev/gemma/docs/gemma_4_license | https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf |
 | Silero VAD (ggml conversion) | MIT | https://github.com/snakers4/silero-vad, https://huggingface.co/ggml-org/whisper-vad |
 
 Other dependencies are added here as they are introduced.
