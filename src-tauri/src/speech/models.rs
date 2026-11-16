@@ -1,7 +1,7 @@
 //! The speech models Ensayo offers, in its own words and order. The files, sizes and download addresses are the
 //! engine's catalog (`voice_engine_models::catalog`); where they live on this computer is `models_store`.
 
-use voice_engine_models::catalog;
+use voice_engine_models::catalog::{self, Kind, ModelInfo};
 
 /// The voice detection model's id: every speech model needs it, and it downloads with the first one.
 pub const VAD: &str = "vad";
@@ -63,7 +63,7 @@ pub struct Listed {
 /// own name and note go with its picks; the others carry the engine's.
 pub fn speech_list() -> Vec<Listed> {
     let picks = speech_in_order().map(|o| Listed { id: o.id, name: o.name, maker: o.maker, note: o.note, recommended: true });
-    let rest = catalog::speech().filter(|m| find(m.id).is_none()).map(|m| Listed { id: m.id, name: m.name, maker: m.maker, note: m.note, recommended: false });
+    let rest = speech_catalog().filter(|m| find(m.id).is_none()).map(|m| Listed { id: m.id, name: m.name, maker: m.maker, note: m.note, recommended: false });
     picks.chain(rest).collect()
 }
 
@@ -72,9 +72,22 @@ pub fn find(id: &str) -> Option<&'static Offered> {
     OFFERED.iter().find(|m| m.id == id)
 }
 
-/// The engine's entry for a speech model: files, sizes, kind, languages.
+/// True when Ensayo can run `m` as a speech model. Ensayo keeps a time for every word (the pace and pause notes and
+/// the replay highlight need them), so a model that gives text only (`word_times` false, like Cohere Transcribe) is
+/// never offered. Multitalker is its own kind with its own API and is left out whatever its flags say. A kind the
+/// engine adds later is not hidden by name, but `is_speech` and `word_times` still decide.
+pub fn usable(m: &ModelInfo) -> bool {
+    m.is_speech() && m.word_times && !matches!(m.kind, Kind::Multitalker | Kind::Cohere)
+}
+
+/// The engine's speech models that Ensayo can run, in the engine's order (see `usable`).
+pub fn speech_catalog() -> impl Iterator<Item = &'static ModelInfo> {
+    catalog::speech().filter(|m| usable(m))
+}
+
+/// The engine's entry for a speech model Ensayo can run: files, sizes, kind, languages.
 pub fn speech_model(id: &str) -> Option<&'static catalog::ModelInfo> {
-    catalog::find(id).filter(|m| m.is_speech())
+    catalog::find(id).filter(|m| usable(m))
 }
 
 /// What the person sees a model called: Ensayo's name, or the engine's for a model Ensayo doesn't word itself.
@@ -102,7 +115,7 @@ mod tests {
         let ids: Vec<&str> = list.iter().map(|m| m.id).collect();
         let unique: std::collections::HashSet<_> = ids.iter().collect();
         assert_eq!(unique.len(), ids.len(), "each model once");
-        assert_eq!(ids.len(), catalog::speech().count(), "every speech model the engine has");
+        assert_eq!(ids.len(), speech_catalog().count(), "every speech model the engine has that Ensayo can run");
         assert_eq!(OFFERED.len(), 12);
         assert!(list[..12].iter().all(|m| m.recommended) && list[12..].iter().all(|m| !m.recommended));
         assert_eq!(list[0].id, DEFAULT_MODEL);
@@ -138,6 +151,28 @@ mod tests {
         assert!(catalog::find(VAD).is_some());
         assert!(speech_model(VAD).is_none());
         assert!(find(VAD).is_none());
+    }
+
+    #[test]
+    fn models_without_word_times_and_multitalker_are_never_offered_and_parakeet_unified_25_is() {
+        // Cohere Transcribe gives text only, and Multitalker has its own API: neither is a speech choice here.
+        for id in ["cohere-transcribe", "multitalker-tdt"] {
+            assert!(catalog::find(id).is_some(), "{id} is in the engine's catalog");
+            assert!(speech_model(id).is_none(), "{id} must not load as a speech model");
+            assert!(!speech_list().iter().any(|m| m.id == id), "{id} must not be listed");
+        }
+        assert!(catalog::speech().any(|m| m.id == "cohere-transcribe"), "the engine lists Cohere as speech; Ensayo hides it");
+        assert!(!catalog::find("cohere-transcribe").unwrap().word_times);
+        assert_eq!(catalog::find("multitalker-tdt").unwrap().kind, Kind::Multitalker);
+        let unified = speech_model("parakeet-unified-25").expect("Parakeet Unified 25 languages is offered");
+        assert!(unified.word_times);
+        assert!(speech_list().iter().any(|m| m.id == "parakeet-unified-25"));
+        for m in speech_list() {
+            let e = catalog::find(m.id).unwrap();
+            assert!(e.word_times, "{} has no word times", m.id);
+            assert_ne!(e.kind, Kind::Multitalker, "{}", m.id);
+        }
+        assert!(speech_catalog().all(|m| m.word_times));
     }
 
     #[test]

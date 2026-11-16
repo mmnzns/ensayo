@@ -458,7 +458,8 @@ mod tests {
         assert_eq!(list[0].id, models::DEFAULT_MODEL, "this computer's recommended model comes first");
         assert!(list.iter().all(|m| m.state == "missing"), "an empty folder has nothing");
         assert!(list.iter().all(|m| m.id != "vad"), "voice detection is not a model to pick");
-        assert_eq!(list.len(), catalog::speech().count());
+        assert_eq!(list.len(), models::speech_catalog().count(), "every speech model Ensayo can run");
+        assert!(list.len() < catalog::speech().count(), "Cohere Transcribe has no word times and is left out");
         assert_eq!(list.iter().filter(|m| m.recommended).count(), models::OFFERED.len());
         assert!(list[..models::OFFERED.len()].iter().all(|m| m.recommended), "the picks come first");
         let json = serde_json::to_value(&list[0]).unwrap();

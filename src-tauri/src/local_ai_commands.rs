@@ -113,7 +113,7 @@ mod tests {
         let v = view_with("", &store, true);
         assert_eq!(v.selected, "qwen3.5-4b");
         assert!(v.helper_found);
-        assert_eq!(v.models.len(), 3);
+        assert_eq!(v.models.len(), 4);
         assert!(v.models.iter().all(|m| m.state == "missing"));
         // The 9B where this computer has the memory for it; a smaller computer (a CI runner) gets the recommended one.
         assert_eq!(view_with("qwen3.5-9b", &store, false).selected, crate::ai::local_models::choose("qwen3.5-9b").info.id);

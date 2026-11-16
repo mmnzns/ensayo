@@ -241,7 +241,7 @@ function rows(rep: FullRep): DetailRow[] {
 }
 
 /** The built-in local models, by the id the helper reports (the catalog names in src-tauri/src/ai/local_models.rs). */
-const LOCAL_NAMES: Record<string, string> = { "qwen3.5-4b": "Qwen3.5 4B", "qwen3.5-9b": "Qwen3.5 9B", "granite-4.2-3b": "Granite 4.2 3B" };
+const LOCAL_NAMES: Record<string, string> = { "qwen3.5-4b": "Qwen3.5 4B", "qwen3.5-9b": "Qwen3.5 9B", "granite-4.2-3b": "Granite 4.2 3B", "gemma-4-e4b": "Gemma 4 E4B" };
 
 /** "Judged by Claude Sonnet 5.5": the name the app knows the model by, else the id as the provider reported it. Nothing for a rep no model scored. */
 export function judgedByLine(rep: FullRep): string | undefined {

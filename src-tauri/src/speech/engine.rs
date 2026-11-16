@@ -24,6 +24,8 @@ pub fn gpu_for(kind: Kind, setting_on: bool, card: bool) -> bool {
         && match kind {
             Kind::Whisper => cfg!(target_os = "macos"),
             Kind::Parakeet => cfg!(windows) && card,
+            // `Kind` can grow (Cohere and Multitalker came with engine v0.4.0). A kind Ensayo has no card path for
+            // runs on the processor, or is never offered at all (see `models::usable`).
             _ => false,
         }
 }
@@ -87,7 +89,7 @@ mod tests {
 
     #[test]
     fn the_graphics_card_is_asked_for_only_where_the_model_has_a_path_to_it() {
-        for kind in [Kind::Whisper, Kind::Parakeet, Kind::ParakeetUnified, Kind::Nemotron] {
+        for kind in [Kind::Whisper, Kind::Parakeet, Kind::ParakeetUnified, Kind::Nemotron, Kind::Cohere, Kind::Multitalker] {
             for card in [false, true] {
                 assert_eq!(gpu_for(kind, true, card), expected(kind, card), "{kind:?}, card {card}");
             }
@@ -101,7 +103,7 @@ mod tests {
 
     #[test]
     fn every_model_runs_on_the_processor_when_the_setting_is_off() {
-        for kind in [Kind::Whisper, Kind::Parakeet, Kind::ParakeetUnified, Kind::Nemotron, Kind::Vad, Kind::Llm] {
+        for kind in [Kind::Whisper, Kind::Parakeet, Kind::ParakeetUnified, Kind::Nemotron, Kind::Cohere, Kind::Multitalker, Kind::Vad, Kind::Llm] {
             for card in [false, true] {
                 assert!(!gpu_for(kind, false, card), "{kind:?}, card {card}");
             }
