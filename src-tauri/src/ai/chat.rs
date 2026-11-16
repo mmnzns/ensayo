@@ -78,6 +78,11 @@ fn is_openai_reasoning(name: &str) -> bool {
     name.starts_with("gpt-5") || name.starts_with("gpt-6") || (name.starts_with('o') && name[1..].starts_with(|c: char| c.is_ascii_digit()))
 }
 
+/// Gemini 3 and 4 always think (it cannot be switched off) and bill the thinking as output.
+fn is_gemini_thinking(name: &str) -> bool {
+    name.starts_with("gemini-3") || name.starts_with("gemini-4")
+}
+
 /// Temperature 0 (the most repeatable scoring) wherever the model accepts it:
 ///
 /// | Provider and model                                        | temperature | reasoning_effort        |
@@ -86,18 +91,23 @@ fn is_openai_reasoning(name: &str) -> bool {
 /// | Claude, older models                                      | 0           | none                    |
 /// | OpenAI gpt-5.x, gpt-6.x, o-series                         | none        | "low" Fast, "medium" Strong |
 /// | OpenAI, other models                                      | 0           | none                    |
-/// | Gemini                                                    | none        | none                    |
+/// | Gemini 3.x and 4.x                                        | none        | "low" Fast, "medium" Strong |
+/// | Gemini, other models                                      | none        | none                    |
 /// | Groq, Cerebras, Mistral, Compatible (local) servers       | 0           | none                    |
 /// | OpenRouter                                                | 0, except for the cases above and Gemini, judged by the maker's model name | none |
 ///
 /// OpenRouter takes a different reasoning switch than OpenAI's, so it never gets `reasoning_effort`. Gemini models
-/// are left at their default temperature, which Google asks for on its newer models.
+/// are left at their default temperature, which Google asks for on its newer models. Gemini's effort goes out as
+/// `thinkingConfig.thinkingLevel` (as the enum, LOW or MEDIUM) on its native API (its OpenAI-style endpoint calls it `reasoning_effort`); the
+/// levels used here, low and medium, are accepted by every Gemini 3 and 4 model. Thinking is paid as output.
+/// OpenAI's gpt-6-astra and gpt-6.1-sol do not take effort "none" (low to max only); "none" is never sent.
 pub fn model_settings(provider: Provider, model: &str, tier: Tier) -> ModelSettings {
     let name = bare_name(provider, model);
     let none = ModelSettings { temperature: None, reasoning_effort: None };
     let zero = ModelSettings { temperature: Some(0.0), reasoning_effort: None };
     match provider {
         Provider::Claude => if is_recent_claude(name) { none } else { zero },
+        Provider::Gemini if is_gemini_thinking(name) => ModelSettings { temperature: None, reasoning_effort: Some(if tier == Tier::Fast { "low" } else { "medium" }) },
         Provider::Gemini => none,
         Provider::OpenAi if is_openai_reasoning(name) => ModelSettings { temperature: None, reasoning_effort: Some(if tier == Tier::Fast { "low" } else { "medium" }) },
         Provider::OpenRouter if is_recent_claude(name) || is_openai_reasoning(name) || name.starts_with("gemini") => none,
@@ -199,6 +209,9 @@ pub fn gemini_request(base: &str, key: &str, model: &str, req: &LlmRequest, sett
     let mut config = json!({ "maxOutputTokens": req.max_tokens + THINKING_ROOM });
     if let Some(t) = settings.temperature {
         config["temperature"] = json!(t);
+    }
+    if let Some(e) = settings.reasoning_effort {
+        config["thinkingConfig"] = json!({ "thinkingLevel": e.to_uppercase() });
     }
     if req.json {
         config["responseMimeType"] = json!("application/json");
@@ -509,7 +522,7 @@ mod tests {
 
     #[test]
     fn recent_claude_models_get_no_temperature() {
-        for m in ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-mythos-5-1"] {
+        for m in ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-fable-5-2", "claude-mythos-5-1"] {
             assert_eq!(settings(Provider::Claude, m, Tier::Fast), (None, None), "{m}");
         }
     }
@@ -523,7 +536,7 @@ mod tests {
 
     #[test]
     fn openai_reasoning_models_take_an_effort_by_tier_and_no_temperature() {
-        for m in ["gpt-6-sol", "gpt-6.1-sol", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4-mini", "o4-mini"] {
+        for m in ["gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4-mini", "o4-mini"] {
             assert_eq!(settings(Provider::OpenAi, m, Tier::Fast), (None, Some("low")), "{m}");
             assert_eq!(settings(Provider::OpenAi, m, Tier::Strong), (None, Some("medium")), "{m}");
         }
@@ -531,16 +544,29 @@ mod tests {
     }
 
     #[test]
-    fn gemini_gets_no_temperature() {
-        assert_eq!(settings(Provider::Gemini, "gemini-3.8-flash", Tier::Fast), (None, None));
-        assert_eq!(settings(Provider::Gemini, "gemini-3.1-pro-preview", Tier::Strong), (None, None));
+    fn gemini_3_and_4_get_no_temperature_and_an_effort_by_tier() {
+        for m in ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"] {
+            assert_eq!(settings(Provider::Gemini, m, Tier::Fast), (None, Some("low")), "{m}");
+            assert_eq!(settings(Provider::Gemini, m, Tier::Strong), (None, Some("medium")), "{m}");
+        }
+        assert_eq!(settings(Provider::Gemini, "gemini-2.5-flash", Tier::Fast), (None, None));
+    }
+
+    #[test]
+    fn openai_never_gets_effort_none() {
+        for m in ["gpt-6-astra", "gpt-6.1-sol"] {
+            for t in [Tier::Fast, Tier::Strong] {
+                let e = settings(Provider::OpenAi, m, t).1;
+                assert!(matches!(e, Some("low" | "medium")), "{m} {e:?}");
+            }
+        }
     }
 
     #[test]
     fn the_other_providers_get_temperature_zero() {
         assert_eq!(settings(Provider::Groq, "openai/gpt-oss-120b", Tier::Fast), (Some(0.0), None));
         assert_eq!(settings(Provider::Cerebras, "gpt-oss-120b", Tier::Fast), (Some(0.0), None));
-        assert_eq!(settings(Provider::Mistral, "mistral-medium-latest", Tier::Strong), (Some(0.0), None));
+        assert_eq!(settings(Provider::Mistral, "mistral-large-latest", Tier::Strong), (Some(0.0), None));
         assert_eq!(settings(Provider::Compatible, "llama3.2:3b", Tier::Fast), (Some(0.0), None));
         assert_eq!(settings(Provider::Compatible, "gpt-5-local", Tier::Fast), (Some(0.0), None), "a local server's model is never judged by its name");
     }
@@ -552,6 +578,9 @@ mod tests {
         assert_eq!(settings(Provider::OpenRouter, "anthropic/claude-sonnet-5.5", Tier::Fast), (None, None));
         assert_eq!(settings(Provider::OpenRouter, "openai/gpt-6-sol", Tier::Strong), (None, None));
         assert_eq!(settings(Provider::OpenRouter, "google/gemini-3.8-flash", Tier::Fast), (None, None));
+        assert_eq!(settings(Provider::OpenRouter, "google/gemini-4-hydrogen", Tier::Strong), (None, None));
+        assert_eq!(settings(Provider::OpenRouter, "anthropic/claude-fable-5.2", Tier::Strong), (None, None));
+        assert_eq!(settings(Provider::OpenRouter, "openai/gpt-6.1-sol", Tier::Strong), (None, None));
     }
 
     #[test]
@@ -720,6 +749,7 @@ mod tests {
         assert_eq!(w.body["generationConfig"]["responseMimeType"], "application/json");
         assert_eq!(w.body["generationConfig"]["maxOutputTokens"], 500 + THINKING_ROOM);
         assert!(w.body["generationConfig"].get("temperature").is_none());
+        assert_eq!(w.body["generationConfig"]["thinkingConfig"]["thinkingLevel"], "LOW");
         let w = gemini_request("b", "k", "gemini-3.8-flash", &request(false, Tier::Fast), &s);
         assert!(w.body["generationConfig"].get("responseMimeType").is_none());
     }

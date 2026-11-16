@@ -27,11 +27,11 @@ pub fn default_models(p: Provider) -> (&'static str, &'static str) {
         // Middle models for the per-answer work too (decided 2026-10-27): the judgement is the point of a key, and a
         // session on Sonnet is still cents. Haiku and the smaller ones stay in the list for anyone who wants cheaper.
         Provider::Claude => ("claude-sonnet-5-5", "claude-sonnet-5-5"),
-        Provider::OpenAi => ("gpt-6-luna", "gpt-6-sol"),
-        Provider::Gemini => ("gemini-3.8-flash", "gemini-3.1-pro-preview"),
+        Provider::OpenAi => ("gpt-6.1-sol", "gpt-6.1-sol"),
+        Provider::Gemini => ("gemini-4-hydrogen", "gemini-4-hydrogen"),
         Provider::Groq => ("openai/gpt-oss-120b", "openai/gpt-oss-120b"),
         Provider::Cerebras => ("gpt-oss-120b", "gpt-oss-120b"),
-        Provider::Mistral => ("mistral-small-latest", "mistral-medium-latest"),
+        Provider::Mistral => ("mistral-large-latest", "mistral-large-latest"),
         Provider::OpenRouter => ("anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5"),
         Provider::Compatible => ("", ""),
     }
@@ -501,7 +501,7 @@ mod tests {
         let mut a = s("openai");
         a.fast_model = "gpt-5.5".into();
         let r = resolve(&a, |_| Some("k".into())).unwrap().unwrap();
-        assert_eq!((r.fast.as_str(), r.strong.as_str()), ("gpt-5.5", "gpt-6-sol"));
+        assert_eq!((r.fast.as_str(), r.strong.as_str()), ("gpt-5.5", "gpt-6.1-sol"));
     }
 
     #[test]
