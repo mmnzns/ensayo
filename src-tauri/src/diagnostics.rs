@@ -92,7 +92,8 @@ fn engine_line(i: &Inputs) -> String {
 
 fn builtin_line(i: &Inputs) -> String {
     let selected = i.settings.ai.as_ref().map(|a| a.fast_model.as_str()).unwrap_or("");
-    let id = local_models::choose(selected).info.id;
+    let ready = |id: &str| i.local_ai.iter().any(|m| m.id == id && matches!(m.state, "ready" | "on_this_computer"));
+    let id = local_models::choose_installed(selected, local_models::memory_bytes(), ready).info.id;
     let state = match i.local_ai.iter().find(|m| m.id == id).map(|m| m.state) {
         Some("ready") => "ready",
         Some("on_this_computer") => "ready (another app's copy)",

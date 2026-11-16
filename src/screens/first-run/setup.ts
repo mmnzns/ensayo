@@ -144,6 +144,17 @@ export const speechWarningNeeded = (plan: SpeechPlan | null): boolean => plan?.k
 const message = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : "");
 const OFFLINE = /dns|resolve|connect|error sending request|network is unreachable|offline|timed out|no route/i;
 
+/** The start of the sentence the backend gives when the built-in AI has no model on this computer (LOCAL_MODEL_MISSING in src-tauri/src/ai_commands.rs; a test keeps the two in step). */
+export const LOCAL_MODEL_MISSING = "The local AI model";
+
+/** True when reading the story failed only because the built-in AI has no model on this computer. */
+export function isLocalModelMissing(e: unknown): boolean {
+  return message(e).trim().startsWith(LOCAL_MODEL_MISSING);
+}
+
+/** What step 7 says for that case: it is still setup, so no mention of Settings. */
+export const LOCAL_MODEL_MISSING_LINE = "The built-in AI has no model on this computer yet.";
+
 /** The backend rejects with a plain sentence; a lost connection gets its own, since a first download is when it shows. */
 export function downloadErrorLine(e: unknown): string {
   const text = message(e).trim();

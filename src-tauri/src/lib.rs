@@ -61,7 +61,11 @@ fn models_in_use() -> Vec<String> {
     let mut used = vec![speech::models::DEFAULT_MODEL.to_string(), speech::models::VAD.to_string()];
     let ai = storage::settings::load(&paths::settings_file()).ai.unwrap_or_default();
     if ai.provider.trim() == ai_commands::LOCAL {
-        used.push(ai::local_models::choose(&ai.fast_model).info.id.to_string());
+        let id = match models_store::store() {
+            Ok(store) => ai::local_models::choose_in(&ai.fast_model, store),
+            Err(_) => ai::local_models::choose(&ai.fast_model),
+        };
+        used.push(id.info.id.to_string());
     }
     used
 }

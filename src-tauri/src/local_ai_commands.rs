@@ -24,7 +24,7 @@ pub struct LocalAiView {
 }
 
 pub fn view_with(saved_model: &str, store: &SharedStore, helper_found: bool) -> LocalAiView {
-    LocalAiView { models: local_models::status_in(store), selected: local_models::choose(saved_model).info.id.to_string(), helper_found }
+    LocalAiView { models: local_models::status_in(store), selected: local_models::choose_in(saved_model, store).info.id.to_string(), helper_found }
 }
 
 #[tauri::command]

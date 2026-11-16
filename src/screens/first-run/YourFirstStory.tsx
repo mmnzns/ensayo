@@ -11,7 +11,20 @@ import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import { getParsedDraft, isFromSetup, pasteDraft, setBlankReview, setFromSetup, setParseFailure, setParsedDraft, type ParsedDraft } from "../stories/selection";
 import StepHeader from "./StepHeader";
-import { foundSummary, parseProblemLine } from "./setup";
+import { foundSummary, isLocalModelMissing, LOCAL_MODEL_MISSING_LINE, parseProblemLine } from "./setup";
+
+/** The note under "What Ensayo found" when the story could not be read. With no local model it points back to step 6, not Settings. */
+export function StoryProblem({ problem, noModel, onFillIn, onBack }: { problem: string; noModel: boolean; onFillIn: () => void; onBack: () => void }) {
+  return (
+    <>
+      <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{noModel ? LOCAL_MODEL_MISSING_LINE : problem}</span>
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        {noModel ? <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={onBack}>Back to the AI step</button> : null}
+        <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={onFillIn}>Fill it in yourself</button>
+      </div>
+    </>
+  );
+}
 
 /** In the app the step reads the user's own text with the real engine; in the browser preview it stays the sample below. */
 export default function YourFirstStory() {
@@ -25,6 +38,7 @@ function YourFirstStoryLive() {
   const [draft, setDraft] = useState<ParsedDraft | null>(() => (resumed ? getParsedDraft() : null));
   const [reading, setReading] = useState(false);
   const [problem, setProblem] = useState("");
+  const [noModel, setNoModel] = useState(false);
   const found = draft ? foundSummary(draft) : null;
   const store = useStore();
   const here = useRef(true);
@@ -40,6 +54,7 @@ function YourFirstStoryLive() {
     pasteDraft.raw = raw;
     pasteDraft.company = "";
     setProblem("");
+    setNoModel(false);
     setReading(true);
     try {
       const parsed = await invoke<ParsedDraft>("parse_story", { raw, employerHint: "" });
@@ -51,6 +66,7 @@ function YourFirstStoryLive() {
       if (here.current && !isStopped(e)) {
         setParseFailure(null);
         setProblem(parseProblemLine(e));
+        setNoModel(isLocalModelMissing(e));
       }
     }
     if (here.current) setReading(false);
@@ -89,6 +105,7 @@ function YourFirstStoryLive() {
                 setRaw(e.target.value);
                 setDraft(null);
                 setProblem("");
+                setNoModel(false);
               }}
             />
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
@@ -122,10 +139,7 @@ function YourFirstStoryLive() {
             <div className="e-card" style={{ flex: "1 1 380px", minWidth: "0", display: "flex", flexDirection: "column", gap: "10px", justifyContent: "center" }}>
               <span className="e-label">What Ensayo found</span>
               {problem ? (
-                <>
-                  <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{problem}</span>
-                  <button type="button" className="e-btn e-btn-line e-btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => review(true)}>Fill it in yourself</button>
-                </>
+                <StoryProblem problem={problem} noModel={noModel} onFillIn={() => review(true)} onBack={() => go("1-6-feedback-engine")} />
               ) : (
                 <span className="e-meta">{raw.trim() ? "Press Read it to see the parts Ensayo pulls out." : "Paste a story and press Read it. You can also skip this and add one later."}</span>
               )}
