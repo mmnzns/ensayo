@@ -9,13 +9,21 @@ $env:GGML_NATIVE = 'OFF'
 foreach ($on in 'GGML_SSE42', 'GGML_AVX', 'GGML_AVX2', 'GGML_BMI2', 'GGML_FMA', 'GGML_F16C') { Set-Item "env:$on" 'ON' }
 foreach ($off in 'GGML_AVX_VNNI', 'GGML_AVX512', 'GGML_AVX512_VBMI', 'GGML_AVX512_VNNI', 'GGML_AVX512_BF16') { Set-Item "env:$off" 'OFF' }
 
-# The CMake caches of whisper.cpp and llama.cpp under a target folder (release profile).
+# The CMake caches of whisper.cpp and llama.cpp under a target folder (release profile). Cargo puts a build script's
+# output in release\build\<crate>-<hash>\out (older layout) or release\build\<crate>\<hash>\out (Rust 1.100 and
+# later, new build-dir layout); look in both, or a build in the new layout looks like it has no caches at all.
 function Get-GgmlCaches([string]$target) {
   $build = Join-Path $target 'release\build'
   if (-not (Test-Path $build)) { return @() }
-  Get-ChildItem $build -Directory |
-    Where-Object { $_.Name -match '^(whisper-rs-sys|llama-cpp-sys-2)-' } |
-    ForEach-Object { Join-Path $_.FullName 'out\build\CMakeCache.txt' } | Where-Object { Test-Path $_ }
+  $outs = @()
+  foreach ($crate in 'whisper-rs-sys', 'llama-cpp-sys-2') {
+    # old layout: build\<crate>-<hash>\out
+    $outs += @(Get-ChildItem $build -Directory | Where-Object { $_.Name -like "$crate-*" } | ForEach-Object { Join-Path $_.FullName 'out' })
+    # new layout: build\<crate>\<hash>\out
+    $dir = Join-Path $build $crate
+    if (Test-Path $dir) { $outs += @(Get-ChildItem $dir -Directory | ForEach-Object { Join-Path $_.FullName 'out' }) }
+  }
+  $outs | ForEach-Object { Join-Path $_ 'build\CMakeCache.txt' } | Where-Object { Test-Path $_ }
 }
 
 # Problems with a cache: built for the build machine's CPU, with AVX-512, or without AVX2.

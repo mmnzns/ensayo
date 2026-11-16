@@ -77,5 +77,9 @@ jobs:
             Pop-Location
             if ($code -ne 0) { Write-Error "$($_.Name) failed ($code)"; exit 1 }
           }
-          $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
+          $caches = @(Get-GgmlCaches src-tauri/target)
+          $whisper = @($caches | Where-Object { $_ -match 'whisper-rs-sys' })
+          Write-Host "baseline check: $($caches.Count) ggml cache(s), $($whisper.Count) of them whisper.cpp"
+          if ($whisper.Count -eq 0) { Write-Error 'no whisper.cpp build found to check'; exit 1 }
+          $bad = @($caches | ForEach-Object { Test-GgmlBaseline $_ })
           if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }

@@ -129,7 +129,9 @@ jobs:
           npm run tauri build -- --bundles nsis --config "$env:RUNNER_TEMP/tauri.release.conf.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $caches = @(Get-GgmlCaches src-tauri/target)
-          if ($caches.Count -eq 0) { Write-Error "no whisper.cpp build found to check"; exit 1 }
+          $whisper = @($caches | Where-Object { $_ -match 'whisper-rs-sys' })
+          Write-Host "baseline check: $($caches.Count) ggml cache(s), $($whisper.Count) of them whisper.cpp"
+          if ($whisper.Count -eq 0) { Write-Error "no whisper.cpp build found to check"; exit 1 }
           $bad = @($caches | ForEach-Object { Test-GgmlBaseline $_ })
           if ($bad.Count -gt 0) { Write-Error "whisper.cpp was not built for the baseline: $bad"; exit 1 }
       - name: Upload to the draft
@@ -301,7 +303,9 @@ jobs:
           npm run tauri build -- --bundles nsis --config "$env:RUNNER_TEMP/tauri.release.conf.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $caches = @(Get-GgmlCaches src-tauri/target)
-          if ($caches.Count -eq 0) { Write-Error "no whisper.cpp build found to check"; exit 1 }
+          $whisper = @($caches | Where-Object { $_ -match 'whisper-rs-sys' })
+          Write-Host "baseline check: $($caches.Count) ggml cache(s), $($whisper.Count) of them whisper.cpp"
+          if ($whisper.Count -eq 0) { Write-Error "no whisper.cpp build found to check"; exit 1 }
           $bad = @($caches | ForEach-Object { Test-GgmlBaseline $_ })
           if ($bad.Count -gt 0) { Write-Error "whisper.cpp was not built for the baseline: $bad"; exit 1 }
       - name: Signing certificate into a temporary keychain
