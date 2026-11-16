@@ -117,6 +117,10 @@ impl Engine {
     }
 }
 
+/// The start of the error `resolve_engine` gives when the built-in AI has no model on this computer. Setup recognises
+/// the case by this text (a frontend test keeps its copy in step); other screens show the whole message.
+pub const LOCAL_MODEL_MISSING: &str = "The local AI model";
+
 /// `resolve`, plus the built-in local AI (provider "local"): it needs no key but needs its model on this computer,
 /// in the shared models folder (Ensayo's or another app's copy). `locate` finds a model (the real one asks the store).
 /// The model is named by `fast_model` (empty, or anything that is not a local model id, means the recommended one);
@@ -125,8 +129,10 @@ pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, l
     if s.provider.trim() != LOCAL {
         return resolve(s, key_of).map(|r| r.map(Engine::Cloud));
     }
-    let model = local_models::choose(&s.fast_model);
-    let file = model.file_in(&locate(model)).ok_or_else(|| format!("The local AI model ({}) isn't downloaded yet. Download it in Settings › AI.", model.info.name))?;
+    let model = local_models::choose_installed(&s.fast_model, crate::diagnostics::total_memory_bytes().unwrap_or(0), |id| {
+        local_models::find(id).is_some_and(|m| m.file_in(&locate(m)).is_some())
+    });
+    let file = model.file_in(&locate(model)).ok_or_else(|| format!("{LOCAL_MODEL_MISSING} ({}) isn't downloaded yet. Download it in Settings › AI.", model.info.name))?;
     Ok(Some(Engine::Local(LocalChoice { id: model.info.id, name: model.info.name, file })))
 }
 
@@ -522,6 +528,19 @@ mod tests {
 
     fn not_found(_: &LocalModel) -> Status {
         Status::Missing
+    }
+
+    #[test]
+    fn a_blank_model_runs_an_installed_one_when_the_recommended_is_missing() {
+        // Granite is the only model here; where the computer's memory can't tell, it is still the one that fits.
+        let only_granite = |m: &LocalModel| if m.info.id == "granite-4.2-3b" { found(m) } else { Status::Missing };
+        let Some(Engine::Local(l)) = resolve_engine(&s("local"), no_keys, only_granite).unwrap() else { panic!() };
+        assert_eq!(l.id, "granite-4.2-3b");
+        // A named model that is missing keeps the error.
+        let mut named = s("local");
+        named.fast_model = "qwen3.5-4b".into();
+        let err = resolve_engine(&named, no_keys, only_granite).unwrap_err();
+        assert!(err.starts_with(LOCAL_MODEL_MISSING) && err.contains("Qwen3.5 4B"), "{err}");
     }
 
     #[test]

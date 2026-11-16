@@ -54,6 +54,10 @@ pub fn find(id: &str) -> Option<&'static LocalModel> {
 pub const MIN_USABLE_CONTEXT: u32 = 12_288;
 
 /// This computer's memory in bytes; 0 when the system won't say (the safe, smallest tier).
+pub fn memory_bytes() -> u64 {
+    memory_here()
+}
+
 fn memory_here() -> u64 {
     crate::diagnostics::total_memory_bytes().unwrap_or(0)
 }
@@ -69,6 +73,24 @@ pub fn choose(setting: &str) -> &'static LocalModel {
 pub fn choose_with_memory(setting: &str, total_memory_bytes: u64) -> &'static LocalModel {
     let named = find(setting.trim()).unwrap_or_else(recommended);
     if named.too_small_for(total_memory_bytes) { recommended() } else { named }
+}
+
+/// What actually runs. A blank setting (or one left over from a cloud provider) means "the recommended model"; when
+/// that one is not on this computer but another catalog model is, and it fits this computer's memory, the installed one
+/// is used (catalog order). A model the person named is never swapped for another one. Nothing is saved: the setting
+/// stays blank, so a recommended model downloaded later becomes the one used. `is_installed` takes a model id.
+pub fn choose_installed(setting: &str, total_memory_bytes: u64, is_installed: impl Fn(&str) -> bool) -> &'static LocalModel {
+    let chosen = choose_with_memory(setting, total_memory_bytes);
+    let named = find(setting.trim()).is_some();
+    if named || is_installed(chosen.info.id) {
+        return chosen;
+    }
+    CATALOG.iter().find(|m| !m.too_small_for(total_memory_bytes) && is_installed(m.info.id)).unwrap_or(chosen)
+}
+
+/// `choose_installed` asking the shared model store what is on this computer.
+pub fn choose_in(setting: &str, store: &SharedStore) -> &'static LocalModel {
+    choose_installed(setting, memory_here(), |id| find(id).is_some_and(|m| m.file_in(&store.status(id)).is_some()))
 }
 
 impl LocalModel {
@@ -182,6 +204,31 @@ mod tests {
         assert_eq!(choose(" qwen3.5-4b ").info.id, "qwen3.5-4b");
         assert_eq!(choose("").info.id, "qwen3.5-4b");
         assert_eq!(choose("claude-haiku-5-5").info.id, "qwen3.5-4b", "left over from a cloud provider");
+    }
+
+    #[test]
+    fn a_blank_setting_uses_an_installed_model_when_the_recommended_one_is_missing() {
+        let gib = 1u64 << 30;
+        let has = |ids: &'static [&'static str]| move |id: &str| ids.contains(&id);
+        assert_eq!(choose_installed("", 32 * gib, has(&["qwen3.5-4b", "granite-4.2-3b"])).info.id, "qwen3.5-4b");
+        assert_eq!(choose_installed("", 32 * gib, has(&["granite-4.2-3b", "gemma-4-e4b"])).info.id, "granite-4.2-3b");
+        assert_eq!(choose_installed("claude-haiku-5-5", 32 * gib, has(&["gemma-4-e4b"])).info.id, "gemma-4-e4b");
+        // Only a model too big for this computer is installed: the recommended one, and its not-downloaded error.
+        assert_eq!(choose_installed("", 8 * gib, has(&["gemma-4-e4b", "qwen3.5-9b"])).info.id, "qwen3.5-4b");
+        // A named model is kept even when it is missing.
+        assert_eq!(choose_installed("qwen3.5-4b", 32 * gib, has(&["granite-4.2-3b"])).info.id, "qwen3.5-4b");
+        assert_eq!(choose_installed("granite-4.2-3b", 32 * gib, has(&[])).info.id, "granite-4.2-3b");
+        assert_eq!(choose_installed("", 32 * gib, has(&[])).info.id, "qwen3.5-4b");
+    }
+
+    #[test]
+    fn the_store_version_finds_a_model_on_disk() {
+        let data = tempfile::tempdir().unwrap();
+        let store = temp_store(App::Ensayo, data.path());
+        let m = find("granite-4.2-3b").unwrap();
+        sparse(&data.path().join(m.info.id).join(m.engine().files[0].name), m.engine().files[0].size);
+        let picked = choose_installed("", 32 * (1u64 << 30), |id| find(id).is_some_and(|m| m.file_in(&store.status(id)).is_some()));
+        assert_eq!(picked.info.id, "granite-4.2-3b");
     }
 
     #[test]

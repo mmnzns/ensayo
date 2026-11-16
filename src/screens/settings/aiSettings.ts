@@ -291,8 +291,22 @@ export interface LocalAiView {
 /** The model the settings mean: the saved one, or the recommended one when none (or one that is not a local model) is saved. Null before the list is known. */
 export function localModelOf(status: LocalAiView | null, s: AiSettings): LocalModel | null {
   const models = status?.models ?? [];
-  const fits = models.filter((m) => !m.too_small_here);
-  return fits.find((m) => m.id === s.fast_model) ?? models.find((m) => m.recommended) ?? models[0] ?? null;
+  const recommended = models.find((m) => m.recommended) ?? models[0] ?? null;
+  const named = models.find((m) => m.id === s.fast_model);
+  // A model the person picked is kept, even when it is not downloaded. One too big for this computer gives way to the recommended one.
+  if (named) return named.too_small_here ? recommended : named;
+  // Nothing picked means the recommended one, unless that one is not on this computer and another that fits is: then that one.
+  // This mirrors `choose_installed` in src-tauri/src/ai/local_models.rs (the list is in catalog order).
+  if (recommended && !localModelHere(recommended)) {
+    const installed = models.find((m) => !m.too_small_here && localModelHere(m));
+    if (installed) return installed;
+  }
+  return recommended;
+}
+
+/** True when the list is known and not one model on this computer is complete and fits its memory. */
+export function noUsableLocalModel(status: LocalAiView | null): boolean {
+  return !!status && !status.models.some((m) => !m.too_small_here && localModelHere(m));
 }
 
 /** The recommended model is stored as empty, so it keeps following the recommendation. */

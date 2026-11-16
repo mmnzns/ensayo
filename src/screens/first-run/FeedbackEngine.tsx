@@ -6,9 +6,15 @@ import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import type { EngineKind } from "../../data/screens/first-run";
 import { EngineDetails, useAiEngine, useAiView } from "../settings/AiEngine";
-import type { AiView } from "../settings/aiSettings";
+import { BUILT_IN, noUsableLocalModel, type AiView, type LocalAiView } from "../settings/aiSettings";
 import StepHeader from "./StepHeader";
 import { useStepSave } from "./useStepSave";
+
+/** Under the model list when the built-in AI is chosen and no model is on this computer to run it. Continue stays allowed. */
+export function NoModelLine({ kind, builtIn, status }: { kind: EngineKind; builtIn: boolean; status: LocalAiView | null }) {
+  if (kind !== "local" || !builtIn || !noUsableLocalModel(status)) return null;
+  return <span className="e-meta" role="status">No model is on this computer yet. Download one above, or continue and Ensayo will give timing notes only.</span>;
+}
 
 const cardStyle = { display: "flex", flexDirection: "column", gap: "10px", padding: "22px", cursor: "pointer" } as const;
 const onStyle = { boxShadow: "inset 0 0 0 2px var(--e-primary)", background: "var(--e-tint)" } as const;
@@ -79,6 +85,7 @@ function FeedbackEngineChoice({ view }: { view: AiView }) {
               {kind === "key" ? <p className="e-small" style={{ margin: "0" }}>Only the text each check needs goes to the provider, never your audio or files. Settings › Privacy lists exactly what is sent.</p> : null}
             </div>
           ) : null}
+          <NoModelLine kind={kind} builtIn={ai.settings.provider === BUILT_IN} status={ai.local.status} />
           {needsKey ? <span className="e-meta">No key yet, so until you add one you will get timing notes only. You can add it any time in Settings, under AI.</span> : null}
           {ai.local.busy ? <span className="e-meta" role="status">The download keeps going while you set up the rest.</span> : null}
           {trouble || problem ? <span className="e-meta" role="alert" style={{ color: "var(--e-warn-ink)" }}>{trouble || problem}</span> : null}
