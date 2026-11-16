@@ -33,7 +33,7 @@ pub enum Provider {
 pub fn catalog(provider: Provider) -> &'static [&'static str] {
     match provider {
         Provider::Claude => &["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-2"],
-        Provider::OpenAi => &["gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+        Provider::OpenAi => &["gpt-6.1-sol", "gpt-6-sol", "gpt-6.1-terra", "gpt-6-luna", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
         Provider::Gemini => &["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"],
         Provider::Groq => &["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
         Provider::Cerebras => &["gpt-oss-120b", "qwen-3.8-27b"],
@@ -184,7 +184,7 @@ fn version(id: &str) -> Vec<u32> {
 }
 
 /// The model Ensayo uses when the user hasn't picked one: the first of the provider's list that the key can
-/// use, else the newest of its fast, capable tier among what the key offers (names change faster than releases).
+/// use, else the newest of its mid tier (smart enough to judge an answer well) among what the key offers (names change faster than releases).
 pub fn recommended_model(provider: Provider, ids: &[String]) -> Option<String> {
     if let Some(m) = catalog(provider).iter().find(|m| ids.iter().any(|id| id == *m)) {
         return Some(m.to_string());
@@ -193,7 +193,7 @@ pub fn recommended_model(provider: Provider, ids: &[String]) -> Option<String> {
         let id = id.to_lowercase();
         match provider {
             Provider::Claude => id.starts_with("claude-sonnet"),
-            Provider::OpenAi => id.starts_with("gpt-") && id.ends_with("-mini") && !id.contains("audio") && !id.contains("realtime") && !id.contains("search"),
+            Provider::OpenAi => id.starts_with("gpt-") && id.ends_with("-sol") && !id.contains("audio") && !id.contains("realtime") && !id.contains("search"),
             Provider::Gemini => id.starts_with("gemini-") && (id.contains("flash") || id.starts_with("gemini-4-")) && !id.contains("lite") && !id.contains("image") && !id.contains("tts") && !id.contains("live") && !id.contains("exp") && !id.contains("preview"),
             Provider::Groq | Provider::Cerebras | Provider::OpenRouter => id.contains("gpt-oss-120b"),
             Provider::Mistral => id.starts_with("mistral-large"),
@@ -301,15 +301,15 @@ mod tests {
 
     #[test]
     fn recommended_prefers_the_listed_default_the_key_can_use() {
-        assert_eq!(recommended_model(Provider::OpenAi, &ids(&["gpt-5.4-mini", "gpt-6-sol", "gpt-6-luna"])).as_deref(), Some("gpt-6-luna"));
+        assert_eq!(recommended_model(Provider::OpenAi, &ids(&["gpt-5.4-mini", "gpt-6-luna", "gpt-6.1-sol"])).as_deref(), Some("gpt-6.1-sol"));
         assert_eq!(recommended_model(Provider::Groq, &ids(&["llama-3.3-70b", "openai/gpt-oss-20b"])).as_deref(), Some("openai/gpt-oss-20b"));
         assert_eq!(recommended_model(Provider::Mistral, &ids(&["mistral-small-latest", "mistral-large-latest"])).as_deref(), Some("mistral-large-latest"));
         assert_eq!(recommended_model(Provider::OpenRouter, &ids(&["x-ai/grok-4.7", "anthropic/claude-sonnet-5.5"])).as_deref(), Some("anthropic/claude-sonnet-5.5"));
     }
 
     #[test]
-    fn the_newest_fast_model_is_recommended_from_what_the_key_offers() {
-        assert_eq!(recommended_model(Provider::OpenAi, &ids(&["gpt-4o", "gpt-4.1-mini", "gpt-5-mini", "gpt-5-mini-audio", "text-embedding-3"])).as_deref(), Some("gpt-5-mini"));
+    fn the_newest_mid_tier_model_is_recommended_from_what_the_key_offers() {
+        assert_eq!(recommended_model(Provider::OpenAi, &ids(&["gpt-4o", "gpt-5-mini", "gpt-6.2-luna", "gpt-6.2-sol", "gpt-6.2-sol-audio", "text-embedding-3"])).as_deref(), Some("gpt-6.2-sol"));
         assert_eq!(recommended_model(Provider::Claude, &ids(&["claude-haiku-5-5", "claude-sonnet-4-6", "claude-sonnet-5-5", "claude-opus-5-5"])).as_deref(), Some("claude-sonnet-5-5"));
         assert_eq!(recommended_model(Provider::Gemini, &ids(&["gemini-2.5-flash", "gemini-3-flash", "gemini-3-flash-lite", "gemini-3-pro"])).as_deref(), Some("gemini-3-flash"));
         assert_eq!(recommended_model(Provider::Gemini, &ids(&["gemini-2.5-flash", "gemini-4-nova", "gemini-4-nova-lite", "gemini-4-nova-preview", "gemini-4-nova-tts"])).as_deref(), Some("gemini-4-nova"));
