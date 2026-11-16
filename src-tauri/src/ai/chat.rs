@@ -98,7 +98,7 @@ fn is_gemini_thinking(name: &str) -> bool {
 ///
 /// OpenRouter takes a different reasoning switch than OpenAI's, so it never gets `reasoning_effort`. Gemini models
 /// are left at their default temperature, which Google asks for on its newer models. Gemini's effort goes out as
-/// `thinkingConfig.thinkingLevel` on its native API (its OpenAI-style endpoint calls it `reasoning_effort`); the
+/// `thinkingConfig.thinkingLevel` (as the enum, LOW or MEDIUM) on its native API (its OpenAI-style endpoint calls it `reasoning_effort`); the
 /// levels used here, low and medium, are accepted by every Gemini 3 and 4 model. Thinking is paid as output.
 /// OpenAI's gpt-6-astra and gpt-6.1-sol do not take effort "none" (low to max only); "none" is never sent.
 pub fn model_settings(provider: Provider, model: &str, tier: Tier) -> ModelSettings {
@@ -211,7 +211,7 @@ pub fn gemini_request(base: &str, key: &str, model: &str, req: &LlmRequest, sett
         config["temperature"] = json!(t);
     }
     if let Some(e) = settings.reasoning_effort {
-        config["thinkingConfig"] = json!({ "thinkingLevel": e });
+        config["thinkingConfig"] = json!({ "thinkingLevel": e.to_uppercase() });
     }
     if req.json {
         config["responseMimeType"] = json!("application/json");
@@ -749,7 +749,7 @@ mod tests {
         assert_eq!(w.body["generationConfig"]["responseMimeType"], "application/json");
         assert_eq!(w.body["generationConfig"]["maxOutputTokens"], 500 + THINKING_ROOM);
         assert!(w.body["generationConfig"].get("temperature").is_none());
-        assert_eq!(w.body["generationConfig"]["thinkingConfig"]["thinkingLevel"], "low");
+        assert_eq!(w.body["generationConfig"]["thinkingConfig"]["thinkingLevel"], "LOW");
         let w = gemini_request("b", "k", "gemini-3.8-flash", &request(false, Tier::Fast), &s);
         assert!(w.body["generationConfig"].get("responseMimeType").is_none());
     }
