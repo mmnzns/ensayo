@@ -14,7 +14,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@1.99.1
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@1.99.1
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -55,15 +55,19 @@ jobs:
           # common-controls manifest with mt.exe, then run them.
           cargo test --release --manifest-path src-tauri/Cargo.toml --workspace --no-run
           if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Rust 1.100 puts the test programs under target/release/build/<crate>/<hash>/out, not deps, so search the whole
+          # release folder, and fail if none are found rather than pass without running a test.
+          $testExes = @(Get-ChildItem src-tauri/target/release -Recurse -Filter *.exe | Where-Object { $_.Name -match '^(ensayo_lib|ensayo|ensayo_eval|ensayo_llm|process)-[0-9a-f]+\.exe$' })
+          if ($testExes.Count -eq 0) { Write-Error 'no test programs found'; exit 1 }
           $manifest = Join-Path $env:RUNNER_TEMP 'tests.manifest'
           Set-Content -Path $manifest -Encoding ascii -Value '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"><dependency><dependentAssembly><assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/></dependentAssembly></dependency></assembly>'
           $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter mt.exe | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
-          Get-ChildItem src-tauri/target/release/deps -Filter *.exe | Where-Object { $_.Name -match '^(ensayo_lib|ensayo|ensayo_eval|ensayo_llm|process)-[0-9a-f]+\.exe$' } | ForEach-Object {
+          Get-ChildItem src-tauri/target/release -Recurse -Filter *.exe | Where-Object { $_.Name -match '^(ensayo_lib|ensayo|ensayo_eval|ensayo_llm|process)-[0-9a-f]+\.exe$' } | ForEach-Object {
             & $mt.FullName -nologo -manifest $manifest "-outputresource:$($_.FullName);#1"
             if ($LASTEXITCODE -ne 0) { Write-Error "mt.exe failed on $($_.Name)"; exit 1 }
           }
           # Run them directly: a second `cargo test` relinks them and drops the manifest. Each runs from its own crate.
-          Get-ChildItem src-tauri/target/release/deps -Filter *.exe | Where-Object { $_.Name -match '^(ensayo_lib|ensayo|ensayo_eval|ensayo_llm|process)-[0-9a-f]+\.exe$' } | ForEach-Object {
+          Get-ChildItem src-tauri/target/release -Recurse -Filter *.exe | Where-Object { $_.Name -match '^(ensayo_lib|ensayo|ensayo_eval|ensayo_llm|process)-[0-9a-f]+\.exe$' } | ForEach-Object {
             $crate = if ($_.Name -like 'ensayo_llm-*') { 'src-tauri/llm' } else { 'src-tauri' }
             $env:CARGO_MANIFEST_DIR = (Resolve-Path $crate).Path
             Write-Host "running $($_.Name)"
@@ -73,5 +77,9 @@ jobs:
             Pop-Location
             if ($code -ne 0) { Write-Error "$($_.Name) failed ($code)"; exit 1 }
           }
-          $bad = @(Get-GgmlCaches src-tauri/target | ForEach-Object { Test-GgmlBaseline $_ })
+          $caches = @(Get-GgmlCaches src-tauri/target)
+          $whisper = @($caches | Where-Object { $_ -match 'whisper-rs-sys' })
+          Write-Host "baseline check: $($caches.Count) ggml cache(s), $($whisper.Count) of them whisper.cpp"
+          if ($whisper.Count -eq 0) { Write-Error 'no whisper.cpp build found to check'; exit 1 }
+          $bad = @($caches | ForEach-Object { Test-GgmlBaseline $_ })
           if ($bad.Count -gt 0) { Write-Error "whisper.cpp or llama.cpp was not built for the baseline: $bad"; exit 1 }
