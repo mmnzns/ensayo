@@ -32,24 +32,24 @@ pub enum Provider {
 /// Notion). The first one is what "Recommended" uses when the key can reach it.
 pub fn catalog(provider: Provider) -> &'static [&'static str] {
     match provider {
-        Provider::Claude => &["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
-        Provider::OpenAi => &["gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
-        Provider::Gemini => &["gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+        Provider::Claude => &["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-2"],
+        Provider::OpenAi => &["gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+        Provider::Gemini => &["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"],
         Provider::Groq => &["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
         Provider::Cerebras => &["gpt-oss-120b", "qwen-3.8-27b"],
-        Provider::Mistral => &["mistral-medium-latest", "mistral-large-latest", "mistral-small-latest", "ministral-14b-latest", "ministral-8b-latest"],
+        Provider::Mistral => &["mistral-large-latest", "mistral-small-latest", "ministral-14b-latest", "ministral-8b-latest"],
         Provider::OpenRouter => &[
             "anthropic/claude-sonnet-5.5",
             "anthropic/claude-opus-5.5",
             "anthropic/claude-haiku-5.5",
-            "openai/gpt-6-sol",
+            "anthropic/claude-fable-5.2",
+            "openai/gpt-6.1-sol",
             "openai/gpt-6-luna",
             "openai/gpt-oss-120b",
-            "google/gemini-3.8-flash",
-            "google/gemini-3.1-pro-preview",
+            "google/gemini-4-hydrogen",
             "deepseek/deepseek-v4.1-flash",
             "qwen/qwen3.8-flash",
-            "mistralai/mistral-medium-3-5",
+            "mistralai/mistral-large-4-0",
             "x-ai/grok-4.7",
             "meta-llama/llama-4-maverick",
         ],
@@ -194,9 +194,9 @@ pub fn recommended_model(provider: Provider, ids: &[String]) -> Option<String> {
         match provider {
             Provider::Claude => id.starts_with("claude-sonnet"),
             Provider::OpenAi => id.starts_with("gpt-") && id.ends_with("-mini") && !id.contains("audio") && !id.contains("realtime") && !id.contains("search"),
-            Provider::Gemini => id.starts_with("gemini-") && id.contains("flash") && !id.contains("lite") && !id.contains("image") && !id.contains("tts") && !id.contains("live") && !id.contains("exp") && !id.contains("preview"),
+            Provider::Gemini => id.starts_with("gemini-") && (id.contains("flash") || id.starts_with("gemini-4-")) && !id.contains("lite") && !id.contains("image") && !id.contains("tts") && !id.contains("live") && !id.contains("exp") && !id.contains("preview"),
             Provider::Groq | Provider::Cerebras | Provider::OpenRouter => id.contains("gpt-oss-120b"),
-            Provider::Mistral => id.starts_with("mistral-medium"),
+            Provider::Mistral => id.starts_with("mistral-large"),
             Provider::Compatible => !id.contains("embed"),
         }
     };
@@ -303,7 +303,7 @@ mod tests {
     fn recommended_prefers_the_listed_default_the_key_can_use() {
         assert_eq!(recommended_model(Provider::OpenAi, &ids(&["gpt-5.4-mini", "gpt-6-sol", "gpt-6-luna"])).as_deref(), Some("gpt-6-luna"));
         assert_eq!(recommended_model(Provider::Groq, &ids(&["llama-3.3-70b", "openai/gpt-oss-20b"])).as_deref(), Some("openai/gpt-oss-20b"));
-        assert_eq!(recommended_model(Provider::Mistral, &ids(&["mistral-small-latest", "mistral-medium-latest"])).as_deref(), Some("mistral-medium-latest"));
+        assert_eq!(recommended_model(Provider::Mistral, &ids(&["mistral-small-latest", "mistral-large-latest"])).as_deref(), Some("mistral-large-latest"));
         assert_eq!(recommended_model(Provider::OpenRouter, &ids(&["x-ai/grok-4.7", "anthropic/claude-sonnet-5.5"])).as_deref(), Some("anthropic/claude-sonnet-5.5"));
     }
 
@@ -312,6 +312,8 @@ mod tests {
         assert_eq!(recommended_model(Provider::OpenAi, &ids(&["gpt-4o", "gpt-4.1-mini", "gpt-5-mini", "gpt-5-mini-audio", "text-embedding-3"])).as_deref(), Some("gpt-5-mini"));
         assert_eq!(recommended_model(Provider::Claude, &ids(&["claude-haiku-5-5", "claude-sonnet-4-6", "claude-sonnet-5-5", "claude-opus-5-5"])).as_deref(), Some("claude-sonnet-5-5"));
         assert_eq!(recommended_model(Provider::Gemini, &ids(&["gemini-2.5-flash", "gemini-3-flash", "gemini-3-flash-lite", "gemini-3-pro"])).as_deref(), Some("gemini-3-flash"));
+        assert_eq!(recommended_model(Provider::Gemini, &ids(&["gemini-2.5-flash", "gemini-4-nova", "gemini-4-nova-lite", "gemini-4-nova-preview", "gemini-4-nova-tts"])).as_deref(), Some("gemini-4-nova"));
+        assert_eq!(recommended_model(Provider::Mistral, &ids(&["mistral-medium-latest", "mistral-large-2"])).as_deref(), Some("mistral-large-2"));
         assert_eq!(recommended_model(Provider::OpenAi, &ids(&["whisper-1"])), None);
     }
 

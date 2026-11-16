@@ -22,10 +22,10 @@ const fn guess(input: f64, output: f64) -> Price {
     Price { input, output, approx: true }
 }
 
-/// One row per model in `providers::catalog()`. Claude prices are the published ones for Anthropic's own API (Haiku
-/// 5.5 is the under-100K-token rate, which every Ensayo prompt is). Every other price is from memory or a guess for a
-/// model too new to have a price I know, and is marked `approx`. Prices that are too low would let the spend cap
-/// overshoot, so the guesses lean high.
+/// One row per model in `providers::catalog()`, plus rows for models that left the list so settings saved earlier
+/// are still priced. Checked against the providers' official pages on 2026-11-16. `exact` rows are published
+/// prices (Claude's Haiku 5.5 is the under-100K-token rate, which every Ensayo prompt is). `guess` rows are
+/// unconfirmed or lean high on purpose: a price that is too low would let the spend cap overshoot.
 const PRICES: &[(&str, Price)] = &[
     // Claude (Anthropic API).
     ("claude-sonnet-5-5", exact(2.0, 10.0)),
@@ -34,48 +34,58 @@ const PRICES: &[(&str, Price)] = &[
     ("claude-fable-5-1", exact(10.0, 50.0)),
     ("claude-fable-5-2", exact(8.0, 40.0)),
     // OpenAI.
-    ("gpt-6-sol", guess(5.0, 30.0)),
-    ("gpt-6.1-sol", guess(5.0, 30.0)),
-    ("gpt-6-luna", guess(1.0, 6.0)),
-    ("gpt-6-astra", guess(0.30, 2.0)),
-    ("gpt-5.6-sol", guess(4.0, 24.0)),
-    ("gpt-5.6-terra", guess(2.0, 12.0)),
-    ("gpt-5.6-luna", guess(0.50, 3.0)),
-    ("gpt-5.5", guess(5.0, 30.0)),
-    ("gpt-5.4", guess(2.50, 15.0)),
-    ("gpt-5.4-mini", guess(0.75, 4.50)),
-    // Gemini.
-    ("gemini-3.8-flash", guess(0.50, 3.0)),
-    ("gemini-3.1-pro-preview", guess(2.0, 12.0)),
-    ("gemini-3.6-flash", guess(0.50, 3.0)),
-    ("gemini-3.5-flash-lite", guess(0.25, 1.50)),
-    ("gemini-3.1-flash-lite", guess(0.25, 1.50)),
+    ("gpt-6-luna", exact(0.10, 0.50)),
+    ("gpt-6-sol", exact(2.0, 10.0)),
+    ("gpt-6.1-sol", exact(2.0, 10.0)),
+    ("gpt-6.1-terra", exact(1.0, 5.0)),
+    ("gpt-6-astra", exact(10.0, 50.0)),
+    ("gpt-5.6-sol", exact(4.0, 20.0)),
+    ("gpt-5.6-terra", exact(2.0, 12.0)),
+    ("gpt-5.6-luna", exact(0.20, 1.20)),
+    ("gpt-5.5", exact(5.0, 30.0)),
+    ("gpt-5.4", exact(2.50, 15.0)),
+    ("gpt-5.4-mini", exact(0.75, 4.50)),
+    // Gemini. The output price includes thinking.
+    ("gemini-4-hydrogen", exact(1.50, 7.50)),
+    // Introductory 0.75 / 3.75 until 2026-12-31, 1.50 / 7.50 from 2027-01-01. The higher price keeps the cap safe.
+    ("gemini-3.8-flash", guess(1.50, 7.50)),
+    ("gemini-3.6-flash", guess(1.50, 7.50)),
+    ("gemini-3.5-flash-lite", exact(0.30, 2.50)),
+    ("gemini-3.1-pro-preview", exact(2.0, 12.0)),
+    // Left the list (shuts down 2027-05-07); kept so saved settings stay priced.
+    ("gemini-3.1-flash-lite", exact(0.25, 1.50)),
     // Groq.
-    ("openai/gpt-oss-120b", guess(0.15, 0.75)),
-    ("openai/gpt-oss-20b", guess(0.10, 0.50)),
-    ("qwen/qwen3.8-27b", guess(0.40, 1.60)),
-    // Cerebras.
+    ("openai/gpt-oss-120b", exact(0.15, 0.60)),
+    ("openai/gpt-oss-20b", exact(0.075, 0.30)),
+    ("qwen/qwen3.8-27b", exact(0.80, 4.00)),
+    // Cerebras (official prices could not be confirmed).
     ("gpt-oss-120b", guess(0.35, 0.75)),
-    ("qwen-3.8-27b", guess(0.40, 1.60)),
-    // Mistral.
-    ("mistral-medium-latest", guess(0.40, 2.0)),
-    ("mistral-large-latest", guess(0.50, 1.50)),
-    ("mistral-small-latest", guess(0.10, 0.30)),
+    ("qwen-3.8-27b", guess(0.99, 1.49)),
+    // Mistral (the -latest aliases could not be confirmed).
+    ("mistral-large-latest", guess(0.70, 2.10)),
+    ("mistral-small-latest", guess(0.15, 0.60)),
     ("ministral-14b-latest", guess(0.20, 0.20)),
     ("ministral-8b-latest", guess(0.15, 0.15)),
+    // Left the list (Medium 3.5 was deprecated 2026-10-31); kept so saved settings stay priced.
+    ("mistral-medium-latest", guess(1.50, 7.50)),
     // OpenRouter (passes the maker's price through, plus a small fee on credit purchases that is not counted here).
-    ("anthropic/claude-sonnet-5.5", guess(2.0, 10.0)),
-    ("anthropic/claude-opus-5.5", guess(4.0, 20.0)),
-    ("anthropic/claude-haiku-5.5", guess(0.10, 0.50)),
-    ("openai/gpt-6-sol", guess(5.0, 30.0)),
-    ("openai/gpt-6-luna", guess(1.0, 6.0)),
-    ("google/gemini-3.8-flash", guess(0.50, 3.0)),
-    ("google/gemini-3.1-pro-preview", guess(2.0, 12.0)),
-    ("deepseek/deepseek-v4.1-flash", guess(0.20, 0.80)),
-    ("qwen/qwen3.8-flash", guess(0.25, 1.0)),
-    ("mistralai/mistral-medium-3-5", guess(0.40, 2.0)),
-    ("x-ai/grok-4.7", guess(3.0, 15.0)),
-    ("meta-llama/llama-4-maverick", guess(0.20, 0.80)),
+    ("anthropic/claude-sonnet-5.5", exact(2.0, 10.0)),
+    ("anthropic/claude-opus-5.5", exact(4.0, 20.0)),
+    ("anthropic/claude-haiku-5.5", exact(0.10, 0.50)),
+    ("anthropic/claude-fable-5.2", exact(8.0, 40.0)),
+    ("openai/gpt-6.1-sol", exact(2.0, 10.0)),
+    ("openai/gpt-6-luna", exact(0.10, 0.50)),
+    ("google/gemini-4-hydrogen", exact(1.50, 7.50)),
+    ("deepseek/deepseek-v4.1-flash", exact(0.14, 0.42)),
+    ("qwen/qwen3.8-flash", exact(0.15, 0.47)),
+    ("mistralai/mistral-large-4-0", exact(0.70, 2.10)),
+    ("x-ai/grok-4.7", exact(2.0, 6.0)),
+    ("meta-llama/llama-4-maverick", exact(0.35, 1.0)),
+    // Left the list; kept so saved settings stay priced.
+    ("openai/gpt-6-sol", exact(2.0, 10.0)),
+    ("google/gemini-3.8-flash", exact(0.825, 4.125)),
+    ("google/gemini-3.1-pro-preview", exact(2.0, 12.0)),
+    ("mistralai/mistral-medium-3-5", exact(1.50, 7.50)),
 ];
 
 /// The price of a model id. A dated snapshot of a listed model ("claude-sonnet-5-5-20261001") is priced as the
@@ -98,7 +108,8 @@ pub fn price_known(model: &str) -> bool {
 
 /// The rows of the table that belong to a provider. Claude rows are `claude-*`, OpenAI `gpt-*` (not the open-weight
 /// `gpt-oss`), Gemini `gemini-*`, OpenRouter rows contain a slash; Groq, Cerebras and Mistral are the models their
-/// catalog lists.
+/// catalog lists. Nothing breaks when a provider's highest price changes: gpt-6-astra at 10 / 50 makes OpenAI's
+/// fallback for unknown models 10 / 50, which is intended (never counted as free, leans high).
 fn rows_of(provider: Provider) -> Vec<Price> {
     let rows = PRICES.iter().filter(|(id, _)| match provider {
         Provider::Claude => id.starts_with("claude-"),
@@ -116,7 +127,8 @@ fn highest(rows: impl IntoIterator<Item = Price>) -> Option<Price> {
 }
 
 /// What a model on a paid provider is priced at: its table price, or, when it has none, the provider's highest listed
-/// price (by output price) marked as a guess, so an unlisted model is never counted as free. A provider with no rows
+/// price (by output price) marked as a guess, so an unlisted model is never counted as free. When a provider's
+/// highest price changes nothing breaks (see `rows_of`). A provider with no rows
 /// falls back to the highest price in the whole table. Local servers are free and never come here.
 pub fn price_or_fallback(provider: Provider, model: &str) -> Option<Price> {
     if provider == Provider::Compatible {
@@ -258,7 +270,8 @@ mod tests {
     #[test]
     fn guessed_prices_are_marked_and_published_ones_are_not() {
         assert!(!price("claude-opus-5-5").unwrap().approx);
-        assert!(price("gpt-6-sol").unwrap().approx);
+        assert!(price("gemini-3.8-flash").unwrap().approx);
+        assert!(!price("gpt-6-sol").unwrap().approx);
     }
 
     #[test]
@@ -272,7 +285,7 @@ mod tests {
         assert_eq!(s.output_tokens, 4_100);
         assert!((s.usd - 0.08).abs() < 1e-9, "{}", s.usd);
         assert!(!s.approx, "Claude prices are published");
-        s.add(&reply("gpt-6-sol", 1000, 1000));
+        s.add(&reply("mistral-large-latest", 1000, 1000));
         assert!(s.approx, "a guessed price makes the total an estimate");
     }
 
@@ -310,7 +323,7 @@ mod tests {
         assert!((c.usd - 1.0).abs() < 1e-9, "{}", c.usd);
         let mut o = Spend::default();
         o.add_from(Provider::OpenRouter, &reply("acme/brand-new", 1_000_000, 1_000_000));
-        let top = price("openai/gpt-6-sol").unwrap();
+        let top = price("anthropic/claude-fable-5.2").unwrap();
         assert!((o.usd - (top.input + top.output)).abs() < 1e-9, "{}", o.usd);
         assert!(o.approx);
         // A local server stays free for any model.

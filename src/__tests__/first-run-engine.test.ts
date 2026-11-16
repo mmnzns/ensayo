@@ -42,6 +42,7 @@ describe("engine status for the sidebar", () => {
   it("only makes friendly names from Claude ids", () => {
     expect(modelLabel("claude-opus-5-5")).toBe("Claude Opus 5.5");
     expect(modelLabel("claude-fable-5-1")).toBe("Claude Fable 5.1");
+    expect(modelLabel("claude-fable-5-2")).toBe("Claude Fable 5.2");
     expect(modelLabel("gpt-6-sol")).toBeNull();
     expect(modelLabel("")).toBeNull();
   });

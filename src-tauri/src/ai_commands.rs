@@ -28,10 +28,10 @@ pub fn default_models(p: Provider) -> (&'static str, &'static str) {
         // session on Sonnet is still cents. Haiku and the smaller ones stay in the list for anyone who wants cheaper.
         Provider::Claude => ("claude-sonnet-5-5", "claude-sonnet-5-5"),
         Provider::OpenAi => ("gpt-6-luna", "gpt-6-sol"),
-        Provider::Gemini => ("gemini-3.8-flash", "gemini-3.1-pro-preview"),
+        Provider::Gemini => ("gemini-4-hydrogen", "gemini-4-hydrogen"),
         Provider::Groq => ("openai/gpt-oss-120b", "openai/gpt-oss-120b"),
         Provider::Cerebras => ("gpt-oss-120b", "gpt-oss-120b"),
-        Provider::Mistral => ("mistral-small-latest", "mistral-medium-latest"),
+        Provider::Mistral => ("mistral-large-latest", "mistral-large-latest"),
         Provider::OpenRouter => ("anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5"),
         Provider::Compatible => ("", ""),
     }
