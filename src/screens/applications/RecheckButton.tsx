@@ -20,3 +20,20 @@ export function RecheckButton({ busy, disabled, onClick }: { busy: boolean; disa
     </button>
   );
 }
+
+/** The same button in the shape of the status pill, for the application header. */
+export function RecheckPill({ busy, disabled, title, onClick }: { busy: boolean; disabled?: boolean; title?: string; onClick: () => void }) {
+  const off = busy || disabled;
+  return (
+    <button
+      type="button"
+      className="e-pill"
+      title={title}
+      disabled={off}
+      style={{ border: "none", font: "inherit", fontSize: "13px", fontWeight: "600", cursor: off ? "default" : "pointer", background: "var(--e-ground)", color: "var(--e-ink)", opacity: disabled && !busy ? 0.6 : 1 }}
+      onClick={onClick}
+    >
+      {busy ? "Rechecking" : "Recheck"} <RecheckIcon size={12} />
+    </button>
+  );
+}

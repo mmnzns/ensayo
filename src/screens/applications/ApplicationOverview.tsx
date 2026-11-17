@@ -1,9 +1,9 @@
 import Working from "./Working";
 import { stopLocalAi } from "../../ui/aiStop";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
-import type { Analysis, JdOutcome } from "../../data/applicationCommands";
+import type { Analysis } from "../../data/applicationCommands";
 import { useActions } from "../../data/real";
 import { askedLine } from "../../data/interviews";
 import { useStore } from "../../data/store";
@@ -11,6 +11,7 @@ import { STAGE_LABEL, STATUS_LABEL, nextStage, shortDate, whenText } from "./for
 import { keptWords } from "./forms";
 import FitBanner from "./FitBanner";
 import { RecheckButton } from "./RecheckButton";
+import { useRecheck } from "./recheck";
 import { FIT_LABEL, fitClass, fitRows } from "./targetPick";
 import { TargetMark } from "./TargetMark";
 import { AppHeader, AppTabs, ErrorLine, Notice, useAppLink, useRun, withFeatured, type Featured } from "./parts";
@@ -29,9 +30,9 @@ function Overview({ app, extras, now }: Featured) {
   const [editNeeds, setEditNeeds] = useState(false);
   const [editBeliefs, setEditBeliefs] = useState(false);
   const [posting, setPosting] = useState("");
-  const [lastRead, setLastRead] = useState<JdOutcome | null>(null);
   const saving = useRun();
-  const reading = useRun();
+  const reading = useRecheck(app.id);
+  const lastRead = reading.last;
   const status = useRun();
 
   // The reading on screen is the saved one until an edit starts; Done saves the edit.
@@ -46,14 +47,14 @@ function Overview({ app, extras, now }: Featured) {
       close();
     }
   };
-  const readPosting = async (text?: string) => {
-    const out = await reading.run(() => actions.analyseJd(app.id, text));
-    if (out) {
-      setLastRead(out);
+  const readPosting = (text?: string) => reading.run(text);
+  // A recheck finished (started here or from the header): what was typed or half edited is now out of date.
+  useEffect(() => {
+    if (lastRead) {
       setPosting("");
       setDraft(null);
     }
-  };
+  }, [lastRead]);
   const next = nextStage(app);
   const practiced = next ? (extras.practicedByStage[next.id] ?? 0) : 0;
   const suggested = app.suggested_status && app.suggested_status !== app.status ? app.suggested_status : null;
