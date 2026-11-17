@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 // The Recheck button: circling arrows and a word, in the size of a small button.
 
 /** Two arrows going round, drawn like the app's other icons. */
@@ -35,5 +37,23 @@ export function RecheckPill({ busy, disabled, title, onClick }: { busy: boolean;
     >
       {busy ? "Rechecking" : "Recheck"} <RecheckIcon size={12} />
     </button>
+  );
+}
+
+/** Keep my edits (the default) or use the new reading, for the next recheck. Only worth showing when there are edits. */
+export function RecheckChoice({ replace, disabled, onChange }: { replace: boolean; disabled?: boolean; onChange: (replace: boolean) => void }) {
+  const name = useId();
+  return (
+    <span role="radiogroup" aria-label="What Recheck does with your edits" style={{ display: "inline-flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
+      <label className="e-small" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+        <input type="radio" name={name} checked={!replace} disabled={disabled} onChange={() => onChange(false)} />
+        Keep my edits
+      </label>
+      <label className="e-small" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+        <input type="radio" name={name} checked={replace} disabled={disabled} onChange={() => onChange(true)} />
+        Use the new reading
+      </label>
+      {replace && <span className="e-meta">Replaces what you edited in this overview. Your own questions stay.</span>}
+    </span>
   );
 }

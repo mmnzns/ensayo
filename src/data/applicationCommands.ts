@@ -82,6 +82,8 @@ export interface JdResult {
   notice: string | null;
   changed: string[];
   kept: string[];
+  /** What the person edited that this reading replaced, because they chose the new reading. Missing from an older app. */
+  replaced?: string[];
   startup_turned_on: boolean;
   question_count: number;
 }

@@ -11,9 +11,11 @@ export interface RecheckState {
   error: string;
   /** What the last recheck on this application did, until the next one. */
   last: JdOutcome | null;
+  /** The choice for the next recheck: false keeps what the person edited, true uses the new reading for it. */
+  replaceEdits: boolean;
 }
 
-const IDLE: RecheckState = { busy: false, error: "", last: null };
+const IDLE: RecheckState = { busy: false, error: "", last: null, replaceEdits: false };
 const states = new Map<string, RecheckState>();
 const listeners = new Set<() => void>();
 
@@ -33,19 +35,26 @@ export function resetRecheck(id?: string) {
   listeners.forEach((l) => l());
 }
 
-type Analyse = (applicationId: string, text?: string) => Promise<JdOutcome>;
+type Analyse = (applicationId: string, text: string | undefined, replaceEdits: boolean) => Promise<JdOutcome>;
+
+/** Chooses, for the next recheck of this application, to keep the person's edits (false) or use the new reading. */
+export function setReplaceEdits(id: string, replace: boolean) {
+  set(id, { replaceEdits: replace });
+}
 
 /** Runs the recheck unless one is already running for this application. */
 export async function startRecheck(id: string, analyse: Analyse, text?: string): Promise<JdOutcome | undefined> {
   if (recheckState(id).busy) return undefined;
-  set(id, { busy: true, error: "" });
+  // The choice is for this one recheck: the next one starts from "Keep my edits" again.
+  const replace = recheckState(id).replaceEdits;
+  set(id, { busy: true, error: "", replaceEdits: false });
   try {
-    const out = await analyse(id, text);
+    const out = await analyse(id, text, replace);
     set(id, { busy: false, last: out });
     return out;
   } catch (e) {
     // Stop is not a failure: the screen stays as it was, with no banner.
-    set(id, { busy: false, error: isStopped(e) ? "" : plainError(e) });
+    set(id, { busy: false, error: isStopped(e) ? "" : plainError(e), replaceEdits: replace });
     return undefined;
   }
 }
@@ -58,8 +67,9 @@ const subscribe = (l: () => void) => {
 export function useRecheck(id: string) {
   const actions = useActions();
   const state = useSyncExternalStore(subscribe, () => recheckState(id), () => IDLE);
-  const run = useCallback((text?: string) => startRecheck(id, (a, t) => actions.analyseJd(a, t), text), [id, actions]);
-  return { ...state, run };
+  const run = useCallback((text?: string) => startRecheck(id, (a, t, r) => actions.analyseJd(a, t, r), text), [id, actions]);
+  const choose = useCallback((replace: boolean) => setReplaceEdits(id, replace), [id]);
+  return { ...state, run, choose };
 }
 
 /** How many of the person's stories changed after the posting was last read. Counts every story, not only the ones this

@@ -98,6 +98,8 @@ pub struct JdResult {
     pub changed: Vec<String>,
     /// What the user edited that reading again left alone (`analysis.summary`, `question q_3`).
     pub kept: Vec<String>,
+    /// What the user edited that this reading replaced, because they asked for the new reading (same paths as `kept`).
+    pub replaced: Vec<String>,
     pub startup_turned_on: bool,
     pub question_count: usize,
     /// How the posting reads against the targets, as saved on the application (the command returns it as `targetFit`).
@@ -683,7 +685,11 @@ pub fn save_posting(storage: &Storage, id: &str, text: &str) -> StorageResult<Po
 
 /// Reads the saved posting: with the engine when there is one and it works, by keywords when not. Edits the user made
 /// to the reading and to the questions are kept; the result says what changed and what was kept.
-pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<JdResult> {
+///
+/// With `replace_edits` the engine's new reading takes the place of the user's edits to the reading (summary, priorities,
+/// beliefs, gaps, phrases), and the result says which were replaced. Their own questions are still kept. A reading by
+/// keywords never replaces an edit: it is the weaker reading, and the result says the edits were kept.
+pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str, replace_edits: bool) -> StorageResult<JdResult> {
     let rec = storage.application(id)?;
     let jd = storage.application_text(id, "jd.txt")?.filter(|t| !t.trim().is_empty()).ok_or_else(|| StorageError::Invalid("Paste the job posting first, then Ensayo can read it.".into()))?;
     let stories = storage.load_stories()?.items;
@@ -705,14 +711,24 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
         Err(reason) => {
             if old.as_ref().is_some_and(|o| o.engine == "ai") {
                 let questions = storage.load_application_part::<QuestionsFile>(id, "questions.json")?.map(|q| q.questions.len()).unwrap_or(0);
-                return Ok(JdResult { source: "unchanged".into(), notice: Some(format!("{reason} What was read before is unchanged.")), changed: vec![], kept: vec![], startup_turned_on: false, question_count: questions, target_fit: rec.target_fit.clone() });
+                return Ok(JdResult { source: "unchanged".into(), notice: Some(format!("{reason} What was read before is unchanged.")), changed: vec![], kept: vec![], replaced: vec![], startup_turned_on: false, question_count: questions, target_fit: rec.target_fit.clone() });
             }
             (keyword_reading(&rec, &jd, &stories, profile.as_ref().map(|p| p.target_role.as_str()).unwrap_or("")), Some(reason))
         }
     };
     let model_fit = reading.fit.clone();
-    let (derived, mut kept) = merge_derived(old.as_ref(), reading.derived);
+    let replace = replace_edits && reading.engine == "ai";
+    let (derived, mut kept, replaced) = if replace {
+        let paths = old.as_ref().map(|o| o.edited_by_user.iter().map(|p| format!("analysis.{p}")).collect()).unwrap_or_default();
+        (reading.derived, vec![], paths)
+    } else {
+        let (d, k) = merge_derived(old.as_ref(), reading.derived);
+        (d, k, vec![])
+    };
     let mut changed = changes(old.as_ref().map(|o| &o.derived), &derived);
+    if replace_edits && !replace && !kept.is_empty() {
+        changed.push("Your edits were kept, because the posting could not be read in full this time.".to_string());
+    }
     let old_questions = storage.load_application_part::<QuestionsFile>(id, "questions.json")?;
     let had_questions = old_questions.as_ref().is_some_and(|q| !q.questions.is_empty());
     let old_count = old_questions.as_ref().map_or(0, |q| q.questions.len());
@@ -721,7 +737,7 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
         changed.push(format!("The prepared questions were replaced: {} before, {} now.", old_count, qfile.questions.len()));
     }
     kept.extend(kept_questions);
-    let edited_paths: Vec<String> = old.as_ref().map(|o| o.edited_by_user.clone()).unwrap_or_default();
+    let edited_paths: Vec<String> = if replace { vec![] } else { old.as_ref().map(|o| o.edited_by_user.clone()).unwrap_or_default() };
     let file = AnalysisFile { prompt: reading.prompt, engine: reading.engine.to_string(), read_on: stamp(), raw: reading.raw, derived, edited_by_user: edited_paths };
     let turn_on = reading.startup && !rec.startup && !rec.is_edited("startup");
     if turn_on {
@@ -742,7 +758,7 @@ pub fn analyse(storage: &Storage, ai: Option<AiCtx>, id: &str) -> StorageResult<
         a.target_fit = target_fit.clone();
         Ok(())
     })?;
-    Ok(JdResult { source: reading.engine.to_string(), notice, changed, kept, startup_turned_on: turn_on, question_count: qfile.questions.len(), target_fit })
+    Ok(JdResult { source: reading.engine.to_string(), notice, changed, kept, replaced, startup_turned_on: turn_on, question_count: qfile.questions.len(), target_fit })
 }
 
 /// How the posting fits the targets: by keywords for now (the engine's own reading of the fit is added where the reply of
@@ -761,7 +777,7 @@ pub fn rebuild_questions(storage: &Storage, ai: Option<AiCtx>, id: &str) -> Stor
     let rec = storage.application(id)?;
     let Some(jd) = storage.application_text(id, "jd.txt")?.filter(|t| !t.trim().is_empty()) else { return Ok(None) };
     if ai.is_some() {
-        let out = analyse(storage, ai, id)?;
+        let out = analyse(storage, ai, id, false)?;
         if out.source != "unchanged" {
             return Ok(Some(out.question_count));
         }
@@ -918,8 +934,12 @@ mod tests {
     }
 
     fn run(s: &Storage, id: &str, llm: &Scripted) -> JdResult {
+        run_with(s, id, llm, false)
+    }
+
+    fn run_with(s: &Storage, id: &str, llm: &Scripted, replace_edits: bool) -> JdResult {
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        analyse(s, Some(AiCtx { llm, budget: &mut budget }), id).unwrap()
+        analyse(s, Some(AiCtx { llm, budget: &mut budget }), id, replace_edits).unwrap()
     }
 
     fn reply(edit: impl FnOnce(&mut Value)) -> String {
@@ -1075,6 +1095,64 @@ mod tests {
     }
 
     #[test]
+    fn asking_for_the_new_reading_replaces_the_users_edits_to_the_analysis_and_says_which() {
+        let (_d, s, id) = setup();
+        run(&s, &id, &Scripted::new(vec![Ok(REPLY)]));
+        let mut d = derived(&s, &id);
+        d.summary = "My own summary.".into();
+        d.priorities[0].title = "Keep new customers".into();
+        save_analysis(&s, &id, d).unwrap();
+        let mine = save_question(&s, &id, QuestionInput { id: None, stage_id: "stg_3".into(), text: "What would you ask the design lead?".into(), kind: "behavioral".into() }).unwrap();
+        let r2 = reply(|v| v["summary"] = json!("A different reading of the role."));
+        let out = run_with(&s, &id, &Scripted::new(vec![Ok(&r2)]), true);
+        let d2 = derived(&s, &id);
+        assert_eq!(d2.summary, "A different reading of the role.", "the new reading wins");
+        assert_ne!(d2.priorities[0].title, "Keep new customers");
+        assert_eq!(out.replaced, vec!["analysis.summary".to_string(), "analysis.priorities.0".to_string()]);
+        assert!(!out.kept.iter().any(|k| k.starts_with("analysis.")), "{:?}", out.kept);
+        let file = s.load_application_part::<AnalysisFile>(&id, "analysis.json").unwrap().unwrap();
+        assert!(file.edited_by_user.is_empty(), "nothing is marked as edited any more");
+        assert!(questions(&s, &id).iter().any(|x| x.id == mine.id), "the person's own questions stay");
+    }
+
+    #[test]
+    fn keeping_the_edits_is_still_what_happens_when_the_new_reading_is_not_asked_for() {
+        let (_d, s, id) = setup();
+        run(&s, &id, &Scripted::new(vec![Ok(REPLY)]));
+        let mut d = derived(&s, &id);
+        d.summary = "My own summary.".into();
+        save_analysis(&s, &id, d).unwrap();
+        let r2 = reply(|v| v["summary"] = json!("A different reading of the role."));
+        let out = run_with(&s, &id, &Scripted::new(vec![Ok(&r2)]), false);
+        assert_eq!(derived(&s, &id).summary, "My own summary.");
+        assert!(out.replaced.is_empty() && out.kept.contains(&"analysis.summary".to_string()));
+    }
+
+    #[test]
+    fn a_reading_by_keywords_never_replaces_an_edit_even_when_the_new_reading_was_asked_for() {
+        let (_d, s, id) = setup();
+        run(&s, &id, &Scripted::new(vec![Ok(REPLY)]));
+        let mut d = derived(&s, &id);
+        d.summary = "My own summary.".into();
+        save_analysis(&s, &id, d).unwrap();
+        // The engine cannot be reached this time, so the saved engine reading is left as it was.
+        let out = analyse(&s, None, &id, true).unwrap();
+        assert_eq!(out.source, "unchanged");
+        assert_eq!(derived(&s, &id).summary, "My own summary.");
+        assert!(out.replaced.is_empty());
+        // With only a keyword reading saved, a keyword recheck keeps the edit and says so.
+        let (_d2, s2, id2) = setup();
+        analyse(&s2, None, &id2, false).unwrap();
+        let mut d = derived(&s2, &id2);
+        d.summary = "My own summary.".into();
+        save_analysis(&s2, &id2, d).unwrap();
+        let out = analyse(&s2, None, &id2, true).unwrap();
+        assert_eq!(derived(&s2, &id2).summary, "My own summary.");
+        assert!(out.replaced.is_empty() && out.kept.contains(&"analysis.summary".to_string()));
+        assert!(out.changed.iter().any(|c| c.contains("edits were kept")), "{:?}", out.changed);
+    }
+
+    #[test]
     fn a_question_can_be_removed_and_the_set_stays_in_stage_order() {
         let (_d, s, id) = setup();
         run(&s, &id, &Scripted::new(vec![Ok(REPLY)]));
@@ -1147,7 +1225,7 @@ mod tests {
         let (_d, s, id) = setup();
         let ops = second_target(&s);
         let first = s.targets().unwrap().remove(0);
-        let out = analyse(&s, None, &id).unwrap();
+        let out = analyse(&s, None, &id, false).unwrap();
         let fit = out.target_fit.clone().expect("a fit");
         assert_eq!(fit.per_target.len(), 2);
         assert_eq!(fit.role_family, "lifecycle");
@@ -1165,7 +1243,7 @@ mod tests {
         let bare = Storage::init(dir.path().join("data")).unwrap();
         let app = bare.create_application(NewApplication { company: "K".into(), role: "Growth Manager".into(), ..Default::default() }, NaiveDate::from_ymd_opt(2026, 10, 6).unwrap()).unwrap();
         bare.save_application_text(&app.id, "jd.txt", KESTREL).unwrap();
-        let out = analyse(&bare, None, &app.id).unwrap();
+        let out = analyse(&bare, None, &app.id, false).unwrap();
         assert_eq!(out.target_fit, None);
         assert_eq!(bare.application(&app.id).unwrap().target_fit, None);
     }
@@ -1198,7 +1276,7 @@ mod tests {
     #[test]
     fn making_the_questions_again_for_another_target_keeps_the_ones_the_user_wrote_or_changed() {
         let (_d, s, id) = setup();
-        analyse(&s, None, &id).unwrap();
+        analyse(&s, None, &id, false).unwrap();
         let mine = save_question(&s, &id, QuestionInput { id: None, stage_id: "stg_1".into(), kind: "behavioral".into(), text: "My own question about Kestrel?".into() }).unwrap();
         let ops = second_target(&s);
         s.update_application(&id, AppPatch { target_id: Some(ops.id.clone()), ..Default::default() }).unwrap();
@@ -1237,7 +1315,7 @@ mod tests {
     #[test]
     fn without_an_engine_the_posting_is_read_by_keywords_with_generic_questions_and_it_says_so() {
         let (_d, s, id) = setup();
-        let out = analyse(&s, None, &id).unwrap();
+        let out = analyse(&s, None, &id, false).unwrap();
         assert_eq!(out.source, "keywords");
         let notice = out.notice.clone().unwrap();
         assert!(notice.contains("keywords") && notice.contains("general set"), "{notice}");
@@ -1267,7 +1345,7 @@ mod tests {
     fn a_posting_that_is_not_a_startup_gets_no_founder_questions_without_an_engine() {
         let (_d, s, id) = setup();
         s.save_application_text(&id, "jd.txt", "Lifecycle Marketing Manager at a large retail bank. You will own onboarding emails and report monthly to the head of growth. SQL is useful.").unwrap();
-        analyse(&s, None, &id).unwrap();
+        analyse(&s, None, &id, false).unwrap();
         assert!(!s.application(&id).unwrap().startup);
         let bank = crate::applications::question_bank::banks_for("Lifecycle");
         let founder: Vec<&str> = bank.iter().filter(|b| b.founder_variant == Some(true)).map(|b| b.text.as_str()).collect();
@@ -1309,7 +1387,7 @@ mod tests {
     fn an_application_with_no_posting_says_to_paste_one() {
         let (_d, s, id) = setup();
         s.remove_application_file(&id, "jd.txt").unwrap();
-        let err = analyse(&s, None, &id).unwrap_err().to_string();
+        let err = analyse(&s, None, &id, false).unwrap_err().to_string();
         assert!(err.contains("Paste the job posting"), "{err}");
     }
 

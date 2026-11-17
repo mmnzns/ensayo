@@ -1,8 +1,9 @@
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
-import { RecheckPill } from "../screens/applications/RecheckButton";
-import { changedLine, recheckState, resetRecheck, startRecheck, storiesChangedSince } from "../screens/applications/recheck";
+import { RecheckChoice, RecheckPill } from "../screens/applications/RecheckButton";
+import { changedLine, recheckState, resetRecheck, setReplaceEdits, startRecheck, storiesChangedSince } from "../screens/applications/recheck";
 import type { JdOutcome } from "../data/applicationCommands";
+import { keptWords } from "../screens/applications/forms";
 
 const outcome = { result: { source: "ai", changed: ["Gap 1 changed."], kept: [] } } as unknown as JdOutcome;
 
@@ -79,5 +80,43 @@ describe("stories changed since the posting was read", () => {
     expect(changedLine(1)).toBe("1 story changed since this was read");
     expect(changedLine(3)).toBe("3 stories changed since this was read");
     expect(changedLine(0)).toBe("");
+  });
+});
+
+describe("keeping the person's edits or using the new reading", () => {
+  beforeEach(() => resetRecheck());
+
+  it("keeps the edits unless the new reading was chosen, and asks only once", async () => {
+    const seen: boolean[] = [];
+    const analyse = async (_id: string, _t: string | undefined, replace: boolean) => {
+      seen.push(replace);
+      return outcome;
+    };
+    await startRecheck("a1", analyse);
+    setReplaceEdits("a1", true);
+    expect(recheckState("a1").replaceEdits).toBe(true);
+    await startRecheck("a1", analyse);
+    await startRecheck("a1", analyse);
+    expect(seen).toEqual([false, true, false]);
+  });
+
+  it("keeps the choice when the recheck fails, so trying again does what was chosen", async () => {
+    setReplaceEdits("a1", true);
+    await startRecheck("a1", () => Promise.reject(new Error("Couldn't reach the engine.")));
+    expect(recheckState("a1").replaceEdits).toBe(true);
+  });
+
+  it("is a choice between two plain answers, with the new reading's cost said when picked", () => {
+    const keep = renderToString(<RecheckChoice replace={false} onChange={() => {}} />);
+    expect(keep).toContain("Keep my edits");
+    expect(keep).toContain("Use the new reading");
+    expect(keep).not.toContain("Replaces what you edited");
+    const use = renderToString(<RecheckChoice replace onChange={() => {}} />);
+    expect(use).toContain("Replaces what you edited in this overview. Your own questions stay.");
+    expect(keep + use).not.toContain("—");
+  });
+
+  it("names what was replaced in plain words", () => {
+    expect(keptWords(["analysis.summary", "analysis.gaps.1"])).toEqual(["the summary", "gap 2"]);
   });
 });

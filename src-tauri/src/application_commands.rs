@@ -191,11 +191,11 @@ pub struct JdOutcome {
 
 /// Reads the posting (saving `text` first when given), and when the engine did it and the resume has been read before,
 /// reads the resume again so its "say these out loud" list matches the posting.
-pub fn analyse_with(storage: &Storage, mut ai: Option<AiCtx>, unavailable: Option<&str>, id: &str, text: Option<&str>, at: NaiveDateTime) -> StorageResult<JdOutcome> {
+pub fn analyse_with(storage: &Storage, mut ai: Option<AiCtx>, unavailable: Option<&str>, id: &str, text: Option<&str>, replace_edits: bool, at: NaiveDateTime) -> StorageResult<JdOutcome> {
     if let Some(t) = text {
         jd::save_posting(storage, id, t)?;
     }
-    let mut result = jd::analyse(storage, reborrow(&mut ai), id)?;
+    let mut result = jd::analyse(storage, reborrow(&mut ai), id, replace_edits)?;
     if let (Some(reason), Some(_)) = (unavailable, result.notice.as_ref()) {
         result.notice = Some(engine_problem(reason, "The posting was read by keywords only, and the questions come from the general set."));
     }
@@ -365,13 +365,14 @@ pub async fn save_posting(application_id: String, text: String) -> Cmd<PostingOu
 
 /// Reads the saved posting (saving `text` first when given): with the engine when one is set up, by keywords when not
 /// (the result says so). Keeps what the user edited, says what changed. Also reads the resume again when it was read
-/// before, so its "say these out loud" list matches.
+/// before, so its "say these out loud" list matches. `replace_edits` lets the new reading take the place of the user's
+/// edits to the reading (off when missing).
 #[tauri::command]
-pub async fn analyse_jd(application_id: String, text: Option<String>) -> Cmd<JdOutcome> {
+pub async fn analyse_jd(application_id: String, text: Option<String>, replace_edits: Option<bool>) -> Cmd<JdOutcome> {
     blocking(move || {
         let _t = crate::logging::Timer::new("analyse_jd");
         let s = open().map_err(plain)?;
-        let (out, unavailable) = with_engine(&application_id, |ai| analyse_with(&s, ai, None, &application_id, text.as_deref(), now()));
+        let (out, unavailable) = with_engine(&application_id, |ai| analyse_with(&s, ai, None, &application_id, text.as_deref(), replace_edits.unwrap_or(false), now()));
         let mut out = out.map_err(plain)?;
         if let (Some(reason), Some(_)) = (unavailable, out.result.notice.as_ref()) {
             out.result.notice = Some(engine_problem(&reason, "The posting was read by keywords only, and the questions come from the general set."));
@@ -781,7 +782,7 @@ mod tests {
         let (_d, s) = setup();
         let (first, ops) = with_two_targets(&s);
         let id = make(&s);
-        let out = analyse_with(&s, None, None, &id, None, at()).unwrap();
+        let out = analyse_with(&s, None, None, &id, None, false, at()).unwrap();
         let json = serde_json::to_value(&out).unwrap();
         assert_eq!(json["targetFit"]["bestTargetId"], first.id.as_str());
         assert_eq!(json["targetFit"]["perTarget"].as_array().unwrap().len(), 2);
@@ -799,7 +800,7 @@ mod tests {
         let (_d, s) = setup();
         let (first, ops) = with_two_targets(&s);
         let id = make(&s);
-        analyse_with(&s, None, None, &id, None, at()).unwrap();
+        analyse_with(&s, None, None, &id, None, false, at()).unwrap();
         jd::save_question(&s, &id, QuestionInput { id: None, stage_id: "stg_1".into(), kind: "behavioral".into(), text: "My own question?".into() }).unwrap();
         let before: Vec<String> = view::build_extras(&s, &s.application(&id).unwrap(), &view::Ctx { now: at(), stories: &[], sessions: &[], targets: &[] }).unwrap().questions.into_iter().map(|q| q.id).collect();
         // Only filing: the questions are not touched.
@@ -835,7 +836,7 @@ mod tests {
         let (_d, s) = setup();
         let (first, ops) = with_two_targets(&s);
         let id = make(&s);
-        let read = analyse_with(&s, None, None, &id, None, at()).unwrap().target_fit.unwrap();
+        let read = analyse_with(&s, None, None, &id, None, false, at()).unwrap().target_fit.unwrap();
         assert!(read.mismatch_notes.is_empty(), "a lifecycle posting filed under the lifecycle target");
         let b = update_with(&s, None, &id, patch(Some(&ops.id), false), at()).unwrap();
         let fit = b.application.target_fit.unwrap();
@@ -849,7 +850,7 @@ mod tests {
         let (_d, s) = setup();
         let (first, _ops) = with_two_targets(&s);
         let id = make(&s);
-        analyse_with(&s, None, None, &id, None, at()).unwrap();
+        analyse_with(&s, None, None, &id, None, false, at()).unwrap();
         let before = bundle(&s, &id, at()).unwrap().extras.questions.iter().map(|q| q.id.clone()).collect::<Vec<_>>();
         let b = update_with(&s, None, &id, patch(Some(&first.id), true), at()).unwrap();
         assert_eq!(b.extras.questions.iter().map(|q| q.id.clone()).collect::<Vec<_>>(), before);
@@ -962,7 +963,7 @@ mod tests {
         assert!(out.bundle.application.resume.as_ref().unwrap().must_say.is_empty());
         // The posting is read: the engine reads it, and the resume is read again with it.
         let llm = Scripted::new(vec![Ok(JD_REPLY), Ok(&resume_reply())]);
-        let jd_out = run_ai(&llm, |ai| analyse_with(&s, ai, None, &id, None, at())).unwrap();
+        let jd_out = run_ai(&llm, |ai| analyse_with(&s, ai, None, &id, None, false, at())).unwrap();
         assert_eq!(jd_out.result.source, "ai");
         let again = jd_out.resume.expect("the resume was read again");
         assert_eq!(again.must_say_state, "ready");
@@ -974,9 +975,9 @@ mod tests {
         let (_d2, s2) = setup();
         let id2 = make(&s2);
         let llm = Scripted::new(vec![Ok(JD_REPLY)]);
-        let out = run_ai(&llm, |ai| analyse_with(&s2, ai, None, &id2, None, at())).unwrap();
+        let out = run_ai(&llm, |ai| analyse_with(&s2, ai, None, &id2, None, false, at())).unwrap();
         assert!(out.resume.is_none());
-        let none = analyse_with(&s2, None, None, &id2, None, at()).unwrap();
+        let none = analyse_with(&s2, None, None, &id2, None, false, at()).unwrap();
         assert!(none.resume.is_none() && none.result.source == "unchanged", "no engine: the earlier reading by the engine stays");
     }
 
@@ -984,7 +985,7 @@ mod tests {
     fn an_engine_that_is_chosen_but_cannot_be_used_is_named_in_the_notice() {
         let (_d, s) = setup();
         let id = make(&s);
-        let out = analyse_with(&s, None, Some("The local AI model isn't downloaded yet."), &id, None, at()).unwrap();
+        let out = analyse_with(&s, None, Some("The local AI model isn't downloaded yet."), &id, None, false, at()).unwrap();
         let notice = out.result.notice.unwrap();
         assert!(notice.starts_with("The local AI model isn't downloaded yet.") && notice.contains("keywords"), "{notice}");
         assert!(!notice.contains("No AI engine is set up"));
@@ -994,7 +995,7 @@ mod tests {
     fn a_new_posting_text_is_saved_before_it_is_read() {
         let (_d, s) = setup();
         let id = make(&s);
-        let out = analyse_with(&s, None, None, &id, Some("Lifecycle Manager at a bank. SQL and Braze. You will own onboarding emails and report monthly to the head of growth."), at()).unwrap();
+        let out = analyse_with(&s, None, None, &id, Some("Lifecycle Manager at a bank. SQL and Braze. You will own onboarding emails and report monthly to the head of growth."), false, at()).unwrap();
         assert_eq!(out.result.source, "keywords");
         assert!(out.bundle.extras.posting_text.starts_with("Lifecycle Manager at a bank"));
         assert!(out.bundle.application.analysis.is_some());
