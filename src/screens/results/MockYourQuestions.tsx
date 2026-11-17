@@ -1,5 +1,7 @@
 // Draft generated from Design/screens/html/4-2-mock-your-questions.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
+import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
+import NoMockRunning from "./NoMockRunning";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
@@ -9,6 +11,11 @@ import { cancelLive, currentQuestionText, liveSession, MOCK_DEBRIEF, useLive } f
 import { stageWithKind, useSpaceKey } from "./speak";
 
 export default function MockYourQuestions() {
+  const live = useLive();
+  return isApp() && !(live.active && live.mode === "mock") ? <NoMockRunning /> : <MockQuestions />;
+}
+
+function MockQuestions() {
   const { applications, screens } = useStore();
   const mock = screens.results.mock;
   const liveNow = useLive();
