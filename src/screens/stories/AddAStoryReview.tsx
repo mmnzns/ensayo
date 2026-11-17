@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
+import { liveAvailable } from "../../practice/live";
 import { startQuickDrill } from "../../practice/quick";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -16,7 +17,8 @@ const WORDS = ["No", "One", "Two"];
 export default function AddAStoryReview() {
   const store = useStore();
   const { parsed, missingNotes, goodForOptions } = store.screens.stories;
-  const blank = isBlankReview();
+  // In the app, with no read to show (opened some other way), start blank rather than show the sample story.
+  const blank = isBlankReview() || (liveAvailable() && !getParsedDraft());
   // In setup the same screen is the last part of "Add one story": back goes to the setup step, saving goes on to the loop card.
   const setup = isFromSetup();
   // In the app the engine's reading of the pasted text; in the browser preview the sample parse.

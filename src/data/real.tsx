@@ -56,6 +56,9 @@ import { getLive } from "../practice/live";
 import { liveBlock, previewRestore, previewTrash, type PracticeDeleted, type TrashedApplication, type TrashedSession, type TrashedStory } from "./trash";
 
 /** True inside the desktop app. In a plain browser (`npm run dev`) the data is the mock, held in memory. */
+/** The store's clock. In the app it is the real time; the browser sample data is dated around MOCK_NOW, so it keeps that. */
+export const storeClock = (app: boolean): (() => Date) => (app ? () => new Date() : mockStore.now);
+
 export const isApp = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /** What the setup screens start from: nothing filled in. */
@@ -841,6 +844,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const profile = tg.you ? mergedProfile(tg.you, active, state.profile ?? undefined) : (state.profile ?? (app ? BLANK_PROFILE : mockStore.profile));
     const base: Store = {
       ...mockStore,
+      now: storeClock(app),
       profile,
       you,
       targets: tg.targets,

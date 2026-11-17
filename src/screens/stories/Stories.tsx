@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { liveAvailable } from "../../practice/live";
 import { storyGaps, useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -71,7 +72,7 @@ export default function Stories() {
       </div>
       {gap && (
         <div className="e-soft" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px" }}>
-          <span className="e-meta" style={{ flex: "1 1 380px" }}>{gap.company} will want {gapNeed}. None of yours fits yet.</span>
+          <span className="e-meta" style={{ flex: "1 1 380px" }}>{liveAvailable() ? `${gap.company} will want a story you don't have yet.` : `${gap.company} will want ${gapNeed}. None of yours fits yet.`}</span>
           <Link to="6-3-application-overview" className="e-btn e-btn-white e-btn-sm">See what they need</Link>
         </div>
       )}
