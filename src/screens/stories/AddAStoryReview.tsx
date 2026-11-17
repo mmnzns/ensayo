@@ -4,13 +4,13 @@ import { useStore } from "../../data/store";
 import { liveAvailable } from "../../practice/live";
 import { startQuickDrill } from "../../practice/quick";
 import AppShell from "../../ui/AppShell";
-import Link from "../../ui/Link";
 import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import { go } from "../../ui/router";
 import { FIELD_HELP } from "./fieldHelp";
 import Numbers, { type NumberRow } from "./Numbers";
 import { draftToReview, storyFromReview } from "./parseDraft";
 import { getParsedDraft, isBlankReview, isFromSetup, pasteDraft, setFromSetup, setParsedDraft } from "./selection";
+import BackLink from "../../components/BackLink";
 
 const WORDS = ["No", "One", "Two"];
 
@@ -77,7 +77,7 @@ export default function AddAStoryReview() {
     <AppShell nav="stories">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to={setup ? "1-7-your-first-story" : "5-2-add-a-story-paste"} className="e-small" style={{ textDecoration: "none" }}>‹ Back to your text</Link>
+          <BackLink to={setup ? "1-7-your-first-story" : "5-2-add-a-story-paste"} label="your text" />
           <h1 className="e-h1">{blank ? "Write your story" : "Check what Ensayo found"}</h1>
           <span className="e-meta">
             {missing === 0

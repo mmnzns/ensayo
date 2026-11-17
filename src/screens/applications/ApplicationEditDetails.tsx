@@ -17,6 +17,7 @@ import { applicationTarget } from "../../data/targets";
 import TargetSelect from "../../components/TargetSelect";
 import StageRow, { uniqueStageLabel } from "../../components/StageRow";
 import { asksToRebuild, targetFromName } from "./targetPick";
+import BackLink from "../../components/BackLink";
 
 interface EditStage extends StageDraft {
   movedFrom?: string;
@@ -150,7 +151,7 @@ function EditDetails({ app, extras }: Featured) {
   return (
     <AppShell nav="applications">
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to={overview} className="e-small" style={{ textDecoration: "none" }}>{`‹ ${app.company}`}</Link>
+        <BackLink to={overview} label={app.company} />
         <h1 className="e-h1">Edit details</h1>
         <span className="e-meta">Fix anything that was read wrong or has changed. What you edit here is never overwritten when Ensayo reads the posting or resume again.</span>
       </div>

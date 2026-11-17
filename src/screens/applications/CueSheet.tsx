@@ -10,6 +10,7 @@ import { useStore } from "../../data/store";
 import { STAGE_LABEL, boldParts, longDate, nextStage, timeText } from "./format";
 import { fileSlug } from "./forms";
 import { ErrorLine, useAppLink, withFeatured, type Featured } from "./parts";
+import BackLink from "../../components/BackLink";
 
 /** The sheet is paper: it keeps its own light colours whatever the app theme is. */
 const PAPER = {
@@ -168,7 +169,7 @@ function Cue({ app, extras }: Featured) {
       <style>{"@media print{.cue-noprint{display:none !important}.e-focus{padding:0 !important;background:#fff !important}.cue-sheet{box-shadow:none !important;padding:24px 0 !important;max-width:none !important}}"}</style>
       <div className="e-wrap" style={{ gap: "24px", width: "100%" }}>
         <header className="cue-noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-          <Link to={link("6-6-application-stages-and-night-before")} className="e-btn e-btn-ghost e-btn-sm" style={{ paddingLeft: "0" }}>{`‹ ${app.company}`}</Link>
+          <BackLink to={link("6-6-application-stages-and-night-before")} label={app.company} />
           <span className="e-meta">Keep it off camera. Beats, not a script.</span>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button type="button" className="e-btn e-btn-white e-btn-sm" disabled={!cue} onClick={() => void copy()}>Copy Markdown</button>

@@ -5,6 +5,7 @@ import { go } from "../../ui/router";
 import { isApp } from "../../data/real";
 import { pasteStart } from "./pasteStart";
 import { getParseFailure, pasteDraft, setBlankReview, setParsedDraft } from "./selection";
+import BackLink from "../../components/BackLink";
 
 /** After "Read it" when the engine could not turn the text into a story. The text the user pasted is kept. */
 export default function StoriesParseError() {
@@ -21,7 +22,7 @@ export default function StoriesParseError() {
   return (
     <AppShell nav="stories">
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to="5-1-stories" className="e-small" style={{ textDecoration: "none" }}>‹ Stories</Link>
+        <BackLink to="5-1-stories" label="Stories" />
         <h1 className="e-h1">Add a story</h1>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>

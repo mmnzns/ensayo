@@ -7,12 +7,12 @@ import { priorityFor, addStress, angleTargets, anglesToSave, branchChoices, chec
 import type { Story, StoryAngle, Target } from "../../data/types";
 import { TargetMark } from "../applications/TargetMark";
 import AppShell from "../../ui/AppShell";
-import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import { practiceStory } from "../../practice/live";
 import { liveContextOf } from "../../practice/quick";
 import { chosenStory } from "./selection";
 import StoryTabs from "./StoryTabs";
+import BackLink from "../../components/BackLink";
 
 export default function StoryAngles() {
   const store = useStore();
@@ -21,7 +21,7 @@ export default function StoryAngles() {
   if (!story) {
     return (
       <AppShell nav="stories">
-        <Link to="5-1-stories" className="e-small" style={{ textDecoration: "none" }}>‹ Stories</Link>
+        <BackLink to="5-1-stories" label="Stories" />
         <h1 className="e-h1">No story to show</h1>
         <span className="e-meta">Add a story and its angles will open here.</span>
       </AppShell>
@@ -94,7 +94,7 @@ function Angles({ story }: { story: Story }) {
     <AppShell nav="stories">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to="5-1-stories" className="e-small" style={{ textDecoration: "none" }}>‹ Stories</Link>
+          <BackLink to="5-1-stories" label="Stories" />
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
             <h1 className="e-h1">{story.title}</h1>
             {gaps.length > 0 ? gaps.map((g) => <span key={g} className="e-badge">{g}</span>) : <span className="e-badge e-badge-ok">Verified</span>}

@@ -5,7 +5,6 @@ import { RESTORE_IN_SETTINGS } from "../../data/trash";
 import { storyGaps, useStore } from "../../data/store";
 import type { Branch, Story as StoryType } from "../../data/types";
 import AppShell from "../../ui/AppShell";
-import Link from "../../ui/Link";
 import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import { go } from "../../ui/router";
 import { practiceStory } from "../../practice/live";
@@ -17,6 +16,7 @@ import Numbers, { type NumberRow } from "./Numbers";
 import { chosenStory } from "./selection";
 import StoryTabs from "./StoryTabs";
 import { useHashParam } from "../../data/selection";
+import BackLink from "../../components/BackLink";
 
 export default function Story() {
   const store = useStore();
@@ -25,7 +25,7 @@ export default function Story() {
   if (!story) {
     return (
       <AppShell nav="stories">
-        <Link to="5-1-stories" className="e-small" style={{ textDecoration: "none" }}>‹ Stories</Link>
+        <BackLink to="5-1-stories" label="Stories" />
         <h1 className="e-h1">No story to show</h1>
         <span className="e-meta">Add a story and it will open here.</span>
       </AppShell>
@@ -153,7 +153,7 @@ function StoryEditor({ story }: { story: StoryType }) {
     <AppShell nav="stories">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to="5-1-stories" className="e-small" style={{ textDecoration: "none" }}>‹ Stories</Link>
+          <BackLink to="5-1-stories" label="Stories" />
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
             <h1 className="e-h1">{story.title}</h1>
             {gaps.length > 0 ? gaps.map((g) => <span key={g} className="e-badge">{g}</span>) : <span className="e-badge e-badge-ok">Verified</span>}

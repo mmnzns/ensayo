@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import FocusShell from "../../ui/FocusShell";
-import Link from "../../ui/Link";
 import { useDirtyGuard } from "../../ui/dirtyGuard";
 import { go } from "../../ui/router";
 import { useActions } from "../../data/real";
@@ -10,6 +9,7 @@ import type { InterviewNote } from "../../data/screens/applications";
 import { STAGE_LABEL, shortDate } from "./format";
 import { defaultStage, draftOf, escOnSheet, hasUnsavedText, inputOf, isBlank, type Draft } from "./afterInterview";
 import { ErrorLine, useAppLink, useRun, withFeatured, type Featured } from "./parts";
+import BackLink from "../../components/BackLink";
 
 interface FormProps {
   company: string;
@@ -38,7 +38,7 @@ export function InterviewForm({ company, stageLabel, stageDate, note, draft, onC
     <FocusShell>
       <div className="e-wrap" style={{ gap: "24px", width: "100%", maxWidth: "720px", margin: "0 auto" }}>
         <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-          <Link to={backTo} className="e-btn e-btn-ghost e-btn-sm" style={{ paddingLeft: "0" }}>{`‹ ${company}`}</Link>
+          <BackLink to={backTo} label={company} />
           <span className="e-meta">{`${stageLabel}${stageDate ? ` · ${stageDate}` : ""}`}</span>
         </header>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -142,7 +142,7 @@ function After({ app, extras, now }: Featured) {
     return (
       <FocusShell>
         <div className="e-wrap" style={{ gap: "16px", maxWidth: "720px", margin: "0 auto" }}>
-          <Link to={back} className="e-btn e-btn-ghost e-btn-sm" style={{ paddingLeft: "0" }}>{`‹ ${app.company}`}</Link>
+          <BackLink to={back} label={app.company} />
           <span className="e-h2">No stage to write about yet</span>
           <span className="e-meta">Add the stages of this application first, then write down what happened after each interview.</span>
         </div>

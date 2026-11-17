@@ -21,6 +21,7 @@ import ResumeFileCard from "../../components/ResumeFileCard";
 import FitBanner from "./FitBanner";
 import TargetSelect from "../../components/TargetSelect";
 import { PICKER_HINT, stagesFor, stagesLine, suggestTarget, targetFromName } from "./targetPick";
+import BackLink from "../../components/BackLink";
 
 type ResumeChoice = "attach" | "other" | "none";
 interface DraftStage {
@@ -237,7 +238,7 @@ export default function NewApplication() {
     return (
       <AppShell nav="applications">
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
+          <BackLink to="6-1-applications" label="Applications" />
           <h1 className="e-h1">{`${saved.company} is saved`}</h1>
         </div>
         {made && <FitBanner app={made} />}
@@ -303,7 +304,7 @@ export default function NewApplication() {
   return (
     <AppShell nav="applications">
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
+        <BackLink to="6-1-applications" label="Applications" />
         <h1 className="e-h1">New application</h1>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>

@@ -9,6 +9,7 @@ import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import { pasteDraft, setBlankReview, setFromSetup, setParseFailure, setParsedDraft } from "./selection";
+import BackLink from "../../components/BackLink";
 
 export default function AddAStoryPaste() {
   const store = useStore();
@@ -57,7 +58,7 @@ export default function AddAStoryPaste() {
   return (
     <AppShell nav="stories">
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to="5-1-stories" className="e-small" style={{ textDecoration: "none" }}>‹ Stories</Link>
+        <BackLink to="5-1-stories" label="Stories" />
         <h1 className="e-h1">Add a story</h1>
       </div>
       <div style={{ display: "flex", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)", alignSelf: "flex-start" }} role="tablist">

@@ -121,3 +121,7 @@ a{color:var(--e-primary)}a:hover{color:var(--e-primary-dark)}
 :root[data-os="windows"] ::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--e-muted) 40%, transparent); border: 3px solid transparent; background-clip: content-box; border-radius: 999px; }
 :root[data-os="windows"] ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--e-muted) 65%, transparent); }
 :root[data-os="windows"] ::-webkit-scrollbar-corner { background: transparent; }
+.e-back{display:inline-flex;align-items:center;gap:6px;max-width:100%;box-sizing:border-box;min-height:32px;padding:4px 10px;margin:-4px 0 -4px -10px;border-radius:10px;font-size:0.9375rem;font-weight:600;color:var(--e-ink);text-decoration:none;vertical-align:middle}
+.e-back:hover{color:var(--e-primary);text-decoration:underline}
+.e-back:focus-visible{outline:2px solid var(--e-primary);outline-offset:2px}
+.e-back-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

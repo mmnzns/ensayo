@@ -14,6 +14,7 @@ import { useRecheck } from "./recheck";
 import type { ApplicationExtras } from "../../data/screens/applications";
 import type { Application, ApplicationStatus, ClosedReason } from "../../data/types";
 import { CLOSED_LABEL, STATUSES, STATUS_LABEL, nextStage, shortDate, statusStyle, STAGE_LABEL, whenText } from "./format";
+import BackLink from "../../components/BackLink";
 
 export { EMPTY_EXTRAS };
 
@@ -100,7 +101,7 @@ export function withFeatured(Inner: ComponentType<Featured>): ComponentType {
     if (!app) {
       return (
         <AppShell nav="applications">
-          <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
+          <BackLink to="6-1-applications" label="Applications" />
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
             <span className="e-h2">No application yet</span>
             <span className="e-meta">Add one and its resume, stages and night-before set will show up here.</span>
@@ -244,7 +245,7 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
   return (
     <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
+        <BackLink to="6-1-applications" label="Applications" />
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <h1 className="e-h1">{app.company}</h1>
           {app.startup && <span className="e-pill">Startup</span>}
