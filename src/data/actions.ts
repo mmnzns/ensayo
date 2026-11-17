@@ -3,6 +3,7 @@
 
 import type { AppBundle, AppPatch, NewApplicationInput, ProcessOutcome, QuestionInput, StageInput } from "./applicationCommands";
 import { STAGE_DECIDES, STAGE_LABEL } from "../screens/applications/format";
+import { stripPercent, withPercent } from "../screens/stories/percent";
 import type { ApplicationExtras, PrepQuestion } from "./screens/applications";
 import type { Application, ApplicationStatus, ClosedReason, Method, Profile, ProofPoint, StageId, Story } from "./types";
 
@@ -113,6 +114,11 @@ function parseTyped(label: string, value: string, checked: boolean): ProofPoint 
   };
 }
 
+/** A number whose unit is "%" holds the bare value ("about 40"); the sign is added when it is shown. */
+function tidyPercent(p: ProofPoint): ProofPoint {
+  return p.unit === "%" ? { ...p, before: stripPercent(p.before), after: stripPercent(p.after) } : p;
+}
+
 /** The proof points for a story after the user edited its Numbers list: existing numbers keep their fields and only
  *  change whether they are ticked; numbers typed in become new proof points. */
 export function proofPointsFromRows(rows: NumberRowLike[], original: ProofPoint[]): ProofPoint[] {
@@ -124,7 +130,7 @@ export function proofPointsFromRows(rows: NumberRowLike[], original: ProofPoint[
       continue;
     }
     const found = original.find((p) => p.label === r.id);
-    if (found) out.push({ ...found, verified: r.checked });
+    if (found) out.push({ ...tidyPercent(found), verified: r.checked });
   }
   return out;
 }
@@ -134,8 +140,8 @@ export function proofPointsFromRows(rows: NumberRowLike[], original: ProofPoint[
 export function cardHeadline(points: ProofPoint[], fallback: string): string {
   const p = points[0];
   if (!p) return fallback;
-  const u = p.unit === "%" ? "%" : "";
-  const value = p.before ? `${p.before}${u} → ${p.after}${u}` : p.after;
+  const pct = p.unit === "%";
+  const value = p.before ? (pct ? `${withPercent(p.before)} → ${withPercent(p.after)}` : `${p.before} → ${p.after}`) : pct ? withPercent(p.after) : p.after;
   return `${p.metric} ${value}`.trim();
 }
 

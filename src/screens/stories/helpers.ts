@@ -1,6 +1,7 @@
 import type { Method, ProofPoint, Story } from "../../data/types";
 import type { StoryFilter } from "../../data/screens/stories";
 import { storyGaps } from "../../data/store";
+import { withPercent } from "./percent";
 
 /** "Practiced 9 times", "Practiced once", "Not practiced yet". */
 export function practicedText(practiced: number): string {
@@ -23,10 +24,10 @@ export function numberText(p: Pick<ProofPoint, "before" | "after" | "unit">): st
   const { before, after, unit } = p;
   const pct = unit === "%";
   if (!before || before === "0") {
-    if (unit.startsWith("%")) return `${unit.slice(1).trim() ? unit.slice(1).trim() + " " : ""}${after}%`;
+    if (unit.startsWith("%")) return `${unit.slice(1).trim() ? unit.slice(1).trim() + " " : ""}${withPercent(after)}`;
     return unit && before === "0" ? `${after} ${unit}` : after;
   }
-  return pct ? `${before}% → ${after}%` : `${before} → ${after}`;
+  return pct ? `${withPercent(before)} → ${withPercent(after)}` : `${before} → ${after}`;
 }
 
 /** Stories that pass the chosen filter chip. */

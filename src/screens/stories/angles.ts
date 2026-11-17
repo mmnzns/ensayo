@@ -4,6 +4,7 @@
 
 import type { Branch, ProofPoint, Story, StoryAngle, Target } from "../../data/types";
 import { BRANCH_LABELS } from "./helpers";
+import { withPercent } from "./percent";
 
 // ---------- numbers said or written (a port of src-tauri/src/metrics/numbers.rs) ----------
 
@@ -195,7 +196,7 @@ export function numberProblem(targetName: string, check: NumberCheck): string {
 export function numberList(story: Pick<Story, "proof_points">): { label: string; value: string; verified: boolean }[] {
   return story.proof_points.map((p) => {
     const pct = p.unit === "%";
-    const value = p.before ? (pct ? `${p.before}% → ${p.after}%` : `${p.before} → ${p.after}`) : pct ? `${p.after}%` : p.after;
+    const value = p.before ? (pct ? `${withPercent(p.before)} → ${withPercent(p.after)}` : `${p.before} → ${p.after}`) : pct ? withPercent(p.after) : p.after;
     return { label: p.metric, value, verified: p.verified };
   });
 }

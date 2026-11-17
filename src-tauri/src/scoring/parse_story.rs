@@ -62,6 +62,16 @@ fn grounded(text: &str, source: &[f64]) -> bool {
     numbers::extract(&without_compounds(text)).iter().all(|n| source.iter().any(|s| numbers::same(*s, n.value)))
 }
 
+/// A number whose unit is "%" holds the bare value ("about 40"); the screen adds the sign. The model sometimes writes the
+/// sign into the value too, which showed as "about 40%%".
+fn bare_percent(unit: &str, v: String) -> String {
+    if unit.trim() == "%" {
+        v.trim().trim_end_matches('%').trim().to_string()
+    } else {
+        v
+    }
+}
+
 fn clean(s: &str) -> String {
     s.trim().replace(" \u{2014} ", ", ").replace('\u{2014}', ", ")
 }
@@ -77,7 +87,7 @@ pub fn parse_story(llm: &dyn Llm, raw_story: &str, employer_hint: &str, budget: 
     for p in raw.proof_points {
         let said = format!("{} {}", p.before, p.after);
         if grounded(&said, &source) {
-            proof_points.push(ProofPoint { label: p.label, metric: p.metric, before: p.before, after: p.after, unit: p.unit, approximate: p.approximate, verified: false });
+            proof_points.push(ProofPoint { label: p.label, metric: p.metric, before: bare_percent(&p.unit, p.before), after: bare_percent(&p.unit, p.after), unit: p.unit, approximate: p.approximate, verified: false });
         } else {
             dropped.push(format!("\"{}\" ({}) is not in your text, so it was left out.", p.metric, said.trim()));
         }
@@ -132,6 +142,19 @@ pub fn parse_story(llm: &dyn Llm, raw_story: &str, employer_hint: &str, budget: 
         angles: vec![],
     };
     Ok(ParsedStory { story, missing, dropped })
+}
+
+#[cfg(test)]
+mod percent_tests {
+    use super::*;
+
+    #[test]
+    fn a_percent_sign_in_the_value_is_dropped_when_the_unit_is_percent() {
+        assert_eq!(bare_percent("%", "about 40%".into()), "about 40");
+        assert_eq!(bare_percent("%", "80 %".into()), "80");
+        assert_eq!(bare_percent("%", "31".into()), "31");
+        assert_eq!(bare_percent("steps", "3%".into()), "3%");
+    }
 }
 
 #[cfg(test)]
