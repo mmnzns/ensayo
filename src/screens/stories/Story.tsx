@@ -10,6 +10,7 @@ import { differs, useDirtyGuard } from "../../ui/dirtyGuard";
 import { go } from "../../ui/router";
 import { practiceStory } from "../../practice/live";
 import { liveContextOf } from "../../practice/quick";
+import { NEEDS_TITLE, withIdentity } from "./storyEdit";
 import { BRANCH_LABELS, CORE_BRANCHES, numberText } from "./helpers";
 import { FIELD_HELP } from "./fieldHelp";
 import Numbers, { type NumberRow } from "./Numbers";
@@ -61,7 +62,11 @@ function StoryEditor({ story }: { story: StoryType }) {
   const { saveStory, deleteStory } = useActions();
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [noTitle, setNoTitle] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [title, setTitle] = useState(story.title);
+  const [company, setCompany] = useState(story.employer);
+  const [year, setYear] = useState(story.year ?? "");
   const [headline, setHeadline] = useState(story.direct_answer);
   const [context, setContext] = useState(story.context);
   const [approach, setApproach] = useState(story.approach);
@@ -76,7 +81,7 @@ function StoryEditor({ story }: { story: StoryType }) {
   const [angle, setAngle] = useState("");
 
   // Edits not yet saved: the fields against what was last saved (or opened with). A save moves the baseline.
-  const fields = { headline, context, approach, action, ownership, result, scale, numbers, added };
+  const fields = { title, company, year, headline, context, approach, action, ownership, result, scale, numbers, added };
   const baseline = useRef(fields);
   const { release } = useDirtyGuard(differs(fields, baseline.current));
 
@@ -92,10 +97,17 @@ function StoryEditor({ story }: { story: StoryType }) {
   const kinds = [...CORE_BRANCHES, ...branches.map((b) => b.kind).filter((k) => !CORE_BRANCHES.includes(k))].filter((k, i, all) => all.indexOf(k) === i) as Branch["kind"][];
 
   const saveChanges = async () => {
+    if (!title.trim()) {
+      setSaved(false);
+      setFailed(false);
+      setNoTitle(true);
+      return;
+    }
+    setNoTitle(false);
     const points = proofPointsFromRows(numbers, story.proof_points);
     try {
       await saveStory({
-        ...story,
+        ...withIdentity(story, { title, company, year }),
         direct_answer: headline.trim(),
         context: context.trim(),
         approach: approach.trim(),
@@ -153,6 +165,21 @@ function StoryEditor({ story }: { story: StoryType }) {
       <StoryTabs story={story} current="story" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
         <section className="e-card" style={{ flex: "999 1 520px", minWidth: "0", display: "flex", flexDirection: "column", gap: "20px" }}>
+          <Field id="ti" label="Title">
+            <input id="ti" className="e-input" value={title} onChange={(e) => { edited(setTitle)(e.target.value); setNoTitle(false); }} />
+          </Field>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+            <div style={{ flex: "1 1 240px" }}>
+              <Field id="co" label="Company">
+                <input id="co" className="e-input" value={company} onChange={(e) => edited(setCompany)(e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ flex: "0 0 140px" }}>
+              <Field id="yr" label="Year">
+                <input id="yr" className="e-input" inputMode="numeric" placeholder="2024" value={year} onChange={(e) => edited(setYear)(e.target.value)} />
+              </Field>
+            </div>
+          </div>
           <Field id="h" help={FIELD_HELP.headline} label="Headline">
             <textarea id="h" className="e-input" rows={2} value={headline} onChange={(e) => edited(setHeadline)(e.target.value)} />
           </Field>
@@ -191,6 +218,7 @@ function StoryEditor({ story }: { story: StoryType }) {
             )}
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               {saved && <span className="e-small" role="status">Saved</span>}
+              {noTitle && <span className="e-small" role="alert" style={{ color: "var(--e-warn-ink)" }}>{NEEDS_TITLE}</span>}
               {failed && <span className="e-small" role="alert" style={{ color: "var(--e-warn-ink)" }}>Could not save. Check your data folder and try again.</span>}
               <button type="button" className="e-btn e-btn-soft e-btn-sm" onClick={saveChanges}>Save changes</button>
             </div>

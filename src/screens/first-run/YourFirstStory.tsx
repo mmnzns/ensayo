@@ -53,6 +53,7 @@ function YourFirstStoryLive() {
     if (!raw.trim() || reading) return;
     pasteDraft.raw = raw;
     pasteDraft.company = "";
+    pasteDraft.title = "";
     setProblem("");
     setNoModel(false);
     setReading(true);

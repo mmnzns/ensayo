@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useActions } from "../../data/real";
 import { useStore } from "../../data/store";
+import { liveAvailable } from "../../practice/live";
 import { startQuickDrill } from "../../practice/quick";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
@@ -16,14 +17,15 @@ const WORDS = ["No", "One", "Two"];
 export default function AddAStoryReview() {
   const store = useStore();
   const { parsed, missingNotes, goodForOptions } = store.screens.stories;
-  const blank = isBlankReview();
+  // In the app, with no read to show (opened some other way), start blank rather than show the sample story.
+  const blank = isBlankReview() || (liveAvailable() && !getParsedDraft());
   // In setup the same screen is the last part of "Add one story": back goes to the setup step, saving goes on to the loop card.
   const setup = isFromSetup();
   // In the app the engine's reading of the pasted text; in the browser preview the sample parse.
   const draft = blank ? null : getParsedDraft();
   const review = draft ? draftToReview(draft.story, draft.missing, draft.dropped) : null;
 
-  const first = review ?? (blank ? null : { ...parsed, company: pasteDraft.company.trim() || parsed.company, numbers: parsed.numbers.map((n) => ({ ...n, checked: false })) });
+  const first = review ?? (blank ? null : { ...parsed, title: pasteDraft.title.trim() || parsed.title, company: pasteDraft.company.trim() || parsed.company, numbers: parsed.numbers.map((n) => ({ ...n, checked: false })) });
   const [title, setTitle] = useState(first?.title ?? "");
   const [company, setCompany] = useState(first?.company ?? "");
   const [headline, setHeadline] = useState(first?.headline ?? "");
@@ -148,7 +150,7 @@ export default function AddAStoryReview() {
             {ownershipMissing && <span className="e-badge">Missing</span>}
           </div>
           <span className="e-meta">{FIELD_HELP.ownership}</span>
-          <input id="ow" className="e-input" placeholder="What was yours, and who else helped?" value={ownership} onChange={(e) => setOwnership(e.target.value)} />
+          <textarea id="ow" className="e-input" rows={2} placeholder="What was yours, and who else helped?" value={ownership} onChange={(e) => setOwnership(e.target.value)} />
         </div>
         <div className="e-field">
           <label htmlFor="r">What changed</label>

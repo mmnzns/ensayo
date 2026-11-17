@@ -21,7 +21,9 @@ describe("Story numbers", () => {
     ];
     const html = renderToString(<Numbers rows={rows} setRows={noop} />);
     expect(count(html, 'aria-label="Remove this number"')).toBe(2);
-    expect(count(html, 'aria-label="What the number is"')).toBe(1);
+    // A saved number is editable too: both rows have a label and a value to type in.
+    expect(count(html, 'aria-label="What the number is"')).toBe(2);
+    expect(count(html, 'aria-label="The number"')).toBe(2);
   });
 });
 
