@@ -1,6 +1,6 @@
 [package]
 name = "ensayo"
-version = "0.4.1"
+version = "0.4.2"
 description = "Interview rehearsal app"
 authors = ["Miguel Monzones"]
 license = "MIT"
