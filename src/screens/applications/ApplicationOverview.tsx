@@ -10,6 +10,7 @@ import { useStore } from "../../data/store";
 import { STAGE_LABEL, STATUS_LABEL, nextStage, shortDate, whenText } from "./format";
 import { keptWords } from "./forms";
 import FitBanner from "./FitBanner";
+import { RecheckButton } from "./RecheckButton";
 import { FIT_LABEL, fitClass, fitRows } from "./targetPick";
 import { TargetMark } from "./TargetMark";
 import { AppHeader, AppTabs, ErrorLine, Notice, useAppLink, useRun, withFeatured, type Featured } from "./parts";
@@ -221,7 +222,7 @@ function Overview({ app, extras, now }: Featured) {
           )}
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <span className="e-h3">The posting</span>
-            <span className="e-small">{extras.postingText ? `Pasted ${shortDate(extras.postingPastedOn)}. Reading it again never overwrites what you edited.` : "No posting text saved. Add it from Edit details to read it again."}</span>
+            <span className="e-small">{extras.postingText ? `Pasted ${shortDate(extras.postingPastedOn)}. Recheck never overwrites what you edited.` : "No posting text saved. Add it from Edit details to read it again."}</span>
             {lastRead && lastRead.result.changed.length > 0 && (
               <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "2px" }} aria-label="What changed">
                 {lastRead.result.changed.map((c, i) => (
@@ -233,7 +234,7 @@ function Overview({ app, extras, now }: Featured) {
             {kept.length > 0 && <span className="e-small">{`Kept what you edited: ${kept.join(", ")}.`}</span>}
             {extras.postingText && (
               <span style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-                <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={reading.busy} onClick={() => void readPosting()}>{reading.busy ? "Reading" : "Read the posting again"}</button>
+                <RecheckButton busy={reading.busy} onClick={() => void readPosting()} />
                 <ErrorLine error={reading.error} />
               </span>
             )}
