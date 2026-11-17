@@ -110,7 +110,7 @@ function NightBeforeCard({ app, stage, stages, lock, draft, onDraft, onDone, onP
       {!stage.at && <span className="e-small">This stage has no date yet. Add one and Ensayo marks the night before.</span>}
       <div className="e-soft" style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
         {LOCK}
-        <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
           <span className="e-h3">Your opener</span>
           {open("opener") ? (
             <textarea className="e-input" rows={3} aria-label="Your opener" placeholder="A few short beats, one on each line" value={opener} onChange={(e) => setOpener(e.target.value)} />
@@ -122,7 +122,7 @@ function NightBeforeCard({ app, stage, stages, lock, draft, onDraft, onDone, onP
       </div>
       <div className="e-soft" style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
         {LOCK}
-        <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
           <span className="e-h3">One power story</span>
           {open("power") ? (
             stories.length === 0 ? (
@@ -143,7 +143,7 @@ function NightBeforeCard({ app, stage, stages, lock, draft, onDraft, onDone, onP
       </div>
       <div className="e-soft" style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
         {LOCK}
-        <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
           <span className="e-h3">Two questions to ask</span>
           {open("questions") ? (
             <span style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -341,8 +341,8 @@ function StagesTab({ app, extras, now }: Featured) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
         <section className="e-card" style={{ flex: "1 1 380px", minWidth: "0", display: "flex", flexDirection: "column", gap: "0" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", paddingBottom: "12px" }}>
-            <span className="e-h2">Stages</span>
-            <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-pressed={editStages} onClick={() => { setEditStages(!editStages); setRenaming(null); setConfirmRemove(null); setError(""); }}>{editStages ? "Done" : "Edit stages"}</button>
+            <span className="e-h2" style={{ minWidth: "0" }}>Stages</span>
+            <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} aria-pressed={editStages} onClick={() => { setEditStages(!editStages); setRenaming(null); setConfirmRemove(null); setError(""); }}>{editStages ? "Done" : "Edit stages"}</button>
           </div>
           <ErrorLine error={error} />
           {confirmRemove && (
@@ -370,7 +370,7 @@ function StagesTab({ app, extras, now }: Featured) {
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
                   </span>
-                  <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
                     {name ?? <span className="e-h3">{label}</span>}
                     <span className="e-small">{s.decides}</span>
                     <span className="e-meta">{`${when ? `${shortDate(when)} · ` : ""}done · ${practiceText(s)}`}</span>
@@ -384,12 +384,12 @@ function StagesTab({ app, extras, now }: Featured) {
               return (
                 <div key={s.id} style={{ display: "flex", gap: "16px", padding: "16px 0", background: "var(--e-ground)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px", ...border }}>
                   <span style={{ width: "28px", height: "28px", borderRadius: "50%", boxShadow: "inset 0 0 0 3px var(--e-win)", flex: "none" }} />
-                  <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-                      {name ?? <span className="e-h3">{label}</span>}
+                  <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", minWidth: "0" }}>
+                      {name ?? <span className="e-h3" style={{ minWidth: "0", overflowWrap: "anywhere" }}>{label}</span>}
                       {editing?.id !== s.id && (
                         <>
-                          <span className="e-badge">{when ? whenText(when, now) : "No date yet"}</span>
+                          <span className="e-badge" style={{ flex: "none" }}>{when ? whenText(when, now) : "No date yet"}</span>
                           <button type="button" style={linkBtn} onClick={() => startEdit(s)}>{when ? "Change" : "Add date"}</button>
                         </>
                       )}
@@ -407,7 +407,7 @@ function StagesTab({ app, extras, now }: Featured) {
             return (
               <div key={s.id} style={{ display: "flex", gap: "16px", padding: "16px 0", ...border }}>
                 <span style={{ width: "28px", height: "28px", borderRadius: "50%", boxShadow: "inset 0 0 0 2px var(--e-line)", flex: "none" }} />
-                <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
                   {name ?? (
                     <span className="e-h3">
                       {label}
@@ -432,7 +432,7 @@ function StagesTab({ app, extras, now }: Featured) {
                   {after(s)}
                   {controls(s, i)}
                 </div>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-expanded={practiceOpen === s.id} onClick={() => setPracticeOpen(practiceOpen === s.id ? null : s.id)}>Practice</button>
+                <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} aria-expanded={practiceOpen === s.id} onClick={() => setPracticeOpen(practiceOpen === s.id ? null : s.id)}>Practice</button>
               </div>
             );
           })}

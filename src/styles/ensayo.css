@@ -125,3 +125,6 @@ a{color:var(--e-primary)}a:hover{color:var(--e-primary-dark)}
 .e-back:hover{color:var(--e-primary);text-decoration:underline}
 .e-back:focus-visible{outline:2px solid var(--e-primary);outline-offset:2px}
 .e-back-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Text people type (names, titles, notes) wraps instead of pushing past its card. */
+.e-h1,.e-h2,.e-h3,.e-body,.e-meta,.e-small,.e-label{overflow-wrap:anywhere}
+.e-pill,.e-badge{max-width:100%;min-width:0;box-sizing:border-box;overflow-wrap:anywhere}

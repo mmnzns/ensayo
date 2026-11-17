@@ -60,7 +60,7 @@ export default function Applications() {
   return (
     <AppShell nav="applications">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "0" }}>
           <h1 className="e-h1">Applications</h1>
           <span className="e-meta">Everything you've applied to. Attach the resume you sent, and practice each one stage by stage.</span>
         </div>
@@ -99,22 +99,22 @@ export default function Applications() {
           </div>
           {tab === "active" && upNext && (
             <div className="e-card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "20px", color: "var(--e-ink)", boxShadow: "inset 0 0 0 2px var(--e-primary)" }}>
-              <Link to={withParams("6-3-application-overview", { app: upNext.application.id })} style={{ flex: "1 1 260px", display: "flex", flexDirection: "column", gap: "6px", textDecoration: "none", color: "var(--e-ink)" }}>
+              <Link to={withParams("6-3-application-overview", { app: upNext.application.id })} style={{ flex: "1 1 260px", minWidth: "0", display: "flex", flexDirection: "column", gap: "6px", textDecoration: "none", color: "var(--e-ink)" }}>
                 <span className="e-label">Next up</span>
                 <span className="e-h2">{`${upNext.application.company} · ${upNext.stage.label || STAGE_LABEL[upNext.stage.stage]}`}</span>
                 <span className="e-meta">{`${whenText(upNext.stage.at, now)} · ${practicedHere > 0 ? `${practicedHere} answers practiced for this stage` : "not practiced yet"}`}</span>
               </Link>
-              <span className="e-badge">{inDays(upNext.stage.at, now)}</span>
-              <Link to={withParams("2-3-start-a-session", { app: upNext.application.id, stage: upNext.stage.id })} className="e-btn e-btn-primary e-btn-sm">Practice this stage</Link>
+              <span className="e-badge" style={{ flex: "none" }}>{inDays(upNext.stage.at, now)}</span>
+              <Link to={withParams("2-3-start-a-session", { app: upNext.application.id, stage: upNext.stage.id })} className="e-btn e-btn-primary e-btn-sm" style={{ flex: "none" }}>Practice this stage</Link>
             </div>
           )}
           <section className="e-card" style={{ padding: "8px 28px" }}>
             <div className="e-rowline" style={{ padding: "14px 0" }}>
-              <span className="e-label" style={{ flex: "2 1 0" }}>Company</span>
-              <span className="e-label" style={{ flex: "1 1 0" }}>Status</span>
-              <span className="e-label" style={{ flex: "1.3 1 0" }}>Sent</span>
-              <span className="e-label" style={{ flex: "1.5 1 0" }}>{tab === "active" ? "Next" : "How it ended"}</span>
-              <span className="e-label" style={{ flex: "0.8 1 0", textAlign: "right" }}>Practice</span>
+              <span className="e-label" style={{ flex: "2 1 0", minWidth: "0" }}>Company</span>
+              <span className="e-label" style={{ flex: "1 1 0", minWidth: "0" }}>Status</span>
+              <span className="e-label" style={{ flex: "1.3 1 0", minWidth: "0" }}>Sent</span>
+              <span className="e-label" style={{ flex: "1.5 1 0", minWidth: "0" }}>{tab === "active" ? "Next" : "How it ended"}</span>
+              <span className="e-label" style={{ flex: "0.8 1 0", minWidth: "0", textAlign: "right" }}>Practice</span>
             </div>
             {rows.length === 0 && (
               <div style={{ padding: "28px 0" }}>
@@ -128,7 +128,7 @@ export default function Applications() {
               return (
                 <Link key={a.id} to={withParams("6-3-application-overview", { app: a.id })} className="e-rowline" style={{ padding: "18px 0", textDecoration: "none", color: "var(--e-ink)", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
                   <span style={{ flex: "2 1 0", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <span style={{ fontWeight: "700", fontSize: "16px" }}>
+                    <span style={{ fontWeight: "700", fontSize: "16px", overflowWrap: "anywhere" }}>
                       {a.company}
                       {a.startup && (
                         <>
@@ -143,15 +143,15 @@ export default function Applications() {
                         </>
                       )}
                     </span>
-                    <span className="e-small" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px" }}>
-                      {a.role}
+                    <span className="e-small" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", minWidth: "0" }}>
+                      <span title={a.role} style={{ minWidth: "0", overflowWrap: "anywhere" }}>{a.role}</span>
                       {withMarker && filed && <TargetLabel target={filed} />}
                     </span>
                   </span>
-                  <span style={{ flex: "1 1 0" }}>
+                  <span style={{ flex: "1 1 0", minWidth: "0" }}>
                     <span className="e-pill" style={{ fontWeight: "600", ...statusStyle(a.status) }}>{STATUS_LABEL[a.status]}</span>
                   </span>
-                  <span style={{ flex: "1.3 1 0", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <span style={{ flex: "1.3 1 0", minWidth: "0", overflowWrap: "anywhere", display: "flex", flexDirection: "column", gap: "4px" }}>
                     <span style={{ fontSize: "14px" }}>{`Applied ${shortDate(a.applied_on)}`}</span>
                     {a.resume ? (
                       <span className="e-small" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
@@ -162,11 +162,11 @@ export default function Applications() {
                       <span className="e-small" style={{ color: "var(--e-warn-ink)" }}>No resume attached</span>
                     )}
                   </span>
-                  <span style={{ flex: "1.5 1 0", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <span style={{ flex: "1.5 1 0", minWidth: "0", overflowWrap: "anywhere", display: "flex", flexDirection: "column", gap: "4px" }}>
                     <span style={{ fontSize: "14px", fontWeight: "600" }}>{nx.title}</span>
                     <span className="e-small">{nx.sub}</span>
                   </span>
-                  <span className="e-small" style={{ flex: "0.8 1 0", textAlign: "right" }}>{answersText(a.answersPracticed)}</span>
+                  <span className="e-small" style={{ flex: "0.8 1 0", minWidth: "0", textAlign: "right" }}>{answersText(a.answersPracticed)}</span>
                 </Link>
               );
             })}

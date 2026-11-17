@@ -60,7 +60,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
   return (
     <AppShell nav="home">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "0" }}>
           <span className="e-meta">{longDate(now)}</span>
           <h1 className="e-h1">
             {greeting(now)}, {profile.name}
@@ -95,7 +95,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "stretch" }}>
         <section className="e-card e-glow" style={{ flex: "999 1 480px", minWidth: "0", padding: "36px", display: "flex", flexDirection: "column", gap: "18px" }}>
           <span className="e-label">Next up</span>
-          <h2 className="e-h1" style={{ fontSize: "28px" }}>{practiceTitle}</h2>
+          <h2 className="e-h1" style={{ fontSize: "28px", overflowWrap: "anywhere" }}>{practiceTitle}</h2>
           <p className="e-meta" style={{ margin: "0" }}>{practiceText}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "8px" }}>
             <Link to="3-1-practice-interviewer-asking" className="e-btn e-btn-primary e-btn-big" onClick={() => {
@@ -127,13 +127,13 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
         {next && nextAt && days !== null && (
           <section className="e-card" style={{ flex: "1 1 300px", minWidth: "0", display: "flex", flexDirection: "column", gap: "14px" }}>
             <span className="e-label">Next interview</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span className="e-h2">{next.application.company}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" }}>
+              <span className="e-h2" style={{ overflowWrap: "anywhere" }}>{next.application.company}</span>
               <span className="e-meta">
                 {next.stage.label} · {next.when.hasTime ? dayAndTime(nextAt) : weekdayName(nextAt)}
               </span>
             </div>
-            <span className="e-badge" style={{ alignSelf: "flex-start" }}>{inDays(days)}</span>
+            <span className="e-badge" style={{ alignSelf: "flex-start", maxWidth: "100%" }}>{inDays(days)}</span>
             <p className="e-meta" style={{ margin: "0" }}>
               {days >= 2
                 ? `${days === 2 ? "Tomorrow evening" : "The evening before"}, lock your opener, one story and two questions.`
@@ -169,9 +169,9 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
             const pct = of > 0 ? Math.min(100, Math.round((got / of) * 100)) : 0;
             return (
               <div key={stat.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                  <span className="e-h3">{habits.find((h) => h.id === stat.id)?.label ?? stat.id}</span>
-                  <span className="e-meta">{habitCount(got, of)}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", minWidth: "0" }}>
+                  <span className="e-h3" style={{ minWidth: "0", overflowWrap: "anywhere" }}>{habits.find((h) => h.id === stat.id)?.label ?? stat.id}</span>
+                  <span className="e-meta" style={{ flex: "none" }}>{habitCount(got, of)}</span>
                 </div>
                 <div className="e-bar" aria-label={`${got} of ${of}`}>
                   <span style={{ width: `${pct}%` }} />
@@ -197,7 +197,7 @@ export function HomeView({ offline = false }: { offline?: boolean }) {
       {last && (
         <section className="e-card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "20px" }}>
           <span className="e-label" style={{ flex: "none" }}>Last session</span>
-          <span className="e-h3" style={{ flex: "1 1 260px" }}>
+          <span className="e-h3" style={{ flex: "1 1 260px", minWidth: "0", overflowWrap: "anywhere" }}>
             {last.when} · {last.mode === "mock" ? "Mock" : "Drill"} · {last.stageLabel} stage
           </span>
           <span className="e-win" style={{ fontSize: "18px" }}>{last.win}</span>

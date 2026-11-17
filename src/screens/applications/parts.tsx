@@ -132,7 +132,7 @@ const TABS: { id: TabId; to: string; label: string }[] = [
 export function AppTabs({ current }: { current: TabId }) {
   const link = useAppLink();
   return (
-    <nav style={{ display: "flex", flexWrap: "wrap", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)", alignSelf: "flex-start" }} aria-label="Application sections">
+    <nav style={{ display: "flex", flexWrap: "wrap", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)", alignSelf: "flex-start", maxWidth: "100%", minWidth: "0", boxSizing: "border-box" }} aria-label="Application sections">
       {TABS.map((t) =>
         t.id === current ? (
           <Link key={t.id} to={link(t.to)} aria-current="page" className="e-btn e-btn-sm" style={{ background: "var(--e-tint)", color: "var(--e-ink)" }}>
@@ -244,11 +244,11 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
   const nextBit = next ? ` · next: ${next.label || STAGE_LABEL[next.stage]}, ${next.at ? whenText(next.at, now) : "date to come"}` : "";
   return (
     <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "0", flex: "1 1 320px" }}>
         <BackLink to="6-1-applications" label="Applications" />
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <h1 className="e-h1">{app.company}</h1>
-          {app.startup && <span className="e-pill">Startup</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: "0" }}>
+          <h1 className="e-h1" style={{ minWidth: "0", overflowWrap: "anywhere" }}>{app.company}</h1>
+          {app.startup && <span className="e-pill" style={{ flex: "none" }}>Startup</span>}
           <StatusMenu app={app} />
           <HeaderRecheck app={app} />
         </div>
@@ -265,9 +265,9 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
         </span>
         {children}
       </div>
-      <div style={{ display: "flex", gap: "10px" }}>
-        <Link to={link("6-4-application-edit-details")} className="e-btn e-btn-line">Edit details</Link>
-        <Link to={link("2-3-start-a-session", { stage: next?.id })} className="e-btn e-btn-primary">Practice the next stage</Link>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", flex: "none", maxWidth: "100%" }}>
+        <Link to={link("6-4-application-edit-details")} className="e-btn e-btn-line" style={{ flex: "none" }}>Edit details</Link>
+        <Link to={link("2-3-start-a-session", { stage: next?.id })} className="e-btn e-btn-primary" style={{ flex: "none" }}>Practice the next stage</Link>
       </div>
     </header>
   );

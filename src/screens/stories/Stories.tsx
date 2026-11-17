@@ -48,17 +48,17 @@ export default function Stories() {
           const gaps = storyGaps(s);
           const here = priorityFor(store.activeTarget, s.id);
           return (
-            <Link key={s.id} to="5-4-story" onClick={() => chooseStory(s.id)} className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", textDecoration: "none", color: "var(--e-ink)", ...(here === "hide" ? { opacity: 0.65 } : {}) }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                <span className="e-small">{s.employer}</span>
-                <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: "6px" }}>
+            <Link key={s.id} to="5-4-story" onClick={() => chooseStory(s.id)} className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", minWidth: "0", textDecoration: "none", color: "var(--e-ink)", ...(here === "hide" ? { opacity: 0.65 } : {}) }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", minWidth: "0" }}>
+                <span className="e-small" title={s.employer} style={{ flex: "1 1 0", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.employer}</span>
+                <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: "6px", flex: "0 1 auto", minWidth: "0", maxWidth: "70%" }}>
                   {here === "pin" && <span className="e-badge" title={`Pinned for ${store.activeTarget?.name}`} style={{ background: "var(--e-tint)", color: "var(--e-primary-dark)" }}>Pinned</span>}
                   {here === "hide" && <span className="e-badge" title={`Hidden for ${store.activeTarget?.name}`}>Hidden</span>}
                   {gaps.length > 0 ? gaps.map((g) => <span key={g} className="e-badge">{g}</span>) : s.verified ? <span className="e-badge e-badge-ok">Verified</span> : null}
                 </span>
               </div>
-              <span className="e-h3">{s.title}</span>
-              {s.headline && <span className="e-pill" style={{ alignSelf: "flex-start", fontWeight: "600", ...(s.headline.includes("→") ? { background: "var(--e-tint)", color: "var(--e-primary-dark)" } : { background: "var(--e-ground)" }) }}>{s.headline}</span>}
+              <span className="e-h3" style={{ overflowWrap: "anywhere" }}>{s.title}</span>
+              {s.headline && <span className="e-pill" title={s.headline} style={{ alignSelf: "flex-start", fontWeight: "600", ...(s.headline.includes("→") ? { background: "var(--e-tint)", color: "var(--e-primary-dark)" } : { background: "var(--e-ground)" }) }}>{s.headline}</span>}
               <span className="e-small" style={{ marginTop: "auto" }}>{usageText(s.usage)}</span>
             </Link>
           );

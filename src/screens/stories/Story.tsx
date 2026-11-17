@@ -152,7 +152,7 @@ function StoryEditor({ story }: { story: StoryType }) {
   return (
     <AppShell nav="stories">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "0", flex: "1 1 320px" }}>
           <BackLink to="5-1-stories" label="Stories" />
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
             <h1 className="e-h1">{story.title}</h1>
@@ -160,7 +160,7 @@ function StoryEditor({ story }: { story: StoryType }) {
           </div>
           <span className="e-meta">{story.year ? `${story.employer} · ${story.year}` : story.employer}</span>
         </div>
-        <button type="button" className="e-btn e-btn-primary" onClick={() => practiceStory(story, liveContextOf(store), go)}>Practice this story</button>
+        <button type="button" className="e-btn e-btn-primary" style={{ flex: "none" }} onClick={() => practiceStory(story, liveContextOf(store), go)}>Practice this story</button>
       </header>
       <StoryTabs story={story} current="story" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
@@ -216,7 +216,7 @@ function StoryEditor({ story }: { story: StoryType }) {
             ) : (
               <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={() => setConfirmDelete(true)}>Delete story</button>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "12px", minWidth: "0" }}>
               {saved && <span className="e-small" role="status">Saved</span>}
               {noTitle && <span className="e-small" role="alert" style={{ color: "var(--e-warn-ink)" }}>{NEEDS_TITLE}</span>}
               {failed && <span className="e-small" role="alert" style={{ color: "var(--e-warn-ink)" }}>Could not save. Check your data folder and try again.</span>}
@@ -228,13 +228,13 @@ function StoryEditor({ story }: { story: StoryType }) {
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <span className="e-label">How you've told it</span>
             {story.usage.practiced > 0 ? (
-              <div style={{ display: "flex", gap: "20px" }}>
-                <div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px 20px", minWidth: "0" }}>
+                <div style={{ minWidth: "0" }}>
                   <div className="e-h2">{story.usage.practiced}</div>
                   <span className="e-small">{story.usage.practiced === 1 ? "time practiced" : "times practiced"}</span>
                 </div>
                 {story.usage.saidNumber !== undefined && (
-                  <div>
+                  <div style={{ minWidth: "0" }}>
                     <div className="e-h2">{story.usage.saidNumber} of {story.usage.practiced}</div>
                     <span className="e-small">said the number</span>
                   </div>
