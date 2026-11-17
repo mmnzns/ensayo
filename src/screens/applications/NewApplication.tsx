@@ -16,14 +16,19 @@ import { pickResumePath } from "../../ui/pickFile";
 import { fileNameOf } from "../settings/targetForms";
 import { bytesOf, contactFromText, isResumeFile, joinAt, moveItem, splitAt } from "./forms";
 import { ErrorLine, Notice, useRun } from "./parts";
+import StageRow, { uniqueStageLabel } from "../../components/StageRow";
+import ResumeFileCard from "../../components/ResumeFileCard";
 import FitBanner from "./FitBanner";
-import TargetPicker from "./TargetPicker";
-import { PICKER_HINT, stagesFor, stagesLine, suggestTarget } from "./targetPick";
+import TargetSelect from "../../components/TargetSelect";
+import { PICKER_HINT, stagesFor, stagesLine, suggestTarget, targetFromName } from "./targetPick";
+import BackLink from "../../components/BackLink";
 
 type ResumeChoice = "attach" | "other" | "none";
-interface StageRow {
+interface DraftStage {
   key: number;
   stage: StageId;
+  /** The name shown. Empty means the plain name of the stage; a repeated kind gets "Technical 2" and so on. */
+  label: string;
   date: string;
   time: string;
 }
@@ -38,9 +43,7 @@ interface Saved {
   notes: string[];
 }
 
-const dateInput = { width: "150px", minHeight: "40px", padding: "8px 10px", fontSize: "14px" } as const;
-const timeInput = { width: "110px", minHeight: "40px", padding: "8px 10px", fontSize: "14px" } as const;
-const smallBtn = { minHeight: "40px", padding: "8px" } as const;
+const rowLabel = (s: DraftStage) => s.label || STAGE_LABEL[s.stage];
 
 export default function NewApplication() {
   const store = useStore();
@@ -71,8 +74,8 @@ export default function NewApplication() {
   const [targetId, setTargetId] = useState(() => suggestTarget(draft.role, draft.postingText, store.targets, activeId) ?? activeId ?? "");
   const [targetTouched, setTargetTouched] = useState(false);
   const [stagesTouched, setStagesTouched] = useState(draft.stages.length > 0);
-  const firstRows: StageRow[] = (draft.stages.length ? draft.stages : stagesFor(targetFor(targetId)).map((stage) => ({ stage, at: "" }))).map((s, i) => ({ key: i, stage: s.stage, ...splitAt(s.at) }));
-  const [stages, setStages] = useState<StageRow[]>(firstRows);
+  const firstRows: DraftStage[] = (draft.stages.length ? draft.stages : stagesFor(targetFor(targetId)).map((stage) => ({ stage, at: "" }))).map((s, i) => ({ key: i, stage: s.stage, label: (s as { label?: string }).label ?? "", ...splitAt(s.at) }));
+  const [stages, setStages] = useState<DraftStage[]>(firstRows);
   const [nextKey, setNextKey] = useState(firstRows.length);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [paste, setPaste] = useState("");
@@ -90,7 +93,7 @@ export default function NewApplication() {
   /** The stages follow the target until the person changes the list themselves. */
   const seedStages = (id: string) => {
     if (stagesTouched) return;
-    const rows = stagesFor(targetFor(id)).map((stage, i) => ({ key: nextKey + i, stage, date: "", time: "" }));
+    const rows = stagesFor(targetFor(id)).map((stage, i) => ({ key: nextKey + i, stage, label: "", date: "", time: "" }));
     setStages(rows);
     setNextKey(nextKey + rows.length);
   };
@@ -144,10 +147,10 @@ export default function NewApplication() {
   };
   const addStage = (stage: StageId) => {
     setStagesTouched(true);
-    setStages([...stages, { key: nextKey, stage, date: "", time: "" }]);
+    setStages([...stages, { key: nextKey, stage, label: uniqueStageLabel(stage, stages.map(rowLabel)), date: "", time: "" }]);
     setNextKey(nextKey + 1);
   };
-  const setStageAt = (key: number, patch: Partial<StageRow>) => {
+  const setStageAt = (key: number, patch: Partial<DraftStage>) => {
     setStagesTouched(true);
     setStages(stages.map((x) => (x.key === key ? { ...x, ...patch } : x)));
   };
@@ -168,7 +171,7 @@ export default function NewApplication() {
           source,
           contacts: contactFromText(contact),
           startup,
-          stages: stages.map((s) => ({ stage: s.stage, ...(joinAt(s.date, s.time) ? { at: joinAt(s.date, s.time) as string } : {}) })),
+          stages: stages.map((s) => ({ stage: s.stage, ...(s.label ? { label: s.label } : {}), ...(joinAt(s.date, s.time) ? { at: joinAt(s.date, s.time) as string } : {}) })),
           ...(targetId ? { targetId } : {}),
         },
         posting,
@@ -221,7 +224,7 @@ export default function NewApplication() {
     setTargetId(fresh);
     setTargetTouched(false);
     setStagesTouched(false);
-    const rows = stagesFor(targetFor(fresh)).map((stage, i) => ({ key: nextKey + i, stage, date: "", time: "" }));
+    const rows = stagesFor(targetFor(fresh)).map((stage, i) => ({ key: nextKey + i, stage, label: "", date: "", time: "" }));
     setStages(rows);
     setNextKey(nextKey + rows.length);
     setError("");
@@ -235,7 +238,7 @@ export default function NewApplication() {
     return (
       <AppShell nav="applications">
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
+          <BackLink to="6-1-applications" label="Applications" />
           <h1 className="e-h1">{`${saved.company} is saved`}</h1>
         </div>
         {made && <FitBanner app={made} />}
@@ -301,7 +304,7 @@ export default function NewApplication() {
   return (
     <AppShell nav="applications">
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
+        <BackLink to="6-1-applications" label="Applications" />
         <h1 className="e-h1">New application</h1>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
@@ -319,7 +322,7 @@ export default function NewApplication() {
           {liveTargets.length > 0 && (
             <div className="e-field">
               <span style={{ fontSize: "14px", fontWeight: "600" }}>Target</span>
-              <TargetPicker targets={store.targets} activeId={activeId} value={targetId} onChange={pickTarget} />
+              <TargetSelect targets={store.targets} activeId={activeId} value={targetId} onChange={pickTarget} onCreate={async (name) => (await actions.saveTarget(targetFromName(name, role, store.targets))).id} />
               <span className="e-small">{PICKER_HINT}</span>
             </div>
           )}
@@ -352,16 +355,7 @@ export default function NewApplication() {
             <ErrorLine error={fileError} />
             <input ref={fileInput} type="file" accept=".pdf,.doc,.docx" style={{ display: "none" }} onChange={(e) => takeFile(e.target.files?.[0])} aria-label="Choose the resume file" />
             {choice === "attach" && !choosing && fileName && (
-              <div className="e-soft" style={{ display: "flex", alignItems: "center", gap: "16px", background: "var(--e-surface)", boxShadow: "inset 0 0 0 1.5px var(--e-primary)" }}>
-                <span style={{ width: "44px", height: "52px", borderRadius: "8px", background: "var(--e-tint)", color: "var(--e-primary-dark)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: "11px", fontWeight: "700" }}>
-                  {fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "DOC"}
-                </span>
-                <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-                  <span style={{ fontWeight: "600" }}>{fileName}</span>
-                  <span className="e-small">{filePages ? `${filePages} pages · ` : ""}read on this computer after you save</span>
-                </span>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChoosing(true)}>Replace</button>
-              </div>
+              <ResumeFileCard fileName={fileName} pages={filePages} onReplace={() => setChoosing(true)} />
             )}
             {choice === "attach" && choosing && (
               <div
@@ -375,9 +369,9 @@ export default function NewApplication() {
               >
                 <span className="e-h3">Drop the PDF or Word file here</span>
                 <span className="e-small">Or pick it from your computer.</span>
-                <span style={{ display: "flex", gap: "8px" }}>
+                <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px", maxWidth: "100%" }}>
                   <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => void chooseFile()}>Choose a file</button>
-                  {fileName && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChoosing(false)}>Keep {fileName}</button>}
+                  {fileName && <button type="button" className="e-btn e-btn-ghost e-btn-sm" title={fileName} style={{ maxWidth: "100%", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }} onClick={() => setChoosing(false)}>Keep {fileName}</button>}
                 </span>
               </div>
             )}
@@ -436,16 +430,19 @@ export default function NewApplication() {
           <span className="e-meta">{stagesLine(targetFor(targetId), draft.stages.length > 0)}</span>
           {stages.length === 0 && <span className="e-small" style={{ padding: "12px 0" }}>No stages yet. Add the ones you know about below.</span>}
           {stages.map((s, i) => (
-            <div key={s.key} className="e-rowline" style={{ padding: "12px 0" }}>
-              <span style={{ display: "flex", flexDirection: "column" }}>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label={`Move ${STAGE_LABEL[s.stage]} up`} disabled={i === 0} onClick={() => move(i, -1)} style={{ minHeight: "20px", padding: "0 6px", fontSize: "11px", lineHeight: 1 }}>▲</button>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label={`Move ${STAGE_LABEL[s.stage]} down`} disabled={i === stages.length - 1} onClick={() => move(i, 1)} style={{ minHeight: "20px", padding: "0 6px", fontSize: "11px", lineHeight: 1 }}>▼</button>
-              </span>
-              <span style={{ flex: "1", fontWeight: "600" }}>{STAGE_LABEL[s.stage]}</span>
-              <input type="date" className="e-input" style={dateInput} value={s.date} aria-label={`${STAGE_LABEL[s.stage]} date`} onChange={(e) => setStageAt(s.key, { date: e.target.value })} />
-              <input type="time" className="e-input" style={timeInput} value={s.time} aria-label={`${STAGE_LABEL[s.stage]} time`} onChange={(e) => setStageAt(s.key, { time: e.target.value })} />
-              <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label={`Remove ${STAGE_LABEL[s.stage]}`} style={smallBtn} onClick={() => setStages(stages.filter((x) => x.key !== s.key))}>✕</button>
-            </div>
+            <StageRow
+              key={s.key}
+              label={rowLabel(s)}
+              name={<span style={{ fontWeight: "600", minWidth: 0, overflowWrap: "break-word" }}>{rowLabel(s)}</span>}
+              date={s.date}
+              time={s.time}
+              onDate={(v) => setStageAt(s.key, { date: v })}
+              onTime={(v) => setStageAt(s.key, { time: v })}
+              onUp={i === 0 ? null : () => move(i, -1)}
+              onDown={i === stages.length - 1 ? null : () => move(i, 1)}
+              onRemove={() => setStages(stages.filter((x) => x.key !== s.key))}
+              last={i === stages.length - 1}
+            />
           ))}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", paddingTop: "6px" }}>
             <span className="e-small" style={{ width: "100%" }}>Add a stage</span>

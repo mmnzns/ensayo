@@ -41,18 +41,18 @@ describe("the application list and targets", () => {
 });
 
 describe("new application and edit details", () => {
-  it("picks a target, says it is a suggestion, and starts the stages from the target", () => {
+  it("shows the suggested target in a dropdown, says it is a suggestion, and starts the stages from the target", () => {
     const text = strip(render("6-2-new-application"));
-    expect(text).toContain("Target B2C lifecycle B2B marketing ops");
+    expect(text).toContain("Target B2C lifecycle ▾");
     expect(text).toContain("Suggested from the role you typed. Once Ensayo reads the posting, it tells you if another target fits better.");
   });
   it("starts the stages from the target in the app, with no sample data", () => {
     const blank = { ...mockStore, screens: { ...mockStore.screens, applications: { ...mockStore.screens.applications, newApplication: { ...mockStore.screens.applications.newApplication, company: "", role: "", postingText: "", stages: [] } } } };
     expect(strip(render("6-2-new-application", blank))).toContain("Started from B2C lifecycle's usual stages.");
   });
-  it("edit details has the target picker", () => {
+  it("edit details has the target dropdown", () => {
     const text = strip(render("6-4-application-edit-details"));
-    expect(text).toContain("Target B2C lifecycle B2B marketing ops");
+    expect(text).toContain("Target B2C lifecycle ▾");
   });
 });
 

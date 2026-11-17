@@ -21,15 +21,20 @@ type Asking = "recordings" | "all" | null;
 
 export default function SettingsPrivacy() {
   const { privacy } = useStore().screens.settings;
-  const [retention, setRetention] = useState(privacy.retention);
+  // In the app nothing is assumed: these stay empty until the real values load. The browser preview starts from the sample.
+  const preview = !isApp();
+  const [retention, setRetention] = useState<string | null>(preview ? privacy.retention : null);
   const [folderNote, setFolderNote] = useState<"show" | "move" | null>(null);
   const [asking, setAsking] = useState<Asking>(null);
   const [typed, setTyped] = useState("");
-  const [recordingsMb, setRecordingsMb] = useState(privacy.recordingsMb);
+  const [recordingsMb, setRecordingsMb] = useState<number | null>(preview ? privacy.recordingsMb : null);
   const [allDeleted, setAllDeleted] = useState(false);
   // In the app the list follows the engine really chosen in Settings > AI; in the browser preview it follows the sample setup.
-  const [setup, setSetup] = useState(privacy.setup);
-  const rows = leavesRows(setup);
+  const [aiPart, setAiPart] = useState<ReturnType<typeof privacySetup> | null>(null);
+  const [speechName, setSpeechName] = useState<string | null>(null);
+  const [setupFailed, setSetupFailed] = useState(false);
+  const setup = preview ? privacy.setup : aiPart ? { speech: speechName ?? "Speech to text", speechLocal: true, ...aiPart } : null;
+  const rows = setup ? leavesRows(setup) : [];
   const app = isApp();
   const later = useLater();
   // The app's own folder, the new folder being typed, and what the last try said.
@@ -48,7 +53,7 @@ export default function SettingsPrivacy() {
   }, []);
   useEffect(() => {
     if (!isApp()) return;
-    void invoke<AiView>("ai_settings").then((v) => setSetup((s) => ({ ...s, ...privacySetup(v) })), () => {});
+    void invoke<AiView>("ai_settings").then((v) => setAiPart(privacySetup(v)), () => setSetupFailed(true));
   }, []);
   useEffect(() => {
     if (!app) return;
@@ -58,7 +63,7 @@ export default function SettingsPrivacy() {
     void invoke<SpeechModelEntry[]>("speech_models").then((models) => {
       const id = inUseModel(models, readPrefs().speech.model);
       const name = models.find((m) => m.id === id)?.name;
-      if (name) setSetup((s) => ({ ...s, speech: name, speechLocal: true }));
+      if (name) setSpeechName(name);
     }, () => {});
   }, [app]);
   const chooseRetention = (label: string) => {
@@ -125,6 +130,7 @@ export default function SettingsPrivacy() {
             <span className="e-h2">What leaves this computer</span>
             <span className="e-meta">Based on your current setup. Change engines to change this list.</span>
           </div>
+          {!setup && <span className="e-meta">{setupFailed ? "Ensayo couldn't read your setup just now. Open Settings, AI to see it." : "Reading your setup."}</span>}
           {rows.map((r, i) => (
             <div key={r.title} className="e-rowline" style={i === rows.length - 1 ? { borderBottom: "none" } : undefined}>
               <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -140,7 +146,8 @@ export default function SettingsPrivacy() {
             <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
               Recordings<span className="e-small">Transcripts and scores stay after audio is removed.</span>
             </span>
-            <select className="e-input" style={{ width: "220px" }} aria-label="Keep recordings" value={retention} onChange={(e) => chooseRetention(e.target.value)}>
+            <select className="e-input" style={{ width: "220px" }} aria-label="Keep recordings" value={retention ?? ""} disabled={retention === null} onChange={(e) => chooseRetention(e.target.value)}>
+              {retention === null && <option value="">Loading…</option>}
               {privacy.retentionOptions.map((o) => (
                 <option key={o}>{o}</option>
               ))}
@@ -181,7 +188,7 @@ export default function SettingsPrivacy() {
           <span className="e-h3">Delete</span>
           <div className="e-rowline" style={asking === "recordings" ? { flexWrap: "wrap" } : undefined}>
             <span style={{ flex: "1" }}>
-              Delete all recordings now <span className="e-small">· {formatSize(recordingsMb)}</span>
+              Delete all recordings now {recordingsMb !== null && <span className="e-small">· {formatSize(recordingsMb)}</span>}
             </span>
             {asking === "recordings" ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -190,7 +197,7 @@ export default function SettingsPrivacy() {
                 <button type="button" className="e-btn e-btn-danger e-btn-sm" onClick={() => void deleteRecordings()}>Yes, delete</button>
               </span>
             ) : (
-              <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={recordingsMb === 0} onClick={() => { setAsking("recordings"); setTyped(""); }}>Delete recordings</button>
+              <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={!recordingsMb} onClick={() => { setAsking("recordings"); setTyped(""); }}>Delete recordings</button>
             )}
           </div>
           <div className="e-rowline" style={{ borderBottom: "none", flexWrap: "wrap" }}>

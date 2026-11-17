@@ -1,12 +1,19 @@
 // Draft generated from Design/screens/html/4-1-mock-in-progress.html by scripts/html-to-tsx.mjs. Data wiring and interactions are added by hand.
+import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
+import NoMockRunning from "./NoMockRunning";
 import FocusShell from "../../ui/FocusShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
 import Wordmark from "../../ui/Wordmark";
 import { stageWithKind, useSpaceKey } from "./speak";
 
+/** The browser preview's sample Mock. The app starts a Mock on the practice screens, so this one is never real. */
 export default function MockInProgress() {
+  return isApp() ? <NoMockRunning /> : <SampleMockInProgress />;
+}
+
+function SampleMockInProgress() {
   const { applications, screens } = useStore();
   const mock = screens.results.mock;
   const app = applications.find((a) => a.id === mock.applicationId);

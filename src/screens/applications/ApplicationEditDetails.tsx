@@ -14,14 +14,14 @@ import { filledContacts, isoDay, moveItem, splitAt, stageInputs, type StageDraft
 import { ErrorLine, useRun, withFeatured, type Featured } from "./parts";
 import { useStore } from "../../data/store";
 import { applicationTarget } from "../../data/targets";
-import TargetPicker from "./TargetPicker";
-import { asksToRebuild } from "./targetPick";
+import TargetSelect from "../../components/TargetSelect";
+import StageRow, { uniqueStageLabel } from "../../components/StageRow";
+import { asksToRebuild, targetFromName } from "./targetPick";
+import BackLink from "../../components/BackLink";
 
-interface StageRow extends StageDraft {
+interface EditStage extends StageDraft {
   movedFrom?: string;
 }
-
-const small = { minHeight: "40px", padding: "8px 10px", fontSize: "14px" } as const;
 
 /** What a field said before the person changed it, in the words the screen uses. */
 function wasText(field: string, was: string): string {
@@ -56,7 +56,7 @@ function EditDetails({ app, extras }: Featured) {
   const [editPosting, setEditPosting] = useState(false);
   const [postingChanged, setPostingChanged] = useState(false);
   const [readAgain, setReadAgain] = useState(true);
-  const [stages, setStages] = useState<StageRow[]>(
+  const [stages, setStages] = useState<EditStage[]>(
     [...app.process]
       .sort((a, b) => a.order - b.order)
       .map((s) => ({
@@ -80,10 +80,10 @@ function EditDetails({ app, extras }: Featured) {
   const { release } = useDirtyGuard(differs(fields, opened));
 
   const setContact = (i: number, patch: Partial<Contact>) => setContacts(contacts.map((c, j) => (j === i ? { ...c, ...patch } : c)));
-  const setStage = (key: string, patch: Partial<StageRow>) => setStages(stages.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+  const setStage = (key: string, patch: Partial<EditStage>) => setStages(stages.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   const move = (i: number, d: -1 | 1) => setStages(moveItem(stages, i, d));
   const addStage = (stage: StageId) => {
-    setStages([...stages, { key: `new_${nextKey}`, stage, label: STAGE_LABEL[stage], date: "", time: "" }]);
+    setStages([...stages, { key: `new_${nextKey}`, stage, label: uniqueStageLabel(stage, stages.map((x) => x.label)), date: "", time: "" }]);
     setNextKey(nextKey + 1);
   };
   const pastedOn = shortDate(extras.postingPastedOn);
@@ -151,7 +151,7 @@ function EditDetails({ app, extras }: Featured) {
   return (
     <AppShell nav="applications">
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to={overview} className="e-small" style={{ textDecoration: "none" }}>{`‹ ${app.company}`}</Link>
+        <BackLink to={overview} label={app.company} />
         <h1 className="e-h1">Edit details</h1>
         <span className="e-meta">Fix anything that was read wrong or has changed. What you edit here is never overwritten when Ensayo reads the posting or resume again.</span>
       </div>
@@ -172,7 +172,7 @@ function EditDetails({ app, extras }: Featured) {
               </div>
               <div className="e-field" style={{ gridColumn: "1 / -1" }}>
                 <span style={{ fontSize: "14px", fontWeight: "600" }}>Target</span>
-                <TargetPicker targets={store.targets} activeId={store.activeTarget?.id} value={targetId} onChange={setTargetId} keep={filedId} />
+                <TargetSelect targets={store.targets} activeId={store.activeTarget?.id} value={targetId} onChange={setTargetId} keep={filedId} onCreate={async (name) => (await actions.saveTarget(targetFromName(name, role, store.targets))).id} />
                 {askRebuild && (
                   <label className="e-soft" style={{ display: "flex", alignItems: "flex-start", gap: "12px", cursor: "pointer", padding: "14px 18px" }}>
                     <input type="checkbox" className="e-check" checked={rebuild} onChange={(e) => setRebuild(e.target.checked)} style={{ marginTop: "2px" }} />
@@ -286,17 +286,20 @@ function EditDetails({ app, extras }: Featured) {
           <span className="e-meta" style={{ paddingBottom: "6px" }}>Rename, reorder and change dates as things move.</span>
           {stages.length === 0 && <span className="e-small" style={{ padding: "12px 0" }}>No stages. Add the ones you know about below.</span>}
           {stages.map((s, i) => (
-            <div key={s.key} className="e-rowline" style={{ padding: "12px 0", flexWrap: "wrap", ...(i === stages.length - 1 ? { borderBottom: "none" } : {}) }}>
-              <span style={{ display: "flex", flexDirection: "column" }}>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label={`Move ${s.label} up`} disabled={i === 0} onClick={() => move(i, -1)} style={{ minHeight: "20px", padding: "0 6px", fontSize: "11px", lineHeight: 1 }}>▲</button>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label={`Move ${s.label} down`} disabled={i === stages.length - 1} onClick={() => move(i, 1)} style={{ minHeight: "20px", padding: "0 6px", fontSize: "11px", lineHeight: 1 }}>▼</button>
-              </span>
-              <input className="e-input" style={{ flex: "1 1 160px", minHeight: "40px", padding: "8px 10px", fontSize: "15px", fontWeight: "600" }} value={s.label} aria-label="Stage name" onChange={(e) => setStage(s.key, { label: e.target.value })} />
-              <input type="date" className="e-input" style={{ ...small, width: "150px" }} value={s.date} aria-label={`${s.label} date`} onChange={(e) => setStage(s.key, { date: e.target.value, movedFrom: undefined })} />
-              <input type="time" className="e-input" style={{ ...small, width: "110px" }} value={s.time} aria-label={`${s.label} time`} onChange={(e) => setStage(s.key, { time: e.target.value })} />
-              <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label={`Remove ${s.label}`} style={{ minHeight: "40px", padding: "8px" }} onClick={() => setStages(stages.filter((x) => x.key !== s.key))}>✕</button>
-              {s.movedFrom && <span className="e-small" style={{ flex: "1 1 100%", paddingLeft: "26px", color: "var(--e-warn-ink)" }}>{`Moved from ${s.movedFrom}. Your night-before reminder moved with it.`}</span>}
-            </div>
+            <StageRow
+              key={s.key}
+              label={s.label}
+              last={i === stages.length - 1}
+              name={<input className="e-input" style={{ flex: "1", minWidth: 0, minHeight: "40px", padding: "8px 10px", fontSize: "15px", fontWeight: "600" }} value={s.label} aria-label="Stage name" onChange={(e) => setStage(s.key, { label: e.target.value })} />}
+              date={s.date}
+              time={s.time}
+              onDate={(v) => setStage(s.key, { date: v, movedFrom: undefined })}
+              onTime={(v) => setStage(s.key, { time: v })}
+              onUp={i === 0 ? null : () => move(i, -1)}
+              onDown={i === stages.length - 1 ? null : () => move(i, 1)}
+              onRemove={() => setStages(stages.filter((x) => x.key !== s.key))}
+              note={s.movedFrom ? <span className="e-small" style={{ color: "var(--e-warn-ink)" }}>{`Moved from ${s.movedFrom}. Your night-before reminder moved with it.`}</span> : undefined}
+            />
           ))}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", paddingTop: "8px" }}>
             <span className="e-small" style={{ width: "100%" }}>Add a stage</span>

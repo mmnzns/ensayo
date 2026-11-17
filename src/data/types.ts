@@ -132,6 +132,8 @@ export interface Story {
   year?: string;
   /** One per target that has its own way in; targets without one use `headline`. */
   angles?: StoryAngle[];
+  /** When the story last changed (RFC 3339), set by the app. Missing on a story saved before this existed. */
+  updated_at?: string;
 }
 
 export interface Method {

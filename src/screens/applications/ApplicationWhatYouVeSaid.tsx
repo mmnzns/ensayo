@@ -42,9 +42,9 @@ function Said({ app, now }: Featured) {
           const num = g.differs ? numberIn(g.differs.quote) : undefined;
           const live = g.claims.filter((c) => !g.struck.has(c.id));
           return (
-            <div key={g.subject} className="e-rowline" style={{ padding: "18px 0", alignItems: "flex-start", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last ? { borderBottom: "none" } : {}) }}>
-              <span className="e-h3" style={{ width: "180px", flex: "none" }}>{g.subject}</span>
-              <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div key={g.subject} className="e-rowline" style={{ padding: "18px 0", alignItems: "flex-start", flexWrap: "wrap", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last ? { borderBottom: "none" } : {}) }}>
+              <span className="e-h3" style={{ flex: "0 1 180px", minWidth: "0" }}>{g.subject}</span>
+              <div style={{ flex: "1 1 220px", minWidth: "0", display: "flex", flexDirection: "column", gap: "6px" }}>
                 {g.claims.map((c) => {
                   const struck = g.struck.has(c.id);
                   const where = c.status === "updated" && c.note ? `${c.stage_label} · ${c.note.charAt(0).toLowerCase()}${c.note.slice(1)}` : c.stage_label;
@@ -88,10 +88,10 @@ function Said({ app, now }: Featured) {
                 {differs && g.differs?.note && !isEditing && <span className="e-meta" style={{ color: "var(--e-warn-ink)" }}>{g.differs.note}</span>}
               </div>
               {differs && !isEditing && g.differs && (
-                <button type="button" className="e-btn e-btn-white e-btn-sm" disabled={busy} onClick={() => void run(() => actions.markClaimCurrent(app.id, (g.differs as { id: string }).id))}>{num ? `It's ${num} now` : "Mark as updated"}</button>
+                <button type="button" className="e-btn e-btn-white e-btn-sm" style={{ flex: "none" }} disabled={busy} onClick={() => void run(() => actions.markClaimCurrent(app.id, (g.differs as { id: string }).id))}>{num ? `It's ${num} now` : "Mark as updated"}</button>
               )}
               {!differs && <MatchChip status={g.status} text={matchText(g.status, live.map((c) => c.stage_label))} />}{" "}
-              <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label="Edit" onClick={() => { setEditing(isEditing ? null : g.subject); setError(""); }}>{isEditing ? "Done" : "Edit"}</button>
+              <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} aria-label="Edit" onClick={() => { setEditing(isEditing ? null : g.subject); setError(""); }}>{isEditing ? "Done" : "Edit"}</button>
             </div>
           );
         })}

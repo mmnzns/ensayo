@@ -64,6 +64,10 @@
 .e-chip-on{background:var(--e-tint);box-shadow:inset 0 0 0 2px var(--e-primary);font-weight:600}
 .e-pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-size:0.8125rem;font-weight:500;background:var(--e-surface);color:var(--e-muted)}
 .e-badge{display:inline-flex;align-items:center;gap:6px;font-size:0.75rem;font-weight:600;border-radius:999px;padding:4px 10px;background:var(--e-highlight);color:var(--e-warn-ink)}
+/* A pill you can press: same shape as the status pill, outlined like a line button. */
+.e-pill-line{background:transparent;box-shadow:inset 0 0 0 1.5px var(--e-line)}
+.e-pill-line:not(:disabled):hover{background:var(--e-surface);box-shadow:inset 0 0 0 1.5px var(--e-muted)}
+.e-pill-line:focus-visible{outline:2px solid var(--e-primary);outline-offset:2px}
 .e-badge-ok{background:var(--e-ok-tint);color:var(--e-ok)}
 .e-field{display:flex;flex-direction:column;gap:8px}
 .e-field label{font-size:0.875rem;font-weight:600;color:var(--e-ink)}
@@ -121,3 +125,11 @@ a{color:var(--e-primary)}a:hover{color:var(--e-primary-dark)}
 :root[data-os="windows"] ::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--e-muted) 40%, transparent); border: 3px solid transparent; background-clip: content-box; border-radius: 999px; }
 :root[data-os="windows"] ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--e-muted) 65%, transparent); }
 :root[data-os="windows"] ::-webkit-scrollbar-corner { background: transparent; }
+.e-back{display:inline-flex;align-items:center;gap:6px;max-width:100%;box-sizing:border-box;min-height:32px;padding:4px 10px;margin:-4px 0 -4px -10px;border-radius:10px;font-size:0.9375rem;font-weight:600;color:var(--e-ink);text-decoration:none;vertical-align:middle}
+.e-back:hover{color:var(--e-primary);text-decoration:underline}
+.e-back:focus-visible{outline:2px solid var(--e-primary);outline-offset:2px}
+.e-back-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Text people type (names, titles, notes) wraps instead of pushing past its card. */
+.e-h1,.e-h2,.e-h3,.e-body,.e-meta,.e-small,.e-label{overflow-wrap:break-word}
+.e-pill,.e-badge{max-width:100%;min-width:0;box-sizing:border-box;overflow-wrap:break-word}
+/* Rows: a text column gets a real basis (flex: 1 1 220px, min-width 0) and the row wraps, so status and buttons drop to the next line instead of squeezing the text. */

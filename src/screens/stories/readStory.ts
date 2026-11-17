@@ -17,8 +17,8 @@ export interface ReadDeps {
 
 const parseStory = (raw: string, employerHint: string) => invoke<ParsedDraft>("parse_story", { raw, employerHint });
 
-/** Reads the story. Stopped: back to the form with nothing changed and no banner. Failed: the error page. Done: the review screen, unless the person already left. */
-export async function readStory(raw: string, employerHint: string, deps: ReadDeps): Promise<ReadEnd> {
+/** Reads the story. Stopped: back to the form with nothing changed and no banner. Failed: the error page. Done: the review screen (with the person's own title, if they gave one), unless the person already left. */
+export async function readStory(raw: string, employerHint: string, deps: ReadDeps, titleHint = ""): Promise<ReadEnd> {
   let draft: ParsedDraft;
   try {
     draft = await (deps.parse ?? parseStory)(raw, employerHint);
@@ -30,7 +30,9 @@ export async function readStory(raw: string, employerHint: string, deps: ReadDep
     return "failed";
   }
   if (!deps.alive()) return "gone";
-  deps.setDraft(draft);
+  // A title the person typed is kept as it is; only a blank one is left for the read to suggest.
+  const given = titleHint.trim();
+  deps.setDraft(given ? { ...draft, story: { ...draft.story, title: given } } : draft);
   deps.goTo("5-3-add-a-story-review");
   return "reviewed";
 }

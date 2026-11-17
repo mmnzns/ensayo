@@ -3,6 +3,8 @@
 
 import type { AppBundle, AppPatch, NewApplicationInput, ProcessOutcome, QuestionInput, StageInput } from "./applicationCommands";
 import { STAGE_DECIDES, STAGE_LABEL } from "../screens/applications/format";
+import { numberText } from "../screens/stories/helpers";
+import { stripPercent, withPercent } from "../screens/stories/percent";
 import type { ApplicationExtras, PrepQuestion } from "./screens/applications";
 import type { Application, ApplicationStatus, ClosedReason, Method, Profile, ProofPoint, StageId, Story } from "./types";
 
@@ -101,20 +103,27 @@ export function slug(text: string): string {
 function parseTyped(label: string, value: string, checked: boolean): ProofPoint {
   const parts = value.split(/→|->|=>/).map((p) => p.trim());
   const [before, after] = parts.length > 1 ? [parts[0], parts[1]] : ["", parts[0] ?? ""];
-  const percent = before !== "" && before.endsWith("%") && after.endsWith("%");
+  // "31% → 44%" and a lone "40%" are percents; the sign is kept out of the stored value and added when shown.
+  const percent = after.endsWith("%") && (before === "" || before.endsWith("%"));
   return {
     label: slug(label),
     metric: label.trim(),
-    before: percent ? before.slice(0, -1) : before,
-    after: percent ? after.slice(0, -1) : after,
+    before: percent ? stripPercent(before) : before,
+    after: percent ? stripPercent(after) : after,
     unit: percent ? "%" : "",
     approximate: false,
     verified: checked,
   };
 }
 
-/** The proof points for a story after the user edited its Numbers list: existing numbers keep their fields and only
- *  change whether they are ticked; numbers typed in become new proof points. */
+/** A number whose unit is "%" holds the bare value ("about 40"); the sign is added when it is shown. */
+function tidyPercent(p: ProofPoint): ProofPoint {
+  return p.unit === "%" ? { ...p, before: stripPercent(p.before), after: stripPercent(p.after) } : p;
+}
+
+/** The proof points for a story after the user edited its Numbers list. Every row can be edited: a row left as it was
+ *  keeps all its fields, an edited value is read again ("31% → 44%" stays a before and after), and numbers typed in
+ *  become new proof points. */
 export function proofPointsFromRows(rows: NumberRowLike[], original: ProofPoint[]): ProofPoint[] {
   const out: ProofPoint[] = [];
   for (const r of rows) {
@@ -124,7 +133,16 @@ export function proofPointsFromRows(rows: NumberRowLike[], original: ProofPoint[
       continue;
     }
     const found = original.find((p) => p.label === r.id);
-    if (found) out.push({ ...found, verified: r.checked });
+    if (!found) continue;
+    if (!r.label.trim() && !r.value.trim()) continue;
+    if (r.value.trim() === numberText(found)) {
+      // The value was not touched (or only the name was): every other field stays exactly as it was.
+      out.push({ ...tidyPercent(found), metric: r.label.trim() || found.metric, verified: r.checked });
+    } else {
+      // The value was edited: read it again, keeping the id and a unit (like "steps") it still fits.
+      const t = parseTyped(r.label || found.metric, r.value, r.checked);
+      out.push({ ...t, label: found.label, unit: t.unit || (found.unit === "%" ? "" : found.unit) });
+    }
   }
   return out;
 }
@@ -134,8 +152,8 @@ export function proofPointsFromRows(rows: NumberRowLike[], original: ProofPoint[
 export function cardHeadline(points: ProofPoint[], fallback: string): string {
   const p = points[0];
   if (!p) return fallback;
-  const u = p.unit === "%" ? "%" : "";
-  const value = p.before ? `${p.before}${u} → ${p.after}${u}` : p.after;
+  const pct = p.unit === "%";
+  const value = p.before ? (pct ? `${withPercent(p.before)} → ${withPercent(p.after)}` : `${p.before} → ${p.after}`) : pct ? withPercent(p.after) : p.after;
   return `${p.metric} ${value}`.trim();
 }
 

@@ -170,19 +170,19 @@ function ResumeTab({ app, now }: Featured) {
                 <span style={{ height: "6px", width: "80%", borderRadius: "3px", background: "var(--e-line)" }} />
                 <span style={{ height: "6px", width: "84%", borderRadius: "3px", background: "var(--e-line)" }} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                <span style={{ fontWeight: "600" }}>{resume.fileName}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" }}>
+                <span title={resume.fileName} style={{ fontWeight: "600", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{resume.fileName}</span>
                 <span className="e-small">
                   {[`Sent ${shortDate(resume.sentOn)}`, resume.readOn ? `read ${resumeDate(resume.readOn)}` : "not read yet", resume.pages ? `${resume.pages} ${resume.pages === 1 ? "page" : "pages"}` : ""].filter(Boolean).join(" · ")}
                 </span>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={fileRun.busy} onClick={() => void open()}>Open</button>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={fileRun.busy} onClick={() => setChooser(true)}>Replace</button>
-                {!unread && !needsPaste && <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={fileRun.busy} onClick={() => void readIt()}>Read it again</button>}
+                <button type="button" className="e-btn e-btn-line e-btn-sm" style={{ flex: "none" }} disabled={fileRun.busy} onClick={() => void open()}>Open</button>
+                <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} disabled={fileRun.busy} onClick={() => setChooser(true)}>Replace</button>
+                {!unread && !needsPaste && <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} disabled={fileRun.busy} onClick={() => void readIt()}>Read it again</button>}
               </div>
               {reading && <Working steps={["resume"]} current="resume" kind={store.engine.kind} />}
-              {opened && !fileRun.error && <span className="e-small" role="status">{`Opened ${resume.fileName} in your viewer.`}</span>}
+              {opened && !fileRun.error && <span className="e-small" role="status" style={{ overflowWrap: "anywhere" }}>{`Opened ${resume.fileName} in your viewer.`}</span>}
               {unread && (
                 <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <span className="e-meta">Attached. Ensayo hasn't read it yet. It reads the file on this computer, and sends the text to your AI engine only if you set one up.</span>
@@ -277,13 +277,13 @@ function ResumeTab({ app, now }: Featured) {
             {mustSay.map((m, i) => {
               const notYet = /^not said/i.test(m.said);
               return (
-                <div key={m.id} className="e-soft" style={{ display: "flex", alignItems: "flex-start", gap: "14px", padding: "16px 20px", ...(notYet ? { background: "var(--e-highlight)" } : {}) }}>
+                <div key={m.id} className="e-soft" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "8px 14px", padding: "16px 20px", ...(notYet ? { background: "var(--e-highlight)" } : {}) }}>
                   <span className="e-h3" style={{ color: notYet ? "var(--e-warn-ink)" : "var(--e-primary-dark)" }}>{i + 1}</span>
-                  <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <span style={{ flex: "1 1 200px", minWidth: "0", display: "flex", flexDirection: "column", gap: "2px" }}>
                     <span className="e-h3" style={{ fontSize: "16px" }}>{m.text}</span>
                     <span className="e-small">{m.resume}</span>
                   </span>
-                  <span className={notYet ? "e-badge" : "e-badge e-badge-ok"}>{m.said}</span>
+                  <span className={notYet ? "e-badge" : "e-badge e-badge-ok"} style={{ flex: "0 1 auto", maxWidth: "100%" }}>{m.said}</span>
                 </div>
               );
             })}
@@ -302,8 +302,8 @@ function ResumeTab({ app, now }: Featured) {
               const isEditing = editing?.id === c.id;
               return (
                 <div key={c.id} style={{ display: "flex", flexDirection: "column" }}>
-                  <div className="e-rowline" style={{ padding: "14px 0", alignItems: "flex-start", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last && !differs && !adding ? { borderBottom: "none" } : {}) }}>
-                    <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <div className="e-rowline" style={{ padding: "14px 0", alignItems: "flex-start", flexWrap: "wrap", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last && !differs && !adding ? { borderBottom: "none" } : {}) }}>
+                    <span style={{ flex: "1 1 220px", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
                       {isEditing ? (
                         <input className="e-input" style={{ minHeight: "40px", padding: "8px 10px", fontSize: "15px" }} aria-label={`${c.subject} text`} value={editing.value} onChange={(e) => setEditing({ id: c.id, value: e.target.value })} />
                       ) : (
@@ -313,20 +313,20 @@ function ResumeTab({ app, now }: Featured) {
                     </span>
                     {isEditing ? (
                       <>
-                        <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={lineRun.busy || !editing.value.trim()} onClick={() => void saveLine()}>Save</button>
-                        <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setEditing(null)}>Cancel</button>
-                        <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={lineRun.busy} onClick={() => void lineRun.run(() => actions.removeClaim(app.id, c.id))}>Remove</button>
+                        <button type="button" className="e-btn e-btn-line e-btn-sm" style={{ flex: "none" }} disabled={lineRun.busy || !editing.value.trim()} onClick={() => void saveLine()}>Save</button>
+                        <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} onClick={() => setEditing(null)}>Cancel</button>
+                        <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} disabled={lineRun.busy} onClick={() => void lineRun.run(() => actions.removeClaim(app.id, c.id))}>Remove</button>
                       </>
                     ) : (
                       <>
                         <MatchChip status={c.status} text={c.note ?? MATCH_LABEL[c.status as keyof typeof MATCH_LABEL] ?? c.status} />
                         {differs && (
-                          <button type="button" className="e-btn e-btn-white e-btn-sm" aria-expanded={!!w?.open} onClick={() => setWhich({ ...which, [c.id]: { ...w, open: !w?.open } })}>
+                          <button type="button" className="e-btn e-btn-white e-btn-sm" style={{ flex: "none" }} aria-expanded={!!w?.open} onClick={() => setWhich({ ...which, [c.id]: { ...w, open: !w?.open } })}>
                             Which is right?
                           </button>
                         )}
-                        {c.status === "not_in_bank" && <Link to="5-2-add-a-story-paste" className="e-btn e-btn-ghost e-btn-sm">Add</Link>}
-                        <button type="button" className="e-btn e-btn-ghost e-btn-sm" aria-label="Edit" onClick={() => setEditing({ id: c.id, value: c.value })}>Edit</button>
+                        {c.status === "not_in_bank" && <Link to="5-2-add-a-story-paste" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }}>Add</Link>}
+                        <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} aria-label="Edit" onClick={() => setEditing({ id: c.id, value: c.value })}>Edit</button>
                       </>
                     )}
                   </div>
@@ -374,12 +374,12 @@ function ResumeTab({ app, now }: Featured) {
             <ErrorLine error={sugRun.error} />
             {suggestions.length === 0 && <span className="e-meta">No bullets to suggest yet.</span>}
             {suggestions.map((sg, i) => (
-              <div key={i} className="e-rowline" style={{ padding: "12px 0", ...(i === suggestions.length - 1 ? { borderBottom: "none" } : {}) }}>
-                <span style={{ flex: "1" }}>{sg.text}</span>
-                <span className="e-badge">{sg.gap}</span>
-                <Link to="5-3-add-a-story-review" className="e-btn e-btn-line e-btn-sm">Review</Link>
+              <div key={i} className="e-rowline" style={{ padding: "12px 0", flexWrap: "wrap", ...(i === suggestions.length - 1 ? { borderBottom: "none" } : {}) }}>
+                <span style={{ flex: "1 1 220px", minWidth: "0" }}>{sg.text}</span>
+                <span className="e-badge" style={{ flex: "0 1 auto" }}>{sg.gap}</span>
+                <Link to="5-3-add-a-story-review" className="e-btn e-btn-line e-btn-sm" style={{ flex: "none" }}>Review</Link>
                 {sg.bullet && (
-                  <button type="button" className="e-btn e-btn-ghost e-btn-sm" disabled={sugRun.busy} onClick={() => void sugRun.run(() => actions.dropStorySuggestion(app.id, sg.bullet as string))}>Not now</button>
+                  <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ flex: "none" }} disabled={sugRun.busy} onClick={() => void sugRun.run(() => actions.dropStorySuggestion(app.id, sg.bullet as string))}>Not now</button>
                 )}
               </div>
             ))}

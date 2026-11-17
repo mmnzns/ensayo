@@ -11,9 +11,9 @@ export function TargetMark({ target, size = 9 }: { target: Pick<Target, "color">
 export function TargetLabel({ target, size }: { target: Pick<Target, "color" | "name"> | undefined; size?: number }) {
   if (!target) return null;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+    <span title={target.name} style={{ display: "inline-flex", alignItems: "center", gap: "6px", minWidth: "0", maxWidth: "100%" }}>
       <TargetMark target={target} size={size} />
-      {target.name}
+      <span style={{ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{target.name}</span>
     </span>
   );
 }

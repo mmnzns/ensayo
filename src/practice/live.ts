@@ -487,6 +487,8 @@ export async function recordingStatus(): Promise<RecordingStatus | null> {
 export const MIC_LOST = "The microphone went away. Plug it back in and press Record again.";
 /** An answer shorter than this isn't worth scoring after the microphone is lost. */
 export const SCORE_LOST_MIN_MS = 3000;
+/** The least speech a note needs, in seconds. The backend decides (MIN_SPEECH_MS in speech/transcribe.rs). */
+export const MIN_SPEECH_SECONDS = 3;
 
 /** The microphone stopped delivering mid-answer: the recording stops, what was said is kept, and the screen says so. */
 export async function micLost() {

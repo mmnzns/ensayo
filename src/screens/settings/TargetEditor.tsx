@@ -17,6 +17,7 @@ import { pickResumePath } from "../../ui/pickFile";
 import { TargetMarker, useTargetChoice } from "../../ui/TargetSwitcher";
 import { setSessionPreset } from "../home/preset";
 import { addStage, fileNameOf, formatPay, isResumeFileName, MAX_LEAD_WITH, onWindows, pastedPath, removeStage, RESUME_PROBLEM, stageChoices, targetToSave, type TargetFields } from "./targetForms";
+import BackLink from "../../components/BackLink";
 
 const FAMILIES: { id: RoleFamily; label: string }[] = [
   { id: "lifecycle", label: "Lifecycle marketing" },
@@ -138,7 +139,7 @@ function EditorForm({ base, pitchCopied, draftFailed }: { base: Target | undefin
     <AppShell nav="profile">
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Link to="profile" className="e-small" style={{ textDecoration: "none" }}>‹ Profile</Link>
+          <BackLink to="profile" label="Profile" />
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <TargetMarker color={start.color} size={14} />
             <h1 className="e-h1">{title}</h1>

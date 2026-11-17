@@ -21,6 +21,22 @@ fn checked_id(id: &str) -> Result<&str> {
     }
 }
 
+/// The key a story's last-changed time is saved under (inside `Story::extra`, so older files and older builds are fine).
+pub const UPDATED_AT: &str = "updated_at";
+
+/// The same story apart from the bookkeeping fields.
+fn same_story(a: &Story, b: &Story) -> bool {
+    let plain = |s: &Story| {
+        let mut v = serde_json::to_value(s).unwrap_or_default();
+        if let Some(o) = v.as_object_mut() {
+            o.remove("schema_version");
+            o.remove(UPDATED_AT);
+        }
+        v
+    };
+    plain(a) == plain(b)
+}
+
 /// True only when there is at least one number and every number is verified (Build Plan, Story Bank).
 fn all_verified(story: &Story) -> bool {
     !story.proof_points.is_empty() && story.proof_points.iter().all(|p| p.verified)
@@ -66,6 +82,24 @@ impl Storage {
         let mut saved = story.clone();
         saved.usage.by_target.clear();
         saved.verified = all_verified(&saved);
+        saved.extra.remove(UPDATED_AT);
+        // When the story last changed, kept beside the story's other fields. Saving it again unchanged keeps the old time,
+        // and a story saved before this existed has none until it is next changed.
+        let before = load_record::<Story>(&self.story_path(&saved.id), migrate::story).ok().flatten();
+        let stamp = match before {
+            Some(mut old) => {
+                let was = old.extra.remove(UPDATED_AT);
+                if same_story(&old, &saved) {
+                    was
+                } else {
+                    Some(super::applications::stamp().into())
+                }
+            }
+            None => Some(super::applications::stamp().into()),
+        };
+        if let Some(t) = stamp {
+            saved.extra.insert(UPDATED_AT.into(), t);
+        }
         save_record(&self.story_path(&saved.id), &saved)?;
         Ok(saved)
     }
@@ -203,6 +237,7 @@ impl Storage {
 
 #[cfg(test)]
 mod tests {
+    use super::UPDATED_AT;
     use crate::storage::model::{Method, Profile, ProofPoint, Story, Usage};
     use crate::storage::versioned::save_record;
     use crate::storage::{Storage, StorageError};
@@ -294,6 +329,39 @@ mod tests {
         s.delete_story("st_a").unwrap();
         assert!(matches!(s.story("st_a"), Err(StorageError::NotFound(_))));
         assert!(matches!(s.delete_story("st_a"), Err(StorageError::NotFound(_))));
+    }
+
+    #[test]
+    fn a_story_remembers_when_it_last_changed_and_an_unchanged_save_keeps_the_time() {
+        let (_d, s) = fresh();
+        let first = s.save_story(&story("st_a", "Apple")).unwrap();
+        let t = first.extra.get(UPDATED_AT).and_then(|v| v.as_str()).unwrap().to_string();
+        assert!(t.ends_with('Z'), "{t}");
+        // Pretend the first save was long ago, then save the same story again.
+        let mut old = s.story("st_a").unwrap();
+        old.extra.insert(UPDATED_AT.into(), "2020-01-01T00:00:00Z".into());
+        save_record(&s.story_path("st_a"), &old).unwrap();
+        let again = s.save_story(&s.story("st_a").unwrap()).unwrap();
+        assert_eq!(again.extra[UPDATED_AT], "2020-01-01T00:00:00Z", "nothing changed, so the time stays");
+        let mut edited = s.story("st_a").unwrap();
+        edited.approach = "I noticed the funnel stalled.".into();
+        let after = s.save_story(&edited).unwrap();
+        assert_ne!(after.extra[UPDATED_AT], "2020-01-01T00:00:00Z");
+        assert_eq!(s.story("st_a").unwrap().extra[UPDATED_AT], after.extra[UPDATED_AT], "saved with the story");
+    }
+
+    #[test]
+    fn a_story_saved_before_the_time_existed_has_none_until_it_changes() {
+        let (_d, s) = fresh();
+        fs::create_dir_all(s.root().join("bank/stories")).unwrap();
+        fs::write(s.root().join("bank/stories/st_old.json"), r#"{"schema_version": 1, "id": "st_old", "title": "Old"}"#).unwrap();
+        let loaded = s.story("st_old").unwrap();
+        assert!(loaded.extra.get(UPDATED_AT).is_none());
+        let kept = s.save_story(&loaded).unwrap();
+        assert!(kept.extra.get(UPDATED_AT).is_none(), "an unchanged save does not make it look new");
+        let mut edited = loaded;
+        edited.title = "Older".into();
+        assert!(s.save_story(&edited).unwrap().extra.get(UPDATED_AT).is_some());
     }
 
     #[test]

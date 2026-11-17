@@ -9,9 +9,12 @@ import { useHashParam, withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
 import { applicationTarget } from "../../data/targets";
 import { TargetLabel } from "./TargetMark";
+import { RecheckPill } from "./RecheckButton";
+import { useRecheck } from "./recheck";
 import type { ApplicationExtras } from "../../data/screens/applications";
 import type { Application, ApplicationStatus, ClosedReason } from "../../data/types";
 import { CLOSED_LABEL, STATUSES, STATUS_LABEL, nextStage, shortDate, statusStyle, STAGE_LABEL, whenText } from "./format";
+import BackLink from "../../components/BackLink";
 
 export { EMPTY_EXTRAS };
 
@@ -98,7 +101,7 @@ export function withFeatured(Inner: ComponentType<Featured>): ComponentType {
     if (!app) {
       return (
         <AppShell nav="applications">
-          <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
+          <BackLink to="6-1-applications" label="Applications" />
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
             <span className="e-h2">No application yet</span>
             <span className="e-meta">Add one and its resume, stages and night-before set will show up here.</span>
@@ -129,7 +132,7 @@ const TABS: { id: TabId; to: string; label: string }[] = [
 export function AppTabs({ current }: { current: TabId }) {
   const link = useAppLink();
   return (
-    <nav style={{ display: "flex", flexWrap: "wrap", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)", alignSelf: "flex-start" }} aria-label="Application sections">
+    <nav style={{ display: "flex", flexWrap: "wrap", gap: "6px", background: "var(--e-surface)", borderRadius: "14px", padding: "4px", boxShadow: "var(--e-shadow)", alignSelf: "flex-start", maxWidth: "100%", minWidth: "0", boxSizing: "border-box" }} aria-label="Application sections">
       {TABS.map((t) =>
         t.id === current ? (
           <Link key={t.id} to={link(t.to)} aria-current="page" className="e-btn e-btn-sm" style={{ background: "var(--e-tint)", color: "var(--e-ink)" }}>
@@ -219,6 +222,19 @@ export function StatusMenu({ app }: { app: Application }) {
   );
 }
 
+/** Recheck in the header, beside the status chip, on every tab. Same recheck as the overview's button. */
+function HeaderRecheck({ app }: { app: Application }) {
+  const extras = useApplicationExtras(app.id);
+  const recheck = useRecheck(app.id);
+  const hasPosting = !!extras.postingText.trim();
+  return (
+    <>
+      <RecheckPill busy={recheck.busy} disabled={!hasPosting} title={hasPosting ? "Read the posting again against your stories" : "No posting text saved. Add it from Edit details."} onClick={() => void recheck.run()} />
+      <ErrorLine error={recheck.error} />
+    </>
+  );
+}
+
 /** Company, badges, role line and the two actions, shared by the application detail screens. */
 export function AppHeader({ app, now, children }: { app: Application; now: Date; children?: ReactNode }) {
   const link = useAppLink();
@@ -228,12 +244,13 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
   const nextBit = next ? ` · next: ${next.label || STAGE_LABEL[next.stage]}, ${next.at ? whenText(next.at, now) : "date to come"}` : "";
   return (
     <header style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Link to="6-1-applications" className="e-small" style={{ textDecoration: "none" }}>‹ Applications</Link>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <h1 className="e-h1">{app.company}</h1>
-          {app.startup && <span className="e-pill">Startup</span>}
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "0", flex: "1 1 320px" }}>
+        <BackLink to="6-1-applications" label="Applications" />
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: "0" }}>
+          <h1 className="e-h1" style={{ minWidth: "0", overflowWrap: "break-word" }}>{app.company}</h1>
+          {app.startup && <span className="e-pill" style={{ flex: "none" }}>Startup</span>}
           <StatusMenu app={app} />
+          <HeaderRecheck app={app} />
         </div>
         <span className="e-meta">
           {`${app.role} · applied ${shortDate(app.applied_on)}${nextBit}`}
@@ -248,9 +265,9 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
         </span>
         {children}
       </div>
-      <div style={{ display: "flex", gap: "10px" }}>
-        <Link to={link("6-4-application-edit-details")} className="e-btn e-btn-line">Edit details</Link>
-        <Link to={link("2-3-start-a-session", { stage: next?.id })} className="e-btn e-btn-primary">Practice the next stage</Link>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", flex: "none", maxWidth: "100%" }}>
+        <Link to={link("6-4-application-edit-details")} className="e-btn e-btn-line" style={{ flex: "none" }}>Edit details</Link>
+        <Link to={link("2-3-start-a-session", { stage: next?.id })} className="e-btn e-btn-primary" style={{ flex: "none" }}>Practice the next stage</Link>
       </div>
     </header>
   );

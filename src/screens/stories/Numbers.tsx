@@ -13,7 +13,7 @@ export interface NumberRow {
  * becomes a real row on the first keystroke; an empty row is never saved (proofPointsFromRows skips it). */
 const BLANK: NumberRow = { id: "blank", label: "", value: "", checked: false, isNew: true };
 
-/** The numbers list with a Checked toggle per row, an X to take a row out, and "+ Add a number", shared by the review
+/** The numbers list: every row's label and value can be edited, with a Checked toggle per row, an X to take a row out, and "+ Add a number", shared by the review
  * and story screens. */
 export default function Numbers({ rows, setRows, onEdit, lastBorder }: { rows: NumberRow[]; setRows: Dispatch<SetStateAction<NumberRow[]>>; onEdit?: () => void; lastBorder?: boolean }) {
   const shown = rows.length > 0 ? rows : [BLANK];
@@ -29,17 +29,8 @@ export default function Numbers({ rows, setRows, onEdit, lastBorder }: { rows: N
     <>
       {shown.map((r, i) => (
         <div key={r.id} className="e-rowline" style={{ padding: "12px 0", ...(!lastBorder && i === shown.length - 1 ? { borderBottom: "none" } : {}) }}>
-          {r.isNew ? (
-            <>
-              <input className="e-input" style={{ flex: "1" }} aria-label="What the number is" placeholder="What it measures" value={r.label} onChange={(e) => patch(r.id, { label: e.target.value })} />
-              <input className="e-input" style={{ width: "170px" }} aria-label="The number" placeholder="31% → 44%" value={r.value} onChange={(e) => patch(r.id, { value: e.target.value })} />
-            </>
-          ) : (
-            <>
-              <span style={{ flex: "1" }}>{r.label}</span>
-              <span className="e-meta" style={{ width: "170px" }}>{r.value}</span>
-            </>
-          )}
+          <input className="e-input" style={{ flex: "1" }} aria-label="What the number is" placeholder="What it measures" value={r.label} onChange={(e) => patch(r.id, { label: e.target.value })} />
+          <input className="e-input" style={{ width: "170px" }} aria-label="The number" placeholder="31% → 44%" value={r.value} onChange={(e) => patch(r.id, { value: e.target.value })} />
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
             <input type="checkbox" className="e-check" checked={r.checked} onChange={(e) => patch(r.id, { checked: e.target.checked })} />
             Checked

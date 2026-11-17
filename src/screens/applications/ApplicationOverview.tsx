@@ -1,15 +1,17 @@
 import Working from "./Working";
 import { stopLocalAi } from "../../ui/aiStop";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
-import type { Analysis, JdOutcome } from "../../data/applicationCommands";
+import type { Analysis } from "../../data/applicationCommands";
 import { useActions } from "../../data/real";
 import { askedLine } from "../../data/interviews";
 import { useStore } from "../../data/store";
 import { STAGE_LABEL, STATUS_LABEL, nextStage, shortDate, whenText } from "./format";
 import { keptWords } from "./forms";
 import FitBanner from "./FitBanner";
+import { RecheckButton, RecheckChoice } from "./RecheckButton";
+import { changedLine, setReplaceEdits, storiesChangedSince, useRecheck } from "./recheck";
 import { FIT_LABEL, fitClass, fitRows } from "./targetPick";
 import { TargetMark } from "./TargetMark";
 import { AppHeader, AppTabs, ErrorLine, Notice, useAppLink, useRun, withFeatured, type Featured } from "./parts";
@@ -28,9 +30,9 @@ function Overview({ app, extras, now }: Featured) {
   const [editNeeds, setEditNeeds] = useState(false);
   const [editBeliefs, setEditBeliefs] = useState(false);
   const [posting, setPosting] = useState("");
-  const [lastRead, setLastRead] = useState<JdOutcome | null>(null);
   const saving = useRun();
-  const reading = useRun();
+  const reading = useRecheck(app.id);
+  const lastRead = reading.last;
   const status = useRun();
 
   // The reading on screen is the saved one until an edit starts; Done saves the edit.
@@ -45,18 +47,24 @@ function Overview({ app, extras, now }: Featured) {
       close();
     }
   };
-  const readPosting = async (text?: string) => {
-    const out = await reading.run(() => actions.analyseJd(app.id, text));
-    if (out) {
-      setLastRead(out);
+  const readPosting = (text?: string) => reading.run(text);
+  // Leaving the overview forgets a choice made here, so the header's Recheck never replaces edits by surprise.
+  useEffect(() => () => setReplaceEdits(app.id, false), [app.id]);
+  // A recheck finished (started here or from the header): what was typed or half edited is now out of date.
+  useEffect(() => {
+    if (lastRead) {
       setPosting("");
       setDraft(null);
     }
-  };
+  }, [lastRead]);
   const next = nextStage(app);
   const practiced = next ? (extras.practicedByStage[next.id] ?? 0) : 0;
   const suggested = app.suggested_status && app.suggested_status !== app.status ? app.suggested_status : null;
   const kept = lastRead ? keptWords(lastRead.result.kept) : [];
+  const hasEdits = app.edited_by_user.some((p) => p.startsWith("analysis."));
+  const choice = hasEdits ? <RecheckChoice replace={reading.replaceEdits} disabled={reading.busy} onChange={reading.choose} /> : null;
+  const replaced = lastRead ? keptWords(lastRead.result.replaced ?? []) : [];
+  const changedStories = storiesChangedSince(stories, extras.readingOn);
   const fits = fitRows(app.targetFit, store.targets);
   const asked = (extras.interviewNotes ?? []).filter((n) => n.asked.length > 0).flatMap((note) => {
     const stage = app.process.find((p) => p.id === note.stageId);
@@ -109,6 +117,13 @@ function Overview({ app, extras, now }: Featured) {
         </section>
       )}
       {lastRead?.result.notice && <Notice>{lastRead.result.notice}</Notice>}
+      {analysis && changedStories > 0 && extras.postingText && (
+        <div className="e-soft" role="status" style={{ padding: "10px 18px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <span className="e-meta">{changedLine(changedStories)}</span>
+          <RecheckButton busy={reading.busy} onClick={() => void readPosting()} />
+          {choice}
+        </div>
+      )}
       {analysis && (
         <>
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -221,7 +236,7 @@ function Overview({ app, extras, now }: Featured) {
           )}
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <span className="e-h3">The posting</span>
-            <span className="e-small">{extras.postingText ? `Pasted ${shortDate(extras.postingPastedOn)}. Reading it again never overwrites what you edited.` : "No posting text saved. Add it from Edit details to read it again."}</span>
+            <span className="e-small">{extras.postingText ? `Pasted ${shortDate(extras.postingPastedOn)}. Recheck keeps what you edited unless you choose the new reading.` : "No posting text saved. Add it from Edit details to read it again."}</span>
             {lastRead && lastRead.result.changed.length > 0 && (
               <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "2px" }} aria-label="What changed">
                 {lastRead.result.changed.map((c, i) => (
@@ -231,9 +246,11 @@ function Overview({ app, extras, now }: Featured) {
             )}
             {lastRead && lastRead.result.changed.length === 0 && lastRead.result.source !== "unchanged" && <span className="e-meta">Nothing changed.</span>}
             {kept.length > 0 && <span className="e-small">{`Kept what you edited: ${kept.join(", ")}.`}</span>}
+            {replaced.length > 0 && <span className="e-small">{`Replaced what you edited with the new reading: ${replaced.join(", ")}.`}</span>}
             {extras.postingText && (
               <span style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-                <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={reading.busy} onClick={() => void readPosting()}>{reading.busy ? "Reading" : "Read the posting again"}</button>
+                <RecheckButton busy={reading.busy} onClick={() => void readPosting()} />
+                {choice}
                 <ErrorLine error={reading.error} />
               </span>
             )}
