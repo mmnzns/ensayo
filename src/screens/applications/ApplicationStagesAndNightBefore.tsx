@@ -12,6 +12,7 @@ import { STAGE_LABEL, nextStage, shortDate, whenText } from "./format";
 import { askedLine, noteFor } from "../../data/interviews";
 import { interviewHappened } from "./afterInterview";
 import { joinAt, lockQuestions, nightDraftOf, nightEdited, splitAt, type NightDraft } from "./forms";
+import { uniqueStageLabel } from "../../components/StageRow";
 import { AppHeader, AppTabs, ErrorLine, useAppLink, useRun, withFeatured, type Featured } from "./parts";
 
 const LOCK = (
@@ -271,8 +272,8 @@ function StagesTab({ app, extras, now }: Featured) {
   const editor = (s: ProcessStage) =>
     editing && editing.id === s.id ? (
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-        <input type="date" className="e-input" style={{ width: "170px", minHeight: "40px", padding: "8px 10px", fontSize: "14px" }} aria-label={`${s.label} date`} value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} />
-        <input type="time" className="e-input" style={{ width: "130px", minHeight: "40px", padding: "8px 10px", fontSize: "14px" }} aria-label={`${s.label} time`} value={editing.time} onChange={(e) => setEditing({ ...editing, time: e.target.value })} />
+        <input type="date" className="e-input" style={{ flex: "1 1 130px", minWidth: 0, width: "auto", minHeight: "40px", padding: "8px 10px", fontSize: "14px" }} aria-label={`${s.label} date`} value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} />
+        <input type="time" className="e-input" style={{ flex: "1 1 110px", minWidth: 0, width: "auto", minHeight: "40px", padding: "8px 10px", fontSize: "14px" }} aria-label={`${s.label} time`} value={editing.time} onChange={(e) => setEditing({ ...editing, time: e.target.value })} />
         <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={busy} onClick={() => void saveEdit()}>Save</button>
         <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setEditing(null)}>Cancel</button>
       </div>
@@ -439,7 +440,7 @@ function StagesTab({ app, extras, now }: Featured) {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", paddingTop: "14px" }}>
               <span className="e-small" style={{ width: "100%" }}>Add a stage</span>
               {ALL_STAGES.map((st) => (
-                <button key={st} type="button" className="e-chip" disabled={busy} style={{ minHeight: "36px", padding: "6px 12px", fontSize: "14px" }} onClick={() => void run(() => actions.addStage(app.id, st))}>{`+ ${STAGE_LABEL[st]}`}</button>
+                <button key={st} type="button" className="e-chip" disabled={busy} style={{ minHeight: "36px", padding: "6px 12px", fontSize: "14px" }} onClick={() => void run(() => actions.addStage(app.id, st, uniqueStageLabel(st, stages.map((x) => x.label || STAGE_LABEL[x.stage]))))}>{`+ ${STAGE_LABEL[st]}`}</button>
               ))}
             </div>
           )}
