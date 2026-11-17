@@ -150,7 +150,7 @@ export default function AddAStoryReview() {
             {ownershipMissing && <span className="e-badge">Missing</span>}
           </div>
           <span className="e-meta">{FIELD_HELP.ownership}</span>
-          <input id="ow" className="e-input" placeholder="What was yours, and who else helped?" value={ownership} onChange={(e) => setOwnership(e.target.value)} />
+          <textarea id="ow" className="e-input" rows={2} placeholder="What was yours, and who else helped?" value={ownership} onChange={(e) => setOwnership(e.target.value)} />
         </div>
         <div className="e-field">
           <label htmlFor="r">What changed</label>
