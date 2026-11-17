@@ -57,3 +57,11 @@ describe("long user text stays inside its card", () => {
     }
   });
 });
+
+describe("the header Recheck pill", () => {
+  it("has a visible outline and a hover state in the stylesheet", () => {
+    const css = read("../styles/ensayo.css");
+    expect(css).toMatch(/\.e-pill-line\{[^}]*box-shadow:inset 0 0 0 1\.5px var\(--e-line\)/);
+    expect(css).toMatch(/\.e-pill-line:not\(:disabled\):hover\{/);
+  });
+});

@@ -64,6 +64,10 @@
 .e-chip-on{background:var(--e-tint);box-shadow:inset 0 0 0 2px var(--e-primary);font-weight:600}
 .e-pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-size:0.8125rem;font-weight:500;background:var(--e-surface);color:var(--e-muted)}
 .e-badge{display:inline-flex;align-items:center;gap:6px;font-size:0.75rem;font-weight:600;border-radius:999px;padding:4px 10px;background:var(--e-highlight);color:var(--e-warn-ink)}
+/* A pill you can press: same shape as the status pill, outlined like a line button. */
+.e-pill-line{background:transparent;box-shadow:inset 0 0 0 1.5px var(--e-line)}
+.e-pill-line:not(:disabled):hover{background:var(--e-surface);box-shadow:inset 0 0 0 1.5px var(--e-muted)}
+.e-pill-line:focus-visible{outline:2px solid var(--e-primary);outline-offset:2px}
 .e-badge-ok{background:var(--e-ok-tint);color:var(--e-ok)}
 .e-field{display:flex;flex-direction:column;gap:8px}
 .e-field label{font-size:0.875rem;font-weight:600;color:var(--e-ink)}

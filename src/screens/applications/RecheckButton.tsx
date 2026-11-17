@@ -29,10 +29,10 @@ export function RecheckPill({ busy, disabled, title, onClick }: { busy: boolean;
   return (
     <button
       type="button"
-      className="e-pill"
+      className="e-pill e-pill-line"
       title={title}
       disabled={off}
-      style={{ border: "none", font: "inherit", fontSize: "13px", fontWeight: "600", cursor: off ? "default" : "pointer", background: "var(--e-ground)", color: "var(--e-ink)", opacity: disabled && !busy ? 0.6 : 1 }}
+      style={{ border: "none", font: "inherit", fontSize: "13px", fontWeight: "600", cursor: off ? "default" : "pointer", color: "var(--e-ink)", opacity: disabled && !busy ? 0.6 : 1 }}
       onClick={onClick}
     >
       {busy ? "Rechecking" : "Recheck"} <RecheckIcon size={12} />

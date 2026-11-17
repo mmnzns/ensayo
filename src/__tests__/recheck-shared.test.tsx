@@ -44,7 +44,8 @@ describe("one recheck shared by the header and the overview", () => {
 describe("the header's Recheck pill", () => {
   it("is shaped like the status pill and says what it does", () => {
     const html = renderToString(<RecheckPill busy={false} onClick={() => {}} />);
-    expect(html).toContain('class="e-pill"');
+    expect(html).toContain('class="e-pill e-pill-line"');
+    expect(html).not.toContain("background");
     expect(html).toContain("font-size:13px");
     expect(html).toContain("Recheck");
     expect(html).toContain('width="12"');
