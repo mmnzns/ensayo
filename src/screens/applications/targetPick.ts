@@ -3,6 +3,7 @@
 // call these and the data layer holds the truth.
 
 import { applicationTarget, fitBanner, pickableTargets, roleFamilyOf, targetName } from "../../data/targets";
+import { blankTarget } from "../../data/targetState";
 import type { Application, FitLevel, RoleFamily, SellsTo, StageId, Target, TargetFit } from "../../data/types";
 
 const B2B_WORDS = /\b(b2b|saas|enterprise|business customers|sales teams?|finance teams?|mid-size companies|other businesses)\b/i;
@@ -153,3 +154,41 @@ export const pitchNeedsWork = (pitch: string, copied: string): boolean => pitch.
 
 export const SENIORITY_LABEL: Record<Target["seniority"], string> = { early: "Early career", mid: "Mid-level", senior: "Senior", lead: "Lead or manager", director: "Director" };
 export const SELLS_TO_LABEL: Record<SellsTo, string> = { b2b: "Businesses (B2B)", b2c: "Consumers (B2C)", both: "Both" };
+
+// ---------- the target dropdown ----------
+
+/** The last line of the dropdown. */
+export const NEW_TARGET_LABEL = "New target…";
+
+/** The targets the dropdown lists: the live ones with the active target first, plus an archived one the application is
+ *  still filed under (`keep`), which can be seen but is not offered for new applications. */
+export const targetChoices = (targets: Target[], activeId: string | null | undefined, keep?: string): Target[] => [
+  ...pickableTargets(targets, activeId),
+  ...targets.filter((t) => t.archived && t.id === keep),
+];
+
+/** Where the highlight goes after a key press in the open list (`count` includes the "New target…" line). It stops at the
+ *  ends instead of wrapping, so a held arrow key never jumps from the last line to the first. */
+export function stepIndex(index: number, key: string, count: number): number {
+  if (count <= 0) return 0;
+  if (key === "ArrowDown") return Math.min(index + 1, count - 1);
+  if (key === "ArrowUp") return Math.max(index - 1, 0);
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return index;
+}
+
+/** Why a name typed for a new target cannot be used yet, or "" when it can. */
+export function newTargetProblem(name: string, targets: Target[]): string {
+  const n = name.trim();
+  if (!n) return "Give the target a name.";
+  if (targets.some((t) => !t.archived && t.name.trim().toLowerCase() === n.toLowerCase())) return "You already have a target with that name.";
+  return "";
+}
+
+/** The target made in place from the dropdown: the name typed, the role typed on the application (or the name when there
+ *  is none yet), and everything else as a blank target starts. It can be filled in properly later under Profile. */
+export function targetFromName(name: string, role: string, targets: Target[]): Target {
+  const r = role.trim() || name.trim();
+  return { ...blankTarget(targets), name: name.trim(), role: r, roleFamily: roleFamilyOf(r) };
+}

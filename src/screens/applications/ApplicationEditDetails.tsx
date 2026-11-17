@@ -14,9 +14,9 @@ import { filledContacts, isoDay, moveItem, splitAt, stageInputs, type StageDraft
 import { ErrorLine, useRun, withFeatured, type Featured } from "./parts";
 import { useStore } from "../../data/store";
 import { applicationTarget } from "../../data/targets";
-import TargetPicker from "./TargetPicker";
+import TargetSelect from "../../components/TargetSelect";
 import StageRow, { uniqueStageLabel } from "../../components/StageRow";
-import { asksToRebuild } from "./targetPick";
+import { asksToRebuild, targetFromName } from "./targetPick";
 
 interface EditStage extends StageDraft {
   movedFrom?: string;
@@ -171,7 +171,7 @@ function EditDetails({ app, extras }: Featured) {
               </div>
               <div className="e-field" style={{ gridColumn: "1 / -1" }}>
                 <span style={{ fontSize: "14px", fontWeight: "600" }}>Target</span>
-                <TargetPicker targets={store.targets} activeId={store.activeTarget?.id} value={targetId} onChange={setTargetId} keep={filedId} />
+                <TargetSelect targets={store.targets} activeId={store.activeTarget?.id} value={targetId} onChange={setTargetId} keep={filedId} onCreate={async (name) => (await actions.saveTarget(targetFromName(name, role, store.targets))).id} />
                 {askRebuild && (
                   <label className="e-soft" style={{ display: "flex", alignItems: "flex-start", gap: "12px", cursor: "pointer", padding: "14px 18px" }}>
                     <input type="checkbox" className="e-check" checked={rebuild} onChange={(e) => setRebuild(e.target.checked)} style={{ marginTop: "2px" }} />

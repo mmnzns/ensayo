@@ -19,8 +19,8 @@ import { ErrorLine, Notice, useRun } from "./parts";
 import StageRow, { uniqueStageLabel } from "../../components/StageRow";
 import ResumeFileCard from "../../components/ResumeFileCard";
 import FitBanner from "./FitBanner";
-import TargetPicker from "./TargetPicker";
-import { PICKER_HINT, stagesFor, stagesLine, suggestTarget } from "./targetPick";
+import TargetSelect from "../../components/TargetSelect";
+import { PICKER_HINT, stagesFor, stagesLine, suggestTarget, targetFromName } from "./targetPick";
 
 type ResumeChoice = "attach" | "other" | "none";
 interface DraftStage {
@@ -321,7 +321,7 @@ export default function NewApplication() {
           {liveTargets.length > 0 && (
             <div className="e-field">
               <span style={{ fontSize: "14px", fontWeight: "600" }}>Target</span>
-              <TargetPicker targets={store.targets} activeId={activeId} value={targetId} onChange={pickTarget} />
+              <TargetSelect targets={store.targets} activeId={activeId} value={targetId} onChange={pickTarget} onCreate={async (name) => (await actions.saveTarget(targetFromName(name, role, store.targets))).id} />
               <span className="e-small">{PICKER_HINT}</span>
             </div>
           )}
