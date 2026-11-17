@@ -1,7 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { RecheckPill } from "../screens/applications/RecheckButton";
-import { recheckState, resetRecheck, startRecheck } from "../screens/applications/recheck";
+import { changedLine, recheckState, resetRecheck, startRecheck, storiesChangedSince } from "../screens/applications/recheck";
 import type { JdOutcome } from "../data/applicationCommands";
 
 const outcome = { result: { source: "ai", changed: ["Gap 1 changed."], kept: [] } } as unknown as JdOutcome;
@@ -54,5 +54,30 @@ describe("the header's Recheck pill", () => {
     const off = renderToString(<RecheckPill busy={false} disabled title="No posting" onClick={() => {}} />);
     expect(off).toContain("disabled");
     expect(off).toContain('title="No posting"');
+  });
+});
+
+describe("stories changed since the posting was read", () => {
+  const read = "2026-10-08T09:30:00Z";
+  it("counts the stories changed after the reading", () => {
+    const stories = [{ updated_at: "2026-10-09T08:00:00Z" }, { updated_at: "2026-10-01T08:00:00Z" }, { updated_at: "2026-10-12T08:00:00Z" }];
+    expect(storiesChangedSince(stories, read)).toBe(2);
+  });
+
+  it("counts nothing when a time is missing or unreadable, rather than a wrong number", () => {
+    expect(storiesChangedSince([{}, { updated_at: "later" }], read)).toBe(0);
+    expect(storiesChangedSince([{ updated_at: "2026-10-09T08:00:00Z" }], undefined)).toBe(0);
+    expect(storiesChangedSince([{ updated_at: "2026-10-09T08:00:00Z" }], "")).toBe(0);
+    expect(storiesChangedSince([{ updated_at: "2026-10-09T08:00:00Z" }], "x")).toBe(0);
+  });
+
+  it("does not count a story saved at the moment of the reading", () => {
+    expect(storiesChangedSince([{ updated_at: read }], read)).toBe(0);
+  });
+
+  it("says one story or many, and nothing for none", () => {
+    expect(changedLine(1)).toBe("1 story changed since this was read");
+    expect(changedLine(3)).toBe("3 stories changed since this was read");
+    expect(changedLine(0)).toBe("");
   });
 });

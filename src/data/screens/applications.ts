@@ -84,6 +84,8 @@ export interface InterviewNote {
 export interface ApplicationExtras {
   postingText: string;
   postingPastedOn: string;
+  /** When the posting was last read (RFC 3339). Missing or empty when it is not known. */
+  readingOn?: string;
   /** What a field was before the person edited it, for the "Edited by you" note. */
   wasValues: Record<string, string>;
   /** Answers practiced per stage, by ProcessStage id. */

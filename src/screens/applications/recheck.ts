@@ -61,3 +61,20 @@ export function useRecheck(id: string) {
   const run = useCallback((text?: string) => startRecheck(id, (a, t) => actions.analyseJd(a, t), text), [id, actions]);
   return { ...state, run };
 }
+
+/** How many of the person's stories changed after the posting was last read. Counts every story, not only the ones this
+ *  reading points at, because the reading is made from the whole bank: a story added or edited since can cover a gap or a
+ *  belief that was open. A story with no change time, or a reading with no time, counts for nothing rather than guess. */
+export function storiesChangedSince(stories: { updated_at?: string }[], readingOn: string | undefined): number {
+  const read = readingOn ? Date.parse(readingOn) : NaN;
+  if (Number.isNaN(read)) return 0;
+  return stories.filter((s) => {
+    const at = s.updated_at ? Date.parse(s.updated_at) : NaN;
+    return !Number.isNaN(at) && at > read;
+  }).length;
+}
+
+/** "1 story changed since this was read" / "3 stories changed since this was read". Empty for none. */
+export function changedLine(n: number): string {
+  return n > 0 ? `${n} ${n === 1 ? "story" : "stories"} changed since this was read` : "";
+}

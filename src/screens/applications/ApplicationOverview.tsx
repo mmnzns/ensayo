@@ -11,7 +11,7 @@ import { STAGE_LABEL, STATUS_LABEL, nextStage, shortDate, whenText } from "./for
 import { keptWords } from "./forms";
 import FitBanner from "./FitBanner";
 import { RecheckButton } from "./RecheckButton";
-import { useRecheck } from "./recheck";
+import { changedLine, storiesChangedSince, useRecheck } from "./recheck";
 import { FIT_LABEL, fitClass, fitRows } from "./targetPick";
 import { TargetMark } from "./TargetMark";
 import { AppHeader, AppTabs, ErrorLine, Notice, useAppLink, useRun, withFeatured, type Featured } from "./parts";
@@ -59,6 +59,7 @@ function Overview({ app, extras, now }: Featured) {
   const practiced = next ? (extras.practicedByStage[next.id] ?? 0) : 0;
   const suggested = app.suggested_status && app.suggested_status !== app.status ? app.suggested_status : null;
   const kept = lastRead ? keptWords(lastRead.result.kept) : [];
+  const changedStories = storiesChangedSince(stories, extras.readingOn);
   const fits = fitRows(app.targetFit, store.targets);
   const asked = (extras.interviewNotes ?? []).filter((n) => n.asked.length > 0).flatMap((note) => {
     const stage = app.process.find((p) => p.id === note.stageId);
@@ -111,6 +112,12 @@ function Overview({ app, extras, now }: Featured) {
         </section>
       )}
       {lastRead?.result.notice && <Notice>{lastRead.result.notice}</Notice>}
+      {analysis && changedStories > 0 && extras.postingText && (
+        <div className="e-soft" role="status" style={{ padding: "10px 18px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <span className="e-meta">{changedLine(changedStories)}</span>
+          <RecheckButton busy={reading.busy} onClick={() => void readPosting()} />
+        </div>
+      )}
       {analysis && (
         <>
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
