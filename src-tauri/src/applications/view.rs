@@ -190,6 +190,10 @@ pub struct ExtrasView {
     /// "2026-10-09", or "" when there is no posting.
     #[serde(rename = "postingPastedOn")]
     pub posting_pasted_on: String,
+    /// When the posting was last read (an RFC 3339 time), or "" when it was never read by Ensayo. The screen compares it
+    /// with when each story last changed.
+    #[serde(rename = "readingOn")]
+    pub reading_on: String,
     #[serde(rename = "wasValues")]
     pub was_values: BTreeMap<String, String>,
     /// Answers practiced per stage, by stage id.
@@ -493,6 +497,14 @@ fn pasted_on(storage: &Storage, id: &str) -> String {
     std::fs::metadata(path).and_then(|m| m.modified()).map(|t| chrono::DateTime::<chrono::Local>::from(t).format("%Y-%m-%d").to_string()).unwrap_or_default()
 }
 
+/// When the posting was last read. Empty when there is no reading, or when the only "reading" is the person's own edit.
+fn reading_on(storage: &Storage, id: &str) -> String {
+    match storage.load_application_part::<AnalysisFile>(id, "analysis.json") {
+        Ok(Some(f)) if f.engine != "user" && chrono::DateTime::parse_from_rfc3339(&f.read_on).is_ok() => f.read_on,
+        _ => String::new(),
+    }
+}
+
 pub fn build_extras(storage: &Storage, app: &AppRecord, ctx: &Ctx) -> StorageResult<ExtrasView> {
     let posting = storage.application_text(&app.id, "jd.txt")?.unwrap_or_default();
     let mut practiced: BTreeMap<String, u32> = BTreeMap::new();
@@ -543,6 +555,7 @@ pub fn build_extras(storage: &Storage, app: &AppRecord, ctx: &Ctx) -> StorageRes
         asked_first: interviews.asked_first,
         posting_pasted_on: if posting.is_empty() { String::new() } else { pasted_on(storage, &app.id) },
         posting_text: posting,
+        reading_on: reading_on(storage, &app.id),
         was_values: app.was_values.clone(),
         practiced_by_stage: practiced,
         night_before,
@@ -922,6 +935,7 @@ mod tests {
         assert_eq!(v["postingText"], "About the role: own lifecycle.");
         assert_eq!(v["postingPastedOn"].as_str().unwrap().len(), 10, "a date");
         assert_eq!(v["wasValues"]["role"], "Senior Lifecycle Marketing Manager");
+        assert_eq!(v["readingOn"], "", "no reading yet");
         assert_eq!(v["nightBefore"]["stageId"], "stg_2");
         assert_eq!(v["lockedByStage"]["stg_2"]["powerStoryId"], "st_onboarding");
         assert!(v["lockedByStage"].get("stg_3").is_none());
@@ -929,6 +943,18 @@ mod tests {
         assert_eq!(v["questions"][1]["type"], "future");
         assert_eq!(v["questions"][1]["editedByUser"], true);
         assert_eq!(v["questions"][2]["type"], "behavioral");
+    }
+
+    #[test]
+    fn the_extras_say_when_the_posting_was_read_and_say_nothing_for_an_unreadable_time() {
+        let (_d, s, app) = setup();
+        let file = |engine: &str, read_on: &str| AnalysisFile { prompt: "analyse-jd v1".into(), engine: engine.into(), read_on: read_on.into(), raw: None, derived: DerivedAnalysis::default(), edited_by_user: vec![] };
+        s.save_application_part(&app.id, "analysis.json", &file("ai", "2026-10-08T09:30:00Z")).unwrap();
+        assert_eq!(json_of(&extras(&s, &app.id))["readingOn"], "2026-10-08T09:30:00Z");
+        s.save_application_part(&app.id, "analysis.json", &file("ai", "x")).unwrap();
+        assert_eq!(json_of(&extras(&s, &app.id))["readingOn"], "");
+        s.save_application_part(&app.id, "analysis.json", &file("user", "2026-10-08T09:30:00Z")).unwrap();
+        assert_eq!(json_of(&extras(&s, &app.id))["readingOn"], "", "only the person's own edit is saved: there is no reading to be out of date");
     }
 
     #[test]

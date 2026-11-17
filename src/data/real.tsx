@@ -137,8 +137,9 @@ export interface Actions {
   setStageTime(applicationId: string, stageId: string, at: string | null): Promise<AppBundle>;
   setStageDone(applicationId: string, stageId: string, done: boolean): Promise<AppBundle>;
   savePosting(applicationId: string, text: string): Promise<PostingOutcome>;
-  /** Reads the saved posting (saving `text` first when given): with the engine, or by keywords when none is set up. */
-  analyseJd(applicationId: string, text?: string): Promise<JdOutcome>;
+  /** Reads the saved posting (saving `text` first when given): with the engine, or by keywords when none is set up.
+   *  `replaceEdits` lets the new reading take the place of what the person edited (kept when it is off). */
+  analyseJd(applicationId: string, text?: string, replaceEdits?: boolean): Promise<JdOutcome>;
   saveAnalysis(applicationId: string, analysis: Analysis): Promise<AppBundle>;
   saveQuestion(applicationId: string, question: QuestionInput): Promise<AppBundle>;
   deleteQuestion(applicationId: string, questionId: string): Promise<AppBundle>;
@@ -439,9 +440,9 @@ function applicationActions(app: boolean, appsRef: { current: AppsState }, setAp
       keep(out.bundle);
       return out;
     },
-    async analyseJd(applicationId, text) {
+    async analyseJd(applicationId, text, replaceEdits) {
       if (!app) return needsApp();
-      const out = await invoke<JdOutcome>("analyse_jd", { applicationId, text: text ?? null });
+      const out = await invoke<JdOutcome>("analyse_jd", { applicationId, text: text ?? null, replaceEdits: replaceEdits ?? false });
       keep(out.bundle);
       return out;
     },

@@ -9,6 +9,8 @@ import { useHashParam, withParams } from "../../data/selection";
 import { useStore } from "../../data/store";
 import { applicationTarget } from "../../data/targets";
 import { TargetLabel } from "./TargetMark";
+import { RecheckPill } from "./RecheckButton";
+import { useRecheck } from "./recheck";
 import type { ApplicationExtras } from "../../data/screens/applications";
 import type { Application, ApplicationStatus, ClosedReason } from "../../data/types";
 import { CLOSED_LABEL, STATUSES, STATUS_LABEL, nextStage, shortDate, statusStyle, STAGE_LABEL, whenText } from "./format";
@@ -219,6 +221,19 @@ export function StatusMenu({ app }: { app: Application }) {
   );
 }
 
+/** Recheck in the header, beside the status chip, on every tab. Same recheck as the overview's button. */
+function HeaderRecheck({ app }: { app: Application }) {
+  const extras = useApplicationExtras(app.id);
+  const recheck = useRecheck(app.id);
+  const hasPosting = !!extras.postingText.trim();
+  return (
+    <>
+      <RecheckPill busy={recheck.busy} disabled={!hasPosting} title={hasPosting ? "Read the posting again against your stories" : "No posting text saved. Add it from Edit details."} onClick={() => void recheck.run()} />
+      <ErrorLine error={recheck.error} />
+    </>
+  );
+}
+
 /** Company, badges, role line and the two actions, shared by the application detail screens. */
 export function AppHeader({ app, now, children }: { app: Application; now: Date; children?: ReactNode }) {
   const link = useAppLink();
@@ -234,6 +249,7 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
           <h1 className="e-h1">{app.company}</h1>
           {app.startup && <span className="e-pill">Startup</span>}
           <StatusMenu app={app} />
+          <HeaderRecheck app={app} />
         </div>
         <span className="e-meta">
           {`${app.role} · applied ${shortDate(app.applied_on)}${nextBit}`}
