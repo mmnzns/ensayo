@@ -16,6 +16,7 @@ import { pickResumePath } from "../../ui/pickFile";
 import { fileNameOf } from "../settings/targetForms";
 import { bytesOf, contactFromText, isResumeFile, joinAt, moveItem, splitAt } from "./forms";
 import { ErrorLine, Notice, useRun } from "./parts";
+import ResumeFileCard from "../../components/ResumeFileCard";
 import FitBanner from "./FitBanner";
 import TargetPicker from "./TargetPicker";
 import { PICKER_HINT, stagesFor, stagesLine, suggestTarget } from "./targetPick";
@@ -352,16 +353,7 @@ export default function NewApplication() {
             <ErrorLine error={fileError} />
             <input ref={fileInput} type="file" accept=".pdf,.doc,.docx" style={{ display: "none" }} onChange={(e) => takeFile(e.target.files?.[0])} aria-label="Choose the resume file" />
             {choice === "attach" && !choosing && fileName && (
-              <div className="e-soft" style={{ display: "flex", alignItems: "center", gap: "16px", background: "var(--e-surface)", boxShadow: "inset 0 0 0 1.5px var(--e-primary)" }}>
-                <span style={{ width: "44px", height: "52px", borderRadius: "8px", background: "var(--e-tint)", color: "var(--e-primary-dark)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: "11px", fontWeight: "700" }}>
-                  {fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "DOC"}
-                </span>
-                <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px" }}>
-                  <span style={{ fontWeight: "600" }}>{fileName}</span>
-                  <span className="e-small">{filePages ? `${filePages} pages · ` : ""}read on this computer after you save</span>
-                </span>
-                <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChoosing(true)}>Replace</button>
-              </div>
+              <ResumeFileCard fileName={fileName} pages={filePages} onReplace={() => setChoosing(true)} />
             )}
             {choice === "attach" && choosing && (
               <div
@@ -375,9 +367,9 @@ export default function NewApplication() {
               >
                 <span className="e-h3">Drop the PDF or Word file here</span>
                 <span className="e-small">Or pick it from your computer.</span>
-                <span style={{ display: "flex", gap: "8px" }}>
+                <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px", maxWidth: "100%" }}>
                   <button type="button" className="e-btn e-btn-line e-btn-sm" onClick={() => void chooseFile()}>Choose a file</button>
-                  {fileName && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChoosing(false)}>Keep {fileName}</button>}
+                  {fileName && <button type="button" className="e-btn e-btn-ghost e-btn-sm" title={fileName} style={{ maxWidth: "100%", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }} onClick={() => setChoosing(false)}>Keep {fileName}</button>}
                 </span>
               </div>
             )}
