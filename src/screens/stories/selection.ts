@@ -9,7 +9,7 @@ export const chooseStory = (id: string) => {
 export const chosenStory = () => chosenStoryId;
 
 /** What the user typed on the paste screen (5-2), kept so a failed read (stories-parse-error) does not lose it. */
-export const pasteDraft: { raw: string | undefined; company: string } = { raw: undefined, company: "" };
+export const pasteDraft: { raw: string | undefined; company: string; title: string } = { raw: undefined, company: "", title: "" };
 
 /** What the engine made of the pasted text (a draft, the parts still missing, anything dropped), until it is saved or abandoned. */
 export interface ParsedDraft {

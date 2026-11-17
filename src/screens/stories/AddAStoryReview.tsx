@@ -25,7 +25,7 @@ export default function AddAStoryReview() {
   const draft = blank ? null : getParsedDraft();
   const review = draft ? draftToReview(draft.story, draft.missing, draft.dropped) : null;
 
-  const first = review ?? (blank ? null : { ...parsed, company: pasteDraft.company.trim() || parsed.company, numbers: parsed.numbers.map((n) => ({ ...n, checked: false })) });
+  const first = review ?? (blank ? null : { ...parsed, title: pasteDraft.title.trim() || parsed.title, company: pasteDraft.company.trim() || parsed.company, numbers: parsed.numbers.map((n) => ({ ...n, checked: false })) });
   const [title, setTitle] = useState(first?.title ?? "");
   const [company, setCompany] = useState(first?.company ?? "");
   const [headline, setHeadline] = useState(first?.headline ?? "");

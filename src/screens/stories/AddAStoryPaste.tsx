@@ -16,6 +16,7 @@ export default function AddAStoryPaste() {
   const engine = store.engine;
   const [raw, setRaw] = useState(pasteStart(pasteDraft.raw, pasteSample, isApp()));
   const [company, setCompany] = useState(pasteDraft.company);
+  const [title, setTitle] = useState(pasteDraft.title);
   const empty = raw.trim() === "";
 
   const [reading, setReading] = useState(false);
@@ -34,13 +35,14 @@ export default function AddAStoryPaste() {
     if (empty || reading) return;
     pasteDraft.raw = raw;
     pasteDraft.company = company;
+    pasteDraft.title = title;
     setBlankReview(false);
     setParsedDraft(null);
     setParseFailure(null);
     // In the app the engine reads the text; in the browser preview the sample parse is shown.
     if (isApp()) {
       setReading(true);
-      await readStory(raw, company, { alive: () => here.current, setDraft: setParsedDraft, setFailure: setParseFailure, goTo: go });
+      await readStory(raw, company, { alive: () => here.current, setDraft: setParsedDraft, setFailure: setParseFailure, goTo: go }, title);
       if (here.current) setReading(false);
       return;
     }
@@ -68,11 +70,18 @@ export default function AddAStoryPaste() {
             <label htmlFor="raw">Your story, any format</label>
             <textarea id="raw" className="e-input" rows={11} value={raw} onChange={(e) => setRaw(e.target.value)} />
           </div>
-          <div className="e-field" style={{ maxWidth: "320px" }}>
-            <label htmlFor="emp">
-              Company <span style={{ fontWeight: "400", color: "var(--e-muted)" }}>(if it's not in the text)</span>
-            </label>
-            <input id="emp" className="e-input" placeholder="e.g. Brightwave" value={company} onChange={(e) => setCompany(e.target.value)} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+            <div className="e-field" style={{ flex: "1 1 240px", maxWidth: "320px" }}>
+              <label htmlFor="emp">
+                Company <span style={{ fontWeight: "400", color: "var(--e-muted)" }}>(if it's not in the text)</span>
+              </label>
+              <input id="emp" className="e-input" placeholder="e.g. Brightwave" value={company} onChange={(e) => setCompany(e.target.value)} />
+            </div>
+            <div className="e-field" style={{ flex: "1 1 240px", maxWidth: "320px" }}>
+              <label htmlFor="ttl">Title (optional)</label>
+              <span className="e-meta">Ensayo suggests one if you leave it blank</span>
+              <input id="ttl" className="e-input" placeholder="e.g. Win-back series" value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <button type="button" className="e-btn e-btn-primary" onClick={() => void readIt()} disabled={empty || reading} style={empty || reading ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>{reading ? "Reading..." : "Read it"}</button>
