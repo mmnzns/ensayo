@@ -110,11 +110,11 @@ export default function Applications() {
           )}
           <section className="e-card" style={{ padding: "8px 28px" }}>
             <div className="e-rowline" style={{ padding: "14px 0" }}>
-              <span className="e-label" style={{ flex: "2 1 0", minWidth: "0" }}>Company</span>
-              <span className="e-label" style={{ flex: "1 1 0", minWidth: "0" }}>Status</span>
-              <span className="e-label" style={{ flex: "1.3 1 0", minWidth: "0" }}>Sent</span>
-              <span className="e-label" style={{ flex: "1.5 1 0", minWidth: "0" }}>{tab === "active" ? "Next" : "How it ended"}</span>
-              <span className="e-label" style={{ flex: "0.8 1 0", minWidth: "0", textAlign: "right" }}>Practice</span>
+              <span className="e-label" style={{ flex: "2 1 150px", minWidth: "0" }}>Company</span>
+              <span className="e-label" style={{ flex: "1 1 100px", minWidth: "0" }}>Status</span>
+              <span className="e-label" style={{ flex: "1.3 1 110px", minWidth: "0" }}>Sent</span>
+              <span className="e-label" style={{ flex: "1.5 1 120px", minWidth: "0" }}>{tab === "active" ? "Next" : "How it ended"}</span>
+              <span className="e-label" style={{ flex: "0.8 1 70px", minWidth: "0", textAlign: "right" }}>Practice</span>
             </div>
             {rows.length === 0 && (
               <div style={{ padding: "28px 0" }}>
@@ -127,8 +127,8 @@ export default function Applications() {
               const check = a.status !== "closed" && fitBanner(a, store.targets) !== null && !isKept(a.id, filed?.id, undefined, a.fitDismissedFor);
               return (
                 <Link key={a.id} to={withParams("6-3-application-overview", { app: a.id })} className="e-rowline" style={{ padding: "18px 0", textDecoration: "none", color: "var(--e-ink)", ...(i === rows.length - 1 ? { borderBottom: "none" } : {}) }}>
-                  <span style={{ flex: "2 1 0", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <span style={{ fontWeight: "700", fontSize: "16px", overflowWrap: "anywhere" }}>
+                  <span style={{ flex: "2 1 150px", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <span style={{ fontWeight: "700", fontSize: "16px", overflowWrap: "break-word" }}>
                       {a.company}
                       {a.startup && (
                         <>
@@ -144,14 +144,14 @@ export default function Applications() {
                       )}
                     </span>
                     <span className="e-small" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", minWidth: "0" }}>
-                      <span title={a.role} style={{ minWidth: "0", overflowWrap: "anywhere" }}>{a.role}</span>
+                      <span title={a.role} style={{ minWidth: "0", overflowWrap: "break-word" }}>{a.role}</span>
                       {withMarker && filed && <TargetLabel target={filed} />}
                     </span>
                   </span>
-                  <span style={{ flex: "1 1 0", minWidth: "0" }}>
+                  <span style={{ flex: "1 1 100px", minWidth: "0" }}>
                     <span className="e-pill" style={{ fontWeight: "600", ...statusStyle(a.status) }}>{STATUS_LABEL[a.status]}</span>
                   </span>
-                  <span style={{ flex: "1.3 1 0", minWidth: "0", overflowWrap: "anywhere", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <span style={{ flex: "1.3 1 110px", minWidth: "0", overflowWrap: "break-word", display: "flex", flexDirection: "column", gap: "4px" }}>
                     <span style={{ fontSize: "14px" }}>{`Applied ${shortDate(a.applied_on)}`}</span>
                     {a.resume ? (
                       <span className="e-small" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
@@ -162,11 +162,11 @@ export default function Applications() {
                       <span className="e-small" style={{ color: "var(--e-warn-ink)" }}>No resume attached</span>
                     )}
                   </span>
-                  <span style={{ flex: "1.5 1 0", minWidth: "0", overflowWrap: "anywhere", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <span style={{ flex: "1.5 1 120px", minWidth: "0", overflowWrap: "break-word", display: "flex", flexDirection: "column", gap: "4px" }}>
                     <span style={{ fontSize: "14px", fontWeight: "600" }}>{nx.title}</span>
                     <span className="e-small">{nx.sub}</span>
                   </span>
-                  <span className="e-small" style={{ flex: "0.8 1 0", minWidth: "0", textAlign: "right" }}>{answersText(a.answersPracticed)}</span>
+                  <span className="e-small" style={{ flex: "0.8 1 70px", minWidth: "0", textAlign: "right" }}>{answersText(a.answersPracticed)}</span>
                 </Link>
               );
             })}

@@ -433,7 +433,7 @@ export default function NewApplication() {
             <StageRow
               key={s.key}
               label={rowLabel(s)}
-              name={<span style={{ fontWeight: "600", minWidth: 0, overflowWrap: "anywhere" }}>{rowLabel(s)}</span>}
+              name={<span style={{ fontWeight: "600", minWidth: 0, overflowWrap: "break-word" }}>{rowLabel(s)}</span>}
               date={s.date}
               time={s.time}
               onDate={(v) => setStageAt(s.key, { date: v })}

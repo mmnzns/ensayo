@@ -108,9 +108,9 @@ function NightBeforeCard({ app, stage, stages, lock, draft, onDraft, onDone, onP
         </div>
       )}
       {!stage.at && <span className="e-small">This stage has no date yet. Add one and Ensayo marks the night before.</span>}
-      <div className="e-soft" style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+      <div className="e-soft" style={{ display: "flex", flexWrap: "wrap", gap: "10px 14px", alignItems: "flex-start" }}>
         {LOCK}
-        <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ flex: "1 1 200px", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
           <span className="e-h3">Your opener</span>
           {open("opener") ? (
             <textarea className="e-input" rows={3} aria-label="Your opener" placeholder="A few short beats, one on each line" value={opener} onChange={(e) => setOpener(e.target.value)} />
@@ -120,9 +120,9 @@ function NightBeforeCard({ app, stage, stages, lock, draft, onDraft, onDone, onP
         </div>
         {lock && <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ minHeight: "36px" }} onClick={() => setChange(change === "opener" ? null : "opener")}>{change === "opener" ? "Done" : "Change"}</button>}
       </div>
-      <div className="e-soft" style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+      <div className="e-soft" style={{ display: "flex", flexWrap: "wrap", gap: "10px 14px", alignItems: "flex-start" }}>
         {LOCK}
-        <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ flex: "1 1 200px", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
           <span className="e-h3">One power story</span>
           {open("power") ? (
             stories.length === 0 ? (
@@ -141,9 +141,9 @@ function NightBeforeCard({ app, stage, stages, lock, draft, onDraft, onDone, onP
         </div>
         {lock && <button type="button" className="e-btn e-btn-ghost e-btn-sm" style={{ minHeight: "36px" }} onClick={() => setChange(change === "power" ? null : "power")}>{change === "power" ? "Done" : "Change"}</button>}
       </div>
-      <div className="e-soft" style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+      <div className="e-soft" style={{ display: "flex", flexWrap: "wrap", gap: "10px 14px", alignItems: "flex-start" }}>
         {LOCK}
-        <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ flex: "1 1 200px", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
           <span className="e-h3">Two questions to ask</span>
           {open("questions") ? (
             <span style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -386,7 +386,7 @@ function StagesTab({ app, extras, now }: Featured) {
                   <span style={{ width: "28px", height: "28px", borderRadius: "50%", boxShadow: "inset 0 0 0 3px var(--e-win)", flex: "none" }} />
                   <div style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", minWidth: "0" }}>
-                      {name ?? <span className="e-h3" style={{ minWidth: "0", overflowWrap: "anywhere" }}>{label}</span>}
+                      {name ?? <span className="e-h3" style={{ minWidth: "0" }}>{label}</span>}
                       {editing?.id !== s.id && (
                         <>
                           <span className="e-badge" style={{ flex: "none" }}>{when ? whenText(when, now) : "No date yet"}</span>

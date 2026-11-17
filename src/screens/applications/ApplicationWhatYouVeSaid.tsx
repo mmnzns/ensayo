@@ -42,9 +42,9 @@ function Said({ app, now }: Featured) {
           const num = g.differs ? numberIn(g.differs.quote) : undefined;
           const live = g.claims.filter((c) => !g.struck.has(c.id));
           return (
-            <div key={g.subject} className="e-rowline" style={{ padding: "18px 0", alignItems: "flex-start", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last ? { borderBottom: "none" } : {}) }}>
-              <span className="e-h3" style={{ width: "180px", flex: "0 1 180px", minWidth: "0" }}>{g.subject}</span>
-              <div style={{ flex: "1", minWidth: "0", overflowWrap: "anywhere", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div key={g.subject} className="e-rowline" style={{ padding: "18px 0", alignItems: "flex-start", flexWrap: "wrap", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last ? { borderBottom: "none" } : {}) }}>
+              <span className="e-h3" style={{ flex: "0 1 180px", minWidth: "0" }}>{g.subject}</span>
+              <div style={{ flex: "1 1 220px", minWidth: "0", display: "flex", flexDirection: "column", gap: "6px" }}>
                 {g.claims.map((c) => {
                   const struck = g.struck.has(c.id);
                   const where = c.status === "updated" && c.note ? `${c.stage_label} · ${c.note.charAt(0).toLowerCase()}${c.note.slice(1)}` : c.stage_label;

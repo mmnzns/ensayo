@@ -277,13 +277,13 @@ function ResumeTab({ app, now }: Featured) {
             {mustSay.map((m, i) => {
               const notYet = /^not said/i.test(m.said);
               return (
-                <div key={m.id} className="e-soft" style={{ display: "flex", alignItems: "flex-start", gap: "14px", padding: "16px 20px", ...(notYet ? { background: "var(--e-highlight)" } : {}) }}>
+                <div key={m.id} className="e-soft" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "8px 14px", padding: "16px 20px", ...(notYet ? { background: "var(--e-highlight)" } : {}) }}>
                   <span className="e-h3" style={{ color: notYet ? "var(--e-warn-ink)" : "var(--e-primary-dark)" }}>{i + 1}</span>
-                  <span style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <span style={{ flex: "1 1 200px", minWidth: "0", display: "flex", flexDirection: "column", gap: "2px" }}>
                     <span className="e-h3" style={{ fontSize: "16px" }}>{m.text}</span>
                     <span className="e-small">{m.resume}</span>
                   </span>
-                  <span className={notYet ? "e-badge" : "e-badge e-badge-ok"} style={{ flex: "0 1 auto", maxWidth: "40%" }}>{m.said}</span>
+                  <span className={notYet ? "e-badge" : "e-badge e-badge-ok"} style={{ flex: "0 1 auto", maxWidth: "100%" }}>{m.said}</span>
                 </div>
               );
             })}
@@ -302,8 +302,8 @@ function ResumeTab({ app, now }: Featured) {
               const isEditing = editing?.id === c.id;
               return (
                 <div key={c.id} style={{ display: "flex", flexDirection: "column" }}>
-                  <div className="e-rowline" style={{ padding: "14px 0", alignItems: "flex-start", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last && !differs && !adding ? { borderBottom: "none" } : {}) }}>
-                    <span style={{ flex: "1", minWidth: "0", overflowWrap: "anywhere", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <div className="e-rowline" style={{ padding: "14px 0", alignItems: "flex-start", flexWrap: "wrap", ...(differs ? { background: "var(--e-highlight)", margin: "0 -28px", paddingLeft: "28px", paddingRight: "28px" } : {}), ...(last && !differs && !adding ? { borderBottom: "none" } : {}) }}>
+                    <span style={{ flex: "1 1 220px", minWidth: "0", display: "flex", flexDirection: "column", gap: "4px" }}>
                       {isEditing ? (
                         <input className="e-input" style={{ minHeight: "40px", padding: "8px 10px", fontSize: "15px" }} aria-label={`${c.subject} text`} value={editing.value} onChange={(e) => setEditing({ id: c.id, value: e.target.value })} />
                       ) : (
@@ -374,8 +374,8 @@ function ResumeTab({ app, now }: Featured) {
             <ErrorLine error={sugRun.error} />
             {suggestions.length === 0 && <span className="e-meta">No bullets to suggest yet.</span>}
             {suggestions.map((sg, i) => (
-              <div key={i} className="e-rowline" style={{ padding: "12px 0", ...(i === suggestions.length - 1 ? { borderBottom: "none" } : {}) }}>
-                <span style={{ flex: "1", minWidth: "0", overflowWrap: "anywhere" }}>{sg.text}</span>
+              <div key={i} className="e-rowline" style={{ padding: "12px 0", flexWrap: "wrap", ...(i === suggestions.length - 1 ? { borderBottom: "none" } : {}) }}>
+                <span style={{ flex: "1 1 220px", minWidth: "0" }}>{sg.text}</span>
                 <span className="e-badge" style={{ flex: "0 1 auto" }}>{sg.gap}</span>
                 <Link to="5-3-add-a-story-review" className="e-btn e-btn-line e-btn-sm" style={{ flex: "none" }}>Review</Link>
                 {sg.bullet && (

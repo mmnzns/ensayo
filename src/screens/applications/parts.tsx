@@ -247,7 +247,7 @@ export function AppHeader({ app, now, children }: { app: Application; now: Date;
       <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "0", flex: "1 1 320px" }}>
         <BackLink to="6-1-applications" label="Applications" />
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: "0" }}>
-          <h1 className="e-h1" style={{ minWidth: "0", overflowWrap: "anywhere" }}>{app.company}</h1>
+          <h1 className="e-h1" style={{ minWidth: "0", overflowWrap: "break-word" }}>{app.company}</h1>
           {app.startup && <span className="e-pill" style={{ flex: "none" }}>Startup</span>}
           <StatusMenu app={app} />
           <HeaderRecheck app={app} />
