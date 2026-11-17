@@ -167,11 +167,32 @@ describe("the Voice list with system voices", () => {
   const browser: VoiceLike[] = [{ voiceURI: "b-zoe", name: "Zoe", lang: "en-US" }, { voiceURI: "b-amelie", name: "Amélie", lang: "fr-CA" }];
   const system = [{ id: "Alex", name: "Alex", language: "en_US" }, { id: "Eddy (English (US))", name: "Eddy (English (US))", language: "en_US" }];
 
-  it("lists browser voices, then system voices tagged system", () => {
+  it("lists English voices of both engines first, then other languages, system voices tagged system", () => {
     const list = voiceOptions(browser, system);
-    expect(list.map((o) => o.engine)).toEqual(["browser", "browser", "system", "system"]);
+    expect(list.map((o) => o.value)).toEqual(["system:Alex", "system:Eddy (English (US))", "b-zoe", "b-amelie"]);
     expect(list.filter((o) => o.tag === "system").map((o) => o.label)).toEqual(["Alex · American English · system", "Eddy (English (US)) · American English · system"]);
-    expect(list[0].tag).toBeUndefined();
+    expect(list[2].tag).toBeUndefined();
+  });
+
+  it("puts Premium, then Enhanced, then the rest first within English", () => {
+    const list = voiceOptions(
+      [{ voiceURI: "b-a", name: "Aaron", lang: "en-US" }, { voiceURI: "b-fr", name: "Thomas", lang: "fr-FR" }],
+      [
+        { id: "Zoe (Premium)", name: "Zoe (Premium)", language: "en_US" },
+        { id: "Evan (Enhanced)", name: "Evan (Enhanced)", language: "en_US" },
+        { id: "Alva", name: "Alva", language: "sv_SE" },
+        { id: "Amy (Premium)", name: "Amy (Premium)", language: "en_GB" },
+      ],
+    );
+    expect(list.map((o) => o.voiceUri)).toEqual(["Amy (Premium)", "Zoe (Premium)", "Evan (Enhanced)", "b-a", "b-fr", "Alva"]);
+  });
+
+  it("puts a system voice right after the browser voice of the same name, and sorts other languages by language", () => {
+    const list = voiceOptions(
+      [{ voiceURI: "b-alex", name: "Alex", lang: "en-US" }, { voiceURI: "b-ben", name: "Ben", lang: "en-US" }],
+      [{ id: "Alex", name: "Alex", language: "en_US" }],
+    );
+    expect(list.map((o) => o.value)).toEqual(["b-alex", "system:Alex", "b-ben"]);
   });
 
   it("keeps a browser voice and a system voice of the same name apart", () => {

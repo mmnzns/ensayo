@@ -311,10 +311,38 @@ export function parseVoiceValue(value: string): { engine: VoiceEngine; voiceUri:
   return value.startsWith(SYSTEM_PREFIX) ? { engine: "system", voiceUri: value.slice(SYSTEM_PREFIX.length) } : { engine: "browser", voiceUri: value };
 }
 
-/** Browser voices first (English first), then the system's, each tagged "system" and labelled with its language. */
+/** How good a voice sounds by its name: Premium first, then Enhanced, then the rest. */
+const quality = (name: string): number => (/\(premium\)/i.test(name) ? 0 : /\(enhanced\)/i.test(name) ? 1 : 2);
+
+/**
+ * One list for both engines: English first (Premium, then Enhanced, then the rest, each by name; a system voice sits
+ * right after a browser voice of the same name), then every other language by language name and voice name.
+ * Values, labels and tags are the same as ever, so a saved choice still matches.
+ */
 export function voiceOptions(browser: VoiceLike[], system: NativeVoiceLike[]): VoiceOption[] {
-  const fromBrowser: VoiceOption[] = voiceChoices(browser).map((c) => ({ ...c, engine: "browser", voiceUri: c.value }));
-  const fromSystem: VoiceOption[] = voiceChoices(system.map((v) => ({ voiceURI: v.id, name: v.name, lang: v.language })))
-    .map((c) => ({ value: SYSTEM_PREFIX + c.value, label: `${c.label} · system`, engine: "system" as const, voiceUri: c.value, tag: "system" as const }));
-  return [...fromBrowser, ...fromSystem];
+  type Entry = { name: string; lang: string; english: boolean; option: VoiceOption };
+  const entries: Entry[] = [
+    ...browser.map((v): Entry => {
+      const label = `${v.name} · ${languageName(v.lang)}`;
+      return { name: v.name, lang: v.lang, english: isEnglish(v), option: { value: v.voiceURI, label, engine: "browser", voiceUri: v.voiceURI } };
+    }),
+    ...system.map((v): Entry => {
+      const label = `${v.name} · ${languageName(v.language)} · system`;
+      return { name: v.name, lang: v.language, english: isEnglish({ voiceURI: v.id, name: v.name, lang: v.language }), option: { value: SYSTEM_PREFIX + v.id, label, engine: "system", voiceUri: v.id, tag: "system" } };
+    }),
+  ];
+  const engineRank = (e: Entry) => (e.option.engine === "browser" ? 0 : 1);
+  const byName = (a: Entry, b: Entry) => a.name.localeCompare(b.name) || engineRank(a) - engineRank(b);
+  const english = entries.filter((e) => e.english).sort((a, b) => quality(a.name) - quality(b.name) || byName(a, b));
+  const other = entries
+    .filter((e) => !e.english)
+    .sort((a, b) => languageName(a.lang).localeCompare(languageName(b.lang)) || byName(a, b));
+  return [...english, ...other].map((e) => e.option);
+}
+
+/** Whether a list option is an English voice (for grouping the dropdown). */
+export function isEnglishOption(o: VoiceOption, browser: VoiceLike[], system: NativeVoiceLike[]): boolean {
+  return o.engine === "system"
+    ? system.some((v) => v.id === o.voiceUri && isEnglish({ voiceURI: v.id, name: v.name, lang: v.language }))
+    : browser.some((v) => v.voiceURI === o.voiceUri && isEnglish(v));
 }

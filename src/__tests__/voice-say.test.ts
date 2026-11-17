@@ -148,3 +148,18 @@ describe("say(): engine choice and fallback", () => {
     expect(await done).toEqual({ started: true, spoke: true });
   });
 });
+
+describe("loadNativeVoices(): refresh", () => {
+  it("asks once normally, and asks again with fresh so a new voice shows up and can be spoken", async () => {
+    installWindow({ engine: "system", voiceUri: "Zoe (Premium)" }, true);
+    const { say, loadNativeVoices } = await loadVoice();
+    expect((await loadNativeVoices()).map((v) => v.id)).toEqual(["Alex"]);
+    backend.native_voices = () => [{ id: "Alex", name: "Alex", language: "en_US" }, { id: "Zoe (Premium)", name: "Zoe (Premium)", language: "en_US" }];
+    expect(await loadNativeVoices()).toHaveLength(1);
+    expect(calls.filter((c) => c.cmd === "native_voices")).toHaveLength(1);
+    expect(await loadNativeVoices({ fresh: true })).toHaveLength(2);
+    // The refreshed cache is what speaking checks, so the new voice is used, not dropped.
+    expect(await ended(say)).toEqual({ started: true, spoke: true });
+    expect(calls.find((c) => c.cmd === "speak_native")?.args).toMatchObject({ voiceId: "Zoe (Premium)" });
+  });
+});

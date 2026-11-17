@@ -3,7 +3,7 @@ import type { VoiceData } from "../../data/screens/settings";
 import { say, stopSaying, useVoiceCatalog } from "../../practice/voice";
 import { NO_BROWSER_VOICE, NO_VOICE, voiceMode } from "../../practice/voiceEngine";
 import { RowText, SettingsLayout, ToggleRow, useLater } from "./parts";
-import { parseVoiceValue, readPrefs, updateVoice, voiceOptions, voiceValue, type VoicePrefs } from "./prefs";
+import { isEnglishOption, parseVoiceValue, readPrefs, updateVoice, voiceOptions, voiceValue, type VoicePrefs } from "./prefs";
 
 const SPEEDS: VoiceData["speed"][] = ["Slower", "Normal", "Faster"];
 
@@ -12,8 +12,11 @@ const SAMPLE = "Tell me about a time you changed your mind.";
 export default function SettingsVoice() {
   // Where the choice is kept: this computer (see prefs.ts). The voices are the ones the system offers.
   const [prefs, setPrefs] = useState<VoicePrefs>(() => readPrefs().voice);
-  const { browser, system, probed } = useVoiceCatalog();
+  const { browser, system, probed } = useVoiceCatalog({ fresh: true });
   const choices = voiceOptions(browser, system);
+  // The list is already English first, so each group keeps that order.
+  const english = choices.filter((c) => isEnglishOption(c, browser, system));
+  const otherLanguages = choices.filter((c) => !isEnglishOption(c, browser, system));
   // What to tell the user about the voices; while the probe is still waiting, the usual hint.
   const mode = probed ? voiceMode(browser.length, system.length) : "list";
   const [playing, setPlaying] = useState(false);
@@ -53,9 +56,18 @@ export default function SettingsVoice() {
           <div style={{ display: "flex", gap: "8px" }}>
             <select className="e-input" style={{ width: "220px" }} aria-label="Voice" value={voice} disabled={!readAloud} onChange={(e) => pick(e.target.value)}>
               <option value="">Automatic</option>
-              {choices.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
+              {[
+                { label: "English", items: english },
+                { label: "Other languages", items: otherLanguages },
+              ].map((g) =>
+                g.items.length === 0 ? null : (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.items.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </optgroup>
+                ),
+              )}
             </select>
             <button type="button" className="e-btn e-btn-soft e-btn-sm" style={{ minHeight: "48px" }} disabled={!readAloud || playing || mode === "none"} onClick={preview}>
               {playing ? (

@@ -46,10 +46,21 @@ export const readsTrySaying = (): boolean => {
 let nativeCache: NativeVoiceLike[] | null = null;
 let nativeAsk: Promise<NativeVoiceLike[]> | null = null;
 
-/** The computer's own voices, asked once per run of the app. Empty outside the app. */
-export function loadNativeVoices(): Promise<NativeVoiceLike[]> {
+/**
+ * The computer's own voices, asked once per run of the app. Empty outside the app.
+ * With `fresh`, ask again (a voice may have been downloaded since) and keep the answer for speaking too.
+ */
+export function loadNativeVoices(opts: { fresh?: boolean } = {}): Promise<NativeVoiceLike[]> {
   if (!inApp()) return Promise.resolve([]);
-  nativeAsk ??= fetchNativeVoices().then((v) => (nativeCache = v));
+  if (opts.fresh) nativeAsk = null;
+  if (!nativeAsk) {
+    const ask: Promise<NativeVoiceLike[]> = fetchNativeVoices().then((v) => {
+      // An older answer arriving after a newer ask must not overwrite it.
+      if (nativeAsk === ask) nativeCache = v;
+      return v;
+    });
+    nativeAsk = ask;
+  }
   return nativeAsk;
 }
 
@@ -67,17 +78,18 @@ export function browserSource(): ProbeSource | null {
 }
 
 /** Both engines' voices, and whether the browser probe has finished (so "no voice" is not shown too early). */
-export function useVoiceCatalog(): { browser: SpeechSynthesisVoice[]; system: NativeVoiceLike[]; probed: boolean } {
+export function useVoiceCatalog(opts: { fresh?: boolean } = {}): { browser: SpeechSynthesisVoice[]; system: NativeVoiceLike[]; probed: boolean } {
   const browser = useVoices();
   const [system, setSystem] = useState<NativeVoiceLike[]>(nativeCache ?? []);
   const [probed, setProbed] = useState(false);
   useEffect(() => {
     let alive = true;
     void probeBrowserVoices(browserSource()).then(() => alive && setProbed(true));
-    void loadNativeVoices().then((v) => alive && setSystem(v));
+    void loadNativeVoices({ fresh: opts.fresh }).then((v) => alive && setSystem(v));
     return () => {
       alive = false;
     };
+    // Asked once per open; the options object is new on every render, so it is left out on purpose.
   }, []);
   return { browser, system, probed: probed || browser.length > 0 };
 }
