@@ -2,6 +2,8 @@
 //! whether it ever passes an answer the user says failed `answer_first`. Pure functions over eval records, so the same
 //! report runs from the CLI (`ensayo-eval`), from tests and in CI.
 
+pub mod coach_report;
+
 use crate::metrics::Check;
 use crate::storage::reps::EvalRecord;
 use serde::Serialize;

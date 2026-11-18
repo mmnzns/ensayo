@@ -139,8 +139,14 @@ pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, l
 /// The saved settings with the key looked up in the system's key storage.
 pub fn resolved_from_disk() -> Result<Option<Engine>, String> {
     let saved = settings::load(&paths::settings_file());
+    resolved_with(&saved.ai.unwrap_or_default(), keys::get)
+}
+
+/// `resolve_engine` for settings the caller built (the eval tool's environment variables), with the shared models
+/// folder looked up for the built-in local AI.
+pub fn resolved_with(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>) -> Result<Option<Engine>, String> {
     let store = models_store::store()?;
-    let engine = resolve_engine(&saved.ai.unwrap_or_default(), keys::get, |m| store.status(m.info.id));
+    let engine = resolve_engine(s, key_of, |m| store.status(m.info.id));
     // Ensayo is using the model it just found: another app's Delete must leave it alone.
     if let Ok(Some(Engine::Local(l))) = &engine {
         let _ = store.use_model(l.id);
