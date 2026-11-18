@@ -23,6 +23,7 @@ written for any user in any field: nothing personal to Miguel is inside them.
 | `09-analyse-jd.md` | JD to priorities, beliefs, question set, story map, and how each target fits | strong | JD import |
 | `10-question-quality.md` | The candidate's own questions (question_quality) and which must-say items were said out loud | fast | End of a Mock; Drill on demand |
 | `11-read-resume.md` | Submitted resume to stage-zero claims, bank check, must-say list, story suggestions, and which lead-with points fit | strong | Once when a resume is attached to an application |
+| `12-coach.md` | One call that judges the whole answer and picks the fix itself (Smart coach; Phase 0 is an offline report only, not wired into the app) | strong | `ensayo-eval --coach-report` only |
 | `schemas/*.schema.json` | JSON Schema (2020-12) for each output | n/a | Validate every response |
 | `examples/` | Fictional candidate, one question, three answers, expected outputs; `examples/targets/` for v0.1 | n/a | Tests and the M4 consistency check |
 
@@ -73,6 +74,7 @@ Rubric: v1 (unchanged by v0.1 Targets: no criterion changed).
 | 09 analyse JD | 2 | `targets` | `target_fit` (optional in the schema) |
 | 10 question quality | 1 | | |
 | 11 read resume | 2 | `lead_with` | `lead_with_fit` (optional in the schema) |
+| 12 smart coach | 1 | all inputs (new) | verdict, worked, fix, more, since_last |
 
 Each prompt's `## Input notes for code` (02: `## Input formats code must produce`) gives the exact
 format of every new input.

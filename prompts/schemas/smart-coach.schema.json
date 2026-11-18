@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ensayo/smart-coach.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "verdict_line", "worked", "fix", "more", "since_last", "offer_follow_up"],
+  "$defs": {
+    "kind": {
+      "enum": [
+        "parts_answered", "structure", "answer_first", "proof", "story_fit", "context_short", "clean_stop",
+        "ownership", "conviction", "no_complaining", "method_first", "approach_before_action", "jd_fit",
+        "stage_fit", "type_fit", "commitment", "builder_operator", "time_to_point", "length", "fillers",
+        "c1_consistent", "other"
+      ]
+    }
+  },
+  "properties": {
+    "verdict": {"enum": ["ready", "nearly", "not_yet"]},
+    "verdict_line": {"type": "string", "minLength": 1, "maxLength": 240},
+    "worked": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["quote", "why"],
+        "properties": {
+          "quote": {"type": "string", "minLength": 1, "maxLength": 240},
+          "why": {"type": "string", "minLength": 1, "maxLength": 240}
+        }
+      }
+    },
+    "fix": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["kind", "what", "why", "quote", "do_instead", "say_instead"],
+      "properties": {
+        "kind": {"$ref": "#/$defs/kind"},
+        "what": {"type": "string", "minLength": 1, "maxLength": 240},
+        "why": {"type": "string", "minLength": 1, "maxLength": 240},
+        "quote": {"type": "string", "maxLength": 240},
+        "do_instead": {"type": "string", "minLength": 1, "maxLength": 320},
+        "say_instead": {"type": ["string", "null"], "maxLength": 240}
+      }
+    },
+    "more": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "what", "quote"],
+        "properties": {
+          "kind": {"$ref": "#/$defs/kind"},
+          "what": {"type": "string", "minLength": 1, "maxLength": 240},
+          "quote": {"type": "string", "maxLength": 240}
+        }
+      }
+    },
+    "since_last": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["direction", "fixed", "still"],
+      "properties": {
+        "direction": {"enum": ["better", "same", "worse"]},
+        "fixed": {"type": "array", "maxItems": 3, "items": {"type": "string", "minLength": 1, "maxLength": 240}},
+        "still": {"type": "array", "maxItems": 3, "items": {"type": "string", "minLength": 1, "maxLength": 240}}
+      }
+    },
+    "offer_follow_up": {"type": "boolean"}
+  }
+}
