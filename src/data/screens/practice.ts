@@ -1,4 +1,5 @@
 // Screen-specific sample data for the "practice" group. Owned by that group's agent; shared entities live in ../mock/.
+import type { SmartCoachReply } from "../../practice/types";
 
 /** 41 seconds as "0:41", 64 as "1:04". */
 export function clock(totalSeconds: number): string {
@@ -54,6 +55,10 @@ export interface DeltaChip {
 
 export interface PracticeAttempt {
   number: 1 | 2 | 3;
+  /** The full coach's reply. When set, the screen shows it in place of the plain note. */
+  coach?: SmartCoachReply;
+  /** An AI-judged answer without the full coach: the screen adds one quiet line about it. */
+  basicFeedback?: boolean;
   coachNote: string;
   /** For a timing-only answer: what was not judged and why, said on the main card. */
   notJudged?: string;
@@ -121,6 +126,25 @@ export const practiceData: PracticeData = {
   attempts: [
     {
       number: 1,
+      coach: {
+        verdict: "not_yet",
+        verdict_line: "The result is in there, but it comes 41 seconds in, after the whole backstory.",
+        worked: [{ quote: "activation went up to about 44 percent", why: "A real number, said out loud." }],
+        fix: {
+          kind: "answer_first",
+          what: "Say the result first.",
+          why: "An interviewer decides in the first few seconds whether you are getting to a point.",
+          quote: "So, um, at Fernhill I was on the lifecycle team",
+          do_instead: "Open with the number, then tell the story behind it.",
+          say_instead: "I moved seven-day activation from 31 to 44 percent by firing the email when people stalled on bank linking.",
+        },
+        more: [
+          { kind: "fillers", what: "A few filler words crept in.", quote: "um" },
+          { kind: "ownership", what: "Most of the decisions were said as we.", quote: "we looked at the data" },
+        ],
+        since_last: null,
+        offer_follow_up: false,
+      },
       coachNote: "Your result came 41 seconds in, after the whole backstory. Say it first, then tell the story.",
       trySaying: "I moved seven-day activation from 31 to 44 percent by firing the email when people stalled on bank linking.",
       durationSeconds: 58,
@@ -149,6 +173,22 @@ export const practiceData: PracticeData = {
     },
     {
       number: 2,
+      coach: {
+        verdict: "nearly",
+        verdict_line: "Much tighter. The point lands in the first sentence now.",
+        worked: [{ quote: "I moved seven-day activation from 31 to 44 percent", why: "It answers the question before anything else." }],
+        fix: {
+          kind: "ownership",
+          what: "Say what you decided.",
+          why: "Every decision was we, so it is hard to tell what you did.",
+          quote: "we decided to change the trigger",
+          do_instead: "Say I where you made the call.",
+          say_instead: "I decided the fix was the handoff from email to the bank-linking screen, and I picked seven-day activation to prove it.",
+        },
+        more: [{ kind: "fillers", what: "Two filler words, down from four.", quote: "like" }],
+        since_last: { direction: "better", fixed: ["The point now comes first."], still: ["Decisions are still said as we."] },
+        offer_follow_up: false,
+      },
       coachNote: `Every decision was "we". Say what you decided.`,
       trySaying: "I decided the fix was the handoff from email to the bank-linking screen, and I picked seven-day activation to prove it.",
       delta: { label: "Point landed", fromSeconds: 41, toSeconds: 6, caption: "Better than your previous attempt", improved: true },
@@ -186,6 +226,18 @@ export const practiceData: PracticeData = {
     },
     {
       number: 3,
+      coach: {
+        verdict: "ready",
+        verdict_line: "You led with the result, said what you decided and stopped right after it.",
+        worked: [
+          { quote: "I moved seven-day activation from 31 to 44 percent", why: "The point comes first." },
+          { quote: "I decided the handoff was the fix", why: "It is clear what you did." },
+        ],
+        fix: null,
+        more: [],
+        since_last: { direction: "better", fixed: ["You said what you decided."], still: [] },
+        offer_follow_up: true,
+      },
       coachNote: "You led with the 44 percent, said what you decided, and stopped right after the result.",
       delta: { label: "Every check clean this time", caption: "Better than your previous attempt", improved: true },
       wins: [`Point at ${clock(5)}`, `"I decided" said twice`, `${clock(64)} long`],

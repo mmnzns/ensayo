@@ -136,8 +136,59 @@ impl Classification {
     }
 }
 
+/// What is left to word once the checks are in: everything prompt 03 needs, kept as owned text so the caller can
+/// word it at once (`score_answer`) or only when something else could not (the Smart coach fell over).
+#[derive(Debug, Clone, Default)]
+pub struct NoteJob {
+    fix: Option<String>,
+    evidence: Option<String>,
+    measurements: String,
+    transcript: String,
+    plain_transcript: String,
+    stories: String,
+    angles: String,
+}
+
+impl NoteJob {
+    /// Prompt 03 for the fix code picked.
+    pub fn word(&self, llm: &dyn Llm, question: &QuestionInfo, stage: &str, method: &str, identity_statement: &str, budget: &mut Budget) -> Result<Coach, CallError> {
+        word_note(
+            llm,
+            &CoachInput {
+                fix: self.fix.as_deref(),
+                evidence: self.evidence.clone(),
+                measurements: self.measurements.clone(),
+                question: &question.text,
+                question_type: &question.question_type,
+                stage,
+                transcript: &self.transcript,
+                plain_transcript: &self.plain_transcript,
+                stories: &self.stories,
+                method,
+                identity_statement,
+                story_angles: &self.angles,
+            },
+            budget,
+        )
+    }
+}
+
 /// How the pipeline reports a score: the AI's checks replace the rules-only ones for this rep.
 pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> Result<AiScore, CallError> {
+    let (mut score, job) = score_checks(llm, input, budget)?;
+    if score.clarifying_question || score.not_an_answer {
+        return Ok(score);
+    }
+    let finished = job.word(llm, input.question, input.stage, input.method, input.identity_statement, budget)?;
+    score.note = finished.note;
+    score.rewrite = finished.rewrite;
+    score.offer_follow_up = finished.offer_follow_up;
+    Ok(score)
+}
+
+/// Prompt 02 and the merge, without the note: the checks, the fix code picked, and the job of wording it. The note
+/// and rewrite of the returned score are empty until the job is done.
+pub fn score_checks(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> Result<(AiScore, NoteJob), CallError> {
     let q = input.question;
     let m = input.metrics;
     let active = criteria::active_criteria(&Ctx {
@@ -175,7 +226,7 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
     let prompts = vec![format!("score-answer v{}", get(PromptId::Score).version), format!("coach-note v{}", get(PromptId::Coach).version)];
 
     if score.clarifying_question || score.not_an_answer {
-        return Ok(AiScore {
+        return Ok((AiScore {
             rubric_version: RUBRIC_VERSION,
             prompts,
             story_id: score.story_id,
@@ -187,7 +238,7 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
             note: String::new(),
             rewrite: None,
             offer_follow_up: false,
-        });
+        }, NoteJob::default()));
     }
 
     let checks = criteria::merge(&score, m, &active, input.bank);
@@ -198,26 +249,16 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
     let measure = fix.as_deref().map(|f| coach::measurements(f, m, criteria::tail_ms(&score, m), score.proof_landed_sentence, ttp)).unwrap_or_default();
 
     let plain_transcript = m.sentences.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ");
-    let finished = word_note(
-        llm,
-        &CoachInput {
-            fix: fix.as_deref(),
-            evidence: fix_check.map(coach::evidence),
-            measurements: measure,
-            question: &q.text,
-            question_type: &q.question_type,
-            stage: input.stage,
-            transcript: &transcript,
-            plain_transcript: &plain_transcript,
-            stories: &stories,
-            method: input.method,
-            identity_statement: input.identity_statement,
-            story_angles: &angles,
-        },
-        budget,
-    )?;
-
-    Ok(AiScore {
+    let job = NoteJob {
+        fix: fix.clone(),
+        evidence: fix_check.map(coach::evidence),
+        measurements: measure,
+        transcript,
+        plain_transcript,
+        stories,
+        angles,
+    };
+    let score = AiScore {
         rubric_version: RUBRIC_VERSION,
         prompts,
         story_id: score.story_id,
@@ -226,10 +267,11 @@ pub fn score_answer(llm: &dyn Llm, input: &ScoreInput, budget: &mut Budget) -> R
         restart_at: score.restart_at_sentence,
         checks,
         fix,
-        note: finished.note,
-        rewrite: finished.rewrite,
-        offer_follow_up: finished.offer_follow_up,
-    })
+        note: String::new(),
+        rewrite: None,
+        offer_follow_up: false,
+    };
+    Ok((score, job))
 }
 
 #[cfg(test)]

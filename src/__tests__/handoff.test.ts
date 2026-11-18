@@ -44,8 +44,8 @@ describe("question bank", () => {
 describe("prompt schemas", () => {
   const schemaFiles = readdirSync(join(root, "prompts/schemas")).filter((f) => f.endsWith(".schema.json"));
 
-  it("has a schema for each of the eleven prompts", () => {
-    expect(schemaFiles.length).toBe(11);
+  it("has a schema for each of the twelve prompts (12 is the Smart coach)", () => {
+    expect(schemaFiles.length).toBe(12);
   });
 
   it.each(schemaFiles)("%s is a valid JSON Schema", (f) => {

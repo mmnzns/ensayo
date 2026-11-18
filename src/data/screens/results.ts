@@ -30,6 +30,8 @@ export interface DrillQuestionResult {
   bestTry: number;
   /** How many tries the question got. */
   tries?: number;
+  /** The coach's verdict on each try in order, when the tries have coach replies. */
+  verdicts?: string[];
 }
 
 export interface DrillResultsData {

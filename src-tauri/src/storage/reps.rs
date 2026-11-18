@@ -8,6 +8,7 @@ use super::versioned::{load_record, save_record};
 use super::{Loaded, Result, Storage, StorageError};
 use crate::metrics::Metrics;
 use crate::scoring::coach::Rewrite;
+use crate::scoring::smart_coach::SmartCoach;
 use crate::speech::words::Word;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -126,6 +127,10 @@ pub struct Rep {
     /// How the AI judged it, for the score log. None for a rules-only rep.
     #[serde(default)]
     pub ai: Option<AiMeta>,
+    /// The Smart coach's whole reply, when a coach-level model coached this answer (the screens show it; `note`,
+    /// `fix` and `rewrite` carry the same advice in short form). None for answers judged the older way.
+    #[serde(default)]
+    pub coach: Option<SmartCoach>,
     pub feedback: Option<Feedback>,
     /// Fields a newer Ensayo added to this file. Kept so saving never drops them.
     #[serde(flatten, default, skip_serializing_if = "serde_json::Map::is_empty")]
@@ -475,7 +480,7 @@ mod tests {
         let metrics = compute(Inputs { words: words.clone(), stage: "recruiter", question_type: "behavioral", bank: numbers::extract("24%"), keep_restart: false });
         FullRep {
             session_id: "ses_a".into(),
-            rep: Rep { extra: Default::default(), n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), note: None, rewrite: None, ai: None, follow_up: None, feedback: None },
+            rep: Rep { extra: Default::default(), n, question_id: "gen-001".into(), question_text: "Tell me about yourself.".into(), question_type: "tell_me_about_yourself".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, is_major_story: true, founder_variant: false, attempt: 1, recorded_at: "2026-10-21T10:00:00Z".into(), story_ids: vec![], fix: Some("proof".into()), note: None, rewrite: None, ai: None, coach: None, follow_up: None, feedback: None },
             transcript: words,
             metrics,
         }

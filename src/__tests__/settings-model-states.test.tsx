@@ -86,9 +86,9 @@ const localModel = (id: string, over: Partial<LocalModel> = {}): LocalModel => (
 const settings = { provider: "local", fast_model: "", strong_model: "", base_url: "", cost_cap_usd: 1 };
 const st: AiScreenState = { kind: "local", cloudId: "claude", settings };
 
-function panel(models: LocalModel | LocalModel[], over: Record<string, unknown> = {}, saved = "") {
+function panel(models: LocalModel | LocalModel[], over: Record<string, unknown> = {}, saved = "", statusOver: Partial<LocalAiView> = {}) {
   const list = Array.isArray(models) ? models : [models];
-  const status: LocalAiView = { models: list, selected: list[0].id, helper_found: true };
+  const status: LocalAiView = { models: list, selected: list[0].id, helper_found: true, ...statusOver };
   const ai = { status, busy: null, error: "", notice: "", confirming: null, askDelete: no, download: no, cancel: no, remove: no, ...over };
   return renderToString(<BuiltInPanel ai={ai as never} st={{ ...st, settings: { ...settings, fast_model: saved } }} change={no} />);
 }
@@ -129,6 +129,16 @@ describe("the built-in local AI panel", () => {
     const html = panel(localModel("a", { state: "on_this_computer" }), { confirming: "a" });
     expect(html).toContain("Delete Model a? Other Craft Concepts apps that use it keep it.");
     expect(html).toContain("Keep it");
+  });
+
+  it("says the graphics card was skipped and offers to try it again, only then", () => {
+    const html = panel(localModel("a", { state: "ready" }), {}, "", { card_skipped: true });
+    expect(html).toContain("The graphics card was skipped after it failed.");
+    expect(html).toContain(">Try the card again<");
+    const fine = panel(localModel("a", { state: "ready" }));
+    expect(fine).not.toContain("graphics card");
+    expect(fine).not.toContain("Try the card again");
+    expect(panel(localModel("a", { state: "ready" }), {}, "", { card_skipped: false })).not.toContain("Try the card again");
   });
 
   it("says what a delete did", () => {

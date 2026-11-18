@@ -25,7 +25,9 @@ fn found() -> &'static Option<(String, Option<String>)> {
     CARD.get_or_init(|| {
         voice_engine_stt::discrete_card().map(|d| {
             let driver = voice_engine_stt::driver_version(&d);
-            (d.name, driver)
+            // `name` is the engine's own id for the adapter ("DirectML0"); `description` is the card's name.
+            let name = if d.description.trim().is_empty() { d.name.clone() } else { d.description.trim().to_string() };
+            (name, driver)
         })
     })
 }

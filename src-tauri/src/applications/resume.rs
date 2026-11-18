@@ -1384,7 +1384,7 @@ mod tests {
 
     fn read(s: &Storage, id: &str, llm: &Scripted) -> ReadResult {
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        read_resume(s, Some(AiCtx { llm, budget: &mut budget }), id).unwrap()
+        read_resume(s, Some(AiCtx { coach: false, llm, budget: &mut budget }), id).unwrap()
     }
 
     #[test]

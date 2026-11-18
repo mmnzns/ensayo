@@ -77,9 +77,10 @@ fn consistency_notice(e: &CallError) -> String {
 
 /// After the model scored an answer inside an application: pulls the claims out, adds `c1_consistent` to its checks,
 /// and when a conflict now outranks the fix the coach was told, words the note again about the conflict. A failure
-/// here never loses the rep: it comes back as a plain notice.
+/// here never loses the rep: it comes back as a plain notice. A `coached` answer (the Smart coach already wrote its
+/// advice) still gets the check, but its fix, note and rewrite are left alone and no note is worded again.
 #[allow(clippy::too_many_arguments)]
-pub fn after_scored(storage: &Storage, ai: &mut AiCtx, app: &AppCtx, heard: &Heard, metrics: &mut Metrics, fix: &mut Option<String>, note: &mut Option<String>, rewrite: &mut Option<Rewrite>) -> (Option<Pending>, Option<String>) {
+pub fn after_scored(storage: &Storage, ai: &mut AiCtx, app: &AppCtx, heard: &Heard, metrics: &mut Metrics, fix: &mut Option<String>, note: &mut Option<String>, rewrite: &mut Option<Rewrite>, coached: bool) -> (Option<Pending>, Option<String>) {
     let all = storage.load_stories().map(|l| l.items).unwrap_or_default();
     let stories: Vec<Story> = heard.story_ids.iter().filter_map(|id| all.iter().find(|s| &s.id == id).cloned()).collect();
     let extracted = {
@@ -91,6 +92,10 @@ pub fn after_scored(storage: &Storage, ai: &mut AiCtx, app: &AppCtx, heard: &Hea
     };
     let check = extracted.check();
     with_c1(&mut metrics.checks, check.clone());
+    let pending = |metrics: &Metrics| Pending { app_id: app.rec.id.clone(), stage_id: app.stage_id.clone(), stage_ref: app.stage_ref.clone(), question: heard.question.to_string(), extracted: extracted.clone(), metrics: metrics.clone() };
+    if coached {
+        return (Some(pending(metrics)), None);
+    }
     let new_fix = top_fix_for(&metrics.checks, heard.founder).map(String::from);
     if new_fix != *fix {
         *fix = new_fix.clone();
@@ -130,7 +135,7 @@ pub fn after_scored(storage: &Storage, ai: &mut AiCtx, app: &AppCtx, heard: &Hea
             }
         }
     }
-    (Some(Pending { app_id: app.rec.id.clone(), stage_id: app.stage_id.clone(), stage_ref: app.stage_ref.clone(), question: heard.question.to_string(), extracted, metrics: metrics.clone() }), None)
+    (Some(pending(metrics)), None)
 }
 
 /// The prompt versions this adds to a rep's score log.

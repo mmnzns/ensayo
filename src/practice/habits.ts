@@ -41,6 +41,8 @@ export interface RepSummary {
   ai_cost_usd: number | null;
   /** The model that judged the answer, as the provider reported it. */
   ai_model?: string | null;
+  /** The full coach's verdict on this answer: "ready", "nearly" or "not_yet". Missing on the basic path. */
+  verdict?: string | null;
 }
 
 /** Last N first attempts a pass rate looks at. */
@@ -276,6 +278,7 @@ export function summaryOfFull(r: FullRep, session: { mode: string; stage: string
     tail_ms: r.metrics.proof.tail_ms,
     ai_cost_usd: r.ai?.cost_usd ?? null,
     ai_model: r.ai?.model ?? null,
+    verdict: r.coach?.verdict ?? null,
     text: r.metrics.sentences.map((s) => s.text).join(" "),
   };
 }
@@ -289,6 +292,8 @@ export interface DrillQuestion {
   bestTry: number;
   /** How many tries the question got (follow-ups left out). */
   tries: number;
+  /** The coach's verdict on each try in order, when the tries have coach replies ("ready", "nearly", "not_yet"). */
+  verdicts?: string[];
 }
 
 export interface DrillView {
@@ -348,12 +353,14 @@ export function drillView(habits: Habit[], session: (RepSummary & { text?: strin
   const questionIds = [...new Set(firsts.map((r) => r.question_id))];
   const questions: DrillQuestion[] = questionIds.map((id) => {
     const tries = scored.filter((r) => r.question_id === id && !r.follow_up).sort((a, b) => a.attempt - b.attempt);
+    const verdicts = tries.map((r) => r.verdict).filter((v): v is string => !!v);
+    const withVerdicts = verdicts.length > 0 ? { verdicts } : {};
     if (spec) {
       const secs = tries.map((r) => secondsOf(r, focus.id)).filter((s): s is number => s !== null);
-      return { id, firstTry: secs[0] ?? 0, bestTry: secs.length ? Math.min(...secs) : 0, tries: tries.length };
+      return { id, firstTry: secs[0] ?? 0, bestTry: secs.length ? Math.min(...secs) : 0, tries: tries.length, ...withVerdicts };
     }
     const results = tries.map((r) => (habitResult(focus, r) ? 1 : 0));
-    return { id, firstTry: results[0] ?? 0, bestTry: results.length ? Math.max(...results) : 0, tries: tries.length };
+    return { id, firstTry: results[0] ?? 0, bestTry: results.length ? Math.max(...results) : 0, tries: tries.length, ...withVerdicts };
   });
 
   const done = scored.filter((r) => !r.follow_up);

@@ -256,6 +256,7 @@ export function attemptFromOutcome(o: RepOutcome): PracticeAttempt {
   const worked = rep.fix === null;
   return {
     number: Math.min(3, Math.max(1, rep.attempt)) as 1 | 2 | 3,
+    ...(rep.coach ? { coach: rep.coach } : rep.ai ? { basicFeedback: true } : {}),
     coachNote: coachNote(rep),
     notJudged: notJudgedLine(rep, o.notice),
     trySaying: rep.rewrite?.text,

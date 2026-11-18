@@ -24,7 +24,7 @@ pub struct Coach {
 /// Fixes whose line to say instead is always empty: the note says what to do (`prompts/03-coach-note.md`).
 const NO_REWRITE: [&str; 2] = ["clean_stop", "fillers"];
 
-fn no_em_dash(s: &str) -> String {
+pub(crate) fn no_em_dash(s: &str) -> String {
     s.replace(" \u{2014} ", ", ").replace(" \u{2013} ", ", ").replace(['\u{2014}', '\u{2013}'], ", ")
 }
 

@@ -20,7 +20,10 @@ export default function StoriesEmpty() {
           <h2 className="e-h1" style={{ fontSize: "28px" }}>No stories yet</h2>
           <p className="e-meta" style={{ margin: "0" }}>A story is a piece of real work you'd talk about in an interview: what was going on, what you did, what changed. With yours here, Ensayo can ask questions that fit and tell you when a number drifted.</p>
         </div>
-        <Link to="5-2-add-a-story-paste" className="e-btn e-btn-primary e-btn-big">Add a story</Link>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+          <Link to="5-2-add-a-story-paste" className="e-btn e-btn-primary e-btn-big">Add a story</Link>
+          <Link to="5-6-add-many-stories" className="e-btn e-btn-soft e-btn-big">Add many at once</Link>
+        </div>
       </section>
       <span className="e-small">The general questions work without any stories, so you can practice whenever you like.</span>
     </AppShell>

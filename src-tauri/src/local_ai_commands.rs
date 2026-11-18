@@ -21,20 +21,29 @@ pub struct LocalAiView {
     pub selected: String,
     /// False when the helper program is not next to the app (a broken install): the row should say it cannot run.
     pub helper_found: bool,
+    /// The graphics card failed three times lately and is being skipped, so answers run on the processor (slow). Settings offers "Try the card again".
+    pub card_skipped: bool,
 }
 
 pub fn view_with(saved_model: &str, store: &SharedStore, helper_found: bool) -> LocalAiView {
-    LocalAiView { models: local_models::status_in(store), selected: local_models::choose_in(saved_model, store).info.id.to_string(), helper_found }
+    LocalAiView { models: local_models::status_in(store), selected: local_models::choose_in(saved_model, store).info.id.to_string(), helper_found, card_skipped: false }
 }
 
 #[tauri::command]
 pub async fn local_ai_status() -> Result<LocalAiView, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let saved = settings::load(&paths::settings_file()).ai.unwrap_or_default();
-        Ok(view_with(&saved.fast_model, models_store::store()?, helper_path().exists()))
+        let view = view_with(&saved.fast_model, models_store::store()?, helper_path().exists());
+        Ok(LocalAiView { card_skipped: local::card_is_skipped(), ..view })
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// "Try the card again": forgets that the graphics card failed and lets the next answer use it, without a restart.
+#[tauri::command]
+pub async fn retry_local_ai_card() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(local::card_turned_on).await.map_err(|e| e.to_string())
 }
 
 /// The one download that may run at a time, with its cancel flag.
