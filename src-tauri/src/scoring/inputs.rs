@@ -2,7 +2,7 @@
 //! produce"). Everything here is user content, so callers wrap it in `<data>` tags through `escape_data`.
 
 use crate::metrics::Metrics;
-use crate::storage::model::Story;
+use crate::storage::model::{ProofPoint, Story};
 
 /// One sentence per line: `[3] (12.4s to 17.9s) The result was...`. Times run from the first word, so the model sees
 /// the clock the user sees. The model refers to sentences by number only; code turns numbers into times.
@@ -34,22 +34,21 @@ pub fn story_angles_text(stories: &[Story], target_id: Option<&str>) -> String {
         .join("\n\n")
 }
 
+/// One proof point as the prompts write it: `activation_7d: 31% -> 44%`, `bank_link_steps: 3 -> 1 steps`.
+pub fn proof_point_text(p: &ProofPoint) -> String {
+    let unit = p.unit.trim();
+    let pct = if unit == "%" { "%" } else { "" };
+    let value = if p.before.trim().is_empty() { format!("{}{}", p.after, pct) } else { format!("{}{} -> {}{}", p.before, pct, p.after, pct) };
+    let unit_word = if unit.is_empty() || unit == "%" { String::new() } else { format!(" {unit}") };
+    format!("{}: {}{}", p.label, value, unit_word)
+}
+
 /// Up to three stories, most relevant first (the caller has already picked them).
 pub fn stories_text(stories: &[Story]) -> String {
     stories
         .iter()
         .map(|s| {
-            let points = s
-                .proof_points
-                .iter()
-                .map(|p| {
-                    let unit = p.unit.trim();
-                    let value = if p.before.trim().is_empty() { format!("{}{}", p.after, if unit == "%" { "%" } else { "" }) } else { format!("{}{} -> {}{}", p.before, if unit == "%" { "%" } else { "" }, p.after, if unit == "%" { "%" } else { "" }) };
-                    let unit_word = if unit.is_empty() || unit == "%" { String::new() } else { format!(" {unit}") };
-                    format!("{}: {}{}", p.label, value, unit_word)
-                })
-                .collect::<Vec<_>>()
-                .join("; ");
+            let points = s.proof_points.iter().map(proof_point_text).collect::<Vec<_>>().join("; ");
             format!(
                 "id: {}\ntitle: {}\ncontext: {}\napproach: {}\naction: {}\nresult: {}\nproof_points: {}",
                 s.id,

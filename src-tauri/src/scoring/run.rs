@@ -163,7 +163,7 @@ fn from_ai(e: AiError) -> CallError {
 /// The system prompt with the reply's JSON Schema after it. The prompts describe the fields in prose; without the
 /// schema itself a model guesses names and allowed values (GPT-6 replies to the resume and posting reads were refused
 /// for exactly that), so every call carries it.
-fn with_schema(system: &str, schema: &Value) -> String {
+pub(crate) fn with_schema(system: &str, schema: &Value) -> String {
     format!(
         "{system}\n\n## Reply format\n\nReply with one JSON object that matches this JSON Schema exactly: the same field names, every required field, no other fields, and only the allowed values where a field lists them.\n\n{}",
         serde_json::to_string(schema).unwrap_or_default()
@@ -171,7 +171,17 @@ fn with_schema(system: &str, schema: &Value) -> String {
 }
 
 pub fn call_json(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, budget: &mut Budget) -> Result<Called, CallError> {
+    call_json_noted(llm, prompt, vars, max_tokens, budget, None)
+}
+
+/// `call_json` with a line added to the end of the user message on every attempt, for a caller that asks again after
+/// a reply broke a rule of its own (the Smart coach report). The note is plain words, never the user's text.
+pub fn call_json_noted(llm: &dyn Llm, prompt: &Prompt, vars: &Vars, max_tokens: u32, budget: &mut Budget, note: Option<&str>) -> Result<Called, CallError> {
     let (system, user) = prompt.render(vars);
+    let user = match note {
+        Some(n) => format!("{user}\n\n{n}"),
+        None => user,
+    };
     let system = with_schema(&system, &prompt.schema);
     let mut last = String::new();
     // Whether the previous reply was cut off at the token limit: the retry then gets twice the room.
