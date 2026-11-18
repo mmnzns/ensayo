@@ -9,6 +9,12 @@ import { clock, ListenButton, speak, stopSpeaking } from "./speak";
 import { useResults } from "./useResults";
 import { useEffect, useState } from "react";
 import DeleteSession from "./DeleteSession";
+import { VERDICT_LABEL } from "../practice/CoachFeedback";
+import type { CoachVerdict } from "../../practice/types";
+
+const verdictLabel = (v: string) => VERDICT_LABEL[v as CoachVerdict] ?? v;
+/** "Not yet → Nearly → Ready": what the coach said on each try of one question, in order. */
+export const verdictPath = (verdicts: string[]) => verdicts.map(verdictLabel).join(" → ");
 
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const word = (n: number) => WORDS[n] ?? String(n);
@@ -164,6 +170,20 @@ function DrillResults({ results }: { results: SessionResults }) {
           </div>
           )}
         </section>
+        {d.questions.some((q) => q.verdicts?.length) && (
+          <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <span className="e-label">What the coach said</span>
+            {d.questions.map((q, i) =>
+              q.verdicts?.length ? (
+                <div key={q.id} className="e-rowline" style={{ gap: "12px" }}>
+                  <span className="e-small" style={{ width: "32px", flex: "none" }}>Q{i + 1}</span>
+                  <span className="e-meta" style={{ flex: "1", minWidth: "0", color: "var(--e-ink)" }}>{verdictPath(q.verdicts)}</span>
+                  <span className={q.verdicts[q.verdicts.length - 1] === "ready" ? "e-badge e-badge-ok" : "e-badge"} style={{ flex: "none" }}>{verdictLabel(q.verdicts[q.verdicts.length - 1])}</span>
+                </div>
+              ) : null,
+            )}
+          </section>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "20px" }}>
           <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <span className="e-label">Fixes that stuck</span>

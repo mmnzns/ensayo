@@ -8,6 +8,8 @@ import { useStore } from "../../data/store";
 import AppShell from "../../ui/AppShell";
 import Link from "../../ui/Link";
 import { go } from "../../ui/router";
+import { useHashParam, withParams } from "../../data/selection";
+import { prefillFor, setStoryForJob } from "./addForJob";
 import { pasteDraft, setBlankReview, setFromSetup, setParseFailure, setParsedDraft } from "./selection";
 import BackLink from "../../components/BackLink";
 
@@ -16,7 +18,13 @@ export default function AddAStoryPaste() {
   const { pasteSample } = store.screens.stories;
   const engine = store.engine;
   const [raw, setRaw] = useState(pasteStart(pasteDraft.raw, pasteSample, isApp()));
-  const [company, setCompany] = useState(pasteDraft.company);
+  // Opened from an application's "Stories to add for this job": the link carries the application, its company and a title hint.
+  const forApp = useHashParam("app");
+  const linkCompany = useHashParam("company");
+  const linkHint = useHashParam("hint");
+  const prefill = prefillFor({ app: forApp, company: linkCompany, hint: linkHint }, pasteDraft.company);
+  const hint = prefill.titleHint;
+  const [company, setCompany] = useState(prefill.company);
   const [title, setTitle] = useState(pasteDraft.title);
   const empty = raw.trim() === "";
 
@@ -31,6 +39,11 @@ export default function AddAStoryPaste() {
   }, []);
   // Adding a story from here is never the setup step, whatever was left behind.
   useEffect(() => setFromSetup(false), []);
+  // Any other way in clears the application, unless a half-typed story is being picked up again (back from the review).
+  useEffect(() => {
+    if (forApp) setStoryForJob(forApp);
+    else if (!pasteDraft.raw?.trim()) setStoryForJob(undefined);
+  }, [forApp]);
 
   const readIt = async () => {
     if (empty || reading) return;
@@ -81,12 +94,12 @@ export default function AddAStoryPaste() {
             <div className="e-field" style={{ flex: "1 1 240px", maxWidth: "320px" }}>
               <label htmlFor="ttl">Title (optional)</label>
               <span className="e-meta">Ensayo suggests one if you leave it blank</span>
-              <input id="ttl" className="e-input" placeholder="e.g. Win-back series" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <input id="ttl" className="e-input" placeholder={hint || "e.g. Win-back series"} value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <button type="button" className="e-btn e-btn-primary" onClick={() => void readIt()} disabled={empty || reading} style={empty || reading ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>{reading ? "Reading..." : "Read it"}</button>
-            <Link to="5-1-stories" className="e-btn e-btn-ghost">Cancel</Link>
+            <Link to={forApp ? withParams("6-3-application-overview", { app: forApp }) : "5-1-stories"} className="e-btn e-btn-ghost" onClick={() => setStoryForJob(undefined)}>Cancel</Link>
             {empty && <span className="e-small">Paste something first, or start blank.</span>}
           </div>
           {reading && <Working steps={["story"]} current="story" kind={engine.kind} onStop={() => void stopLocalAi()} />}

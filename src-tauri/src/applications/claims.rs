@@ -446,7 +446,7 @@ mod tests {
 
     fn run(s: &Storage, id: &str, c: &AnswerCtx, llm: &Scripted) -> Result<Extracted, CallError> {
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        extract(s, &mut AiCtx { llm, budget: &mut budget }, id, c)
+        extract(s, &mut AiCtx { coach: false, llm, budget: &mut budget }, id, c)
     }
 
     fn rep(n: u32) -> RepRef {

@@ -31,6 +31,7 @@ import {
   shownModel,
   testedLine,
   withCap,
+  withChosenKind,
   withKind,
   withLocalEngine,
   withLocalModel,
@@ -266,6 +267,68 @@ describe("changing the engine", () => {
 
   it("only picks a built-in engine while on this computer", () => {
     expect(withLocalEngine(start, "Built-in local AI")).toBe(start);
+  });
+});
+
+describe("coming back to an engine", () => {
+  const onBuiltIn = initialState({ settings: { ...settings, provider: "local", fast_model: "qwen3.5-9b" }, providers });
+  const onOllama = initialState({ settings: { ...settings, provider: "compatible", base_url: "http://localhost:1234", fast_model: "llama3.2", strong_model: "llama3.2" }, providers });
+
+  it("local, then key, then local keeps the built-in engine and its model", () => {
+    const back = withKind(withKind(onBuiltIn, "key", providers), "local", providers);
+    expect(back.kind).toBe("local");
+    expect(back.settings).toMatchObject({ provider: "local", base_url: "", fast_model: "qwen3.5-9b" });
+    expect(localEngineOf(back.settings).name).toBe("Built-in local AI");
+  });
+
+  it("keeps a compatible server, its address and both models", () => {
+    const back = withKind(withKind(onOllama, "key", providers), "local", providers);
+    expect(back.settings).toMatchObject({ provider: "compatible", base_url: "http://localhost:1234", fast_model: "llama3.2", strong_model: "llama3.2" });
+  });
+
+  it("keeps the local setup through timing only too, and the card path used by the engine cards does not undo it", () => {
+    const via = withKind(withKind(onBuiltIn, "timing", providers), "local", providers);
+    expect(via.settings).toMatchObject({ provider: "local", fast_model: "qwen3.5-9b" });
+    const cards = withChosenKind(withChosenKind(onBuiltIn, "key", providers), "local", providers);
+    expect(cards.settings).toMatchObject({ provider: "local", fast_model: "qwen3.5-9b" });
+    const lm = withChosenKind(withChosenKind(onOllama, "key", providers), "local", providers);
+    expect(lm.settings).toMatchObject({ provider: "compatible", base_url: "http://localhost:1234", fast_model: "llama3.2" });
+  });
+
+  it("remembers the setup as it is when the person leaves, not as it was at the start", () => {
+    const changed = withLocalEngine(onOllama, "Built-in local AI");
+    const picked = { ...changed, settings: { ...changed.settings, fast_model: "qwen3.5-4b" } };
+    expect(withKind(withKind(picked, "key", providers), "local", providers).settings).toMatchObject({ provider: "local", fast_model: "qwen3.5-4b" });
+  });
+
+  it("key, then local, then key keeps the provider and its model", () => {
+    const keyed = initialState({ settings: { ...settings, provider: "openai", fast_model: "gpt-5", strong_model: "gpt-5" }, providers });
+    const back = withKind(withKind(keyed, "local", providers), "key", providers);
+    expect(back.cloudId).toBe("openai");
+    expect(back.settings).toMatchObject({ provider: "openai", base_url: "", fast_model: "gpt-5", strong_model: "gpt-5" });
+  });
+
+  it("switching the cloud provider A, then B, then A keeps A's model", () => {
+    const a = initialState({ settings: { ...settings, provider: "claude", fast_model: "claude-opus-4", strong_model: "claude-sonnet-4" }, providers });
+    const b = withProvider(a, "openai", providers);
+    expect(b.settings).toMatchObject({ provider: "openai", fast_model: "", strong_model: "" });
+    const b2 = { ...b, settings: { ...b.settings, fast_model: "gpt-5" } };
+    const again = withProvider(b2, "claude", providers);
+    expect(again.settings).toMatchObject({ provider: "claude", fast_model: "claude-opus-4", strong_model: "claude-sonnet-4" });
+    expect(withProvider(again, "openai", providers).settings).toMatchObject({ provider: "openai", fast_model: "gpt-5" });
+  });
+
+  it("a fresh state with nothing remembered behaves as it always did", () => {
+    const fresh = initialState(view);
+    expect(fresh).toEqual({ kind: "key", cloudId: "claude", settings });
+    expect(withKind(fresh, "local", providers).settings).toMatchObject({ provider: "compatible", base_url: "http://localhost:11434", fast_model: "" });
+    const chosen = withChosenKind(fresh, "local", providers);
+    expect(chosen.settings).toMatchObject({ provider: "local", base_url: "", fast_model: "" });
+    expect(withKind(fresh, "timing", providers).settings).toMatchObject({ provider: "", fast_model: "" });
+  });
+
+  it("does nothing when the kind is already the one asked for", () => {
+    expect(withChosenKind(onBuiltIn, "local", providers)).toBe(onBuiltIn);
   });
 });
 

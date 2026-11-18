@@ -8,6 +8,7 @@ import Methods from "./Methods";
 import StoriesEmpty from "./StoriesEmpty";
 import StoriesParseError from "./StoriesParseError";
 import StoryAngles from "./StoryAngles";
+import AddManyStories from "./AddManyStories";
 
 /** Screen id to component, for this group's screens. */
 export const routes: Record<string, ComponentType> = {
@@ -17,6 +18,7 @@ export const routes: Record<string, ComponentType> = {
   "5-4-story": Story,
   "5-5-methods": Methods,
   "5-5-story-angles": StoryAngles,
+  "5-6-add-many-stories": AddManyStories,
   "stories-empty": StoriesEmpty,
   "stories-parse-error": StoriesParseError,
 };
@@ -24,6 +26,7 @@ export const routes: Record<string, ComponentType> = {
 /** Extra screens (states, dialogs) this group adds beyond the 46 in the design export. */
 export const extras: ManifestEntry[] = [
   { id: "5-5-story-angles", title: "Story, angles", shell: "app", nav: "stories", group: "stories", name: "StoryAngles", designed: false },
+  { id: "5-6-add-many-stories", title: "Add many stories", shell: "app", nav: "stories", group: "stories", name: "AddManyStories", designed: false },
   { id: "stories-empty", title: "Stories, none yet", shell: "app", nav: "stories", group: "stories", name: "StoriesEmpty", designed: false },
   { id: "stories-parse-error", title: "Add a story, couldn't read it", shell: "app", nav: "stories", group: "stories", name: "StoriesParseError", designed: false },
 ];

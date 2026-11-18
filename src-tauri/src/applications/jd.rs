@@ -939,7 +939,7 @@ mod tests {
 
     fn run_with(s: &Storage, id: &str, llm: &Scripted, replace_edits: bool) -> JdResult {
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        analyse(s, Some(AiCtx { llm, budget: &mut budget }), id, replace_edits).unwrap()
+        analyse(s, Some(AiCtx { coach: false, llm, budget: &mut budget }), id, replace_edits).unwrap()
     }
 
     fn reply(edit: impl FnOnce(&mut Value)) -> String {
@@ -1296,7 +1296,7 @@ mod tests {
         s.update_application(&id, AppPatch { target_id: Some(ops.id.clone()), ..Default::default() }).unwrap();
         let llm = Scripted::new(vec![Ok(REPLY)]);
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        let n = rebuild_questions(&s, Some(AiCtx { llm: &llm, budget: &mut budget }), &id).unwrap().unwrap();
+        let n = rebuild_questions(&s, Some(AiCtx { coach: false, llm: &llm, budget: &mut budget }), &id).unwrap().unwrap();
         assert_eq!(n, 12);
         assert!(llm.seen.lock().unwrap()[0].user.contains("Marketing Operations Manager"), "the new target's role is what the reading is told");
         assert!(questions(&s, &id).iter().all(|q| q.source != "bank"));

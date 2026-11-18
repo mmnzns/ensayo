@@ -80,7 +80,7 @@ fn with_engine<T>(application_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -> (
         Ok(Some(engine)) => {
             let llm = engine.client();
             let (provider, cap_usd) = engine.budget_basis();
-            let out = crate::ai_commands::with_budget(&format!("application-{application_id}"), provider, cap_usd, |budget| f(Some(AiCtx { llm: llm.as_ref() as &dyn Llm, budget })));
+            let out = crate::ai_commands::with_budget(&format!("application-{application_id}"), provider, cap_usd, |budget| f(Some(AiCtx { coach: false, llm: llm.as_ref() as &dyn Llm, budget })));
             (out, None)
         }
         Ok(None) => (f(None), None),
@@ -89,7 +89,7 @@ fn with_engine<T>(application_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -> (
 }
 
 fn reborrow<'a>(ai: &'a mut Option<AiCtx<'_>>) -> Option<AiCtx<'a>> {
-    ai.as_mut().map(|c| AiCtx { llm: c.llm, budget: &mut *c.budget })
+    ai.as_mut().map(|c| AiCtx { coach: c.coach, llm: c.llm, budget: &mut *c.budget })
 }
 
 /// The notice for a reading that fell back because the chosen engine cannot be used.
@@ -735,7 +735,7 @@ mod tests {
 
     fn run_ai<T>(llm: &Scripted, f: impl FnOnce(Option<AiCtx>) -> T) -> T {
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        f(Some(AiCtx { llm, budget: &mut budget }))
+        f(Some(AiCtx { coach: false, llm, budget: &mut budget }))
     }
 
     fn resume_reply() -> String {

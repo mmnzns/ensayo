@@ -7,6 +7,9 @@ import type { Analysis } from "../../data/applicationCommands";
 import { useActions } from "../../data/real";
 import { askedLine } from "../../data/interviews";
 import { useStore } from "../../data/store";
+import { useHashParam } from "../../data/selection";
+import { addStoryLink, storiesToAdd } from "../stories/helpers";
+import { showSavedOffer } from "../stories/addForJob";
 import { STAGE_LABEL, STATUS_LABEL, nextStage, shortDate, whenText } from "./format";
 import { keptWords } from "./forms";
 import FitBanner from "./FitBanner";
@@ -15,6 +18,34 @@ import { changedLine, setReplaceEdits, storiesChangedSince, useRecheck } from ".
 import { FIT_LABEL, fitClass, fitRows } from "./targetPick";
 import { TargetMark } from "./TargetMark";
 import { AppHeader, AppTabs, ErrorLine, Notice, useAppLink, useRun, withFeatured, type Featured } from "./parts";
+
+/** Every belief and gap none of the person's stories covers, each with the question it would answer and a way to add the story. */
+export function StoriesToAdd({ app, analysis, stories }: { app: Featured["app"]; analysis: Analysis; stories: { id: string; title: string }[] }) {
+  const link = useAppLink();
+  const items = storiesToAdd(analysis, stories);
+  return (
+    <section className="e-card" style={{ display: "flex", flexDirection: "column", gap: "6px" }} aria-label="Stories to add for this job">
+      <span className="e-h2" style={{ paddingBottom: "8px" }}>Stories to add for this job</span>
+      {items.length === 0 && <span className="e-meta">Your stories cover everything this job asks for.</span>}
+      {items.map((it, i) => (
+        <div key={it.key} className="e-rowline" style={{ alignItems: "flex-start", flexWrap: "wrap", ...(i === items.length - 1 ? { borderBottom: "none" } : {}) }}>
+          <div style={{ flex: "1 1 320px", minWidth: "0", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span className="e-h3" style={{ overflowWrap: "break-word" }}>{it.proves}</span>
+            <span className="e-meta">{`A story that shows this would answer: "${it.question}"`}</span>
+            {it.related && (
+              <span className="e-small">
+                {"Your story "}
+                <Link to={link("5-5-story-angles", { story: it.related.id })} style={{ fontWeight: 600 }}>{it.related.title}</Link>
+                {" might cover this with a new angle."}
+              </span>
+            )}
+          </div>
+          <Link to={addStoryLink(app, it.proves)} className="e-btn e-btn-line e-btn-sm" style={{ flex: "none" }}>Add this story</Link>
+        </div>
+      ))}
+    </section>
+  );
+}
 
 const editInput = { minHeight: "40px", padding: "8px 10px", fontSize: "15px" } as const;
 
@@ -30,6 +61,7 @@ function Overview({ app, extras, now }: Featured) {
   const [editNeeds, setEditNeeds] = useState(false);
   const [editBeliefs, setEditBeliefs] = useState(false);
   const [posting, setPosting] = useState("");
+  const savedParam = useHashParam("saved");
   const saving = useRun();
   const reading = useRecheck(app.id);
   const lastRead = reading.last;
@@ -117,6 +149,13 @@ function Overview({ app, extras, now }: Featured) {
         </section>
       )}
       {lastRead?.result.notice && <Notice>{lastRead.result.notice}</Notice>}
+      {showSavedOffer(savedParam, !!lastRead, !!extras.postingText) && (
+        <div className="e-soft" role="status" style={{ padding: "10px 18px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <span className="e-meta">Story saved. Recheck to see if this gap is covered.</span>
+          <RecheckButton busy={reading.busy} onClick={() => void readPosting()} />
+          {choice}
+        </div>
+      )}
       {analysis && changedStories > 0 && extras.postingText && (
         <div className="e-soft" role="status" style={{ padding: "10px 18px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <span className="e-meta">{changedLine(changedStories)}</span>
@@ -191,13 +230,14 @@ function Overview({ app, extras, now }: Featured) {
                     </>
                   ) : (
                     <>
-                      <span className="e-badge">No story yet</span>{" "}<Link to="5-2-add-a-story-paste" className="e-btn e-btn-line e-btn-sm">Add one</Link>
+                      <span className="e-badge">No story yet</span>{" "}<Link to={addStoryLink(app, b.text)} className="e-btn e-btn-line e-btn-sm">Add one</Link>
                     </>
                   )}
                 </div>
               );
             })}
           </section>
+          <StoriesToAdd app={app} analysis={analysis} stories={stories} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
             <section className="e-card" style={{ flex: "1 1 380px", display: "flex", flexDirection: "column", gap: "12px" }}>
               <span className="e-h3">They ask for, and your stories don't mention</span>

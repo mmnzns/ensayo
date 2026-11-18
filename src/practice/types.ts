@@ -80,6 +80,19 @@ export interface FollowUpQuestion {
   of: number;
 }
 
+export type CoachVerdict = "ready" | "nearly" | "not_yet";
+
+/** What the full coach said about one answer (a strong model; absent on the basic path and on answers saved before it). */
+export interface SmartCoachReply {
+  verdict: CoachVerdict;
+  verdict_line: string;
+  worked: { quote: string; why: string }[];
+  fix: { kind: string; what: string; why: string; quote: string; do_instead: string; say_instead: string | null } | null;
+  more: { kind: string; what: string; quote: string }[];
+  since_last: { direction: "better" | "same" | "worse"; fixed: string[]; still: string[] } | null;
+  offer_follow_up: boolean;
+}
+
 export interface FullRep {
   session_id: string;
   n: number;
@@ -102,6 +115,8 @@ export interface FullRep {
   rewrite: Rewrite | null;
   ai: { prompts: string[]; rubric_version: number; cost_usd: number; model?: string | null } | null;
   feedback: { note_was_wrong: boolean; at: string } | null;
+  /** The full coach's reply. Null or missing: the basic path, or an answer saved before the coach existed. */
+  coach?: SmartCoachReply | null;
   transcript: Word[];
   metrics: Metrics;
 }

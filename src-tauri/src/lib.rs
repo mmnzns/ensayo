@@ -26,6 +26,7 @@ mod platform;
 pub mod rep_commands;
 pub mod storage;
 mod story_commands;
+mod story_files;
 mod trash_commands;
 mod target_commands;
 mod recorder;
@@ -220,6 +221,8 @@ pub fn run() {
             ai_commands::continue_past_cap,
             ai_commands::decline_past_cap,
             story_commands::parse_story,
+            story_files::read_story_files,
+            story_files::model_price,
             mock_commands::mock_debrief,
             mock_commands::load_debrief,
             application_commands::load_applications,
@@ -261,6 +264,7 @@ pub fn run() {
             application_commands::cue_sheet,
             application_commands::cue_sheet_markdown,
             local_ai_commands::local_ai_status,
+            local_ai_commands::retry_local_ai_card,
             local_ai_commands::download_local_ai,
             local_ai_commands::cancel_local_ai_download,
             local_ai_commands::stop_local_ai,

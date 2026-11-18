@@ -12,4 +12,5 @@ pub mod pipeline;
 pub mod prompts;
 pub mod run;
 pub mod score;
+pub mod smart_coach;
 pub mod template;

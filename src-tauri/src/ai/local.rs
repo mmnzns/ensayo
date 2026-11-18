@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 use voice_engine_client::{EngineError, Limits, LlmClient, LlmConfig};
 use voice_engine_models::catalog::LlmInfo;
 use voice_engine_models::ModelHandle;
-use voice_engine_protocol::{Completion, Event, Phase, JSON_OBJECT_SCHEMA};
+use voice_engine_protocol::{Completion, Event, Fallback, Phase, JSON_OBJECT_SCHEMA};
 
 pub const HELPER: &str = "ensayo-llm";
 
@@ -151,9 +151,136 @@ fn failures_file() -> PathBuf {
     paths::app_local().join("gpu-failures.json")
 }
 
-/// Forgets that the card failed (the person turned it on again): the next answer tries it.
+/// The card is skipped after this many failures in a row (a success clears them) ...
+const SKIP_AFTER: u32 = 3;
+/// ... and only for this long after the last one: the next answer after that tries the card again.
+const RETRY_AFTER_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// What is remembered about one card state (app version, card, driver): how many times in a row it failed and when
+/// the last time was (milliseconds since 1970). It holds nothing about the person.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct Failure {
+    #[serde(default = "one")]
+    count: u32,
+    #[serde(default)]
+    last_ms: u64,
+}
+
+fn one() -> u32 {
+    1
+}
+
+/// The whole file: one `Failure` per key. Only the current key is kept when a failure is written, since a record for
+/// another app version, card or driver can't matter again.
+#[derive(Debug, Default, PartialEq)]
+struct Failures(std::collections::BTreeMap<String, Failure>);
+
+impl Failures {
+    /// Reads the file. Missing or unreadable means no failures. The first version of this file was the key alone as
+    /// text, and a JSON entry with no count is the same thing: both count as one failure (which never skips the card).
+    fn read(path: &Path) -> Failures {
+        let Ok(text) = std::fs::read_to_string(path) else { return Failures::default() };
+        Failures::parse(&text)
+    }
+
+    fn parse(text: &str) -> Failures {
+        let mut map = std::collections::BTreeMap::new();
+        match serde_json::from_str::<serde_json::Value>(text) {
+            Ok(serde_json::Value::Object(entries)) => {
+                for (key, value) in entries {
+                    let failure = serde_json::from_value::<Failure>(value).unwrap_or(Failure { count: 1, last_ms: 0 });
+                    map.insert(key, Failure { count: failure.count.max(1), ..failure });
+                }
+            }
+            Ok(_) => {}
+            Err(_) => {
+                let key = text.trim();
+                if !key.is_empty() {
+                    map.insert(key.to_string(), Failure { count: 1, last_ms: 0 });
+                }
+            }
+        }
+        Failures(map)
+    }
+
+    fn write(&self, path: &Path) {
+        if self.0.is_empty() {
+            let _ = std::fs::remove_file(path);
+            return;
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Ok(text) = serde_json::to_string(&self.0) {
+            let _ = std::fs::write(path, text);
+        }
+    }
+
+    /// True while the card should not be asked for: it failed `SKIP_AFTER` times and the last time was less than 24
+    /// hours ago.
+    fn skipping(&self, key: &str, now_ms: u64) -> bool {
+        self.0.get(key).is_some_and(|f| f.count >= SKIP_AFTER && now_ms.saturating_sub(f.last_ms) < RETRY_AFTER_MS)
+    }
+
+    /// Adds a failure for `key` and returns how many there are now.
+    fn record(&mut self, key: &str, now_ms: u64) -> u32 {
+        let count = self.0.get(key).map_or(0, |f| f.count).saturating_add(1);
+        self.0.clear();
+        self.0.insert(key.to_string(), Failure { count, last_ms: now_ms });
+        count
+    }
+
+    fn clear(&mut self, key: &str) -> bool {
+        self.0.remove(key).is_some()
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
+}
+
+/// One writer at a time: answers can finish together.
+static FAILURES: Mutex<()> = Mutex::new(());
+
+fn failures_locked() -> std::sync::MutexGuard<'static, ()> {
+    FAILURES.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Whether the card is being skipped now (it failed three times and the last time was under 24 hours ago).
+fn skipping_card(card: &Card) -> bool {
+    let _g = failures_locked();
+    Failures::read(&failures_file()).skipping(&card.key(), now_ms())
+}
+
+/// True when the person turned the card on, a card helper is there for it, and it is being skipped after failing:
+/// Settings says so and offers "Try the card again". Blocks like `Card::now`, so call it from a worker thread.
+pub fn card_is_skipped() -> bool {
+    let card = Card::now();
+    card.ask() && skipping_card(&card)
+}
+
+/// The card failed for this answer: remembered with the time. Returns how many times in a row it has failed.
+fn record_card_failure(path: &Path, key: &str, now_ms: u64) -> u32 {
+    let _g = failures_locked();
+    let mut all = Failures::read(path);
+    let count = all.record(key, now_ms);
+    all.write(path);
+    count
+}
+
+/// The card ran an answer: its failures are forgotten.
+fn clear_card_failure(path: &Path, key: &str) {
+    let _g = failures_locked();
+    let mut all = Failures::read(path);
+    if all.clear(key) {
+        all.write(path);
+    }
+}
+
+/// Forgets that the card failed (the person asked to try it again, or turned it on again): the next answer tries it.
 pub fn forget_card_failure() {
-    voice_engine_client::clear_gpu_failure(&failures_file());
+    let _g = failures_locked();
+    let _ = std::fs::remove_file(failures_file());
 }
 
 fn new_client(exe: &Path, card: &Card) -> LlmClient {
@@ -162,7 +289,8 @@ fn new_client(exe: &Path, card: &Card) -> LlmClient {
         gpu_helper: card.vulkan.clone(),
         env: vec![],
         gpu_env: vec![],
-        gpu_failures: Some(failures_file()),
+        // The app keeps its own record (a count and a time), so the engine's one-line file is not used.
+        gpu_failures: None,
         gpu_key: card.key(),
         idle_secs: Some(IDLE_SECS),
         limits: Limits { total: TOTAL, ..Limits::default() },
@@ -178,6 +306,8 @@ pub struct LocalLlm {
     model_name: String,
     /// Ask for the graphics card (`Card::ask`).
     gpu: bool,
+    /// The card state's key (`Card::key`), for the record of failures.
+    key: String,
     /// Hold the model's folder while it is loaded, so no other app erases it mid-use. Off only in tests.
     hold: bool,
 }
@@ -282,6 +412,7 @@ impl Llm for LocalLlm {
             message(&e)
         })?;
         graphics::note_fallback(graphics::AI, out.fallback);
+        self.note_card(out.fallback, out.backend.on_gpu());
         if self.hold {
             // The idle clock runs from the end of the answer, like the helper's.
             let _ = hold_model(&self.model_name);
@@ -309,19 +440,57 @@ pub fn shared(exe: &Path, model_path: &Path, model_name: &str) -> LocalLlm {
 }
 
 fn shared_with(exe: &Path, model_path: &Path, model_name: &str, card: &Card, hold: bool) -> LocalLlm {
+    let skipped = card.ask() && skipping_card(card);
+    shared_for(exe, model_path, model_name, card, skipped, hold)
+}
+
+/// `skipped`: the card failed three times in the last 24 hours, so the client is built (or kept) without it. A client
+/// built the other way is replaced, which is how the card is tried again once the 24 hours are over.
+fn shared_for(exe: &Path, model_path: &Path, model_name: &str, card: &Card, skipped: bool, hold: bool) -> LocalLlm {
+    let used = if skipped { Card { on: false, vulkan: None, ..card.clone() } } else { card.clone() };
     let mut slot = SHARED.lock().unwrap_or_else(|e| e.into_inner());
-    let client = match slot.as_ref().filter(|(path, _, _)| path == exe) {
+    let client = match slot.as_ref().filter(|(path, _, helper)| path == exe && *helper == used.vulkan) {
         Some((_, client, _)) => client.clone(),
         None => {
             if let Some((_, old, _)) = slot.take() {
                 old.shutdown();
             }
-            let client = Arc::new(new_client(exe, card));
-            *slot = Some((exe.to_path_buf(), client.clone(), card.vulkan.clone()));
+            let client = Arc::new(new_client(exe, &used));
+            *slot = Some((exe.to_path_buf(), client.clone(), used.vulkan.clone()));
             client
         }
     };
-    LocalLlm { client, exe: exe.to_path_buf(), model_path: model_path.to_path_buf(), model_name: model_name.to_string(), gpu: card.ask(), hold }
+    LocalLlm { client, exe: exe.to_path_buf(), model_path: model_path.to_path_buf(), model_name: model_name.to_string(), gpu: used.ask(), key: card.key(), hold }
+}
+
+/// Lets go of `client` if it is still the shared one: the next answer builds a new one.
+fn drop_shared(client: &Arc<LlmClient>) {
+    let mut slot = SHARED.lock().unwrap_or_else(|e| e.into_inner());
+    if slot.as_ref().is_some_and(|(_, c, _)| Arc::ptr_eq(c, client)) {
+        slot.take();
+    }
+    client.shutdown();
+}
+
+impl LocalLlm {
+    /// What an answer that asked for the card says about it. A failure is counted: the card is tried again on the next
+    /// answer until it has failed three times, then skipped for 24 hours. An answer that ran on the card clears the count.
+    fn note_card(&self, fallback: Option<Fallback>, ran_on_card: bool) {
+        if !self.gpu {
+            return;
+        }
+        let path = failures_file();
+        if graphics::card_failed(fallback) {
+            if record_card_failure(&path, &self.key, now_ms()) >= SKIP_AFTER {
+                log::info!("local AI: the graphics card failed {SKIP_AFTER} times, so it is skipped for 24 hours");
+                drop_shared(&self.client);
+            } else {
+                self.client.retry_gpu();
+            }
+        } else if fallback.is_none() && ran_on_card {
+            clear_card_failure(&path, &self.key);
+        }
+    }
 }
 
 /// Ends the shared helper now (the app is closing, the engine was switched, or the models are being deleted), and lets
@@ -662,7 +831,7 @@ done
         let _s = serial();
         let dir = tempfile::tempdir().unwrap();
         let exe = fake_helper(dir.path(), "first", false);
-        let ai = LocalLlm { client: Arc::new(new_client(&exe, &NO_CARD)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into(), gpu: false, hold: false };
+        let ai = LocalLlm { client: Arc::new(new_client(&exe, &NO_CARD)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into(), gpu: false, key: NO_CARD.key(), hold: false };
         let r = ai.complete(&request(true, Tier::Fast)).unwrap();
         assert_eq!((r.text.as_str(), r.input_tokens, r.output_tokens, r.model.as_str()), ("first", 120, 7, "qwen3.5-4b"));
         assert_eq!(ai.complete(&request(false, Tier::Strong)).unwrap().text, "first", "both tiers use the same helper");
@@ -675,7 +844,7 @@ done
         let _s = serial();
         let dir = tempfile::tempdir().unwrap();
         let exe = fake_helper(dir.path(), "", true);
-        let ai = LocalLlm { client: Arc::new(new_client(&exe, &NO_CARD)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into(), gpu: false, hold: false };
+        let ai = LocalLlm { client: Arc::new(new_client(&exe, &NO_CARD)), exe: exe.clone(), model_path: PathBuf::from("/models/qwen.gguf"), model_name: "qwen3.5-4b".into(), gpu: false, key: NO_CARD.key(), hold: false };
         let m = text_of(ai.complete(&request(true, Tier::Fast)).unwrap_err());
         assert!(m.contains("ran out of room"), "{m}");
         ai.client.shutdown();
@@ -957,5 +1126,102 @@ done
         }
         stop_shared();
         assert!(failed.is_empty(), "replies that failed Ensayo's validation: {failed:?}");
+    }
+
+    // ---------- the record of card failures ----------
+
+    const HOUR: u64 = 60 * 60 * 1000;
+
+    #[test]
+    fn one_or_two_failures_never_skip_the_card_and_the_third_does() {
+        let mut f = Failures::default();
+        assert!(!f.skipping("k", 0));
+        assert_eq!(f.record("k", 1000), 1);
+        assert!(!f.skipping("k", 1000));
+        assert_eq!(f.record("k", 2000), 2);
+        assert!(!f.skipping("k", 2000));
+        assert_eq!(f.record("k", 3000), 3);
+        assert!(f.skipping("k", 3000));
+        assert!(!f.skipping("other", 3000), "another card state is not skipped");
+    }
+
+    #[test]
+    fn the_card_is_tried_again_after_24_hours_and_skipped_again_by_the_next_failure() {
+        let mut f = Failures::default();
+        for t in 1..=3 {
+            f.record("k", t * 1000);
+        }
+        assert!(f.skipping("k", 3000 + 24 * HOUR - 1), "just under 24 hours");
+        assert!(!f.skipping("k", 3000 + 24 * HOUR), "24 hours: the next call tries the card");
+        assert_eq!(f.record("k", 3000 + 25 * HOUR), 4);
+        assert!(f.skipping("k", 3000 + 25 * HOUR + HOUR), "it failed again: skipped for another 24 hours");
+    }
+
+    #[test]
+    fn a_success_clears_the_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("sub").join("gpu-failures.json");
+        assert_eq!(record_card_failure(&file, "k", 5), 1);
+        assert_eq!(record_card_failure(&file, "k", 6), 2);
+        assert_eq!(Failures::read(&file).0.get("k").map(|f| f.count), Some(2), "kept on disk");
+        clear_card_failure(&file, "k");
+        assert!(!file.exists(), "nothing left to remember");
+        assert_eq!(record_card_failure(&file, "k", 7), 1, "counting starts over");
+    }
+
+    #[test]
+    fn a_new_key_starts_with_a_fresh_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("gpu-failures.json");
+        record_card_failure(&file, "old", 1);
+        record_card_failure(&file, "old", 2);
+        assert_eq!(record_card_failure(&file, "new", 3), 1);
+        assert!(!Failures::read(&file).0.contains_key("old"));
+    }
+
+    #[test]
+    fn an_old_file_with_no_count_is_one_failure() {
+        // The first version wrote the key alone as text.
+        let text = Failures::parse("0.4.0-NVIDIA GeForce RTX 5070 Ti-32.0.15.6614\n");
+        assert_eq!(text.0.get("0.4.0-NVIDIA GeForce RTX 5070 Ti-32.0.15.6614").map(|f| f.count), Some(1));
+        assert!(!text.skipping("0.4.0-NVIDIA GeForce RTX 5070 Ti-32.0.15.6614", 0));
+        // A JSON entry with no count, or one that is not an object, is the same.
+        let json = Failures::parse(r#"{"a": {}, "b": {"last_ms": 9}, "c": true, "d": {"count": 0}}"#);
+        assert_eq!(json.0["a"].count, 1);
+        assert_eq!(json.0["b"], Failure { count: 1, last_ms: 9 });
+        assert_eq!(json.0["c"].count, 1);
+        assert_eq!(json.0["d"].count, 1, "a zero count is read as one");
+        assert_eq!(Failures::parse(""), Failures::default());
+        assert_eq!(Failures::parse("[1, 2]"), Failures::default());
+    }
+
+    #[test]
+    fn the_record_is_written_and_read_back_and_a_bad_file_means_no_failures() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("gpu-failures.json");
+        for t in 1..=3 {
+            record_card_failure(&file, "k", t);
+        }
+        assert!(Failures::read(&file).skipping("k", 10));
+        std::fs::write(&file, b"\xff\xfe").unwrap();
+        assert_eq!(Failures::read(&file), Failures::default());
+        assert_eq!(Failures::read(&dir.path().join("missing.json")), Failures::default());
+    }
+
+    #[test]
+    fn a_skipped_card_builds_a_client_without_it_and_a_later_try_builds_one_with_it() {
+        let _s = serial();
+        let exe = Path::new("/nonexistent/ensayo-llm");
+        let card = Card { on: true, vulkan: Some(PathBuf::from("/nonexistent/ensayo-llm-vulkan")), name: Some("RTX".into()), driver: None };
+        let skipped = shared_for(exe, Path::new("/m.gguf"), "m", &card, true, false);
+        assert!(!skipped.gpu, "no card asked for while it is skipped");
+        let first = skipped.client.clone();
+        let again = shared_for(exe, Path::new("/m.gguf"), "m", &card, true, false);
+        assert!(Arc::ptr_eq(&first, &again.client), "still skipped: the same client");
+        let retry = shared_for(exe, Path::new("/m.gguf"), "m", &card, false, false);
+        assert_eq!(retry.gpu, card.ask());
+        assert!(!Arc::ptr_eq(&first, &retry.client), "no longer skipped: a client that has the card");
+        assert_eq!(retry.key, card.key());
+        stop_shared();
     }
 }

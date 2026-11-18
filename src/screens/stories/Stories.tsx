@@ -7,6 +7,7 @@ import SearchBox, { NoMatch } from "../../ui/SearchBox";
 import { searchStories, searchTerm } from "../search";
 import { priorityFor } from "./angles";
 import { filterStories, firstUncovered, storyFilters, usageText } from "./helpers";
+import ResultPill from "./ResultPill";
 import { chooseStory } from "./selection";
 
 export default function Stories() {
@@ -27,7 +28,10 @@ export default function Stories() {
           <h1 className="e-h1">Stories</h1>
           <span className="e-meta">The work you'll talk about. Ensayo uses these to check your numbers and pick follow-ups.</span>
         </div>
-        <Link to="5-2-add-a-story-paste" className="e-btn e-btn-primary">+ Add a story</Link>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+          <Link to="5-6-add-many-stories" className="e-btn e-btn-soft">Add many at once</Link>
+          <Link to="5-2-add-a-story-paste" className="e-btn e-btn-primary">+ Add a story</Link>
+        </div>
       </header>
       <SearchBox value={query} onChange={setQuery} />
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
@@ -58,7 +62,7 @@ export default function Stories() {
                 </span>
               </div>
               <span className="e-h3" style={{ overflowWrap: "break-word" }}>{s.title}</span>
-              {s.headline && <span className="e-pill" title={s.headline} style={{ alignSelf: "flex-start", fontWeight: "600", ...(s.headline.includes("→") ? { background: "var(--e-tint)", color: "var(--e-primary-dark)" } : { background: "var(--e-ground)" }) }}>{s.headline}</span>}
+              <ResultPill headline={s.headline} />
               <span className="e-small" style={{ marginTop: "auto" }}>{usageText(s.usage)}</span>
             </Link>
           );

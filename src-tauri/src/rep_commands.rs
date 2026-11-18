@@ -10,7 +10,8 @@ use crate::metrics::{self, fix, numbers, Inputs, Metrics, Outcome};
 use crate::paths;
 use crate::scoring::pipeline::{self, QuestionInfo, ScoreInput};
 use crate::scoring::prompts::{get, PromptId};
-use crate::scoring::run::Budget;
+use crate::scoring::run::{Budget, CallError};
+use crate::scoring::smart_coach::{self, SmartCoach};
 use crate::speech::words::Word;
 use crate::speech::transcribe;
 use crate::transcript_edit;
@@ -157,6 +158,8 @@ fn measure(storage: &Storage, stage: &str, question_type: &str, story_ids: &[Str
 /// A model to judge with, and what this session may spend.
 pub struct AiCtx<'a> {
     pub llm: &'a dyn Llm,
+    /// The model used for the coach is coach level: answers are judged by the Smart coach (prompt 12).
+    pub coach: bool,
     pub budget: &'a mut Budget,
 }
 
@@ -173,10 +176,16 @@ struct Asked {
     jd_summary: String,
     /// The target the practice is for: its pitch, level and role are what the answer is judged against.
     target_id: Option<String>,
+    /// Where this try sits, so the Smart coach can read the earlier tries at the same question in the session.
+    session_id: String,
+    question_id: String,
+    attempt: u32,
+    /// A follow-up answer is never coached by the Smart coach.
+    follow_up: bool,
 }
 
 enum Judged {
-    Scored { fix: Option<String>, note: String, rewrite: Option<crate::scoring::coach::Rewrite>, meta: AiMeta, question_type: String },
+    Scored { fix: Option<String>, note: String, rewrite: Option<crate::scoring::coach::Rewrite>, coach: Option<SmartCoach>, meta: AiMeta, question_type: String },
     /// A clarifying question back to the interviewer.
     Clarifying,
     NotAnAnswer,
@@ -227,21 +236,68 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
         metrics,
         bank: &bank,
     };
-    match pipeline::score_answer(ai.llm, &input, ai.budget) {
-        Err(e) => Judged::Fallback(e.notice()),
-        Ok(score) if score.clarifying_question => Judged::Clarifying,
-        Ok(score) if score.not_an_answer => Judged::NotAnAnswer,
-        Ok(score) => {
-            metrics.checks = score.checks.clone();
-            Judged::Scored {
-                fix: score.fix,
-                note: score.note,
-                rewrite: score.rewrite,
-                meta: AiMeta { prompts: score.prompts, rubric_version: score.rubric_version, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
-                question_type: question.question_type,
+    let use_coach = ai.coach && !asked.follow_up && question.question_type != "candidate_questions" && !metrics.sentences.is_empty() && metrics.outcome == Outcome::Scored;
+    let (mut score, job) = match pipeline::score_checks(ai.llm, &input, ai.budget) {
+        Err(e) => return Judged::Fallback(e.notice()),
+        Ok((score, _)) if score.clarifying_question => return Judged::Clarifying,
+        Ok((score, _)) if score.not_an_answer => return Judged::NotAnAnswer,
+        Ok(done) => done,
+    };
+    // A coach-level model reads the whole answer and writes the advice itself (prompt 12 in place of prompt 03). If
+    // that call fails for any reason but the cap or Stop, the person still gets a note the older way.
+    let mut coached: Option<SmartCoach> = None;
+    let mut prompts = score.prompts.clone();
+    if use_coach {
+        let before = std::mem::replace(&mut metrics.checks, score.checks.clone());
+        let (earlier, replies) = earlier_tries(storage, asked);
+        let facts = smart_coach::Facts { question: &question.text, question_type: &question.question_type, stage, jd_summary: asked.jd_summary.clone(), story_ids, target_id: asked.target_id.as_deref(), metrics };
+        let coach_input = smart_coach::build_input_from(storage, &facts, &earlier.iter().collect::<Vec<_>>(), &replies.iter().map(|r| r.as_ref()).collect::<Vec<_>>());
+        match smart_coach::coach(ai.llm, &coach_input, ai.budget) {
+            Ok(run) => {
+                score.note = smart_coach::note_text(&run.reply);
+                score.rewrite = smart_coach::rewrite_of(&run.reply);
+                score.fix = run.reply.fix.as_ref().map(|f| f.kind.clone());
+                prompts.truncate(1);
+                prompts.push(smart_coach::prompt_tag());
+                coached = Some(run.reply);
+            }
+            Err(e @ (CallError::CapReached { .. } | CallError::Stopped)) => {
+                metrics.checks = before;
+                return Judged::Fallback(e.notice());
+            }
+            Err(_) => metrics.checks = before,
+        }
+    }
+    if coached.is_none() {
+        match job.word(ai.llm, &question, stage, &method, profile.as_ref().map(|p| p.identity_statement.as_str()).unwrap_or(""), ai.budget) {
+            Err(e) => return Judged::Fallback(e.notice()),
+            Ok(c) => {
+                score.note = c.note;
+                score.rewrite = c.rewrite;
             }
         }
     }
+    metrics.checks = score.checks.clone();
+    Judged::Scored {
+        fix: score.fix,
+        note: score.note,
+        rewrite: score.rewrite,
+        coach: coached,
+        meta: AiMeta { prompts, rubric_version: score.rubric_version, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
+        question_type: question.question_type,
+    }
+}
+
+/// The earlier tries at this question in this session that the Smart coach can read (oldest first), and the reply it
+/// gave to each (None for a try the older coach noted).
+fn earlier_tries(storage: &Storage, asked: &Asked) -> (Vec<FullRep>, Vec<Option<SmartCoach>>) {
+    if asked.session_id.is_empty() {
+        return (vec![], vec![]);
+    }
+    let mut earlier: Vec<FullRep> = storage.reps(&asked.session_id).map(|l| l.items).unwrap_or_default().into_iter().filter(|r| r.rep.question_id == asked.question_id && r.rep.attempt < asked.attempt && smart_coach::can_coach(r)).collect();
+    earlier.sort_by_key(|r| (r.rep.attempt, r.rep.n));
+    let replies = earlier.iter().map(|r| r.rep.coach.clone()).collect();
+    (earlier, replies)
 }
 
 /// Judges the answer to a follow-up: F1, F2, F3 and (for a skeptic push) F5 by the model, F4 by code, then the coach.
@@ -284,6 +340,7 @@ fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &F
                 fix,
                 note: coach.note,
                 rewrite: coach.rewrite,
+                coach: None,
                 meta: AiMeta { prompts: vec![format!("score-follow-up v{}", get(PromptId::ScoreFollowUp).version), format!("coach-note v{}", get(PromptId::Coach).version)], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
                 question_type: parent.rep.question_type.clone(),
             }
@@ -298,6 +355,11 @@ fn delta_for(storage: &Storage, session: &str, question_id: &str, attempt: u32, 
     }
     let reps = storage.reps(session).ok()?.items;
     let prev = reps.iter().rev().find(|r| r.rep.question_id == question_id && r.rep.attempt == attempt - 1)?;
+    // A try the Smart coach judged: its "Since your last try" covers progress, so no check-based chip (it would
+    // bring back "Still no number from your story" after the coach chose not to repeat it).
+    if prev.rep.coach.is_some() {
+        return None;
+    }
     fix::delta(&prev.metrics, current, prev.rep.fix.as_deref()?)
 }
 
@@ -340,6 +402,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
     let mut question_type = type_for_rules.to_string();
     let mut note = None;
     let mut rewrite = None;
+    let mut coach_reply: Option<SmartCoach> = None;
     let mut meta = None;
     let mut notice = None;
     let rules_fix = fix::top_fix(&metrics.checks).map(String::from);
@@ -355,14 +418,19 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             founder_variant: args.founder_variant,
             jd_summary: if app_ctx.is_some() { hook::jd_summary(storage, args.application_id.as_deref()) } else { String::new() },
             target_id: target_id.clone(),
+            session_id: session_id.clone(),
+            question_id: args.question_id.clone(),
+            attempt: args.attempt,
+            follow_up: args.follow_up.is_some(),
         };
         let judged = match &args.follow_up {
             Some(f) => judge_follow_up(storage, ctx, &session_id, args, f, &mut metrics, target_id.as_deref()),
             None => judge(storage, ctx, &args.stage, &args.story_ids, &asked, &mut metrics),
         };
         match judged {
-            Judged::Scored { fix, note: n, rewrite: r, meta: m, question_type: t } => {
+            Judged::Scored { fix, note: n, rewrite: r, coach: c, meta: m, question_type: t } => {
                 fix_id = fix;
+                coach_reply = c;
                 note = Some(n);
                 rewrite = r;
                 meta = Some(m);
@@ -371,7 +439,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
                     // Claims for the consistency check (prompt 07): the answer is compared with what was said before.
                     let identity = storage.profile_for(target_id.as_deref()).ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
                     let heard = hook::Heard { question: &args.question_text, question_type: &question_type, story_ids: &args.story_ids, identity_statement: &identity, founder: args.founder_variant && args.stage == "leadership" };
-                    let (p, claims_notice) = hook::after_scored(storage, ctx, app, &heard, &mut metrics, &mut fix_id, &mut note, &mut rewrite);
+                    let (p, claims_notice) = hook::after_scored(storage, ctx, app, &heard, &mut metrics, &mut fix_id, &mut note, &mut rewrite, coach_reply.is_some());
                     pending = p;
                     notice = claims_notice;
                     if let Some(m) = meta.as_mut() {
@@ -421,6 +489,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
             note,
             rewrite,
             ai: meta,
+            coach: coach_reply,
             follow_up: args.follow_up.as_ref().map(|f| FollowUpMeta { parent_n: f.parent_n, kind: f.kind.clone(), question: args.question_text.clone(), number: f.number }),
             feedback: None,
         },
@@ -467,6 +536,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
     full.rep.note = None;
     full.rep.rewrite = None;
     full.rep.ai = None;
+    full.rep.coach = None;
     let mut notice = None;
     let mut pending: Option<hook::Pending> = None;
     if let Some(ctx) = ai.as_mut() {
@@ -480,10 +550,15 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
             founder_variant: full.rep.founder_variant,
             jd_summary: hook::jd_summary(storage, session.application_id.as_deref()),
             target_id: storage.session_target(&session)?,
+            session_id: session_id.to_string(),
+            question_id: full.rep.question_id.clone(),
+            attempt: full.rep.attempt,
+            follow_up: full.rep.follow_up.is_some(),
         };
         match judge(storage, ctx, &session.stage, &full.rep.story_ids.clone(), &asked, &mut full.metrics) {
-            Judged::Scored { fix, note, rewrite, meta, .. } => {
+            Judged::Scored { fix, note, rewrite, coach, meta, .. } => {
                 full.rep.fix = fix;
+                full.rep.coach = coach;
                 full.rep.note = Some(note);
                 full.rep.rewrite = rewrite;
                 full.rep.ai = Some(meta);
@@ -493,7 +568,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
                     if let Some(app) = hook::app_context(storage, Some(app_id), session.stage_id.as_deref(), None, &session.stage) {
                         let identity = storage.profile_for(storage.session_target(&session).ok().flatten().as_deref()).ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
                         let heard = hook::Heard { question: &full.rep.question_text, question_type: &full.rep.question_type, story_ids: &full.rep.story_ids, identity_statement: &identity, founder: full.rep.founder_variant && session.stage == "leadership" };
-                        let (p, claims_notice) = hook::after_scored(storage, ctx, &app, &heard, &mut full.metrics, &mut full.rep.fix, &mut full.rep.note, &mut full.rep.rewrite);
+                        let (p, claims_notice) = hook::after_scored(storage, ctx, &app, &heard, &mut full.metrics, &mut full.rep.fix, &mut full.rep.note, &mut full.rep.rewrite, full.rep.coach.is_some());
                         pending = p;
                         notice = claims_notice;
                         if let Some(m) = full.rep.ai.as_mut() {
@@ -548,6 +623,10 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
         founder_variant: rep.rep.founder_variant,
         jd_summary: String::new(),
         target_id,
+        session_id: rep.session_id.clone(),
+        question_id: rep.rep.question_id.clone(),
+        attempt: rep.rep.attempt,
+        follow_up: rep.rep.follow_up.is_some(),
     };
     match judge(storage, ai, &stage, &rep.rep.story_ids, &asked, &mut metrics) {
         Judged::Scored { .. } => Ok(metrics.checks),
@@ -582,7 +661,8 @@ pub(crate) fn with_ai<T>(session_id: &str, f: impl FnOnce(Option<AiCtx>) -> T) -
         Ok(Some(engine)) => {
             let llm = engine.client();
             let (provider, cap_usd) = engine.budget_basis();
-            let out = crate::ai_commands::with_budget(session_id, provider, cap_usd, |budget| f(Some(AiCtx { llm: llm.as_ref(), budget })));
+            let coach = engine.coach_level();
+            let out = crate::ai_commands::with_budget(session_id, provider, cap_usd, |budget| f(Some(AiCtx { coach, llm: llm.as_ref(), budget })));
             (out, None)
         }
         Ok(None) => (f(None), None),
@@ -830,6 +910,8 @@ pub struct RepSummary {
     pub rubric_version: u32,
     pub fix: Option<String>,
     pub note: Option<String>,
+    /// The Smart coach's verdict ("ready", "nearly" or "not_yet"); None when the answer was judged the older way.
+    pub verdict: Option<String>,
     pub note_was_wrong: bool,
     pub checks: Vec<crate::metrics::Check>,
     pub speaking_ms: u64,
@@ -872,6 +954,7 @@ pub fn summaries_with(storage: &Storage) -> StorageResult<Vec<RepSummary>> {
                 rubric_version: r.metrics.rubric_version,
                 fix: r.rep.fix.clone(),
                 note: r.rep.note.clone(),
+                verdict: r.rep.coach.as_ref().map(|c| c.verdict.as_str().to_string()),
                 note_was_wrong: r.rep.feedback.as_ref().is_some_and(|f| f.note_was_wrong),
                 checks: r.metrics.checks.clone(),
                 speaking_ms: r.metrics.speaking_ms,
@@ -1274,7 +1357,7 @@ mod tests {
 
     fn ai_run(llm: &Scripted, args: &FinishArgs, storage: &Storage, audio: &Path, words: Vec<Word>) -> RepOutcome {
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        finish_with(storage, audio, args, words, true, now(), Some(AiCtx { llm, budget: &mut budget })).unwrap()
+        finish_with(storage, audio, args, words, true, now(), Some(AiCtx { coach: false, llm, budget: &mut budget })).unwrap()
     }
 
     // ---------- which target a session is for ----------
@@ -1502,9 +1585,172 @@ mod tests {
         assert!(out.restart_offered);
         let again = Scripted::new(vec![Ok(&score_json(1, 1, &[("answer_first", "pass"), ("proof", "pass")], false)), Ok(r#"{"note":"Clean.","rewrite":null,"offer_follow_up":true}"#)]);
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        let r = rescore_with(&storage, &audio, &out.session_id, 1, true, Some(AiCtx { llm: &again, budget: &mut budget })).unwrap();
+        let r = rescore_with(&storage, &audio, &out.session_id, 1, true, Some(AiCtx { coach: false, llm: &again, budget: &mut budget })).unwrap();
         assert_eq!(again.calls(), 2);
         assert_eq!(r.rep.unwrap().rep.note.as_deref(), Some("Clean."));
+    }
+
+    // ---------- the Smart coach ----------
+
+    use crate::scoring::smart_coach::Verdict;
+
+    /// The same, with a coach-level model.
+    fn coach_run(llm: &Scripted, args: &FinishArgs, storage: &Storage, audio: &Path, words: Vec<Word>) -> RepOutcome {
+        let mut budget = Budget::new(Provider::Claude, 0.0);
+        finish_with(storage, audio, args, words, true, now(), Some(AiCtx { coach: true, llm, budget: &mut budget })).unwrap()
+    }
+
+    fn smart_json(verdict: &str, kind: &str, say: Option<&str>) -> String {
+        let fix = if verdict == "ready" { Value::Null } else { json!({"kind": kind, "what": "Stop once the number lands.", "why": "A recruiter wants the short version.", "quote": "We cut churn", "do_instead": "End on the 18 percent.", "say_instead": say}) };
+        json!({"verdict": verdict, "verdict_line": "The number is strong but you kept going.", "worked": [{"quote": "We cut churn", "why": "It led with the result."}], "fix": fix,
+               "more": [], "since_last": null, "offer_follow_up": true})
+        .to_string()
+    }
+
+    const COACH_NOTE: &str = "The number is strong but you kept going. Stop once the number lands. End on the 18 percent.";
+
+    #[test]
+    fn a_coach_level_answer_keeps_the_checks_and_gets_the_smart_coach_in_place_of_the_note() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let say = "We cut churn from 24% to 18%.";
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("nearly", "clean_stop", Some(say)))]);
+        let out = coach_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40));
+        let rep = out.rep.unwrap();
+        assert_eq!(llm.calls(), 2, "prompt 02 and prompt 12, no prompt 03");
+        let seen = llm.seen.lock().unwrap();
+        assert!(seen[1].system.contains("You are an interview coach"));
+        let coach = rep.rep.coach.clone().expect("the reply is saved on the rep");
+        assert_eq!(coach.verdict, Verdict::Nearly);
+        assert_eq!(rep.rep.fix.as_deref(), Some("clean_stop"));
+        assert_eq!(rep.rep.note.as_deref(), Some(COACH_NOTE));
+        let w = rep.rep.rewrite.clone().unwrap();
+        assert_eq!((w.text.as_str(), w.position.as_str(), w.replaces_sentence), (say, "replace", None));
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "smart-coach v2"]);
+        assert!(rep.metrics.checks.iter().any(|c| c.id == "answer_first"), "the checks of prompt 02 are kept");
+        assert_eq!(storage.rep(&out.session_id, 1).unwrap().unwrap().rep.coach, Some(coach));
+        assert_eq!(summaries_with(&storage).unwrap()[0].verdict.as_deref(), Some("nearly"));
+    }
+
+    #[test]
+    fn a_ready_coach_answer_has_no_fix_no_rewrite_and_the_verdict_line_as_its_note() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("ready", "other", None))]);
+        let rep = coach_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        assert_eq!((rep.rep.fix, rep.rep.rewrite), (None, None));
+        assert_eq!(rep.rep.note.as_deref(), Some("The number is strong but you kept going."));
+        assert_eq!(rep.rep.coach.unwrap().verdict, Verdict::Ready);
+    }
+
+    #[test]
+    fn a_basic_model_is_judged_as_before_with_no_coach_reply() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(COACH)]);
+        let rep = ai_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        assert_eq!(llm.calls(), 2);
+        assert!(rep.rep.coach.is_none());
+        assert_eq!(rep.rep.note.as_deref(), Some("You kept going long after the number. Stop once it lands."));
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "coach-note v2"]);
+        assert_eq!(summaries_with(&storage).unwrap()[0].verdict, None);
+    }
+
+    #[test]
+    fn a_failed_coach_call_falls_back_to_the_note_the_old_way() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        // Two unreadable replies from the coach, then the old note.
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok("nope"), Ok("nope"), Ok(COACH)]);
+        let out = coach_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40));
+        let rep = out.rep.unwrap();
+        assert_eq!(llm.calls(), 4);
+        assert!(rep.rep.coach.is_none() && out.notice.is_none());
+        assert_eq!(rep.rep.note.as_deref(), Some("You kept going long after the number. Stop once it lands."));
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "coach-note v2"]);
+        assert!(rep.metrics.checks.iter().any(|c| c.id == "answer_first"), "the checks still count");
+    }
+
+    #[test]
+    fn stopping_the_ai_during_the_coach_call_works_as_it_does_today() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let llm = Scripted::new(vec![Ok(&good_score()), Err(AiError::Stopped)]);
+        let out = coach_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40));
+        let rep = out.rep.unwrap();
+        assert_eq!(llm.calls(), 2);
+        assert!(rep.rep.coach.is_none() && rep.rep.note.is_none() && rep.rep.ai.is_none());
+        assert!(out.notice.unwrap().contains("You stopped the AI"));
+        assert!(rep.metrics.checks.iter().all(|c| c.id != "answer_first"), "the checks are the rules-only ones, as before");
+    }
+
+    #[test]
+    fn an_earlier_tries_coach_reply_reaches_the_next_try_as_a_note_given_by_you() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let one = coach_run(&Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("not_yet", "proof", None))]), &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40));
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("nearly", "clean_stop", None))]);
+        let two = coach_run(&llm, &args(&tmp, 2, Some(&one.session_id)), &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        let user = llm.seen.lock().unwrap()[1].user.clone();
+        assert!(user.contains("try: 1\ntranscript:"), "{user}");
+        assert!(user.contains("note given by you: verdict not_yet; fix (proof): Stop once the number lands."), "{user}");
+        assert!(!user.contains("old coach"));
+        assert_eq!(two.rep.coach.unwrap().verdict, Verdict::Nearly);
+    }
+
+    #[test]
+    fn rescoring_a_rep_gives_a_fresh_coach_reply_and_without_a_model_none() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let audio = tmp.join("audio");
+        let out = coach_run(&Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("not_yet", "proof", None))]), &args(&tmp, 1, None), &storage, &audio, words(40));
+        let again = Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("ready", "other", None))]);
+        let mut budget = Budget::new(Provider::Claude, 0.0);
+        let r = rescore_with(&storage, &audio, &out.session_id, 1, false, Some(AiCtx { coach: true, llm: &again, budget: &mut budget })).unwrap().rep.unwrap();
+        assert_eq!(r.rep.coach.as_ref().unwrap().verdict, Verdict::Ready);
+        assert_eq!(storage.rep(&out.session_id, 1).unwrap().unwrap().rep.coach.unwrap().verdict, Verdict::Ready);
+        let timing = rescore_with(&storage, &audio, &out.session_id, 1, false, None).unwrap().rep.unwrap();
+        assert!(timing.rep.coach.is_none(), "a stale reply never stays on a rep that was measured again");
+    }
+
+    #[test]
+    fn a_rep_saved_before_the_coach_still_loads_and_the_reply_has_the_schema_field_names() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("nearly", "clean_stop", Some("We cut churn from 24% to 18%.")))]);
+        let rep = coach_run(&llm, &args(&tmp, 1, None), &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        let mut v = serde_json::to_value(&rep).unwrap();
+        let c = &v["coach"];
+        assert_eq!(c["verdict"], "nearly");
+        assert_eq!(c["worked"][0]["quote"], "We cut churn");
+        assert_eq!(c["fix"]["kind"], "clean_stop");
+        assert_eq!(c["fix"]["say_instead"], "We cut churn from 24% to 18%.");
+        assert!(c["since_last"].is_null() && c["offer_follow_up"] == true && c["more"].as_array().unwrap().is_empty());
+        v.as_object_mut().unwrap().remove("coach");
+        let old: FullRep = serde_json::from_value(v).unwrap();
+        assert!(old.rep.coach.is_none());
+    }
+
+    #[test]
+    fn inside_an_application_a_coached_answer_gets_the_consistency_check_but_keeps_the_coach_note() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut first = args(&tmp, 1, None);
+        in_app(&mut first, &id, "recruiter");
+        coach_run(&Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("nearly", "clean_stop", None)), Ok(&claims_reply(notice_claim("four weeks"), json!([])))]), &first, &storage, &tmp.join("audio"), words(40));
+        let mut second = args(&tmp, 2, None);
+        in_app(&mut second, &id, "hiring_manager");
+        let conflict = json!([{"type": "availability", "subject": "notice period", "earlier_claim_id": "cl_1", "earlier_stage": "recruiter", "earlier_value": "four weeks", "new_value": "two weeks", "sentence": 1}]);
+        let llm = Scripted::new(vec![Ok(&good_score()), Ok(&smart_json("nearly", "clean_stop", None)), Ok(&claims_reply(notice_claim("two weeks"), conflict))]);
+        let rep = coach_run(&llm, &second, &storage, &tmp.join("audio"), words(40)).rep.unwrap();
+        assert_eq!(llm.calls(), 3, "no note is worded again for the conflict");
+        assert_eq!(rep.metrics.checks.iter().find(|c| c.id == "c1_consistent").unwrap().passed, Some(false));
+        assert_eq!(rep.rep.fix.as_deref(), Some("clean_stop"));
+        assert_eq!(rep.rep.note.as_deref(), Some(COACH_NOTE));
+        assert!(rep.rep.coach.is_some());
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "smart-coach v2", "extract-claims v1"]);
+        assert_eq!(saved_claims(&storage, &id).len(), 2);
     }
 
     // ---------- follow-ups ----------
@@ -1535,7 +1781,7 @@ mod tests {
         let session = first_answer(&storage, &tmp, "hiring_manager");
         let mut budget = Budget::new(Provider::Claude, 0.0);
         let llm = Scripted::new(vec![Ok(&gen_json("ownership_probe", "What was your part in that, specifically?"))]);
-        let f = next_follow_up_with(&storage, &mut AiCtx { llm: &llm, budget: &mut budget }, &session, 1).unwrap();
+        let f = next_follow_up_with(&storage, &mut AiCtx { coach: false, llm: &llm, budget: &mut budget }, &session, 1).unwrap();
         assert_eq!((f.kind.as_str(), f.number, f.of), ("ownership_probe", 1, 2));
         assert!(llm.seen.lock().unwrap()[0].user.contains("Score summary: failed: ") && llm.seen.lock().unwrap()[0].user.contains("ownership"), "aimed at the weak spots");
         // Answer it, then ask for another: number 2, and the used type is passed along.
@@ -1546,7 +1792,7 @@ mod tests {
         let llm = Scripted::new(vec![Ok(&follow_score_json(&[])), Ok(r#"{"note":"Held up.","rewrite":null,"offer_follow_up":true}"#)]);
         ai_run(&llm, &a2, &storage, &tmp.join("audio"), words(8));
         let llm = Scripted::new(vec![Ok(&gen_json("metric_probe", "How did you measure that?"))]);
-        let f2 = next_follow_up_with(&storage, &mut AiCtx { llm: &llm, budget: &mut budget }, &session, 1).unwrap();
+        let f2 = next_follow_up_with(&storage, &mut AiCtx { coach: false, llm: &llm, budget: &mut budget }, &session, 1).unwrap();
         assert_eq!((f2.kind.as_str(), f2.number), ("metric_probe", 2));
         assert!(llm.seen.lock().unwrap()[0].user.contains("already asked for this question: ownership_probe"));
     }
@@ -1562,7 +1808,7 @@ mod tests {
         let llm = Scripted::new(vec![Ok(&follow_score_json(&[])), Ok(r#"{"note":"Fine.","rewrite":null,"offer_follow_up":true}"#)]);
         ai_run(&llm, &a2, &storage, &tmp.join("audio"), words(8));
         let none = Scripted::new(vec![]);
-        let err = next_follow_up_with(&storage, &mut AiCtx { llm: &none, budget: &mut budget }, &session, 1).unwrap_err();
+        let err = next_follow_up_with(&storage, &mut AiCtx { coach: false, llm: &none, budget: &mut budget }, &session, 1).unwrap_err();
         assert!(err.contains("all the follow-ups"), "{err}");
         assert_eq!(none.calls(), 0, "no model call is wasted past the limit");
     }
@@ -1838,7 +2084,7 @@ mod tests {
         let out = ai_run(&Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("four weeks"), json!([])))]), &a, &storage, &audio, words(40));
         let again = Scripted::new(vec![Ok(&good_score()), Ok(COACH), Ok(&claims_reply(notice_claim("five weeks"), json!([])))]);
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        rescore_with(&storage, &audio, &out.session_id, 1, true, Some(AiCtx { llm: &again, budget: &mut budget })).unwrap();
+        rescore_with(&storage, &audio, &out.session_id, 1, true, Some(AiCtx { coach: false, llm: &again, budget: &mut budget })).unwrap();
         let claims = saved_claims(&storage, &id);
         assert_eq!(claims.iter().map(|c| c.value.as_str()).collect::<Vec<_>>(), vec!["five weeks"]);
     }

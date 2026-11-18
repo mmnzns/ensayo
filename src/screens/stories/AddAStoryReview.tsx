@@ -9,6 +9,7 @@ import { go } from "../../ui/router";
 import { FIELD_HELP } from "./fieldHelp";
 import Numbers, { type NumberRow } from "./Numbers";
 import { draftToReview, storyFromReview } from "./parseDraft";
+import { afterSave, setStoryForJob, storyForJob } from "./addForJob";
 import { getParsedDraft, isBlankReview, isFromSetup, pasteDraft, setFromSetup, setParsedDraft } from "./selection";
 import BackLink from "../../components/BackLink";
 
@@ -57,7 +58,10 @@ export default function AddAStoryReview() {
       // "Save and practice" starts a real Drill on this story (a no-op in the browser preview).
       if (next === "3-1-practice-interviewer-asking") startQuickDrill({ targetRole: store.profile.targetRole, stories: [...store.stories.filter((x) => x.id !== saved.id), saved], methods: store.methods }, { storyId: saved.id });
       release();
-      go(next);
+      // A story added for an application goes back to it with the Recheck offer; "Save and practice" still starts the drill.
+      const job = storyForJob();
+      setStoryForJob(undefined);
+      go(afterSave(job, next));
     } catch {
       setSaveError(true);
       setSaving(false);

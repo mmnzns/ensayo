@@ -26,11 +26,31 @@ export interface AiView {
   providers: ProviderInfo[];
 }
 
-/** The settings plus what the screen remembers for switching back and forth: which cloud provider "Your own key" meant. */
+/** The models picked for one engine: the scoring one and the writing one ("" means the engine's default). */
+export interface ModelPair {
+  fast_model: string;
+  strong_model: string;
+}
+
+/** A local setup: which local engine (built-in, or a compatible server at an address) and its models. */
+export interface LocalSetup extends ModelPair {
+  provider: string;
+  base_url: string;
+}
+
+/**
+ * The settings plus what the screen remembers for switching back and forth: which cloud provider "Your own key" meant,
+ * the model picked for each cloud provider, and the last local setup. They are filled in when the person leaves an
+ * engine, and nothing is remembered until then (so a fresh screen behaves as it always did).
+ */
 export interface AiScreenState {
   kind: AiKind;
   cloudId: string;
   settings: AiSettings;
+  /** The last local setup, restored when the person comes back to "On this computer". */
+  local?: LocalSetup;
+  /** The models last picked for each cloud provider, by provider id. */
+  cloudModels?: Record<string, ModelPair>;
 }
 
 /** Fired on `window` after the AI settings, a key or the local model changed, so the sidebar's engine line can read them again. */
@@ -244,18 +264,45 @@ export function initialState(view: AiView): AiScreenState {
 }
 
 const noModels = (s: AiSettings): AiSettings => ({ ...s, fast_model: "", strong_model: "" });
+const pairOf = (s: AiSettings): ModelPair => ({ fast_model: s.fast_model, strong_model: s.strong_model });
+const withPair = (s: AiSettings, p: ModelPair | undefined): AiSettings => ({ ...s, fast_model: p?.fast_model ?? "", strong_model: p?.strong_model ?? "" });
 
-/** Moving to a different engine drops the model choices, which belong to the old one. */
+/** What the screen should remember about the engine it is on now, so that leaving it loses nothing. Other engines' memories are kept as they were. */
+function remembered(state: AiScreenState): Pick<AiScreenState, "local" | "cloudModels"> {
+  const { settings: s } = state;
+  if (state.kind === "local") return { local: { provider: s.provider, base_url: s.base_url, ...pairOf(s) }, cloudModels: state.cloudModels };
+  if (state.kind === "key") return { local: state.local, cloudModels: { ...state.cloudModels, [state.cloudId]: pairOf(s) } };
+  return { local: state.local, cloudModels: state.cloudModels };
+}
+
+/** Moving to a different engine keeps what was picked for it last time: the local engine, address and model, or the cloud provider's model. A first visit starts with no models. */
 export function withKind(state: AiScreenState, kind: AiKind, providers: ProviderInfo[]): AiScreenState {
   if (kind === state.kind) return state;
-  const provider = providerIdForKind(kind, state.cloudId);
-  const base = kind === "local" ? (providers.find((p) => p.id === COMPATIBLE)?.base_default || OLLAMA.address) : "";
-  return { ...state, kind, settings: { ...noModels(state.settings), provider, base_url: kind === "timing" ? state.settings.base_url : base } };
+  const memory = remembered(state);
+  const base = { ...state, ...memory, kind };
+  const s = state.settings;
+  if (kind === "timing") return { ...base, settings: { ...noModels(s), provider: "" } };
+  if (kind === "local") {
+    const l = memory.local;
+    if (l) return { ...base, settings: { ...s, provider: l.provider, base_url: l.base_url, fast_model: l.fast_model, strong_model: l.strong_model } };
+    return { ...base, settings: { ...noModels(s), provider: COMPATIBLE, base_url: providers.find((p) => p.id === COMPATIBLE)?.base_default || OLLAMA.address } };
+  }
+  return { ...base, settings: { ...withPair(s, memory.cloudModels?.[state.cloudId]), provider: state.cloudId, base_url: "" } };
+}
+
+/**
+ * The engine cards: the same as `withKind`, except that "On this computer" with no local setup remembered starts on the built-in
+ * local AI, not on Ollama.
+ */
+export function withChosenKind(state: AiScreenState, kind: AiKind, providers: ProviderInfo[]): AiScreenState {
+  const next = withKind(state, kind, providers);
+  return kind === "local" && next !== state && !state.local ? withLocalEngine(next, BUILT_IN_ENGINE.name) : next;
 }
 
 export function withProvider(state: AiScreenState, id: string, providers: ProviderInfo[]): AiScreenState {
   if (state.kind !== "key" || !providers.some((p) => p.id === id) || id === state.cloudId) return state;
-  return { ...state, cloudId: id, settings: { ...noModels(state.settings), provider: id, base_url: "" } };
+  const cloudModels = { ...state.cloudModels, [state.cloudId]: pairOf(state.settings) };
+  return { ...state, cloudId: id, cloudModels, settings: { ...withPair(state.settings, cloudModels[id]), provider: id, base_url: "" } };
 }
 
 export function withLocalEngine(state: AiScreenState, name: string): AiScreenState {
@@ -286,7 +333,13 @@ export interface LocalAiView {
   models: LocalModel[];
   selected: string;
   helper_found: boolean;
+  /** The graphics card failed three times lately and is skipped, so answers run slowly on the processor. */
+  card_skipped?: boolean;
 }
+
+/** Under the local AI when its graphics card is being skipped; the button beside it is "Try the card again". */
+export const CARD_SKIPPED_LINE = "The graphics card was skipped after it failed.";
+export const TRY_CARD_AGAIN = "Try the card again";
 
 /** The model the settings mean: the saved one, or the recommended one when none (or one that is not a local model) is saved. Null before the list is known. */
 export function localModelOf(status: LocalAiView | null, s: AiSettings): LocalModel | null {

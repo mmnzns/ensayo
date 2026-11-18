@@ -149,7 +149,7 @@ mod tests {
 
         let llm = Scripted::new(vec![Ok(&scripted_reply())]);
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        let mut ctx = AiCtx { llm: &llm, budget: &mut budget };
+        let mut ctx = AiCtx { coach: false, llm: &llm, budget: &mut budget };
         let args = DebriefArgs { session_id: "ses_m".into(), company: "Kestrel Pay".into(), role: "Lifecycle lead".into(), jd_summary: String::new(), priorities: String::new(), must_say: vec![], refresh: false };
         let q = debrief_with(&storage, &mut ctx, &args).unwrap();
         assert_eq!(q.questions[0].result, "fail");

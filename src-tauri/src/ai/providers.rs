@@ -57,6 +57,38 @@ pub fn catalog(provider: Provider) -> &'static [&'static str] {
     }
 }
 
+/// Whether a model is strong enough for the Smart coach (prompt 12): one call that judges the whole answer and picks
+/// the fix itself. Smaller cloud models, Groq, Cerebras, OpenAI-compatible servers, any typed-in model and every
+/// built-in local model are basic and keep the checks-then-note path. Matched by exact id (case and spaces ignored).
+pub fn coach_level(provider: Provider, model: &str) -> bool {
+    let m = model.trim().to_lowercase();
+    let ids: &[&str] = match provider {
+        Provider::Claude => &["claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-2"],
+        Provider::OpenAi => &["gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol"],
+        Provider::Gemini => &["gemini-4-hydrogen", "gemini-3.1-pro-preview"],
+        Provider::Mistral => &["mistral-large-latest"],
+        Provider::OpenRouter => &[
+            "anthropic/claude-sonnet-5.5",
+            "anthropic/claude-opus-5.5",
+            "anthropic/claude-fable-5.2",
+            "openai/gpt-6.1-sol",
+            "openai/gpt-6-sol",
+            "openai/gpt-5.6-sol",
+            "google/gemini-4-hydrogen",
+            "google/gemini-3.1-pro-preview",
+            "mistralai/mistral-large-4-0",
+            "mistralai/mistral-large-latest",
+        ],
+        Provider::Groq | Provider::Cerebras | Provider::Compatible => &[],
+    };
+    ids.contains(&m.as_str())
+}
+
+/// The catalog ids of a provider that are coach level, in catalog order.
+pub fn coach_models(provider: Provider) -> Vec<String> {
+    catalog(provider).iter().filter(|m| coach_level(provider, m)).map(|m| m.to_string()).collect()
+}
+
 impl Provider {
     pub const ALL: [Provider; 8] = [Provider::Claude, Provider::OpenAi, Provider::Gemini, Provider::Groq, Provider::Cerebras, Provider::Mistral, Provider::OpenRouter, Provider::Compatible];
 
@@ -347,5 +379,54 @@ mod tests {
     fn a_server_that_is_not_running_is_unavailable_not_a_crash() {
         let e = list_models(Provider::Compatible, "http://127.0.0.1:1/v1", "").unwrap_err();
         assert!(matches!(&e, AiError::Unavailable(m) if m.contains("Couldn't reach")), "{e:?}");
+    }
+
+    #[test]
+    fn only_the_strong_models_are_coach_level() {
+        for (p, m) in [
+            (Provider::Claude, "claude-sonnet-5-5"),
+            (Provider::Claude, "claude-opus-5-5"),
+            (Provider::Claude, "claude-fable-5-2"),
+            (Provider::OpenAi, "gpt-6.1-sol"),
+            (Provider::OpenAi, "gpt-6-sol"),
+            (Provider::OpenAi, "gpt-5.6-sol"),
+            (Provider::Gemini, "gemini-4-hydrogen"),
+            (Provider::Gemini, "gemini-3.1-pro-preview"),
+            (Provider::Mistral, "mistral-large-latest"),
+            (Provider::OpenRouter, "anthropic/claude-sonnet-5.5"),
+            (Provider::OpenRouter, "anthropic/claude-opus-5.5"),
+            (Provider::OpenRouter, "anthropic/claude-fable-5.2"),
+            (Provider::OpenRouter, "openai/gpt-6.1-sol"),
+            (Provider::OpenRouter, "google/gemini-4-hydrogen"),
+            (Provider::OpenRouter, "mistralai/mistral-large-4-0"),
+        ] {
+            assert!(coach_level(p, m), "{m}");
+        }
+        for (p, m) in [
+            (Provider::Claude, "claude-haiku-5-5"),
+            (Provider::OpenAi, "gpt-6-luna"),
+            (Provider::OpenAi, "gpt-5.5"),
+            (Provider::Gemini, "gemini-3.8-flash"),
+            (Provider::Groq, "openai/gpt-oss-120b"),
+            (Provider::Cerebras, "gpt-oss-120b"),
+            (Provider::Mistral, "mistral-small-latest"),
+            (Provider::OpenRouter, "anthropic/claude-haiku-5.5"),
+            (Provider::OpenRouter, "x-ai/grok-4.7"),
+            (Provider::Compatible, "claude-sonnet-5-5"),
+            (Provider::Compatible, "llama3.2:3b"),
+            (Provider::Claude, "typed-in-model"),
+            (Provider::Claude, ""),
+        ] {
+            assert!(!coach_level(p, m), "{m}");
+        }
+    }
+
+    #[test]
+    fn coach_models_are_the_catalog_ids_that_are_coach_level() {
+        assert_eq!(coach_models(Provider::Claude), vec!["claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-2"]);
+        assert!(coach_models(Provider::Groq).is_empty() && coach_models(Provider::Compatible).is_empty());
+        for p in Provider::ALL {
+            assert!(coach_models(p).iter().all(|m| catalog(p).contains(&m.as_str())));
+        }
     }
 }

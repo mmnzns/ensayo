@@ -1,4 +1,4 @@
-//! The eleven prompts in `prompts/`, parsed once from the files embedded in the app. They are versioned files, never
+//! The twelve prompts in `prompts/`, parsed once from the files embedded in the app. They are versioned files, never
 //! inline strings (Build Plan, M4): changing one bumps its `version`; changing a criterion bumps the rubric version.
 
 use super::template::{render, Vars};
@@ -20,10 +20,11 @@ pub enum PromptId {
     AnalyseJd,
     QuestionQuality,
     ReadResume,
+    SmartCoach,
 }
 
 impl PromptId {
-    pub const ALL: [PromptId; 11] = [
+    pub const ALL: [PromptId; 12] = [
         PromptId::Classify,
         PromptId::Score,
         PromptId::Coach,
@@ -35,6 +36,7 @@ impl PromptId {
         PromptId::AnalyseJd,
         PromptId::QuestionQuality,
         PromptId::ReadResume,
+        PromptId::SmartCoach,
     ];
 }
 
@@ -64,6 +66,7 @@ fn source(id: PromptId) -> (&'static str, &'static str) {
         PromptId::AnalyseJd => (include_str!("../../../prompts/09-analyse-jd.md"), include_str!("../../../prompts/schemas/analyse-jd.schema.json")),
         PromptId::QuestionQuality => (include_str!("../../../prompts/10-question-quality.md"), include_str!("../../../prompts/schemas/question-quality.schema.json")),
         PromptId::ReadResume => (include_str!("../../../prompts/11-read-resume.md"), include_str!("../../../prompts/schemas/read-resume.schema.json")),
+        PromptId::SmartCoach => (include_str!("../../../prompts/12-coach.md"), include_str!("../../../prompts/schemas/smart-coach.schema.json")),
     }
 }
 
@@ -184,6 +187,27 @@ mod tests {
         assert_eq!(get(PromptId::Score).tier, Tier::Fast);
         assert_eq!(get(PromptId::AnalyseJd).tier, Tier::Strong);
         assert_eq!(get(PromptId::ReadResume).tier, Tier::Strong);
+        assert_eq!(get(PromptId::SmartCoach).id, "smart-coach");
+        assert_eq!(get(PromptId::SmartCoach).tier, Tier::Strong);
+    }
+
+    #[test]
+    fn the_smart_coach_declares_every_input_it_uses_and_its_schema_adapts_for_each_provider() {
+        let p = get(PromptId::SmartCoach);
+        assert_eq!(p.inputs.len(), 12);
+        let used: Vec<String> = [p.system_template(), p.user_template()].iter().flat_map(|t| placeholders(t)).collect();
+        for name in &p.inputs {
+            assert!(used.contains(name), "input {name} is declared but never used");
+        }
+        let v = jsonschema::validator_for(&p.schema).unwrap();
+        let ok = serde_json::json!({"verdict": "ready", "verdict_line": "x", "worked": [], "fix": null, "more": [], "since_last": null, "offer_follow_up": true});
+        assert!(v.is_valid(&ok));
+        let bad_kind = serde_json::json!({"verdict": "nearly", "verdict_line": "x", "worked": [], "fix": {"kind": "made_up", "what": "a", "why": "b", "quote": "", "do_instead": "c", "say_instead": null}, "more": [], "since_last": null, "offer_follow_up": true});
+        assert!(!v.is_valid(&bad_kind), "the $ref to the kind list is enforced");
+        let slim = crate::scoring::run::provider_schema(&p.schema);
+        assert!(slim["$defs"]["kind"]["enum"].is_array(), "the kind list survives for Claude and Gemini");
+        let strict = crate::scoring::run::openai_strict_schema(&slim).expect("OpenAI strict mode takes it");
+        assert!(strict["$defs"]["kind"]["enum"].is_array());
     }
 
     #[test]

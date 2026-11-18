@@ -115,6 +115,15 @@ impl Engine {
             Engine::Local(_) => (Provider::Compatible, 0.0),
         }
     }
+
+    /// Whether the model used for the coach (the strong one) is coach level, so answers are judged by the Smart coach.
+    /// Every built-in local model is basic.
+    pub fn coach_level(&self) -> bool {
+        match self {
+            Engine::Cloud(r) => crate::ai::providers::coach_level(r.provider, &r.strong),
+            Engine::Local(_) => false,
+        }
+    }
 }
 
 /// The start of the error `resolve_engine` gives when the built-in AI has no model on this computer. Setup recognises
@@ -139,8 +148,14 @@ pub fn resolve_engine(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>, l
 /// The saved settings with the key looked up in the system's key storage.
 pub fn resolved_from_disk() -> Result<Option<Engine>, String> {
     let saved = settings::load(&paths::settings_file());
+    resolved_with(&saved.ai.unwrap_or_default(), keys::get)
+}
+
+/// `resolve_engine` for settings the caller built (the eval tool's environment variables), with the shared models
+/// folder looked up for the built-in local AI.
+pub fn resolved_with(s: &AiSettings, key_of: impl Fn(&str) -> Option<String>) -> Result<Option<Engine>, String> {
     let store = models_store::store()?;
-    let engine = resolve_engine(&saved.ai.unwrap_or_default(), keys::get, |m| store.status(m.info.id));
+    let engine = resolve_engine(s, key_of, |m| store.status(m.info.id));
     // Ensayo is using the model it just found: another app's Delete must leave it alone.
     if let Ok(Some(Engine::Local(l))) = &engine {
         let _ = store.use_model(l.id);
@@ -221,6 +236,8 @@ pub struct ProviderInfo {
     pub id: &'static str,
     pub name: &'static str,
     pub models: Vec<String>,
+    /// The catalog ids that are coach level (judged by the Smart coach).
+    pub coach_models: Vec<String>,
     pub fast_default: &'static str,
     pub strong_default: &'static str,
     pub has_key: bool,
@@ -245,6 +262,7 @@ pub fn view_with(saved: &AiSettings, key_of: impl Fn(&str) -> Option<String>) ->
                     id: p.key_id(),
                     name: p.name(),
                     models: catalog(*p).iter().map(|m| m.to_string()).collect(),
+                    coach_models: crate::ai::providers::coach_models(*p),
                     fast_default: fast,
                     strong_default: strong,
                     has_key: key_of(p.key_id()).is_some(),
@@ -520,6 +538,32 @@ mod tests {
         assert_eq!(r.strong, "llama3.2:3b", "one local model does both jobs");
         a.base_url = "localhost:1234".into();
         assert_eq!(resolve(&a, no_keys).unwrap().unwrap().base, "http://localhost:1234/v1");
+    }
+
+    #[test]
+    fn the_engine_says_whether_its_strong_model_is_coach_level() {
+        let cloud = |provider: &str, strong: &str| {
+            let mut a = s(provider);
+            a.strong_model = strong.into();
+            resolve_engine(&a, |_| Some("k".into()), not_found).unwrap().unwrap()
+        };
+        assert!(cloud("claude", "").coach_level(), "the default Claude model is coach level");
+        assert!(!cloud("claude", "claude-haiku-5-5").coach_level());
+        assert!(!cloud("groq", "").coach_level());
+        assert!(!cloud("openai", "some-typed-in-model").coach_level());
+        let mut compatible = s("compatible");
+        compatible.fast_model = "claude-sonnet-5-5".into();
+        assert!(!resolve_engine(&compatible, no_keys, not_found).unwrap().unwrap().coach_level());
+        let only_granite = |m: &LocalModel| if m.info.id == "granite-4.2-3b" { found(m) } else { Status::Missing };
+        assert!(!resolve_engine(&s("local"), no_keys, only_granite).unwrap().unwrap().coach_level(), "built-in local models are basic");
+    }
+
+    #[test]
+    fn the_settings_view_lists_the_coach_models() {
+        let v = view_with(&AiSettings::default(), |_| None);
+        let claude = v.providers.iter().find(|p| p.id == "claude").unwrap();
+        assert_eq!(claude.coach_models, vec!["claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-2"]);
+        assert!(v.providers.iter().find(|p| p.id == "groq").unwrap().coach_models.is_empty());
     }
 
     fn found(m: &LocalModel) -> Status {

@@ -16,6 +16,8 @@ import {
   unpricedNote,
   explainTestError,
   initialState,
+  CARD_SKIPPED_LINE,
+  TRY_CARD_AGAIN,
   isLocalAddress,
   localEngineOf,
   localDeletedLine,
@@ -23,11 +25,12 @@ import {
   localModelLine,
   localModelOf,
   modelChoices,
+  modelFromChoice,
   serverFor,
   shownModel,
   testedLine,
   withDetectedServer,
-  withKind,
+  withChosenKind,
   withLocalModel,
   withLocalEngine,
   withModelChoice,
@@ -39,6 +42,7 @@ import {
   type LocalAiView,
   type ProviderInfo,
 } from "./aiSettings";
+import { coachLine, FULL_LABEL, isFullCoach } from "./coachLevel";
 import SpeechModelList from "./SpeechModelList";
 import { modelRows, removedLine, type Removal, type SpeechModelEntry } from "./speechModels";
 import { CheckIcon } from "./parts";
@@ -187,7 +191,15 @@ export function useLocalAi(active: boolean) {
       },
     );
   };
-  return { status, busy, error, notice, confirming, askDelete, download, cancel, remove, removeId, askRemove, removeEverywhere };
+  /** "Try the card again": the graphics card is used for the next answer. */
+  const retryCard = () => {
+    setError("");
+    invoke("retry_local_ai_card").then(
+      () => void refresh(),
+      (e) => setError(explainTestError(e)),
+    );
+  };
+  return { status, busy, error, notice, confirming, askDelete, download, cancel, remove, removeId, askRemove, removeEverywhere, retryCard };
 }
 
 type LocalAi = ReturnType<typeof useLocalAi>;
@@ -236,6 +248,14 @@ export function BuiltInPanel({ ai, st, change }: { ai: LocalAi; st: AiScreenStat
           onRemove={ai.removeEverywhere}
         />
       </div>
+      {status.card_skipped && (
+        <span className="e-meta" role="status">
+          {CARD_SKIPPED_LINE}{" "}
+          <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={ai.retryCard}>
+            {TRY_CARD_AGAIN}
+          </button>
+        </span>
+      )}
       {!here && !rows.some((r) => r.downloadingHere) && <span className="e-meta">{localModelLine(m)}. Until a model is downloaded and in use, you'll get timing notes only.</span>}
       <span className="e-meta">
         No key needed, and nothing you say leaves this computer. A small model like this is good for judging your answers and reading your stories. It is weaker at follow-up questions, so if the follow-up drill matters to you, use a cloud key instead.
@@ -380,7 +400,7 @@ export function useAiEngine(view: AiView) {
   const clearTest = () => setTest(null);
   const providerChange = (id: string) => withProvider(st, id, providers);
   /** The three engine cards. "On this computer" means the built-in local AI; Ollama and LM Studio stay in Settings. */
-  const chooseKind = (next: AiKind) => moved(next === "local" ? withLocalEngine(withKind(st, "local", providers), "Built-in local AI") : withKind(st, next, providers));
+  const chooseKind = (next: AiKind) => moved(withChosenKind(st, next, providers));
 
   return { st, providers, kind, settings, cloud, provider, hasKey, typedKey, typeKey, otherOpen, setOtherOpen, test, result, found, problem, local, detect, change, moved, storeKey, removeKey, runTest, saveNow, clearTest, providerChange, chooseKind };
 }
@@ -424,12 +444,18 @@ export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: b
       </span>
     );
 
+  const coachText = coachLine(kind, provider, chosenModel(provider, settings));
+  const coachNote = coachText && <span className="e-meta" role="status">{coachText}</span>;
+
   return (
     <>
       {kind === "timing" ? (
         <span className="e-meta">Ensayo will tell you how fast you got to the point, how long you ran and how many filler words you used. Notes on what you said need an AI engine; you can add one any time.</span>
       ) : guided && builtIn ? (
-        <BuiltInPanel ai={local} st={st} change={change} />
+        <>
+          <BuiltInPanel ai={local} st={st} change={change} />
+          {coachNote}
+        </>
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
@@ -467,13 +493,14 @@ export function EngineDetails({ ai, guided = false }: { ai: AiEngine; guided?: b
                   }}
                 >
                   {modelChoices(provider).map((m) => (
-                    <option key={m}>{m}</option>
+                    <option key={m} value={m}>{kind === "key" && isFullCoach(provider, modelFromChoice(m) ?? "") ? `${m} · ${FULL_LABEL}` : m}</option>
                   ))}
                 </select>
               </div>
             )}
           </div>
           {!builtIn && <UnpricedNote kind={kind} model={chosenModel(provider, settings)} />}
+          {coachNote}
           {builtIn ? (
             <BuiltInPanel ai={local} st={st} change={change} />
           ) : (

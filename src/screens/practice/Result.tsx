@@ -6,6 +6,7 @@ import { consistencyCheckOf, consistencySentences } from "../../practice/applied
 import { anotherFollowUp, currentRep, endFollowUp, keepAfterRestart, labelCriteria, listenToRep, fixTranscript, requestFollowUp, savedLabels, scoreWithAi, stoppedByUser, markWrong, nextLiveQuestion, startOverAfterRestart, stopListening, tryAgain, useLive } from "../../practice/live";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
+import CoachFeedback, { BASIC_LINE } from "./CoachFeedback";
 import { Kbd, SessionHeader } from "./parts";
 import { ASK, FOLLOW_UP, MAX_ATTEMPTS, nextAttempt, nextQuestion, RECORD, setAttempt, THINK } from "./practiceFlow";
 import { hush, speak, speakTrySaying } from "./speak";
@@ -154,13 +155,16 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   // Inside an application, an answer that was said differently from an earlier stage says so, in the words the check found.
   const saidBefore = live ? consistencySentences(consistencyCheckOf(currentRep())) : [];
 
+  const coach = attempt?.coach;
   const wins = attempt?.wins ?? [];
-  const everythingWorked = wins.length > 0;
+  // With the full coach, "ready" is the verdict; without it, every check coming out clean is.
+  const everythingWorked = coach ? coach.verdict === "ready" : wins.length > 0;
   const maxTries = live ? state.tries : MAX_ATTEMPTS;
   const lastAttempt = number >= maxTries;
   // A real session offers a follow-up after any answer once a feedback engine is set up (the interviewer needs one);
   // the preview keeps the old rule.
-  const canFollowUp = live ? state.aiReady && state.followUps && !inFollowUp : number >= 2 && !everythingWorked;
+  // With the full coach, it only offers one when it says so.
+  const canFollowUp = coach ? coach.offer_follow_up && (!live || (state.aiReady && state.followUps && !inFollowUp)) : live ? state.aiReady && state.followUps && !inFollowUp : number >= 2 && !everythingWorked;
   const moreFollowUps = inFollowUp && !!state.followUp && state.followUp.number < state.followUp.of;
 
   const again = () => {
@@ -177,7 +181,8 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const anotherOne = () => void anotherFollowUp().then((route) => route && go(route));
   const backToAnswer = () => {
     endFollowUp();
-    go(state.attempts[state.attempt - 1]?.wins?.length ? "3-8-result-everything-worked" : state.attempt > 1 ? "3-5-result-attempt-2" : "3-4-result-attempt-1-details-open");
+    const done = state.attempts[state.attempt - 1];
+    go(done?.coach ? (done.coach.verdict === "ready" ? "3-8-result-everything-worked" : state.attempt > 1 ? "3-5-result-attempt-2" : "3-4-result-attempt-1-details-open") : done?.wins?.length ? "3-8-result-everything-worked" : state.attempt > 1 ? "3-5-result-attempt-2" : "3-4-result-attempt-1-details-open");
   };
   const end = () => {
     onEnd?.();
@@ -190,7 +195,7 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   const sayIt = () => attempt?.trySaying && speak(attempt.trySaying);
 
   // Enter does whatever the big button does.
-  const primary = inFollowUp ? (moreFollowUps ? anotherOne : next) : everythingWorked ? (canFollowUp ? followUp : next) : lastAttempt ? next : again;
+  const primary = inFollowUp ? (moreFollowUps ? anotherOne : next) : coach && everythingWorked ? next : everythingWorked ? (canFollowUp ? followUp : next) : lastAttempt ? next : again;
   useKeys({ enter: primary, n: next, l: listen, esc: end });
 
   if (!attempt) {
@@ -209,6 +214,20 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
   // A change that is not an improvement is said plainly, not drawn as a win.
   const deltaStyle = delta?.improved === false ? { className: "e-h3", style: { fontSize: "21px", color: "var(--e-ink)" } } : { className: "e-win", style: { fontSize: "21px" } };
   const lastLine = attempt.transcript.length - 1;
+  const tryBlock = attempt.trySaying && (
+          <div className="e-soft" style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+            <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <span className="e-label">Try saying</span>
+              <p style={{ margin: "0", fontSize: "20px", lineHeight: "1.5" }}>"{attempt.trySaying}"</p>
+            </div>
+            <button type="button" aria-label="Hear this line" onClick={sayIt} style={{ flex: "none", width: "48px", height: "48px", borderRadius: "50%", border: "none", background: "var(--e-surface)", color: "var(--e-pen)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M7 4l13 8-13 8z" />
+              </svg>
+            </button>
+          </div>
+        );
+
 
   const wrongLink = wrong ? (
     <span className="e-small" role="status" style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "baseline" }}>
@@ -258,14 +277,19 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
             ) : (
               <span className="e-meta">{inFollowUp && state.followUp ? `Follow-up ${state.followUp.number} of ${state.followUp.of}` : `Attempt ${number} of ${maxTries}`}</span>
             )}
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span className="e-label">Coach's note</span>
-              <p className="e-hand" style={{ margin: "0", fontSize: `${handSize}px` }}>{attempt.coachNote}</p>
-              {attempt.notJudged && <p className="e-meta" style={{ margin: "6px 0 0" }}>{attempt.notJudged}</p>}
-              {live && stoppedByUser() && (
-                <button type="button" className="e-btn e-btn-soft e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "8px" }} onClick={() => { const scoring = scoreWithAi(); go(THINK); void scoring; }}>Score with AI</button>
-              )}
-            </div>
+            {coach ? (
+              <CoachFeedback coach={coach} afterFix={tryBlock} />
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <span className="e-label">Coach's note</span>
+                <p className="e-hand" style={{ margin: "0", fontSize: `${handSize}px` }}>{attempt.coachNote}</p>
+                {attempt.basicFeedback && <p className="e-small" style={{ margin: "6px 0 0" }}>{BASIC_LINE}</p>}
+                {attempt.notJudged && <p className="e-meta" style={{ margin: "6px 0 0" }}>{attempt.notJudged}</p>}
+                {live && stoppedByUser() && (
+                  <button type="button" className="e-btn e-btn-soft e-btn-sm" style={{ alignSelf: "flex-start", marginTop: "8px" }} onClick={() => { const scoring = scoreWithAi(); go(THINK); void scoring; }}>Score with AI</button>
+                )}
+              </div>
+            )}
             {saidBefore.length > 0 && (
               <div className="e-soft" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <span className="e-label">Said differently</span>
@@ -275,20 +299,8 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
                 <span className="e-small">Pick one and say it the same way every time.</span>
               </div>
             )}
-            {attempt.trySaying && (
-              <div className="e-soft" style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-                <div style={{ flex: "1", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span className="e-label">Try saying</span>
-                  <p style={{ margin: "0", fontSize: "20px", lineHeight: "1.5" }}>"{attempt.trySaying}"</p>
-                </div>
-                <button type="button" aria-label="Hear this line" onClick={sayIt} style={{ flex: "none", width: "48px", height: "48px", borderRadius: "50%", border: "none", background: "var(--e-surface)", color: "var(--e-pen)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M7 4l13 8-13 8z" />
-                  </svg>
-                </button>
-              </div>
-            )}
-            {everythingWorked && (
+            {!coach && tryBlock}
+            {everythingWorked && !coach && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                 {wins.map((w) => (
                   <span key={w} className="e-pill" style={{ background: "var(--e-ok-tint)", color: "var(--e-ok)", fontWeight: "600" }}>{w}</span>
@@ -302,6 +314,11 @@ export default function Result({ index, detailsStartOpen, detailsInAside, handSi
                   <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={moreFollowUps ? anotherOne : next}>{moreFollowUps ? "Another follow-up" : "Next question →"}</button>
                   {moreFollowUps && <button type="button" className="e-btn e-btn-ghost" onClick={next}>Next question →</button>}
                   <button type="button" className="e-btn e-btn-ghost" onClick={backToAnswer}>Back to my answer</button>
+                </>
+              ) : coach && everythingWorked ? (
+                <>
+                  <button type="button" className="e-btn e-btn-primary e-btn-big" onClick={next}>Next question →</button>
+                  {canFollowUp && <button type="button" className="e-btn e-btn-soft" onClick={followUp}>They have a follow-up</button>}
                 </>
               ) : everythingWorked ? (
                 <>
