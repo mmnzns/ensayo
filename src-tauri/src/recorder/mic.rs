@@ -83,6 +83,25 @@ fn plain_open_error(stage: &str, e: &cpal::Error) -> String {
 }
 
 /// True when a stream error means the microphone is gone for good rather than a glitch.
+/// How a stream error is logged: the Xrun a capture reports as it opens is noise (once per capture, at info, then
+/// silent); anything else stays a warning.
+#[derive(Debug, PartialEq)]
+enum LogAs {
+    Warn,
+    Info,
+    Skip,
+}
+
+fn log_level(kind: ErrorKind, xrun_logged: &AtomicBool) -> LogAs {
+    if kind != ErrorKind::Xrun {
+        LogAs::Warn
+    } else if xrun_logged.swap(true, Ordering::Relaxed) {
+        LogAs::Skip
+    } else {
+        LogAs::Info
+    }
+}
+
 fn is_fatal(kind: ErrorKind) -> bool {
     !matches!(kind, ErrorKind::Xrun | ErrorKind::DeviceChanged | ErrorKind::RealtimeDenied | ErrorKind::DeviceBusy | ErrorKind::ResourceExhausted)
 }
@@ -107,8 +126,13 @@ fn open(feed: &SharedFeed, preferred: Option<&str>, failed: &Arc<AtomicBool>) ->
     let rate = config.sample_rate;
     let channels = config.channels;
     let failed_cb = failed.clone();
+    let xrun_logged = Arc::new(AtomicBool::new(false));
     let err = move |e: cpal::Error| {
-        log::warn!("mic stream error: kind {:?}: {e}", e.kind());
+        match log_level(e.kind(), &xrun_logged) {
+            LogAs::Warn => log::warn!("mic stream error: kind {:?}: {e}", e.kind()),
+            LogAs::Info => log::info!("mic stream error: kind {:?}: {e} (once per capture)", e.kind()),
+            LogAs::Skip => {}
+        }
         if is_fatal(e.kind()) {
             failed_cb.store(true, Ordering::Release);
         }
@@ -261,5 +285,16 @@ mod tests {
         assert!(!is_fatal(ErrorKind::DeviceChanged));
         assert!(is_fatal(ErrorKind::DeviceNotAvailable));
         assert!(is_fatal(ErrorKind::StreamInvalidated));
+    }
+
+    #[test]
+    fn an_xrun_is_logged_once_per_capture_at_info_and_real_errors_stay_warnings() {
+        let seen = AtomicBool::new(false);
+        assert_eq!(log_level(ErrorKind::Xrun, &seen), LogAs::Info);
+        assert_eq!(log_level(ErrorKind::Xrun, &seen), LogAs::Skip);
+        assert_eq!(log_level(ErrorKind::DeviceNotAvailable, &seen), LogAs::Warn);
+        assert_eq!(log_level(ErrorKind::DeviceBusy, &AtomicBool::new(true)), LogAs::Warn);
+        // A new capture has its own flag.
+        assert_eq!(log_level(ErrorKind::Xrun, &AtomicBool::new(false)), LogAs::Info);
     }
 }

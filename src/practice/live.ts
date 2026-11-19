@@ -287,6 +287,9 @@ const isCurrentRun = (run: string) => run === currentRun && state.active;
 
 export function resetLive() {
   currentRun = null;
+  recOp = null;
+  restarting = false;
+  recToken++;
   state = INITIAL;
   stories = [];
   target = undefined;
@@ -440,33 +443,121 @@ export const currentQuestionText = (): string => (state.view === "followup" && s
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export async function beginRecording() {
+/** The start or restart in flight, if any. Never rejects. One capture is opened at a time: a second begin while this
+ *  runs does nothing, and a stop, skip or end waits for it so it never finds a capture half open. */
+let recOp: Promise<void> | null = null;
+/** True while `recOp` is a restart (a second restart is the same one, not another). */
+let restarting = false;
+/** Bumped by anything that ends the recording. A restart that finds it changed does not start a new capture. */
+let recToken = 0;
+
+const ALREADY_RECORDING = /already recording/i;
+
+/** Waits for the start or restart in flight. */
+async function settleRec() {
+  while (recOp) await recOp;
+}
+
+/** Starts the capture. When the recorder says one is already running that nothing on screen owns, it is stopped and
+ *  thrown away and a new one starts, instead of showing "Already recording". */
+async function startTakingOver(a: RepApi): Promise<string | void> {
   try {
-    const api = await repApi();
-    const name = await api.startRecording();
-    set({ phase: "recording", error: null, stopNote: null, micName: typeof name === "string" && name ? name : null });
-    // Load the speech model while you talk; if it can't, the transcript says why when you stop.
-    void api.warmSpeech?.().catch(() => {});
+    return await a.startRecording();
   } catch (e) {
-    set({ phase: "error", error: message(e) });
+    if (!ALREADY_RECORDING.test(message(e))) throw e;
+    try {
+      const rec = await a.stopRecording();
+      await a.discardRecording(rec.path);
+    } catch {
+      // Nothing to stop (the backend lets go of it when the next start asks).
+    }
+    return await a.startRecording();
   }
+}
+
+function track(op: Promise<void>): Promise<void> {
+  const tracked = op.finally(() => {
+    if (recOp === tracked) recOp = null;
+  });
+  recOp = tracked;
+  return tracked;
+}
+
+export function beginRecording(): Promise<void> {
+  // Already starting, restarting or recording: this call has nothing to add.
+  if (recOp || state.phase === "recording") return recOp ?? Promise.resolve();
+  return track(
+    (async () => {
+      try {
+        const api = await repApi();
+        const name = await startTakingOver(api);
+        set({ phase: "recording", error: null, stopNote: null, micName: typeof name === "string" && name ? name : null });
+        // Load the speech model while you talk; if it can't, the transcript says why when you stop.
+        void api.warmSpeech?.().catch(() => {});
+      } catch (e) {
+        set({ phase: "error", error: message(e) });
+      }
+    })(),
+  );
+}
+
+/** Counts the recording screens on show, so one that goes away and comes straight back (it remounts) is not a way out. */
+let screens = 0;
+
+/** The recording screen is on show. Call the returned function when it goes away. */
+export function recordingScreenShown(): () => void {
+  screens++;
+  return () => {
+    screens--;
+    void leaveRecording();
+  };
+}
+
+/** The recording screen went away without stopping the answer (any way out that isn't Stop, Skip or End): the capture
+ *  is stopped and thrown away so nothing is left running with nothing on screen to own it. */
+async function leaveRecording() {
+  await settleRec();
+  if (screens > 0 || !state.active || state.phase !== "recording") return;
+  recToken++;
+  try {
+    const a = await repApi();
+    const rec = await a.stopRecording();
+    await a.discardRecording(rec.path);
+  } catch {
+    // Nothing was being recorded.
+  }
+  if (state.phase === "recording") set({ phase: "asking" });
 }
 
 function storyIdsFor(q: BankQuestion, source?: Story): string[] {
   return (source ? [source] : pickStories(q, stories, methods, target)).map((s) => s.id);
 }
 
-/** "Start over" while recording: throw this take away and begin again. */
-export async function restartRecording() {
-  try {
-    const a = await repApi();
-    const rec = await a.stopRecording();
-    await a.discardRecording(rec.path);
-    const name = await a.startRecording();
-    set({ phase: "recording", error: null, stopNote: null, micName: typeof name === "string" && name ? name : null });
-  } catch (e) {
-    set({ phase: "error", error: message(e) });
-  }
+/** "Start over" while recording: throw this take away and begin again. One at a time, and it gives way to a stop. */
+export function restartRecording(): Promise<void> {
+  if (restarting && recOp) return recOp;
+  const prev = recOp;
+  const token = ++recToken;
+  restarting = true;
+  return track(
+    (async () => {
+      try {
+        if (prev) await prev;
+        if (token !== recToken) return;
+        const a = await repApi();
+        const rec = await a.stopRecording();
+        await a.discardRecording(rec.path);
+        // Stopped, skipped or ended while the old take was being thrown away: no new capture.
+        if (token !== recToken) return;
+        const name = await startTakingOver(a);
+        set({ phase: "recording", error: null, stopNote: null, micName: typeof name === "string" && name ? name : null });
+      } catch (e) {
+        if (token === recToken) set({ phase: "error", error: message(e) });
+      } finally {
+        restarting = false;
+      }
+    })(),
+  );
 }
 
 /** 0 to 1, how loud the mic is right now. 0 when it cannot be read. */
@@ -569,7 +660,10 @@ export async function stopAndFinish(stopNote: string | null = null) {
   if (!q) return;
   const run = newRun();
   set({ phase: "thinking", stopNote, measured: null, thinkingSince: Date.now() });
+  // A start or restart still opening finishes first; a restart that hasn't begun its new take never will.
+  recToken++;
   try {
+    await settleRec();
     const a = await repApi();
     const rec = await a.stopRecording();
     if (!isCurrentRun(run)) return;
@@ -882,6 +976,8 @@ export async function cancelLive() {
   markEnded(state.sessionId);
   const scoring = state.phase === "thinking";
   currentRun = null;
+  recToken++;
+  await settleRec();
   if (state.phase === "recording") {
     try {
       const a = await repApi();

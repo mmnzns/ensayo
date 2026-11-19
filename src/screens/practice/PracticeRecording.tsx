@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { useLive, beginRecording, getLive, micLost, MIC_LOST, recordAgainAfterLoss, recordingStatus, restartRecording, retryFinish, SCORE_LOST_MIN_MS, setRecordingPaused, stopAndFinish } from "../../practice/live";
+import { useLive, beginRecording, getLive, micLost, MIC_LOST, recordAgainAfterLoss, recordingScreenShown, recordingStatus, restartRecording, retryFinish, SCORE_LOST_MIN_MS, setRecordingPaused, stopAndFinish } from "../../practice/live";
 import { LIMIT_STOPPED, LIMIT_WARNING, limitState } from "../../practice/limit";
 import { SILENCE_START, silenceStep, silenceStop } from "../../practice/silence";
 import { readPrefs } from "../settings/prefs";
@@ -68,6 +68,7 @@ export default function PracticeRecording() {
   // A live session starts the microphone when the screen opens, shows its real level, and stops itself at the hard cap.
   useEffect(() => {
     if (!live) return;
+    const left = recordingScreenShown();
     if (getLive().phase !== "recording") void beginRecording();
     const autoStop = readPrefs().practice.autoStop;
     silence.current = SILENCE_START;
@@ -92,7 +93,10 @@ export default function PracticeRecording() {
         }),
       130,
     );
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      left();
+    };
   }, [live]);
 
   // The microphone didn't start (on Windows, a blocked microphone fails here): back to the question, which says
