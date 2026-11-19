@@ -359,7 +359,36 @@ pub fn openai_strict_schema(schema: &Value) -> Option<Value> {
         if let Some(Value::Object(props)) = out.get("properties") {
             out.insert("required".into(), Value::Array(props.keys().map(|k| Value::String(k.clone())).collect()));
         }
+        // Strict mode wants a `type` on every plain value, and doesn't list `const`: a lone `{"const": 2}` becomes
+        // `{"type": "integer", "enum": [2]}`. Same rule, same values. Documentation-only keys go too.
+        if let Some(c) = out.remove("const") {
+            out.entry("enum").or_insert_with(|| Value::Array(vec![c]));
+        }
+        for k in ["title", "default", "examples"] {
+            out.remove(k);
+        }
+        if !out.contains_key("type") && !out.contains_key("$ref") && !out.contains_key("anyOf") {
+            if let Some(vals) = out.get("enum").and_then(Value::as_array) {
+                let has_null = vals.iter().any(Value::is_null);
+                let rest: Vec<Value> = vals.iter().filter(|v| !v.is_null()).cloned().collect();
+                if let Some(t) = value_type(&rest) {
+                    out.insert("type".into(), if has_null { serde_json::json!([t, "null"]) } else { Value::String(t.into()) });
+                }
+            }
+        }
         Some(Value::Object(out))
+    }
+    /// The one JSON type all of `vals` share, if there is one.
+    fn value_type(vals: &[Value]) -> Option<&'static str> {
+        let name = |v: &Value| match v {
+            Value::String(_) => "string",
+            Value::Bool(_) => "boolean",
+            Value::Number(n) if n.is_i64() || n.is_u64() => "integer",
+            Value::Number(_) => "number",
+            _ => "",
+        };
+        let first = name(vals.first()?);
+        (!first.is_empty() && vals.iter().all(|v| name(v) == first)).then_some(first)
     }
     if !is_object_schema(schema.as_object()?) {
         return None;
@@ -641,6 +670,107 @@ mod tests {
                 }
             });
         }
+    }
+
+    /// OpenAI strict structured-output rules, as documented: the root is an object; every schema node has a `type`
+    /// (or is a `$ref` or an `anyOf`); every object is closed and lists all its properties as required; only the
+    /// supported keywords appear; at most 5 levels of nesting and 100 properties; no `const`.
+    fn strict_problems(root: &Value) -> Vec<String> {
+        const ALLOWED: &[&str] = &["type", "properties", "required", "additionalProperties", "items", "enum", "anyOf", "$ref", "$defs", "definitions"];
+        let mut out = vec![];
+        if root.get("type") != Some(&Value::String("object".into())) || root.get("anyOf").is_some() {
+            out.push("root is not a plain object".to_string());
+        }
+        let mut props = 0;
+        fn node(s: &Value, depth: usize, path: &str, props: &mut usize, out: &mut Vec<String>) {
+            let Value::Object(m) = s else { return out.push(format!("{path}: not a schema object")) };
+            for k in m.keys() {
+                if !ALLOWED.contains(&k.as_str()) {
+                    out.push(format!("{path}: keyword {k} is not supported"));
+                }
+            }
+            if !(m.contains_key("type") || m.contains_key("$ref") || m.contains_key("anyOf")) {
+                out.push(format!("{path}: no type"));
+            }
+            if let Some(Value::Array(ts)) = m.get("type") {
+                if !ts.iter().all(|t| t.as_str().is_some_and(|t| ["string", "number", "integer", "boolean", "null", "object", "array"].contains(&t))) {
+                    out.push(format!("{path}: bad type list"));
+                }
+            }
+            if let Some(Value::Array(vals)) = m.get("enum") {
+                if vals.is_empty() || vals.len() > 500 {
+                    out.push(format!("{path}: enum size"));
+                }
+            }
+            if depth > 5 {
+                out.push(format!("{path}: nested deeper than 5"));
+            }
+            if is_object_schema(m) {
+                if m.get("additionalProperties") != Some(&Value::Bool(false)) {
+                    out.push(format!("{path}: object is not closed"));
+                }
+                let names: Vec<&String> = m.get("properties").and_then(Value::as_object).map(|p| p.keys().collect()).unwrap_or_default();
+                let mut req: Vec<&str> = m.get("required").and_then(Value::as_array).map(|r| r.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+                let mut want: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+                req.sort();
+                want.sort();
+                if req != want {
+                    out.push(format!("{path}: required does not list every property"));
+                }
+                *props += names.len();
+            }
+            if let Some(Value::Object(p)) = m.get("properties") {
+                for (n, c) in p {
+                    node(c, depth + 1, &format!("{path}.{n}"), props, out);
+                }
+            }
+            for key in ["$defs", "definitions"] {
+                if let Some(Value::Object(p)) = m.get(key) {
+                    for (n, c) in p {
+                        node(c, depth + 1, &format!("{path}#{n}"), props, out);
+                    }
+                }
+            }
+            if let Some(i) = m.get("items") {
+                node(i, depth + 1, &format!("{path}[]"), props, out);
+            }
+            if let Some(Value::Array(a)) = m.get("anyOf") {
+                for (i, c) in a.iter().enumerate() {
+                    node(c, depth + 1, &format!("{path}|{i}"), props, out);
+                }
+            }
+        }
+        node(root, 0, "root", &mut props, &mut out);
+        if props > 100 {
+            out.push(format!("{props} properties (limit 100)"));
+        }
+        out
+    }
+
+    #[test]
+    fn every_prompt_schema_comes_out_of_openai_strict_following_the_strict_rules() {
+        for id in PromptId::ALL {
+            let strict = openai_strict_schema(&provider_schema(&get(id).schema)).unwrap_or_else(|| panic!("{id:?} can't be made strict"));
+            assert_eq!(strict_problems(&strict), Vec::<String>::new(), "{id:?}");
+            assert!(jsonschema::validator_for(&strict).is_ok(), "{id:?}");
+        }
+    }
+
+    #[test]
+    fn the_strict_validator_catches_what_openai_refuses() {
+        let bad = serde_json::json!({ "type": "object", "properties": { "v": { "const": 2 }, "e": { "enum": ["a"] } }, "required": ["v"] });
+        let p = strict_problems(&bad).join("; ");
+        assert!(p.contains("keyword const") && p.contains("no type") && p.contains("not closed") && p.contains("required does not list"), "{p}");
+    }
+
+    #[test]
+    fn a_const_and_a_typeless_enum_become_typed_enums_in_strict_mode() {
+        let schema = serde_json::json!({ "type": "object", "properties": { "v": { "const": 2 }, "e": { "enum": ["a", "b"] }, "o": { "enum": ["x"] } }, "required": ["v", "e"] });
+        let strict = openai_strict_schema(&provider_schema(&schema)).unwrap();
+        assert_eq!(strict["properties"]["v"], serde_json::json!({ "type": "integer", "enum": [2] }));
+        assert_eq!(strict["properties"]["e"], serde_json::json!({ "type": "string", "enum": ["a", "b"] }));
+        assert_eq!(strict["properties"]["o"], serde_json::json!({ "type": ["string", "null"], "enum": ["x", null] }));
+        assert_eq!(strict_problems(&strict), Vec::<String>::new());
     }
 
     #[test]

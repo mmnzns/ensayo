@@ -322,9 +322,6 @@ pub struct ProviderLlm {
     timeout_override: Option<Duration>,
     /// Set once a server has refused `response_format`, so later calls skip the doomed first try.
     json_mode_refused: AtomicBool,
-    /// Set once a provider has refused the schema mode (Claude's `output_config.format`, OpenAI's `json_schema`,
-    /// Gemini's `responseJsonSchema`), so later calls go out on the plain path.
-    schema_refused: AtomicBool,
     /// Set once Claude has refused `output_config` itself (an API version without effort), so later calls leave it out.
     effort_refused: AtomicBool,
 }
@@ -347,7 +344,6 @@ impl ProviderLlm {
             sleep: Arc::new(std::thread::sleep),
             timeout_override: None,
             json_mode_refused: AtomicBool::new(false),
-            schema_refused: AtomicBool::new(false),
             effort_refused: AtomicBool::new(false),
         }
     }
@@ -433,6 +429,23 @@ impl ProviderLlm {
     }
 }
 
+/// Provider + model pairs that refused the schema mode (Claude's `output_config.format`, OpenAI's `json_schema`,
+/// Gemini's `responseJsonSchema`) in this run of the app. A client is built for every call, so the memory has to live
+/// outside it; one refusal means no later call in the run pays for a refused first try.
+static SCHEMA_REFUSED: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+fn schema_refused(provider: Provider, model: &str) -> bool {
+    let list = SCHEMA_REFUSED.lock().unwrap_or_else(|e| e.into_inner());
+    list.iter().any(|(p, m)| p == provider.name() && m == model)
+}
+
+fn remember_schema_refusal(provider: Provider, model: &str) {
+    let mut list = SCHEMA_REFUSED.lock().unwrap_or_else(|e| e.into_inner());
+    if !list.iter().any(|(p, m)| p == provider.name() && m == model) {
+        list.push((provider.name().to_string(), model.to_string()));
+    }
+}
+
 /// Which providers take the schema in the request: recent Claude models, OpenAI's own API and Gemini.
 fn schema_applies(provider: Provider, model: &str) -> bool {
     match provider {
@@ -468,17 +481,18 @@ impl ProviderLlm {
         let json_mode = req.json && !self.json_mode_refused.load(Ordering::Relaxed);
         // The schema goes to the providers that can hold a reply to it; after a refusal, to none.
         let mut req = req.clone();
-        let schema_sent = req.schema.is_some() && req.json && schema_applies(self.provider, model) && !self.schema_refused.load(Ordering::Relaxed);
+        let schema_sent = req.schema.is_some() && req.json && schema_applies(self.provider, model) && !schema_refused(self.provider, model);
         if !schema_sent {
             req.schema = None;
         }
+        let mut dropped_schema = false;
         let mut first = self.round_trip(&req, model, json_mode);
         if let Err(f) = &first {
             if schema_sent && f.status == Some(400) && mentions_schema(&f.body) {
-                self.schema_refused.store(true, Ordering::Relaxed);
                 log::info!("schema mode refused by {}; asking again without it", self.provider.name());
                 req.schema = None;
                 first = self.round_trip(&req, model, json_mode);
+                dropped_schema = true;
             }
         }
         if let Err(f) = &first {
@@ -500,6 +514,11 @@ impl ProviderLlm {
             self.json_mode_refused.store(true, Ordering::Relaxed);
             self.round_trip(req, model, false)
         });
+        // Remembered only once the call went through without the schema, so an unrelated 400 can't switch the schema
+        // off for the whole run.
+        if dropped_schema && result.is_ok() {
+            remember_schema_refusal(self.provider, model);
+        }
         result.map_err(|f| self.scrub(f.error))
     }
 }
@@ -955,7 +974,7 @@ mod tests {
     fn a_refused_schema_is_asked_again_without_it_once_and_remembered() {
         let refusal = reply(400, json!({ "error": { "message": "Invalid schema for response_format 'reply'" } }));
         let (base, server) = fake_server(vec![refusal, openai_ok("{\"n\": 1}"), openai_ok("{\"n\": 2}")]);
-        let (llm, pauses) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol");
+        let (llm, pauses) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol-refusal-a");
         let r = schema_request(Tier::Fast);
         assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 1}");
         assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 2}");
@@ -968,11 +987,43 @@ mod tests {
     }
 
     #[test]
+    fn a_refusal_is_remembered_across_clients_for_the_run_but_only_for_that_model() {
+        let refusal = reply(400, json!({ "error": { "message": "Invalid schema for response_format 'reply': something is not permitted" } }));
+        let (base, server) = fake_server(vec![refusal, openai_ok("{\"n\": 1}")]);
+        let (first, _) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol-refusal-d");
+        assert!(first.complete(&schema_request(Tier::Fast)).is_ok());
+        server.join().unwrap();
+        // A new client, as every answer makes one: its first request already goes out without the schema.
+        let (base, server) = fake_server(vec![openai_ok("{\"n\": 2}")]);
+        let (second, _) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol-refusal-d");
+        assert!(second.complete(&schema_request(Tier::Fast)).is_ok());
+        let seen = server.join().unwrap();
+        assert_eq!(seen.len(), 1, "no refused first try");
+        assert_eq!(seen[0].body["response_format"]["type"], "json_object");
+        // Another model has not refused anything.
+        let (base, server) = fake_server(vec![openai_ok("{\"n\": 3}")]);
+        let (other, _) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol-refusal-e");
+        assert!(other.complete(&schema_request(Tier::Fast)).is_ok());
+        assert_eq!(server.join().unwrap()[0].body["response_format"]["type"], "json_schema");
+    }
+
+    #[test]
+    fn a_400_that_fails_again_without_the_schema_is_not_remembered_as_a_refusal() {
+        let bad = || reply(400, json!({ "error": { "message": "invalid format of the request" } }));
+        let (base, server) = fake_server(vec![bad(), bad(), openai_ok("{\"n\": 1}")]);
+        let (llm, _) = llm(Provider::OpenAi, format!("{base}/v1"), "sk-key-12345678", "gpt-6-sol-refusal-f");
+        assert!(llm.complete(&schema_request(Tier::Fast)).is_err());
+        assert!(llm.complete(&schema_request(Tier::Fast)).is_ok());
+        let seen = server.join().unwrap();
+        assert_eq!(seen[2].body["response_format"]["type"], "json_schema", "the schema is still tried");
+    }
+
+    #[test]
     fn a_claude_400_about_output_config_after_the_schema_goes_drops_the_effort_too() {
         let refusal = || reply(400, json!({ "error": { "message": "output_config: extra inputs are not permitted" } }));
         let ok = |n: u32| reply(200, json!({ "content": [{ "type": "text", "text": format!("{{\"n\": {n}}}") }], "usage": { "input_tokens": 1, "output_tokens": 1 } }));
         let (base, server) = fake_server(vec![refusal(), refusal(), ok(1), ok(2)]);
-        let (llm, _) = llm(Provider::Claude, base, "sk-ant-key-12345678", "claude-sonnet-5-5");
+        let (llm, _) = llm(Provider::Claude, base, "sk-ant-key-12345678", "claude-sonnet-5-5-refusal-b");
         let r = schema_request(Tier::Fast);
         assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 1}");
         assert_eq!(llm.complete(&r).unwrap().text, "{\"n\": 2}");
@@ -988,7 +1039,7 @@ mod tests {
         let refusal = reply(400, json!({ "error": { "message": "output_config.format: extra inputs are not permitted" } }));
         let ok = reply(200, json!({ "content": [{ "type": "text", "text": "{\"n\": 1}" }], "usage": { "input_tokens": 1, "output_tokens": 1 } }));
         let (base, server) = fake_server(vec![refusal, ok]);
-        let (llm, _) = llm(Provider::Claude, format!("{base}/v1"), "sk-ant-secret-key", "claude-sonnet-5-5");
+        let (llm, _) = llm(Provider::Claude, format!("{base}/v1"), "sk-ant-secret-key", "claude-sonnet-5-5-refusal-c");
         assert!(llm.complete(&schema_request(Tier::Fast)).is_ok());
         let seen = server.join().unwrap();
         assert!(seen[0].body["output_config"].get("format").is_some());
