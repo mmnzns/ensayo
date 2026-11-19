@@ -183,6 +183,69 @@ export function bankQuestionFromExtra(e: ExtraQuestion, stageType: string): Bank
 const normal = (s: string) => s.split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 const sameText = (a: string, b: string) => normal(a) === normal(b);
 
+// ---------- the same question in other words ----------
+// The same rule as src-tauri/src/applications/dedupe.rs (`near_duplicate`); keep the two in step. In short: both ask
+// about the right to work, or both ask for the career history, or the content words agree. Words a question
+// capitalises mid-sentence (a tool: Aurora, CRM) are its topic; sharing one, the other words must also agree (two or
+// more in common and half of the shorter question's); sharing none, 0.6 of the shorter question's words must be shared.
+
+const DUP_STOP = new Set(
+  ("a an and are as at be been being by can could did do does for from give has have how i if in into is it its me my of on or our please so tell that the their them there they this through to us walk was we were what when where which who why will with would you your about describe " +
+    "example experience time work team any all not but than then also most more some other just ever talk share explain like used using role job").split(" "),
+);
+const WORK_RIGHT = ["entitled to work", "authorized to work", "authorised to work", "eligible to work", "legally able to work", "right to work", "work authorization", "work authorisation", "work permit", "visa", "sponsorship", "citizen", "permanent resident"];
+const HISTORY = [
+  "career history", "career path", "career journey", "work history", "employment history", "your background", "your resume", "your cv", "your roles", "your timeline", "roles and years", "roles and dates", "through your career", "through your background",
+  "through your resume", "through your cv", "through your work history", "through your experience",
+];
+
+const mentions = (text: string, phrases: string[]) => {
+  const t = text.toLowerCase();
+  return phrases.some((p) => (p === "visa" ? t.split(/[^\p{L}\p{N}]+/u).includes("visa") : t.includes(p)));
+};
+
+/** Content words (lowercase, no punctuation or stop words, cut to five letters) and the topic words among them. */
+function dupWords(text: string): { all: Set<string>; topic: Set<string> } {
+  const all = new Set<string>();
+  const topic = new Set<string>();
+  let sentenceStart = true;
+  for (const raw of text.split(/\s+/).filter(Boolean)) {
+    const w = raw.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    const capitalised = /^\p{Lu}/u.test(w);
+    for (const part of w.split(/[^\p{L}\p{N}]+/u).filter(Boolean)) {
+      const lower = part.toLowerCase();
+      if ([...lower].length < 3 || DUP_STOP.has(lower)) continue;
+      const stem = [...lower].slice(0, 5).join("");
+      if (capitalised && !sentenceStart && part !== "I") topic.add(stem);
+      all.add(stem);
+    }
+    sentenceStart = /[.?!]$/.test(raw);
+  }
+  return { all, topic };
+}
+
+/** True when two questions ask for the same thing in other words. */
+export function nearDuplicate(a: string, b: string): boolean {
+  if (mentions(a, WORK_RIGHT) && mentions(b, WORK_RIGHT)) return true;
+  if (mentions(a, HISTORY) && mentions(b, HISTORY)) return true;
+  const x = dupWords(a);
+  const y = dupWords(b);
+  if (x.all.size === 0 || y.all.size === 0) return false;
+  const topics = new Set([...x.topic, ...y.topic].filter((t) => x.all.has(t) && y.all.has(t)));
+  if (topics.size > 0) {
+    const ra = [...x.all].filter((w) => !topics.has(w));
+    const rb = new Set([...y.all].filter((w) => !topics.has(w)));
+    const shared = ra.filter((w) => rb.has(w)).length;
+    return shared >= 2 && shared / Math.min(ra.length, rb.size) >= 0.5;
+  }
+  const shared = [...x.all].filter((w) => y.all.has(w)).length;
+  return shared / Math.min(x.all.size, y.all.size) >= 0.6;
+}
+
+/** Kinds of general question that one question of an application's own at the stage already covers: why you are looking,
+ *  what you want next, who you are. Behavioral, technical and factual questions are many and different, so they stay. */
+const ONE_PER_KIND = new Set(["motivation", "tell_me_about_yourself", "future_looking"]);
+
 export interface ApplicationPickOptions {
   bank: BankQuestion[];
   /** The application's question set; undefined while it has not loaded, or in the browser preview. */
@@ -226,11 +289,20 @@ export function askedFromEarlier(extras: ExtraQuestion[] | undefined, earlierSta
  *  switched off); then that stage's own questions, in the order they are kept; then the bank to make up the count. A Mock keeps its stage set. */
 export function pickApplicationQuestions(o: ApplicationPickOptions): BankQuestion[] {
   const lead = o.mode === "drill" && o.askedFirst !== false ? askedFromEarlier(o.extras, o.earlierStageIds).filter((e) => e.stageId !== o.stageId) : [];
-  const own = [...lead, ...(o.extras ?? []).filter((e) => e.stageId === o.stageId && e.text.trim() !== "" && !lead.some((l) => sameText(l.text, e.text)))]
+  const kept: ExtraQuestion[] = [];
+  for (const e of [...lead, ...(o.extras ?? []).filter((e) => e.stageId === o.stageId && e.text.trim() !== "" && !lead.some((l) => sameText(l.text, e.text)))]) {
+    // A gap question that repeats one already in the list is the same question; saved applications have these too.
+    if ((e.source === "gap" || e.type === "gap") && kept.some((k) => nearDuplicate(k.text, e.text))) continue;
+    kept.push(e);
+  }
+  const own = kept
     .map((e) => bankQuestionFromExtra(e, o.stage))
     .filter((q, i, all) => all.findIndex((x) => sameText(x.text, q.text)) === i)
     .slice(0, o.count);
   if (own.length >= o.count) return own;
-  const fill = pickQuestions({ bank: o.bank, stage: o.stage, mode: o.mode, count: o.count + own.length, startup: o.startup, seed: o.seed ?? 1 }).filter((q) => !own.some((x) => sameText(x.text, q.text)));
+  const ownKinds = new Set(own.map((q) => q.type).filter((t) => ONE_PER_KIND.has(t)));
+  const fill = pickQuestions({ bank: o.bank, stage: o.stage, mode: o.mode, count: o.count + own.length, startup: o.startup, seed: o.seed ?? 1 }).filter(
+    (q) => !own.some((x) => sameText(x.text, q.text) || nearDuplicate(x.text, q.text)) && !(ownKinds.has(q.type) && ONE_PER_KIND.has(q.type)),
+  );
   return [...own, ...fill].slice(0, o.count);
 }

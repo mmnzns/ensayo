@@ -2,6 +2,7 @@
 //! do it. The model's reply is checked before it is trusted: a story id that is not in the bank becomes "no story", a
 //! phrase that is not in the posting is dropped, and the startup flag can only ever be turned on.
 
+use super::dedupe::near_duplicate;
 use super::inputs::{bank_index, found_in, norm, plain, process_text, profile_text};
 use super::question_bank::{banks_for, pick, story_fit};
 use crate::rep_commands::AiCtx;
@@ -259,6 +260,24 @@ fn question_for(rec: &AppRecord, stories: &[Story], stage_type: &str, q: RawQues
     })
 }
 
+/// Adds the gap questions after the posting's own, leaving out one that asks what an earlier question at the same stage
+/// already asks (see `dedupe::near_duplicate`). The earlier question stays, and takes the gap's requirement when it has
+/// none, so the requirement is still on a question. The requirement also stays in the analysis's gaps list, which is
+/// built from every gap the reading returned.
+fn add_gap_questions(mut questions: Vec<QuestionRec>, gaps: Vec<QuestionRec>) -> Vec<QuestionRec> {
+    for g in gaps {
+        match questions.iter().position(|q| q.stage_id == g.stage_id && near_duplicate(&q.text, &g.text)) {
+            Some(i) => {
+                if questions[i].requirement.is_none() {
+                    questions[i].requirement = g.requirement;
+                }
+            }
+            None => questions.push(g),
+        }
+    }
+    questions
+}
+
 fn ai_read(ctx: &mut AiCtx, rec: &AppRecord, jd: &str, stories: &[Story], profile: &str, targets: &str) -> Result<Reading, CallError> {
     let vars = Vars::new()
         .set("targets", escape_data(targets))
@@ -280,13 +299,15 @@ fn ai_read(ctx: &mut AiCtx, rec: &AppRecord, jd: &str, stories: &[Story], profil
         let stage = q.stage.clone();
         questions.extend(question_for(rec, stories, &stage, q, "jd"));
     }
+    let mut gap_questions: Vec<QuestionRec> = Vec::new();
     for g in gaps {
         let q = RawQuestion { stage: g.stage.clone(), text: g.text, kind: "gap".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, best_story_id: None, why: String::new() };
         if let Some(mut rq) = question_for(rec, stories, &g.stage, q, "gap") {
             rq.requirement = Some(plain(&g.requirement));
-            questions.push(rq);
+            gap_questions.push(rq);
         }
     }
+    let questions = add_gap_questions(questions, gap_questions);
     Ok(Reading { derived, questions, startup, raw: Some(called.value), prompt: format!("analyse-jd v{}", get(PromptId::AnalyseJd).version), engine: "ai", fit })
 }
 
@@ -965,7 +986,7 @@ mod tests {
         let out = run(&s, &id, &llm);
         assert_eq!((out.source.as_str(), out.notice.clone()), ("ai", None));
         let file = s.load_application_part::<AnalysisFile>(&id, "analysis.json").unwrap().unwrap();
-        assert_eq!((file.prompt.as_str(), file.engine.as_str()), ("analyse-jd v3", "ai"));
+        assert_eq!((file.prompt.as_str(), file.engine.as_str()), ("analyse-jd v4", "ai"));
         assert_eq!(file.raw.as_ref().unwrap()["summary"], serde_json::from_str::<Value>(REPLY).unwrap()["summary"], "the reply is kept as it was returned");
         let d = file.derived;
         assert_eq!(d.priorities.iter().map(|p| p.title.as_str()).collect::<Vec<_>>(), vec!["Keep customers", "Do more with less", "Win customers"]);
@@ -990,6 +1011,66 @@ mod tests {
         assert_eq!(leadership.len(), 3);
         assert!(leadership.iter().any(|x| x.commitment_check) && leadership.iter().any(|x| x.builder_operator_check));
         assert_eq!(q.iter().find(|x| x.text.starts_with("Tell me about a time you found out")).unwrap().best_story_id.as_deref(), Some("st_onboarding"));
+    }
+
+    fn gap_reply(recruiter: &str, hm: &str, gaps: Value) -> String {
+        reply(|v| {
+            let qs = v["questions"].as_array_mut().unwrap();
+            qs.iter_mut().find(|q| q["stage"] == "recruiter").unwrap()["text"] = json!(recruiter);
+            qs.iter_mut().find(|q| q["stage"] == "hiring_manager").unwrap()["text"] = json!(hm);
+            v["gap_questions"] = gaps;
+        })
+    }
+
+    #[test]
+    fn a_gap_question_that_repeats_a_posting_question_is_folded_into_it_and_its_requirement_stays() {
+        // The three overlaps seen in practice, with made-up wording: the right to work, a CRM's reports, the career history.
+        let (_d, s, id) = setup();
+        let gaps = json!([
+            {"stage": "recruiter", "text": "Do you need a visa or sponsorship to take this role?", "requirement": "Must be authorized to work in Canada"},
+            {"stage": "hiring_manager", "text": "Tell me about your experience creating reports and dashboards in Aurora CRM.", "requirement": "3 years of Aurora CRM reporting"},
+            {"stage": "recruiter", "text": "Map your roles and years so I can see the timeline.", "requirement": "5+ years in lifecycle roles"},
+            {"stage": "hiring_manager", "text": "How do you keep data clean and avoid duplicate records in Aurora CRM?", "requirement": "Aurora CRM data hygiene"},
+        ]);
+        let llm = Scripted::new(vec![Ok(&gap_reply(
+            "Walk me through your background, and are you entitled to work in Canada?",
+            "How have you built reports and dashboards in Aurora CRM for a revenue team?",
+            gaps,
+        ))]);
+        run(&s, &id, &llm);
+        let q = questions(&s, &id);
+        let gap: Vec<&QuestionRec> = q.iter().filter(|x| x.source == "gap").collect();
+        assert_eq!(gap.len(), 1, "only the data hygiene question is a different question: {:?}", gap.iter().map(|g| &g.text).collect::<Vec<_>>());
+        assert!(gap[0].text.contains("duplicate records"));
+        assert_eq!(q.len(), 11, "ten posting questions and one gap question");
+        let recruiter = q.iter().find(|x| x.text.starts_with("Walk me through your background")).unwrap();
+        assert_eq!(recruiter.requirement.as_deref(), Some("Must be authorized to work in Canada"), "the first requirement it absorbed");
+        let hm = q.iter().find(|x| x.text.starts_with("How have you built reports")).unwrap();
+        assert_eq!(hm.requirement.as_deref(), Some("3 years of Aurora CRM reporting"));
+        assert_eq!(derived(&s, &id).gaps, vec!["Must be authorized to work in Canada", "3 years of Aurora CRM reporting", "5+ years in lifecycle roles", "Aurora CRM data hygiene"], "every requirement is still listed");
+    }
+
+    #[test]
+    fn a_gap_question_at_another_stage_is_kept_even_when_the_words_match() {
+        let (_d, s, id) = setup();
+        let gaps = json!([{"stage": "leadership", "text": "How have you built reports and dashboards in Aurora CRM?", "requirement": "Aurora CRM reporting"}]);
+        let llm = Scripted::new(vec![Ok(&gap_reply("What caught your eye about this team?", "How have you built reports and dashboards in Aurora CRM for a revenue team?", gaps))]);
+        run(&s, &id, &llm);
+        assert_eq!(questions(&s, &id).iter().filter(|x| x.source == "gap").count(), 1);
+    }
+
+    #[test]
+    fn a_gap_that_repeats_an_earlier_gap_is_dropped_and_old_questions_files_are_not_touched() {
+        let rec = |id: &str, stage: &str, text: &str, source: &str, req: Option<&str>| QuestionRec { id: id.into(), stage_id: stage.into(), stage: "recruiter".into(), text: text.into(), kind: "gap".into(), behavioral_situation: None, commitment_check: false, builder_operator_check: false, best_story_id: None, why: String::new(), requirement: req.map(String::from), source: source.into(), edited_by_user: false };
+        let jd = vec![rec("q1", "stg_1", "Are you authorized to work in the country?", "jd", None)];
+        let out = add_gap_questions(jd, vec![rec("q2", "stg_1", "Do you hold a work permit?", "gap", Some("Work permit")), rec("q3", "stg_1", "Do you need visa sponsorship?", "gap", Some("Visa"))]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].requirement.as_deref(), Some("Work permit"));
+        // A saved questions file is read as it is: nothing here rewrites it.
+        let (_d, s, id) = setup();
+        let old = QuestionsFile { questions: vec![rec("q9", "stg_1", "Do you need a visa?", "gap", None), rec("q8", "stg_1", "Are you entitled to work here?", "jd", None)], ..Default::default() };
+        s.save_application_part(&id, "questions.json", &old).unwrap();
+        assert_eq!(questions(&s, &id).len(), 2, "old applications keep both; the session list drops the repeat when it is built");
     }
 
     #[test]
