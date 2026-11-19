@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readSource } from "./helpers/readSource";
 
 describe("the data folder row in Privacy settings", () => {
-  const src = readFileSync("src/screens/settings/SettingsPrivacy.tsx", "utf8");
+  const src = readSource("src/screens/settings/SettingsPrivacy.tsx");
   it("gives the text column a real basis and keeps Show and Move from shrinking", () => {
-    expect(src).toContain('flex: "1 1 220px", display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" }}>\n              Data folder');
+    expect(src).toMatch(/flex: "1 1 220px",\s*display: "flex",\s*flexDirection: "column",\s*gap: "2px",\s*minWidth: "0"\s*\}\}>\s*Data folder/);
     expect(src).toMatch(/<div style=\{\{ display: "flex", gap: "8px", flex: "none" \}\}>\s*<button[\s\S]*?>Show</);
   });
 });

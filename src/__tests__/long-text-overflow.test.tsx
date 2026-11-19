@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readSource } from "./helpers/readSource";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TargetLabel } from "../screens/applications/TargetMark";
 
-const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
+const read = (p: string) => readSource(new URL(p, import.meta.url));
 
 describe("long user text stays inside its card", () => {
   it("cuts a long target name with an ellipsis and keeps it in the title", () => {

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readSource } from "./helpers/readSource";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import BaseResumeCard from "../components/BaseResumeCard";
@@ -24,7 +24,7 @@ describe("the base resume card on a target", () => {
     expect(html).toContain("min-width:0");
   });
   it("is what the target editor uses", () => {
-    const src = readFileSync("src/screens/settings/TargetEditor.tsx", "utf8");
+    const src = readSource("src/screens/settings/TargetEditor.tsx");
     expect(src).toContain("<BaseResumeCard");
     expect(src).not.toMatch(/overflowWrap: "anywhere"/);
   });

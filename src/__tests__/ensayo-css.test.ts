@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readSource } from "./helpers/readSource";
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync(new URL("../styles/ensayo.css", import.meta.url), "utf8").toLowerCase();
+const css = readSource(new URL("../styles/ensayo.css", import.meta.url)).toLowerCase();
 
 describe("ensayo.css", () => {
   it("keeps the light palette from the design", () => {
