@@ -3,7 +3,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import BaseResumeCard from "../components/BaseResumeCard";
 
-const name = "MiguelMonzones_Resume_Anatta_Marketing_Operations_Final_v7.docx";
+const name = "Jordan_Rivera_Resume_Acme_Marketing_Operations_Final_v7.docx";
 const html = renderToString(<BaseResumeCard fileName={name} onReplace={() => {}} onRemove={() => {}} />);
 
 describe("the base resume card on a target", () => {

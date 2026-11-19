@@ -5,7 +5,7 @@ const ex = (id: string, text: string, over: Partial<ExtraQuestion> = {}): ExtraQ
 
 describe("the same question in other words", () => {
   it("catches the right to work asked twice", () => {
-    expect(nearDuplicate("Are you legally entitled to work in Canada, and when could you start?", "Do you need a visa or sponsorship to take this role?")).toBe(true);
+    expect(nearDuplicate("Are you legally entitled to work in Spain, and when could you start?", "Do you need a visa or sponsorship to take this role?")).toBe(true);
     expect(nearDuplicate("Are you authorized to work in the country without sponsorship?", "Are you entitled to work here?")).toBe(true);
     expect(nearDuplicate("When could you start if we made an offer?", "Are you entitled to work here?")).toBe(false);
   });
@@ -41,7 +41,7 @@ describe("a session's list for an application stage", () => {
 
   it("drops a gap question that repeats a posting question, including in an application saved before this fix", () => {
     const extras = [
-      ex("q1", "Walk me through your background, and are you entitled to work in Canada?"),
+      ex("q1", "Walk me through your background, and are you entitled to work in Spain?"),
       ex("q2", "How have you built reports and dashboards in Aurora CRM?", { type: "technical" }),
       ex("g1", "Do you need a visa or sponsorship to take this role?", { type: "gap", source: "gap" }),
       ex("g2", "Tell me about your experience creating reports and dashboards in Aurora CRM.", { type: "gap", source: "gap" }),
@@ -56,7 +56,7 @@ describe("a session's list for an application stage", () => {
   });
 
   it("never drops a question the person wrote or was asked", () => {
-    const extras = [ex("q1", "Are you entitled to work in Canada?"), ex("u1", "Do you need a visa to take this role?", { source: "user" }), ex("a1", "Are you authorized to work here?", { source: "asked" })];
+    const extras = [ex("q1", "Are you entitled to work in Spain?"), ex("u1", "Do you need a visa to take this role?", { source: "user" }), ex("a1", "Are you authorized to work here?", { source: "asked" })];
     expect(pickApplicationQuestions({ ...base, extras }).map((q) => q.id).slice(0, 3)).toEqual(["q1", "u1", "a1"]);
   });
 

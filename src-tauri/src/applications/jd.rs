@@ -1027,13 +1027,13 @@ mod tests {
         // The three overlaps seen in practice, with made-up wording: the right to work, a CRM's reports, the career history.
         let (_d, s, id) = setup();
         let gaps = json!([
-            {"stage": "recruiter", "text": "Do you need a visa or sponsorship to take this role?", "requirement": "Must be authorized to work in Canada"},
+            {"stage": "recruiter", "text": "Do you need a visa or sponsorship to take this role?", "requirement": "Must be authorized to work in Spain"},
             {"stage": "hiring_manager", "text": "Tell me about your experience creating reports and dashboards in Aurora CRM.", "requirement": "3 years of Aurora CRM reporting"},
             {"stage": "recruiter", "text": "Map your roles and years so I can see the timeline.", "requirement": "5+ years in lifecycle roles"},
             {"stage": "hiring_manager", "text": "How do you keep data clean and avoid duplicate records in Aurora CRM?", "requirement": "Aurora CRM data hygiene"},
         ]);
         let llm = Scripted::new(vec![Ok(&gap_reply(
-            "Walk me through your background, and are you entitled to work in Canada?",
+            "Walk me through your background, and are you entitled to work in Spain?",
             "How have you built reports and dashboards in Aurora CRM for a revenue team?",
             gaps,
         ))]);
@@ -1044,10 +1044,10 @@ mod tests {
         assert!(gap[0].text.contains("duplicate records"));
         assert_eq!(q.len(), 11, "ten posting questions and one gap question");
         let recruiter = q.iter().find(|x| x.text.starts_with("Walk me through your background")).unwrap();
-        assert_eq!(recruiter.requirement.as_deref(), Some("Must be authorized to work in Canada"), "the first requirement it absorbed");
+        assert_eq!(recruiter.requirement.as_deref(), Some("Must be authorized to work in Spain"), "the first requirement it absorbed");
         let hm = q.iter().find(|x| x.text.starts_with("How have you built reports")).unwrap();
         assert_eq!(hm.requirement.as_deref(), Some("3 years of Aurora CRM reporting"));
-        assert_eq!(derived(&s, &id).gaps, vec!["Must be authorized to work in Canada", "3 years of Aurora CRM reporting", "5+ years in lifecycle roles", "Aurora CRM data hygiene"], "every requirement is still listed");
+        assert_eq!(derived(&s, &id).gaps, vec!["Must be authorized to work in Spain", "3 years of Aurora CRM reporting", "5+ years in lifecycle roles", "Aurora CRM data hygiene"], "every requirement is still listed");
     }
 
     #[test]

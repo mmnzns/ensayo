@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn the_right_to_work_asked_twice_in_other_words_is_one_question() {
-        assert!(near_duplicate("Are you legally entitled to work in Canada, and when could you start?", "Do you need a visa or sponsorship to take this role?"));
+        assert!(near_duplicate("Are you legally entitled to work in Spain, and when could you start?", "Do you need a visa or sponsorship to take this role?"));
         assert!(near_duplicate("Are you authorized to work in the country without sponsorship?", "Are you entitled to work here?"));
         assert!(!near_duplicate("When could you start if we made an offer?", "Are you entitled to work here?"));
     }
