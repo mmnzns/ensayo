@@ -7,16 +7,19 @@
 ;
 ; The account names are the list in src-tauri/src/keys.rs (ACCOUNTS). Windows stores each one as "<account>.<service>".
 
-; The ensayo-llm helpers (processor and graphics card) can outlive Ensayo for a few seconds (an update closes the app
-; without stopping it); close them so their exes aren't locked when the installer replaces or removes them.
+; The helpers (ensayo-llm and ensayo-llm-vulkan for the local AI, ensayo-stt-vulkan for Whisper on the graphics card) can
+; outlive Ensayo for a few seconds (an update closes the app without stopping it); close them so their exes aren't
+; locked when the installer replaces or removes them.
 !macro NSIS_HOOK_PREINSTALL
   !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-llm.exe" "${PRODUCTNAME}"
   !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-llm-vulkan.exe" "${PRODUCTNAME}"
+  !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-stt-vulkan.exe" "${PRODUCTNAME}"
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
   !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-llm.exe" "${PRODUCTNAME}"
   !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-llm-vulkan.exe" "${PRODUCTNAME}"
+  !insertmacro CheckIfAppIsRunning "$INSTDIR\ensayo-stt-vulkan.exe" "${PRODUCTNAME}"
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL

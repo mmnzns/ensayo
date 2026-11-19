@@ -1,6 +1,9 @@
 //! The "Use the graphics card" setting and what depends on it: whether to ask for the card, the one-time notice when it
 //! didn't work, and the commands Settings › Speech uses. The setting is machine-local (`LocalSettings::gpu`); `None`
-//! means "use the default": on for a Mac (Metal), and on Windows only when the engine sees a discrete graphics card.
+//! means "use the default": on for a Mac (Metal), and on Windows only when the engine sees a dedicated graphics card
+//! (`discrete_card` leaves out integrated, software and Microsoft adapters, and any with no memory of their own). On
+//! Windows with one, the card is the default for every model that has a path to it: Whisper through the Vulkan speech
+//! helper, Parakeet through DirectML, the local AI through its Vulkan helper (`speech::engine::route`).
 //!
 //! Asking the engine about the card (`voice_engine_stt::discrete_card`) can take up to ten seconds, so it is asked
 //! once, off the main thread, and remembered.
@@ -159,6 +162,7 @@ pub async fn set_graphics_card(on: bool) -> Result<(), String> {
         crate::speech::loaded::unload();
         if on {
             set_speech_card_failed(false);
+            crate::speech::helper::forget_card_failure();
             crate::ai::local::card_turned_on();
         } else {
             crate::ai::local::card_turned_off();
@@ -190,6 +194,34 @@ mod tests {
         assert!(default_on(false, true, true), "Windows with a card");
         assert!(!default_on(false, true, false), "Windows without one");
         assert!(!default_on(false, false, true), "anything else");
+    }
+
+    /// The owner's rule, end to end: with no choice made, a Windows PC with a dedicated card runs every model that has a
+    /// card path on it (Whisper through the Vulkan helper, Parakeet through DirectML); one with integrated graphics only
+    /// runs everything on the processor; the Mac uses Metal for Whisper and the processor for the rest.
+    #[test]
+    fn the_default_puts_every_model_that_can_on_the_card_on_windows_with_a_dedicated_card_and_on_the_processor_without() {
+        use crate::speech::engine::{route, Os, Route};
+        use voice_engine_models::catalog::Kind;
+        // Windows, dedicated card: the default is on, and the helper is there.
+        let on = default_on(false, true, true);
+        assert!(on);
+        assert_eq!(route(Os::Windows, Kind::Whisper, on, true, true), Route::VulkanHelper);
+        assert_eq!(route(Os::Windows, Kind::Parakeet, on, true, true), Route::InProcessCard);
+        // Windows, integrated graphics only (the engine finds no dedicated card): off, and nothing is on a card even if
+        // the person turns the switch on.
+        let off = default_on(false, true, false);
+        assert!(!off);
+        for kind in [Kind::Whisper, Kind::Parakeet] {
+            assert_eq!(route(Os::Windows, kind, off, false, false), Route::Processor);
+            assert_eq!(route(Os::Windows, kind, true, false, true), Route::Processor, "switched on by hand, still no card");
+        }
+        // Mac: on by default, Metal for Whisper only.
+        let mac = default_on(true, false, false);
+        assert_eq!(route(Os::Mac, Kind::Whisper, mac, false, false), Route::InProcessCard);
+        assert_eq!(route(Os::Mac, Kind::Parakeet, mac, false, false), Route::Processor);
+        // The setting stays switchable: off puts everything back on the processor.
+        assert_eq!(route(Os::Windows, Kind::Whisper, false, true, true), Route::Processor);
     }
 
     #[test]

@@ -12,9 +12,11 @@ name: Release
 # Nothing here uses a paid certificate: the Mac is signed with the free self-signed one, Windows is unsigned, and
 # testers get one-time steps in INSTALL.md.
 #
-# The local AI helpers (ensayo-llm, and ensayo-llm-vulkan on Windows) are NOT built in the app jobs: the `helpers` job
+# The helpers (ensayo-llm, the local AI, and on Windows x64 also ensayo-llm-vulkan and ensayo-stt-vulkan, Whisper on the
+# graphics card) are NOT built in the app jobs: the `helpers` job
 # calls voice-engine's reusable workflow at the engine tag (keep it equal to the tag in src-tauri/Cargo.toml), and the
-# app jobs download its `helpers-<triple>` artifact into src-tauri/binaries. The app jobs pass `--config` with a
+# app jobs download its `helpers-<triple>` artifact into src-tauri/binaries. There is no processor speech helper
+# (`stt`): Whisper on the processor runs inside Ensayo itself, the way out when the Vulkan helper is missing or fails. The app jobs pass `--config` with a
 # `beforeBuildCommand` that only builds the frontend, so scripts/build-llm-helper.* cannot overwrite those files.
 # The manual run (workflow_dispatch) builds like a release: the `helpers` job runs too, and `test-build` downloads and
 # checks the same artifact and builds with the same release-only `--config`, so its Windows installer has the Vulkan
@@ -64,9 +66,10 @@ jobs:
     uses: mmnzns/voice-engine/.github/workflows/build-helpers.yml@v0.4.0
     with:
       engine-ref: v0.4.0
-      helpers: "llm,llm-vulkan"
+      helpers: "llm,llm-vulkan,stt-vulkan"
       targets: "aarch64-apple-darwin,x86_64-pc-windows-msvc"
       llm-name: ensayo-llm
+      stt-name: ensayo-stt
 
   windows:
     needs: [draft, helpers]
@@ -88,8 +91,8 @@ jobs:
           workspaces: src-tauri
           key: release-windows
       - run: npm ci
-      # The AI helpers come from the engine's workflow (the `helpers` job): ensayo-llm-<triple>.exe and, on x64,
-      # ensayo-llm-vulkan-<triple>.exe, where Tauri's externalBin expects them.
+      # The helpers come from the engine's workflow (the `helpers` job): ensayo-llm-<triple>.exe and, on x64,
+      # ensayo-llm-vulkan-<triple>.exe and ensayo-stt-vulkan-<triple>.exe, where Tauri's externalBin expects them.
       - uses: actions/download-artifact@v4
         with:
           name: helpers-x86_64-pc-windows-msvc
@@ -98,7 +101,7 @@ jobs:
         shell: pwsh
         working-directory: src-tauri/binaries
         run: |
-          foreach ($f in 'ensayo-llm-x86_64-pc-windows-msvc.exe', 'ensayo-llm-vulkan-x86_64-pc-windows-msvc.exe') {
+          foreach ($f in 'ensayo-llm-x86_64-pc-windows-msvc.exe', 'ensayo-llm-vulkan-x86_64-pc-windows-msvc.exe', 'ensayo-stt-vulkan-x86_64-pc-windows-msvc.exe') {
             if (-not (Test-Path $f)) { Write-Error "$f is missing from the helpers artifact"; exit 1 }
           }
           foreach ($line in (Get-Content SHA256SUMS | Where-Object { $_.Trim() })) {
@@ -108,13 +111,13 @@ jobs:
           }
           Get-Content build-info.txt
       # Release-only Tauri config, passed with --config: (1) the frontend-only beforeBuildCommand, so the in-repo helper
-      # script cannot overwrite the helpers above; (2) the Vulkan sidecar in externalBin (the default config omits it so
-      # a build without the Vulkan SDK still bundles; this job has checked that the file exists). Arrays replace, so
-      # the processor helper is listed again.
+      # script cannot overwrite the helpers above; (2) the Vulkan sidecars in externalBin (the default config omits them
+      # so a build without the Vulkan SDK still bundles; this job has checked that the files exist). Arrays replace, so
+      # the processor AI helper is listed again.
       - name: Release Tauri config
         shell: pwsh
         run: |
-          '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan"]}}' |
+          '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan","binaries/ensayo-stt-vulkan"]}}' |
             Set-Content -Path "$env:RUNNER_TEMP/tauri.release.conf.json" -Encoding ascii
       # The app's own whisper.cpp must be built for the AVX2 baseline, not this runner's CPU. The signing key makes the
       # installer's .sig (tauri.conf.json: bundle.createUpdaterArtifacts). The helpers are not built here, so only the
@@ -267,7 +270,7 @@ jobs:
         shell: pwsh
         working-directory: src-tauri/binaries
         run: |
-          foreach ($f in 'ensayo-llm-x86_64-pc-windows-msvc.exe', 'ensayo-llm-vulkan-x86_64-pc-windows-msvc.exe') {
+          foreach ($f in 'ensayo-llm-x86_64-pc-windows-msvc.exe', 'ensayo-llm-vulkan-x86_64-pc-windows-msvc.exe', 'ensayo-stt-vulkan-x86_64-pc-windows-msvc.exe') {
             if (-not (Test-Path $f)) { Write-Error "$f is missing from the helpers artifact"; exit 1 }
           }
           foreach ($line in (Get-Content SHA256SUMS | Where-Object { $_.Trim() })) {
@@ -285,12 +288,12 @@ jobs:
           chmod +x ./*-apple-darwin
           cat build-info.txt
       # Release-only Tauri config, as in the windows release job: the frontend-only beforeBuildCommand and the Vulkan
-      # sidecar in externalBin.
+      # sidecars in externalBin.
       - name: Release Tauri config
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan"]}}' |
+          '{"build":{"beforeBuildCommand":"npm run build"},"bundle":{"externalBin":["binaries/ensayo-llm","binaries/ensayo-llm-vulkan","binaries/ensayo-stt-vulkan"]}}' |
             Set-Content -Path "$env:RUNNER_TEMP/tauri.release.conf.json" -Encoding ascii
       - name: Windows installer
         if: runner.os == 'Windows'
