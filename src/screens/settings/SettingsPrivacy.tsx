@@ -154,7 +154,7 @@ export default function SettingsPrivacy() {
             </select>
           </div>
           <div className="e-rowline" style={{ borderBottom: "none", flexWrap: "wrap" }}>
-            <span style={{ flex: "1", display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" }}>
+            <span style={{ flex: "1 1 220px", display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" }}>
               Data folder<span className="e-small">{app && folder ? "Stories, applications and sessions, as plain files" : "Ensayo's app folder on this computer · stories, applications, sessions as plain files"}</span>
               {app && folder && <span className="e-small" style={{ color: "var(--e-ink)", overflowWrap: "anywhere" }}>{folder}</span>}
               {folderNote && !app && (
@@ -164,7 +164,7 @@ export default function SettingsPrivacy() {
               )}
               {folderDone && <span className="e-small" role="status" style={{ color: "var(--e-primary-dark)" }}>{folderDone}</span>}
             </span>
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div style={{ display: "flex", gap: "8px", flex: "none" }}>
               <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={app ? showFolder : () => setFolderNote("show")}>Show</button>
               <button type="button" className="e-btn e-btn-line e-btn-sm" disabled={busy} onClick={() => (app ? setFolderNote(folderNote === "move" ? null : "move") : setFolderNote("move"))}>Move…</button>
             </div>
