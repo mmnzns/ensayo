@@ -2007,7 +2007,7 @@ mod tests {
     /// 02; the claims check reads only the words, so it runs beside the coach. One after another is about 450 ms.
     #[test]
     fn the_claims_check_runs_beside_the_coach_and_the_spend_still_adds_up() {
-        use std::time::{Duration, Instant};
+        use std::time::Duration;
         let (guard, storage) = setup();
         let tmp = guard.path().to_path_buf();
         let id = app(&storage, false);
@@ -2019,13 +2019,12 @@ mod tests {
             .delayed(&ids.1, Duration::from_millis(150))
             .delayed(&ids.2, Duration::from_millis(100));
         let mut budget = Budget::new(Provider::Claude, 0.0);
-        let started = Instant::now();
         let out = finish_with(&storage, &tmp.join("audio"), &a, words(40), true, now(), Some(AiCtx { coach: true, llm: &llm, budget: &mut budget })).unwrap();
-        let took = started.elapsed();
-        eprintln!("score 200 + coach 150 + claims 100 ms took {} ms", took.as_millis());
         let rep = out.rep.unwrap();
-        // Setup and saving cost about 85 ms on top: one after another measured 540 ms, beside the coach 432 ms.
-        assert!(took < Duration::from_millis(480), "{took:?}: the claims call should not wait for the coach");
+        // Overlap is proved by the calls' own start and end instants, not by the wall clock, so a slow runner can't fail it.
+        let (score, coach, claims) = (llm.span(&ids.0).unwrap(), llm.span(&ids.1).unwrap(), llm.span(&ids.2).unwrap());
+        assert!(coach.0 >= score.1, "the coach reads the scorer's checks, so it waits for the scorer");
+        assert!(claims.0 < coach.1 && coach.0 < claims.1, "the claims call should run beside the coach, not after it");
         assert!(rep.rep.coach.is_some());
         assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "smart-coach v2", "extract-claims v1"]);
         assert_eq!(saved_claims(&storage, &id).len(), 1);

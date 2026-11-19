@@ -500,6 +500,8 @@ pub mod testing {
         routes: Mutex<Vec<(String, Result<String, AiError>)>>,
         /// How long a call waits before it answers, by prompt id.
         delays: Mutex<Vec<(String, std::time::Duration)>>,
+        /// When each call began and finished waiting, by prompt id, for tests that prove calls overlapped.
+        spans: Mutex<Vec<(String, std::time::Instant, std::time::Instant)>>,
         /// Calls seen that were not the claims check (see `complete`).
         others: std::sync::atomic::AtomicUsize,
     }
@@ -513,7 +515,7 @@ pub mod testing {
             Scripted::from_queue(replies.into_iter().map(|(t, c)| Ok((String::from(t), c))).collect())
         }
         fn from_queue(replies: VecDeque<Result<(String, bool), AiError>>) -> Scripted {
-            Scripted { replies: Mutex::new(replies), seen: Mutex::new(vec![]), routes: Mutex::new(vec![]), delays: Mutex::new(vec![]), others: Default::default() }
+            Scripted { replies: Mutex::new(replies), seen: Mutex::new(vec![]), routes: Mutex::new(vec![]), delays: Mutex::new(vec![]), spans: Mutex::new(vec![]), others: Default::default() }
         }
         /// Replies by prompt id (`get(PromptId::X).id`), for calls that run at the same time and so have no fixed
         /// turn. Each entry answers one call.
@@ -526,6 +528,10 @@ pub mod testing {
         pub fn delayed(self, prompt_id: &str, by: std::time::Duration) -> Scripted {
             self.delays.lock().unwrap().push((prompt_id.to_string(), by));
             self
+        }
+        /// The (start, end) of the first call of this prompt, taken around its scripted wait.
+        pub fn span(&self, prompt_id: &str) -> Option<(std::time::Instant, std::time::Instant)> {
+            self.spans.lock().unwrap().iter().find(|(id, _, _)| id == prompt_id).map(|(_, a, b)| (*a, *b))
         }
         pub fn calls(&self) -> usize {
             self.seen.lock().unwrap().len()
@@ -553,9 +559,11 @@ pub mod testing {
             }
             self.seen.lock().unwrap().push(req.clone());
             let delay = self.delays.lock().unwrap().iter().find(|(id, _)| id == &req.label).map(|(_, d)| *d);
+            let began = std::time::Instant::now();
             if let Some(d) = delay {
                 std::thread::sleep(d);
             }
+            self.spans.lock().unwrap().push((req.label.clone(), began, std::time::Instant::now()));
             if routed {
                 let mut routes = self.routes.lock().unwrap();
                 let at = routes.iter().position(|(id, _)| id == &req.label).unwrap_or_else(|| panic!("no scripted reply for {}", req.label));
