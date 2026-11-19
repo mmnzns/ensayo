@@ -2,16 +2,16 @@
 import { useEffect, useRef, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { useLive, beginRecording, getLive, micLost, MIC_LOST, recordAgainAfterLoss, recordingScreenShown, recordingStatus, restartRecording, retryFinish, SCORE_LOST_MIN_MS, setRecordingPaused, stopAndFinish } from "../../practice/live";
+import { useLive, askRoute, beginRecording, getLive, micLost, MIC_LOST, recordAgainAfterLoss, recordingScreenShown, recordingStatus, restartRecording, retryFinish, SCORE_LOST_MIN_MS, setRecordingPaused, skipWhileRecording, stopAndFinish } from "../../practice/live";
 import { LIMIT_STOPPED, LIMIT_WARNING, limitState } from "../../practice/limit";
 import { SILENCE_START, silenceStep, silenceStop } from "../../practice/silence";
 import { readPrefs } from "../settings/prefs";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
-import { ASK, THINK } from "./practiceFlow";
+import { ASK, THINK, resetFlow } from "./practiceFlow";
 import { Kbd, SessionHeader } from "./parts";
 import { usePractice } from "./usePractice";
-import { useKeys } from "./useKeys";
+import { keyBelongsToTarget, useKeys } from "./useKeys";
 import EndSessionDialog from "./EndSessionDialog";
 import { atStake, escDecision } from "./endSession";
 
@@ -140,6 +140,31 @@ export default function PracticeRecording() {
     silence.current = SILENCE_START;
     if (live) void restartRecording();
   };
+  // Skip question: the answer is thrown away unscored, and the next question (or the end) comes up, like the asking screen's Skip.
+  const canSkip = !(live && mode === "mock");
+  const skip = () => {
+    if (lost || !canSkip) return;
+    if (!live) {
+      resetFlow();
+      go(ASK);
+      return;
+    }
+    void skipWhileRecording().then((next) => {
+      if (next === "done") go(endTo);
+      else if (next === "asking") go(askRoute());
+    });
+  };
+  const skipRef = useRef(skip);
+  skipRef.current = skip;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "s" || e.repeat || e.metaKey || e.ctrlKey || e.altKey || keyBelongsToTarget(e.target as HTMLElement | null, undefined)) return;
+      e.preventDefault();
+      skipRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // At 4:00 of recorded time it stops, says why on the next screen, and scores the answer.
   useEffect(() => {
     if (limitState(seconds) === "stop") stop(LIMIT_STOPPED);
@@ -221,6 +246,12 @@ export default function PracticeRecording() {
               <button type="button" className="e-btn e-btn-soft e-btn-sm" aria-pressed={paused} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
               <span className="e-small">or press <Kbd>P</Kbd></span>
             </div>
+            {canSkip && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={skip}>Skip question</button>
+                <span className="e-small">or press <Kbd>S</Kbd></span>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -289,6 +289,7 @@ export function resetLive() {
   currentRun = null;
   recOp = null;
   restarting = false;
+  skipping = false;
   recToken++;
   state = INITIAL;
   stories = [];
@@ -450,6 +451,8 @@ let recOp: Promise<void> | null = null;
 let restarting = false;
 /** Bumped by anything that ends the recording. A restart that finds it changed does not start a new capture. */
 let recToken = 0;
+/** A skip is under way: nothing else may stop and score the answer. */
+let skipping = false;
 
 const ALREADY_RECORDING = /already recording/i;
 
@@ -517,7 +520,7 @@ export function recordingScreenShown(): () => void {
  *  is stopped and thrown away so nothing is left running with nothing on screen to own it. */
 async function leaveRecording() {
   await settleRec();
-  if (screens > 0 || !state.active || state.phase !== "recording") return;
+  if (screens > 0 || skipping || !state.active || state.phase !== "recording") return;
   recToken++;
   try {
     const a = await repApi();
@@ -543,12 +546,12 @@ export function restartRecording(): Promise<void> {
     (async () => {
       try {
         if (prev) await prev;
-        if (token !== recToken) return;
+        if (token !== recToken || skipping) return;
         const a = await repApi();
         const rec = await a.stopRecording();
         await a.discardRecording(rec.path);
         // Stopped, skipped or ended while the old take was being thrown away: no new capture.
-        if (token !== recToken) return;
+        if (token !== recToken || skipping) return;
         const name = await startTakingOver(a);
         set({ phase: "recording", error: null, stopNote: null, micName: typeof name === "string" && name ? name : null });
       } catch (e) {
@@ -658,6 +661,7 @@ async function finishAt(q: BankQuestion, path: string, run: string) {
 export async function stopAndFinish(stopNote: string | null = null) {
   const q = currentQuestion();
   if (!q) return;
+  if (skipping) return;
   const run = newRun();
   set({ phase: "thinking", stopNote, measured: null, thinkingSince: Date.now() });
   // A start or restart still opening finishes first; a restart that hasn't begun its new take never will.
@@ -994,6 +998,34 @@ export async function cancelLive() {
     }
   }
   set({ active: false, phase: "idle", recordingPath: null });
+}
+
+/** "Skip question" while answering: the recording stops without scoring and its audio is thrown away (nothing is saved
+ *  and no AI call is made), then it moves on like the asking screen's Skip. Null when a skip is already under way. */
+export async function skipWhileRecording(): Promise<"asking" | "done" | null> {
+  if (skipping) return null;
+  skipping = true;
+  try {
+    currentRun = null;
+    recToken++;
+    await settleRec();
+    const a = await repApi();
+    const path = state.phase === "recording" ? null : state.recordingPath;
+    try {
+      if (state.phase === "recording") {
+        const rec = await a.stopRecording();
+        await a.discardRecording(rec.path);
+      } else if (path) {
+        await a.discardRecording(path);
+      }
+    } catch {
+      // Nothing was being recorded, or the file is already gone.
+    }
+    set({ recordingPath: null, lostMs: 0 });
+    return nextLiveQuestion();
+  } finally {
+    skipping = false;
+  }
 }
 
 /** "Try again" on an error page: back to the same question for another go. */

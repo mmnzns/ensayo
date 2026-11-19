@@ -1,9 +1,13 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { mockStore } from "../data/mock";
+import { StoreProvider } from "../data/store";
 import type { RepApi } from "../practice/api";
-import { beginRecording, cancelLive, getLive, recordingScreenShown, resetLive, restartRecording, setRepApi, startLive, stopAndFinish } from "../practice/live";
+import { beginRecording, cancelLive, getLive, recordingScreenShown, resetLive, restartRecording, setRepApi, skipWhileRecording, startLive, stopAndFinish } from "../practice/live";
 import { liveContextOf } from "../practice/quick";
 import type { RepOutcome } from "../practice/types";
+import PracticeRecording from "../screens/practice/PracticeRecording";
 
 const ctx = liveContextOf({ profile: { targetRole: "Senior Lifecycle Marketing Manager" }, stories: mockStore.stories, methods: mockStore.methods });
 const outcome: RepOutcome = { outcome: "didnt_catch", session_id: "s", rep: null, delta: null, restart_offered: false, audio_kept: false, notice: null, transcript_text: null };
@@ -158,3 +162,69 @@ describe("leaving the recording screen", () => {
   });
 });
 
+describe("skip while answering", () => {
+  beforeEach(() => resetLive());
+
+  it("discards the recording, saves no rep, makes no AI call and opens the next question", async () => {
+    const rec = fakeRecorder();
+    begin(rec);
+    await beginRecording();
+    const first = getLive().index;
+    expect(await skipWhileRecording()).toBe("asking");
+    expect(rec.log).toContain("discard:/tmp/r1.wav");
+    expect(rec.log).not.toContain("finish");
+    expect(rec.capturing()).toBe(false);
+    expect(getLive().index).toBe(first + 1);
+    expect(getLive().phase).toBe("asking");
+    expect(getLive().outcomes).toEqual([]);
+  });
+
+  it("on the last question it ends the session", async () => {
+    const rec = fakeRecorder();
+    begin(rec, "drill", 1);
+    await beginRecording();
+    expect(await skipWhileRecording()).toBe("done");
+    expect(rec.log).not.toContain("finish");
+    expect(rec.capturing()).toBe(false);
+  });
+
+  it("a second press while skipping does nothing, and Stop can't score it", async () => {
+    const rec = fakeRecorder();
+    begin(rec);
+    await beginRecording();
+    const a = skipWhileRecording();
+    const b = skipWhileRecording();
+    void stopAndFinish();
+    expect(await b).toBeNull();
+    expect(await a).toBe("asking");
+    expect(rec.log).not.toContain("finish");
+    expect(rec.log.filter((l) => l.startsWith("discard"))).toHaveLength(1);
+  });
+
+  it("while a restart is under way it waits and leaves no capture", async () => {
+    const rec = fakeRecorder({ startDelay: 10 });
+    begin(rec);
+    await beginRecording();
+    const restart = restartRecording();
+    const skip = skipWhileRecording();
+    await Promise.all([restart, skip]);
+    expect(rec.capturing()).toBe(false);
+  });
+});
+
+const render = () => renderToStaticMarkup(createElement(StoreProvider, { store: mockStore, children: createElement(PracticeRecording) }));
+
+describe("Skip question on the recording screen", () => {
+  it("is offered in a Drill with S", () => {
+    resetLive();
+    const html = render();
+    expect(html).toContain("Skip question");
+    expect(html).toMatch(/or press <span class="e-kbd">S</);
+  });
+
+  it("is hidden in a Mock", () => {
+    const rec = fakeRecorder();
+    begin(rec, "mock");
+    expect(render()).not.toContain("Skip question");
+  });
+});
