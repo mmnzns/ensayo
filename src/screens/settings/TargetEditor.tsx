@@ -1,6 +1,7 @@
 // Settings, Targets, the editor: every field of a target, its pinned and hidden stories, usual stages, base resume,
 // pay range and Archive. `?target=<id>` edits one; with no id it makes a new one (`?fromApp=<application id>` starts it
 // from a posting). Stories are pinned and hidden as you click; everything else saves with Save target.
+import BaseResumeCard from "../../components/BaseResumeCard";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isApp, useActions } from "../../data/real";
 import { useHashParam } from "../../data/selection";
@@ -409,17 +410,7 @@ function ResumeCard({ resume, onChange }: { resume: Target["baseResume"]; onChan
       <span className="e-h3">Base resume <span style={{ fontWeight: "400", color: "var(--e-muted)", fontSize: "14px" }}>· optional</span></span>
       <input ref={input} type="file" accept=".pdf,.doc,.docx" style={{ display: "none" }} aria-label="Choose the resume file" onChange={(e) => { const file = e.target.files?.[0]; if (file) take(file.name, file.name); }} />
       {resume && !choosing && (
-        <div className="e-soft" style={{ display: "flex", alignItems: "center", gap: "14px", padding: "14px 16px", background: "var(--e-ground)" }}>
-          <span style={{ width: 36, height: 44, borderRadius: 7, background: "var(--e-tint)", color: "var(--e-primary-dark)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 10, fontWeight: 700 }}>
-            {resume.fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "DOC"}
-          </span>
-          <span style={{ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ fontWeight: "600", fontSize: "15px", overflowWrap: "anywhere" }}>{resume.fileName}</span>
-            <span className="e-small">your master for this kind of job</span>
-          </span>
-          <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => setChoosing(true)}>Replace</button>
-          <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => onChange(null)}>Remove</button>
-        </div>
+        <BaseResumeCard fileName={resume.fileName} onReplace={() => setChoosing(true)} onRemove={() => onChange(null)} />
       )}
       {(!resume || choosing) &&
         (app ? (
