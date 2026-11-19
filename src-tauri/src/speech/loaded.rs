@@ -4,6 +4,7 @@
 //! about a gigabyte of memory isn't held all day by an app left open.
 
 use super::engine::{self, Loaded};
+use super::helper;
 use super::models;
 use super::transcribe::{self, Transcript};
 use super::vad;
@@ -12,6 +13,7 @@ use crate::models_store;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, Once};
 use std::time::{Duration, Instant};
+use voice_engine_models::catalog::Kind;
 use voice_engine_models::{ModelHandle, StoreError};
 use voice_engine_stt::SpeechBackend;
 
@@ -72,7 +74,6 @@ impl<T> Kept<T> {
 struct Speech {
     model: Loaded,
     vad_dir: PathBuf,
-    backend: SpeechBackend,
     _model_hold: ModelHandle,
     _vad_hold: ModelHandle,
 }
@@ -103,20 +104,24 @@ fn load(model_id: &str) -> Result<Speech, String> {
         StoreError::NotInstalled(_) => "The voice detection model isn't downloaded yet. Download it in Settings › Speech.".to_string(),
         e => hold_message("voice detection", &e),
     })?;
-    // The setting decides, and the engine's own answer about the card: a Windows computer without a discrete card never
-    // asks for it, and a card that failed once isn't asked again until the person turns it off and on.
-    let gpu = engine::gpu_for(info.kind, graphics::is_on() && !graphics::speech_card_failed(), graphics::card().is_some());
-    let model = engine::load(model_id, model_hold.dir(), gpu)?;
+    // The setting decides, and the engine's own answer about the card: a Windows computer without a dedicated card never
+    // asks for it, and a card that failed once isn't asked again until the person turns it off and on. Whisper on
+    // Windows goes through the Vulkan helper when it is installed and hasn't failed (`engine::route`).
+    let setting_on = graphics::is_on() && !graphics::speech_card_failed();
+    let card = graphics::card().is_some();
+    let helper = if info.kind == Kind::Whisper && setting_on && card { helper::whisper_helper_now() } else { None };
+    let route = engine::route_here(info.kind, setting_on, card, helper.is_some());
+    let model = engine::load_routed(model_id, model_hold.dir(), route, helper.as_deref())?;
     let backend = model.t.backend();
     match backend.fallback {
         Some(reason) => log::info!("speech model {model_id} loaded on {} (the graphics card was not used: {reason:?})", backend.backend),
-        None => log::info!("speech model {model_id} loaded on {}", backend.backend),
+        None => log::info!("speech model {model_id} loaded on {} ({route:?})", backend.backend),
     }
     // Only a card that failed is not asked again; a model with no card path, or a build with no card, never was.
     if graphics::card_failed(backend.fallback) {
         graphics::set_speech_card_failed(true);
     }
-    Ok(Speech { model, vad_dir: vad_hold.dir().to_path_buf(), backend, _model_hold: model_hold, _vad_hold: vad_hold })
+    Ok(Speech { model, vad_dir: vad_hold.dir().to_path_buf(), _model_hold: model_hold, _vad_hold: vad_hold })
 }
 
 /// Checks once a minute whether the model has been unused for `IDLE`.
@@ -141,14 +146,16 @@ pub fn warm(model_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Where the loaded model runs and whether the graphics card was refused.
+/// Where the loaded model runs now and whether the graphics card was refused. Asked of the model each time: Whisper in
+/// the helper can move to the processor in the middle of an answer.
 pub fn backend() -> Option<SpeechBackend> {
-    lock().peek().map(|s| s.backend.clone())
+    lock().peek().map(|s| s.model.t.backend())
 }
 
 /// When the loaded model was given the processor because the graphics card didn't work, the person is told (once per run).
 fn tell_if_card_failed() {
     if backend().is_some_and(|b| graphics::card_failed(b.fallback)) {
+        graphics::set_speech_card_failed(true);
         graphics::fell_back(graphics::SPEECH);
     }
 }

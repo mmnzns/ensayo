@@ -2,6 +2,7 @@
 //! The models, their files and their downloads belong to the shared engine; see `models_store`.
 
 pub mod engine;
+pub mod helper;
 pub mod loaded;
 pub mod models;
 pub mod transcribe;
