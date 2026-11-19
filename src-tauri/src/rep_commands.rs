@@ -185,7 +185,9 @@ struct Asked {
 }
 
 enum Judged {
-    Scored { fix: Option<String>, note: String, rewrite: Option<crate::scoring::coach::Rewrite>, coach: Option<SmartCoach>, meta: AiMeta, question_type: String },
+    Scored { fix: Option<String>, note: String, rewrite: Option<crate::scoring::coach::Rewrite>, coach: Option<SmartCoach>, meta: AiMeta, question_type: String,
+        /// The claims check, when it already ran beside the coach.
+        claims: Option<Result<crate::applications::claims::Extracted, CallError>> },
     /// A clarifying question back to the interviewer.
     Clarifying,
     NotAnAnswer,
@@ -195,7 +197,7 @@ enum Judged {
 
 /// Judges one answer with the model and, when it works, replaces the rules-only checks in `metrics` with the merged
 /// ones. Any failure falls back to the rules-only checks already there.
-fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], asked: &Asked, metrics: &mut Metrics) -> Judged {
+fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], asked: &Asked, metrics: &mut Metrics, claims_for: Option<&hook::AppCtx>) -> Judged {
     let profile = storage.profile_for(asked.target_id.as_deref()).ok().flatten();
     let stories_all = storage.load_stories().map(|l| l.items).unwrap_or_default();
     let stories: Vec<Story> = story_ids.iter().filter_map(|id| stories_all.iter().find(|s| &s.id == id).cloned()).collect();
@@ -243,10 +245,54 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
         Ok((score, _)) if score.not_an_answer => return Judged::NotAnAnswer,
         Ok(done) => done,
     };
+    let mut prompts = score.prompts.clone();
+    // The claims check (prompt 07) reads only the words, the question and the stories, never the scorer's checks, so
+    // it starts now and runs beside whichever call writes the advice. It gets its own copy of the budget (merged back
+    // below) and its own copy of the metrics.
+    let early_base = ai.budget.spend.clone();
+    let early_budget = claims_for.map(|_| ai.budget.fork());
+    let early_metrics = claims_for.map(|_| metrics.clone());
+    let (storage_ref, llm) = (storage, ai.llm);
+    let (question_ref, stories_ref) = (&question, &stories);
+    let (advice, early) = std::thread::scope(|scope| {
+        let handle = claims_for.zip(early_budget).zip(early_metrics).map(|((app, mut budget), m)| {
+            scope.spawn(move || {
+                let done = hook::extract(storage_ref, llm, &mut budget, app, &question_ref.text, stories_ref, &m);
+                (done, budget)
+            })
+        });
+        let advice = write_advice(storage, ai, stage, asked, story_ids, &question, &method, profile.as_ref().map(|p| p.identity_statement.as_str()).unwrap_or(""), use_coach, &mut score, &mut prompts, &job, metrics);
+        let early = handle.map(|h| h.join().expect("the claims call panicked"));
+        (advice, early)
+    });
+    let early = early.map(|(done, budget)| {
+        ai.budget.absorb(budget, &early_base);
+        done
+    });
+    let coached = match advice {
+        Ok(c) => c,
+        Err(fallback) => return fallback,
+    };
+    metrics.checks = score.checks.clone();
+    Judged::Scored {
+        fix: score.fix,
+        note: score.note,
+        rewrite: score.rewrite,
+        coach: coached,
+        claims: early,
+        meta: AiMeta { prompts, rubric_version: score.rubric_version, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
+        question_type: question.question_type,
+    }
+}
+
+/// Writes the advice for a scored answer: the Smart coach when the model is coach level, else the coach note (prompt
+/// 03). The coach reads prompt 02's checks (and the timing worked out from the sentence numbers 02 returns), so it can
+/// only start once 02 is done. Err is the fallback to hand back (cap or Stop, or a failed note).
+#[allow(clippy::too_many_arguments)]
+fn write_advice(storage: &Storage, ai: &mut AiCtx, stage: &str, asked: &Asked, story_ids: &[String], question: &QuestionInfo, method: &str, identity: &str, use_coach: bool, score: &mut pipeline::AiScore, prompts: &mut Vec<String>, job: &pipeline::NoteJob, metrics: &mut Metrics) -> Result<Option<SmartCoach>, Judged> {
     // A coach-level model reads the whole answer and writes the advice itself (prompt 12 in place of prompt 03). If
     // that call fails for any reason but the cap or Stop, the person still gets a note the older way.
     let mut coached: Option<SmartCoach> = None;
-    let mut prompts = score.prompts.clone();
     if use_coach {
         let before = std::mem::replace(&mut metrics.checks, score.checks.clone());
         let (earlier, replies) = earlier_tries(storage, asked);
@@ -263,29 +309,21 @@ fn judge(storage: &Storage, ai: &mut AiCtx, stage: &str, story_ids: &[String], a
             }
             Err(e @ (CallError::CapReached { .. } | CallError::Stopped)) => {
                 metrics.checks = before;
-                return Judged::Fallback(e.notice());
+                return Err(Judged::Fallback(e.notice()));
             }
             Err(_) => metrics.checks = before,
         }
     }
     if coached.is_none() {
-        match job.word(ai.llm, &question, stage, &method, profile.as_ref().map(|p| p.identity_statement.as_str()).unwrap_or(""), ai.budget) {
-            Err(e) => return Judged::Fallback(e.notice()),
+        match job.word(ai.llm, question, stage, method, identity, ai.budget) {
+            Err(e) => return Err(Judged::Fallback(e.notice())),
             Ok(c) => {
                 score.note = c.note;
                 score.rewrite = c.rewrite;
             }
         }
     }
-    metrics.checks = score.checks.clone();
-    Judged::Scored {
-        fix: score.fix,
-        note: score.note,
-        rewrite: score.rewrite,
-        coach: coached,
-        meta: AiMeta { prompts, rubric_version: score.rubric_version, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
-        question_type: question.question_type,
-    }
+    Ok(coached)
 }
 
 /// The earlier tries at this question in this session that the Smart coach can read (oldest first), and the reply it
@@ -341,6 +379,7 @@ fn judge_follow_up(storage: &Storage, ai: &mut AiCtx, session_id: &str, args: &F
                 note: coach.note,
                 rewrite: coach.rewrite,
                 coach: None,
+                claims: None,
                 meta: AiMeta { prompts: vec![format!("score-follow-up v{}", get(PromptId::ScoreFollowUp).version), format!("coach-note v{}", get(PromptId::Coach).version)], rubric_version: crate::metrics::RUBRIC_VERSION, cost_usd: ai.budget.spend.usd, model: ai.budget.spend.last_model.clone() },
                 question_type: parent.rep.question_type.clone(),
             }
@@ -425,10 +464,10 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
         };
         let judged = match &args.follow_up {
             Some(f) => judge_follow_up(storage, ctx, &session_id, args, f, &mut metrics, target_id.as_deref()),
-            None => judge(storage, ctx, &args.stage, &args.story_ids, &asked, &mut metrics),
+            None => judge(storage, ctx, &args.stage, &args.story_ids, &asked, &mut metrics, app_ctx.as_ref()),
         };
         match judged {
-            Judged::Scored { fix, note: n, rewrite: r, coach: c, meta: m, question_type: t } => {
+            Judged::Scored { fix, note: n, rewrite: r, coach: c, meta: m, question_type: t, claims: early } => {
                 fix_id = fix;
                 coach_reply = c;
                 note = Some(n);
@@ -439,7 +478,7 @@ pub fn finish_with(storage: &Storage, audio_root: &Path, args: &FinishArgs, word
                     // Claims for the consistency check (prompt 07): the answer is compared with what was said before.
                     let identity = storage.profile_for(target_id.as_deref()).ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
                     let heard = hook::Heard { question: &args.question_text, question_type: &question_type, story_ids: &args.story_ids, identity_statement: &identity, founder: args.founder_variant && args.stage == "leadership" };
-                    let (p, claims_notice) = hook::after_scored(storage, ctx, app, &heard, &mut metrics, &mut fix_id, &mut note, &mut rewrite, coach_reply.is_some());
+                    let (p, claims_notice) = hook::after_scored(storage, ctx, app, &heard, &mut metrics, &mut fix_id, &mut note, &mut rewrite, coach_reply.is_some(), early);
                     pending = p;
                     notice = claims_notice;
                     if let Some(m) = meta.as_mut() {
@@ -555,7 +594,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
             attempt: full.rep.attempt,
             follow_up: full.rep.follow_up.is_some(),
         };
-        match judge(storage, ctx, &session.stage, &full.rep.story_ids.clone(), &asked, &mut full.metrics) {
+        match judge(storage, ctx, &session.stage, &full.rep.story_ids.clone(), &asked, &mut full.metrics, None) {
             Judged::Scored { fix, note, rewrite, coach, meta, .. } => {
                 full.rep.fix = fix;
                 full.rep.coach = coach;
@@ -568,7 +607,7 @@ pub fn rescore_with(storage: &Storage, audio_root: &Path, session_id: &str, n: u
                     if let Some(app) = hook::app_context(storage, Some(app_id), session.stage_id.as_deref(), None, &session.stage) {
                         let identity = storage.profile_for(storage.session_target(&session).ok().flatten().as_deref()).ok().flatten().map(|p| p.identity_statement).unwrap_or_default();
                         let heard = hook::Heard { question: &full.rep.question_text, question_type: &full.rep.question_type, story_ids: &full.rep.story_ids, identity_statement: &identity, founder: full.rep.founder_variant && session.stage == "leadership" };
-                        let (p, claims_notice) = hook::after_scored(storage, ctx, &app, &heard, &mut full.metrics, &mut full.rep.fix, &mut full.rep.note, &mut full.rep.rewrite, full.rep.coach.is_some());
+                        let (p, claims_notice) = hook::after_scored(storage, ctx, &app, &heard, &mut full.metrics, &mut full.rep.fix, &mut full.rep.note, &mut full.rep.rewrite, full.rep.coach.is_some(), None);
                         pending = p;
                         notice = claims_notice;
                         if let Some(m) = full.rep.ai.as_mut() {
@@ -628,7 +667,7 @@ pub fn rejudge(storage: &Storage, ai: &mut AiCtx, rep: &FullRep) -> Result<Vec<c
         attempt: rep.rep.attempt,
         follow_up: rep.rep.follow_up.is_some(),
     };
-    match judge(storage, ai, &stage, &rep.rep.story_ids, &asked, &mut metrics) {
+    match judge(storage, ai, &stage, &rep.rep.story_ids, &asked, &mut metrics, None) {
         Judged::Scored { .. } => Ok(metrics.checks),
         Judged::Fallback(n) => Err(n),
         Judged::Clarifying | Judged::NotAnAnswer => Ok(vec![]),
@@ -1962,6 +2001,58 @@ mod tests {
         let flagged = saved_claims(&storage, &id).into_iter().find(|c| c.value == "two weeks").unwrap();
         assert_eq!(flagged.conflict.unwrap().earlier_claim_id, "cl_1");
         assert_eq!(flagged.stage, "stg_2");
+    }
+
+    /// 02 (scorer) 200 ms, the Smart coach 150 ms, extract-claims 100 ms. The coach reads 02's checks, so it waits for
+    /// 02; the claims check reads only the words, so it runs beside the coach. One after another is about 450 ms.
+    #[test]
+    fn the_claims_check_runs_beside_the_coach_and_the_spend_still_adds_up() {
+        use std::time::{Duration, Instant};
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &id, "recruiter");
+        let ids = (get(PromptId::Score).id.clone(), get(PromptId::SmartCoach).id.clone(), get(PromptId::Claims).id.clone());
+        let llm = Scripted::routed(vec![(&ids.0, Ok(&good_score())), (&ids.1, Ok(&smart_json("nearly", "clean_stop", None))), (&ids.2, Ok(&claims_reply(notice_claim("four weeks"), json!([]))))])
+            .delayed(&ids.0, Duration::from_millis(200))
+            .delayed(&ids.1, Duration::from_millis(150))
+            .delayed(&ids.2, Duration::from_millis(100));
+        let mut budget = Budget::new(Provider::Claude, 0.0);
+        let started = Instant::now();
+        let out = finish_with(&storage, &tmp.join("audio"), &a, words(40), true, now(), Some(AiCtx { coach: true, llm: &llm, budget: &mut budget })).unwrap();
+        let took = started.elapsed();
+        eprintln!("score 200 + coach 150 + claims 100 ms took {} ms", took.as_millis());
+        let rep = out.rep.unwrap();
+        // Setup and saving cost about 85 ms on top: one after another measured 540 ms, beside the coach 432 ms.
+        assert!(took < Duration::from_millis(480), "{took:?}: the claims call should not wait for the coach");
+        assert!(rep.rep.coach.is_some());
+        assert_eq!(rep.rep.ai.as_ref().unwrap().prompts, vec!["score-answer v3", "smart-coach v2", "extract-claims v1"]);
+        assert_eq!(saved_claims(&storage, &id).len(), 1);
+        assert_eq!(budget.spend.calls, 3, "every call is counted once");
+        let one = {
+            let mut b = Budget::new(Provider::Claude, 0.0);
+            b.spend.add_from(Provider::Claude, &crate::ai::llm::LlmReply { text: String::new(), input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 });
+            b.spend.usd
+        };
+        assert!((budget.spend.usd - 3.0 * one).abs() < 1e-9, "{} vs {}", budget.spend.usd, 3.0 * one);
+        assert_eq!(rep.rep.ai.as_ref().unwrap().cost_usd, budget.spend.usd);
+    }
+
+    #[test]
+    fn stopping_during_the_coach_still_ends_the_answer_even_with_the_claims_call_beside_it() {
+        let (guard, storage) = setup();
+        let tmp = guard.path().to_path_buf();
+        let id = app(&storage, false);
+        let mut a = args(&tmp, 1, None);
+        in_app(&mut a, &id, "recruiter");
+        let ids = (get(PromptId::Score).id.clone(), get(PromptId::SmartCoach).id.clone(), get(PromptId::Claims).id.clone());
+        let llm = Scripted::routed(vec![(&ids.0, Ok(&good_score())), (&ids.1, Err(AiError::Stopped)), (&ids.2, Err(AiError::Stopped))]);
+        let out = coach_run(&llm, &a, &storage, &tmp.join("audio"), words(40));
+        let rep = out.rep.unwrap();
+        assert!(out.notice.unwrap().contains("You stopped the AI"));
+        assert!(rep.rep.coach.is_none() && rep.rep.ai.is_none());
+        assert!(saved_claims(&storage, &id).is_empty(), "nothing from the claims call is saved");
     }
 
     #[test]

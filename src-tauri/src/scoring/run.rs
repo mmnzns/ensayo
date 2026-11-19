@@ -94,6 +94,19 @@ impl Budget {
         self.cap_usd + self.extra_usd
     }
 
+    /// A copy for a call that runs beside another one on this budget. Two calls can't both hold `&mut` to it, so each
+    /// takes its own copy, and the spend is merged back with `absorb` once both are done. Each copy checks the cap
+    /// against what was spent when it started, the same as two calls one after the other would at their start.
+    pub fn fork(&self) -> Budget {
+        Budget { spend: self.spend.clone(), cap_usd: self.cap_usd, provider: self.provider, extra_usd: self.extra_usd, declined: self.declined, announced: self.announced, refused: false }
+    }
+
+    /// Takes back what a `fork` spent since it was made (`base` is the spend at that moment).
+    pub fn absorb(&mut self, child: Budget, base: &Spend) {
+        self.spend.absorb(&child.spend, base);
+        self.refused |= child.refused;
+    }
+
     /// The limit applies: a cloud engine and a cap that is not "None". A local engine and a local server cost nothing.
     fn capped(&self) -> bool {
         self.cap_usd > 0.0 && self.provider != Provider::Compatible
@@ -483,15 +496,36 @@ pub mod testing {
     pub struct Scripted {
         pub replies: Mutex<VecDeque<Result<(String, bool), AiError>>>,
         pub seen: Mutex<Vec<LlmRequest>>,
+        /// Replies picked by the prompt id of the call instead of by turn (see `routed`).
+        routes: Mutex<Vec<(String, Result<String, AiError>)>>,
+        /// How long a call waits before it answers, by prompt id.
+        delays: Mutex<Vec<(String, std::time::Duration)>>,
+        /// Calls seen that were not the claims check (see `complete`).
+        others: std::sync::atomic::AtomicUsize,
     }
 
     impl Scripted {
         pub fn new(replies: Vec<Result<&str, AiError>>) -> Scripted {
-            Scripted { replies: Mutex::new(replies.into_iter().map(|r| r.map(|t| (String::from(t), false))).collect()), seen: Mutex::new(vec![]) }
+            Scripted::from_queue(replies.into_iter().map(|r| r.map(|t| (String::from(t), false))).collect())
         }
         /// Replies that say whether the provider cut them off at the token limit.
         pub fn with_cut_offs(replies: Vec<(&str, bool)>) -> Scripted {
-            Scripted { replies: Mutex::new(replies.into_iter().map(|(t, c)| Ok((String::from(t), c))).collect()), seen: Mutex::new(vec![]) }
+            Scripted::from_queue(replies.into_iter().map(|(t, c)| Ok((String::from(t), c))).collect())
+        }
+        fn from_queue(replies: VecDeque<Result<(String, bool), AiError>>) -> Scripted {
+            Scripted { replies: Mutex::new(replies), seen: Mutex::new(vec![]), routes: Mutex::new(vec![]), delays: Mutex::new(vec![]), others: Default::default() }
+        }
+        /// Replies by prompt id (`get(PromptId::X).id`), for calls that run at the same time and so have no fixed
+        /// turn. Each entry answers one call.
+        pub fn routed(replies: Vec<(&str, Result<&str, AiError>)>) -> Scripted {
+            let s = Scripted::from_queue(VecDeque::new());
+            *s.routes.lock().unwrap() = replies.into_iter().map(|(id, r)| (id.to_string(), r.map(String::from))).collect();
+            s
+        }
+        /// Makes every call of this prompt wait this long before it answers.
+        pub fn delayed(self, prompt_id: &str, by: std::time::Duration) -> Scripted {
+            self.delays.lock().unwrap().push((prompt_id.to_string(), by));
+            self
         }
         pub fn calls(&self) -> usize {
             self.seen.lock().unwrap().len()
@@ -500,7 +534,34 @@ pub mod testing {
 
     impl Llm for Scripted {
         fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
+            use std::sync::atomic::Ordering;
+            let claims_id = &crate::scoring::prompts::get(crate::scoring::prompts::PromptId::Claims).id;
+            let routed = !self.routes.lock().unwrap().is_empty();
+            if !routed {
+                // A script written as one queue keeps its order even where calls now overlap: the claims check
+                // waits (briefly) until the scorer and the advice call have taken their turns.
+                if &req.label == claims_id {
+                    for _ in 0..200 {
+                        if self.others.load(Ordering::SeqCst) >= 2 {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                } else {
+                    self.others.fetch_add(1, Ordering::SeqCst);
+                }
+            }
             self.seen.lock().unwrap().push(req.clone());
+            let delay = self.delays.lock().unwrap().iter().find(|(id, _)| id == &req.label).map(|(_, d)| *d);
+            if let Some(d) = delay {
+                std::thread::sleep(d);
+            }
+            if routed {
+                let mut routes = self.routes.lock().unwrap();
+                let at = routes.iter().position(|(id, _)| id == &req.label).unwrap_or_else(|| panic!("no scripted reply for {}", req.label));
+                let (_, next) = routes.remove(at);
+                return next.map(|text| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 });
+            }
             let next = self.replies.lock().unwrap().pop_front().expect("the script ran out of replies");
             next.map(|(text, cut_off)| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off, cache_read_tokens: 0, cache_write_tokens: 0 })
         }
