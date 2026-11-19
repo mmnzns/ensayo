@@ -190,6 +190,18 @@ impl Spend {
         }
     }
 
+    /// Adds what `child` spent since it was copied from `base` (see `Budget::fork`).
+    pub fn absorb(&mut self, child: &Spend, base: &Spend) {
+        self.usd += child.usd - base.usd;
+        self.calls += child.calls - base.calls;
+        self.input_tokens += child.input_tokens - base.input_tokens;
+        self.output_tokens += child.output_tokens - base.output_tokens;
+        self.approx |= child.approx;
+        if child.calls > base.calls {
+            self.last_model = child.last_model.clone();
+        }
+    }
+
     fn record(&mut self, reply: &LlmReply, usd: f64, approx: bool) {
         self.approx |= approx;
         self.usd += usd;

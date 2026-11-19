@@ -94,6 +94,19 @@ impl Budget {
         self.cap_usd + self.extra_usd
     }
 
+    /// A copy for a call that runs beside another one on this budget. Two calls can't both hold `&mut` to it, so each
+    /// takes its own copy, and the spend is merged back with `absorb` once both are done. Each copy checks the cap
+    /// against what was spent when it started, the same as two calls one after the other would at their start.
+    pub fn fork(&self) -> Budget {
+        Budget { spend: self.spend.clone(), cap_usd: self.cap_usd, provider: self.provider, extra_usd: self.extra_usd, declined: self.declined, announced: self.announced, refused: false }
+    }
+
+    /// Takes back what a `fork` spent since it was made (`base` is the spend at that moment).
+    pub fn absorb(&mut self, child: Budget, base: &Spend) {
+        self.spend.absorb(&child.spend, base);
+        self.refused |= child.refused;
+    }
+
     /// The limit applies: a cloud engine and a cap that is not "None". A local engine and a local server cost nothing.
     fn capped(&self) -> bool {
         self.cap_usd > 0.0 && self.provider != Provider::Compatible
@@ -359,7 +372,36 @@ pub fn openai_strict_schema(schema: &Value) -> Option<Value> {
         if let Some(Value::Object(props)) = out.get("properties") {
             out.insert("required".into(), Value::Array(props.keys().map(|k| Value::String(k.clone())).collect()));
         }
+        // Strict mode wants a `type` on every plain value, and doesn't list `const`: a lone `{"const": 2}` becomes
+        // `{"type": "integer", "enum": [2]}`. Same rule, same values. Documentation-only keys go too.
+        if let Some(c) = out.remove("const") {
+            out.entry("enum").or_insert_with(|| Value::Array(vec![c]));
+        }
+        for k in ["title", "default", "examples"] {
+            out.remove(k);
+        }
+        if !out.contains_key("type") && !out.contains_key("$ref") && !out.contains_key("anyOf") {
+            if let Some(vals) = out.get("enum").and_then(Value::as_array) {
+                let has_null = vals.iter().any(Value::is_null);
+                let rest: Vec<Value> = vals.iter().filter(|v| !v.is_null()).cloned().collect();
+                if let Some(t) = value_type(&rest) {
+                    out.insert("type".into(), if has_null { serde_json::json!([t, "null"]) } else { Value::String(t.into()) });
+                }
+            }
+        }
         Some(Value::Object(out))
+    }
+    /// The one JSON type all of `vals` share, if there is one.
+    fn value_type(vals: &[Value]) -> Option<&'static str> {
+        let name = |v: &Value| match v {
+            Value::String(_) => "string",
+            Value::Bool(_) => "boolean",
+            Value::Number(n) if n.is_i64() || n.is_u64() => "integer",
+            Value::Number(_) => "number",
+            _ => "",
+        };
+        let first = name(vals.first()?);
+        (!first.is_empty() && vals.iter().all(|v| name(v) == first)).then_some(first)
     }
     if !is_object_schema(schema.as_object()?) {
         return None;
@@ -454,15 +496,36 @@ pub mod testing {
     pub struct Scripted {
         pub replies: Mutex<VecDeque<Result<(String, bool), AiError>>>,
         pub seen: Mutex<Vec<LlmRequest>>,
+        /// Replies picked by the prompt id of the call instead of by turn (see `routed`).
+        routes: Mutex<Vec<(String, Result<String, AiError>)>>,
+        /// How long a call waits before it answers, by prompt id.
+        delays: Mutex<Vec<(String, std::time::Duration)>>,
+        /// Calls seen that were not the claims check (see `complete`).
+        others: std::sync::atomic::AtomicUsize,
     }
 
     impl Scripted {
         pub fn new(replies: Vec<Result<&str, AiError>>) -> Scripted {
-            Scripted { replies: Mutex::new(replies.into_iter().map(|r| r.map(|t| (String::from(t), false))).collect()), seen: Mutex::new(vec![]) }
+            Scripted::from_queue(replies.into_iter().map(|r| r.map(|t| (String::from(t), false))).collect())
         }
         /// Replies that say whether the provider cut them off at the token limit.
         pub fn with_cut_offs(replies: Vec<(&str, bool)>) -> Scripted {
-            Scripted { replies: Mutex::new(replies.into_iter().map(|(t, c)| Ok((String::from(t), c))).collect()), seen: Mutex::new(vec![]) }
+            Scripted::from_queue(replies.into_iter().map(|(t, c)| Ok((String::from(t), c))).collect())
+        }
+        fn from_queue(replies: VecDeque<Result<(String, bool), AiError>>) -> Scripted {
+            Scripted { replies: Mutex::new(replies), seen: Mutex::new(vec![]), routes: Mutex::new(vec![]), delays: Mutex::new(vec![]), others: Default::default() }
+        }
+        /// Replies by prompt id (`get(PromptId::X).id`), for calls that run at the same time and so have no fixed
+        /// turn. Each entry answers one call.
+        pub fn routed(replies: Vec<(&str, Result<&str, AiError>)>) -> Scripted {
+            let s = Scripted::from_queue(VecDeque::new());
+            *s.routes.lock().unwrap() = replies.into_iter().map(|(id, r)| (id.to_string(), r.map(String::from))).collect();
+            s
+        }
+        /// Makes every call of this prompt wait this long before it answers.
+        pub fn delayed(self, prompt_id: &str, by: std::time::Duration) -> Scripted {
+            self.delays.lock().unwrap().push((prompt_id.to_string(), by));
+            self
         }
         pub fn calls(&self) -> usize {
             self.seen.lock().unwrap().len()
@@ -471,7 +534,34 @@ pub mod testing {
 
     impl Llm for Scripted {
         fn complete(&self, req: &LlmRequest) -> Result<LlmReply, AiError> {
+            use std::sync::atomic::Ordering;
+            let claims_id = &crate::scoring::prompts::get(crate::scoring::prompts::PromptId::Claims).id;
+            let routed = !self.routes.lock().unwrap().is_empty();
+            if !routed {
+                // A script written as one queue keeps its order even where calls now overlap: the claims check
+                // waits (briefly) until the scorer and the advice call have taken their turns.
+                if &req.label == claims_id {
+                    for _ in 0..200 {
+                        if self.others.load(Ordering::SeqCst) >= 2 {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                } else {
+                    self.others.fetch_add(1, Ordering::SeqCst);
+                }
+            }
             self.seen.lock().unwrap().push(req.clone());
+            let delay = self.delays.lock().unwrap().iter().find(|(id, _)| id == &req.label).map(|(_, d)| *d);
+            if let Some(d) = delay {
+                std::thread::sleep(d);
+            }
+            if routed {
+                let mut routes = self.routes.lock().unwrap();
+                let at = routes.iter().position(|(id, _)| id == &req.label).unwrap_or_else(|| panic!("no scripted reply for {}", req.label));
+                let (_, next) = routes.remove(at);
+                return next.map(|text| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off: false, cache_read_tokens: 0, cache_write_tokens: 0 });
+            }
             let next = self.replies.lock().unwrap().pop_front().expect("the script ran out of replies");
             next.map(|(text, cut_off)| LlmReply { text, input_tokens: 1000, output_tokens: 200, model: "claude-haiku-5-5".into(), cut_off, cache_read_tokens: 0, cache_write_tokens: 0 })
         }
@@ -641,6 +731,107 @@ mod tests {
                 }
             });
         }
+    }
+
+    /// OpenAI strict structured-output rules, as documented: the root is an object; every schema node has a `type`
+    /// (or is a `$ref` or an `anyOf`); every object is closed and lists all its properties as required; only the
+    /// supported keywords appear; at most 5 levels of nesting and 100 properties; no `const`.
+    fn strict_problems(root: &Value) -> Vec<String> {
+        const ALLOWED: &[&str] = &["type", "properties", "required", "additionalProperties", "items", "enum", "anyOf", "$ref", "$defs", "definitions"];
+        let mut out = vec![];
+        if root.get("type") != Some(&Value::String("object".into())) || root.get("anyOf").is_some() {
+            out.push("root is not a plain object".to_string());
+        }
+        let mut props = 0;
+        fn node(s: &Value, depth: usize, path: &str, props: &mut usize, out: &mut Vec<String>) {
+            let Value::Object(m) = s else { return out.push(format!("{path}: not a schema object")) };
+            for k in m.keys() {
+                if !ALLOWED.contains(&k.as_str()) {
+                    out.push(format!("{path}: keyword {k} is not supported"));
+                }
+            }
+            if !(m.contains_key("type") || m.contains_key("$ref") || m.contains_key("anyOf")) {
+                out.push(format!("{path}: no type"));
+            }
+            if let Some(Value::Array(ts)) = m.get("type") {
+                if !ts.iter().all(|t| t.as_str().is_some_and(|t| ["string", "number", "integer", "boolean", "null", "object", "array"].contains(&t))) {
+                    out.push(format!("{path}: bad type list"));
+                }
+            }
+            if let Some(Value::Array(vals)) = m.get("enum") {
+                if vals.is_empty() || vals.len() > 500 {
+                    out.push(format!("{path}: enum size"));
+                }
+            }
+            if depth > 5 {
+                out.push(format!("{path}: nested deeper than 5"));
+            }
+            if is_object_schema(m) {
+                if m.get("additionalProperties") != Some(&Value::Bool(false)) {
+                    out.push(format!("{path}: object is not closed"));
+                }
+                let names: Vec<&String> = m.get("properties").and_then(Value::as_object).map(|p| p.keys().collect()).unwrap_or_default();
+                let mut req: Vec<&str> = m.get("required").and_then(Value::as_array).map(|r| r.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+                let mut want: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+                req.sort();
+                want.sort();
+                if req != want {
+                    out.push(format!("{path}: required does not list every property"));
+                }
+                *props += names.len();
+            }
+            if let Some(Value::Object(p)) = m.get("properties") {
+                for (n, c) in p {
+                    node(c, depth + 1, &format!("{path}.{n}"), props, out);
+                }
+            }
+            for key in ["$defs", "definitions"] {
+                if let Some(Value::Object(p)) = m.get(key) {
+                    for (n, c) in p {
+                        node(c, depth + 1, &format!("{path}#{n}"), props, out);
+                    }
+                }
+            }
+            if let Some(i) = m.get("items") {
+                node(i, depth + 1, &format!("{path}[]"), props, out);
+            }
+            if let Some(Value::Array(a)) = m.get("anyOf") {
+                for (i, c) in a.iter().enumerate() {
+                    node(c, depth + 1, &format!("{path}|{i}"), props, out);
+                }
+            }
+        }
+        node(root, 0, "root", &mut props, &mut out);
+        if props > 100 {
+            out.push(format!("{props} properties (limit 100)"));
+        }
+        out
+    }
+
+    #[test]
+    fn every_prompt_schema_comes_out_of_openai_strict_following_the_strict_rules() {
+        for id in PromptId::ALL {
+            let strict = openai_strict_schema(&provider_schema(&get(id).schema)).unwrap_or_else(|| panic!("{id:?} can't be made strict"));
+            assert_eq!(strict_problems(&strict), Vec::<String>::new(), "{id:?}");
+            assert!(jsonschema::validator_for(&strict).is_ok(), "{id:?}");
+        }
+    }
+
+    #[test]
+    fn the_strict_validator_catches_what_openai_refuses() {
+        let bad = serde_json::json!({ "type": "object", "properties": { "v": { "const": 2 }, "e": { "enum": ["a"] } }, "required": ["v"] });
+        let p = strict_problems(&bad).join("; ");
+        assert!(p.contains("keyword const") && p.contains("no type") && p.contains("not closed") && p.contains("required does not list"), "{p}");
+    }
+
+    #[test]
+    fn a_const_and_a_typeless_enum_become_typed_enums_in_strict_mode() {
+        let schema = serde_json::json!({ "type": "object", "properties": { "v": { "const": 2 }, "e": { "enum": ["a", "b"] }, "o": { "enum": ["x"] } }, "required": ["v", "e"] });
+        let strict = openai_strict_schema(&provider_schema(&schema)).unwrap();
+        assert_eq!(strict["properties"]["v"], serde_json::json!({ "type": "integer", "enum": [2] }));
+        assert_eq!(strict["properties"]["e"], serde_json::json!({ "type": "string", "enum": ["a", "b"] }));
+        assert_eq!(strict["properties"]["o"], serde_json::json!({ "type": ["string", "null"], "enum": ["x", null] }));
+        assert_eq!(strict_problems(&strict), Vec::<String>::new());
     }
 
     #[test]
