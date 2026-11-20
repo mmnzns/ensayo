@@ -15,9 +15,15 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      # A runner image CMake upgrade must not reuse a cached build dir that points at the old install.
+      - name: Read CMake version
+        id: cmake
+        shell: bash
+        run: echo "version=$(cmake --version | head -n 1)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: cmake-${{ steps.cmake.outputs.version }}
       - run: npm ci
       - run: npm test
       - run: node --test scripts/latest-json.check.mjs
@@ -37,9 +43,17 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      # A runner image CMake upgrade must not reuse a cached build dir that points at the old install.
+      - name: Read CMake version
+        id: cmake
+        shell: pwsh
+        run: |
+          $v = (cmake --version | Select-Object -First 1).Trim()
+          "version=$v" >> $env:GITHUB_OUTPUT
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: cmake-${{ steps.cmake.outputs.version }}
       - run: npm ci
       - run: npm test
       - run: npm run build

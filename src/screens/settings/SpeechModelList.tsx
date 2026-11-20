@@ -2,6 +2,7 @@
 // so every state (partial, downloading here, downloading in another app, installed) can be checked without the app.
 import { formatSize } from "./format";
 import Dialog from "../states/Dialog";
+import { Ratings } from "./RatingDots";
 import { deleteQuestion, removeQuestion, hiddenCount, progressPercent, visibleRows, type ModelRow } from "./speechModels";
 
 const ring = (color: string) => ({ width: "10px", height: "10px", borderRadius: "50%", boxShadow: `inset 0 0 0 1.5px ${color}`, flex: "none" as const });
@@ -42,7 +43,8 @@ export default function SpeechModelList(p: SpeechModelListProps) {
             <span style={{ flex: "1 1 220px", display: "flex", flexDirection: "column", gap: "2px", ...(have ? {} : { color: "var(--e-muted)" }) }}>
               {m.name}
               <span className="e-small">{m.downloadingHere ? `Downloading, ${percent}%` : m.status}{m.note ? ` · ${m.note}` : ""}</span>
-              {m.slowNote ? <span className="e-small">{m.slowNote}</span> : null}
+              {m.ratings ? <Ratings speed={m.ratings.speed} accuracy={m.ratings.accuracy} where={m.speedWhere} /> : null}
+              {m.about ? <span className="e-small">{m.about}</span> : null}
             </span>
             <span className="e-small">{formatSize(m.size_mb)}</span>
             {m.canUse && !asking && <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={() => p.onUse(m.id)}>Use</button>}

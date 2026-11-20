@@ -210,17 +210,41 @@ describe("the Ollama and LM Studio screen", () => {
   });
 });
 
-describe("the slow note on Whisper models", () => {
-  const models = [entry("whisper-turbo", "missing"), entry("parakeet-ultra", "missing")];
-  const render = (os: "windows" | "mac") => renderToString(<SpeechModelList {...{ rows: modelRows(models, "", null, os), fraction: 0, busy: false, showAll: false, confirmId: null, onShowAll: no, onUse: no, onFetch: no, onCancel: no, onAskDelete: no, onDelete: no }} />);
+describe("speed and accuracy on the model rows", () => {
+  const turbo = (over: Partial<SpeechModelEntry> = {}) =>
+    entry("whisper-turbo", "missing", { name: "Whisper Large Turbo", languages: "99 languages", size_mb: 574, speed: 2, accuracy: 3, english_only: false, kind: "whisper", runs_on: "card", card_path: true, ...over });
+  const render = (m: SpeechModelEntry) => renderToString(<SpeechModelList {...{ rows: modelRows([m], ""), fraction: 0, busy: false, showAll: false, confirmId: null, onShowAll: no, onUse: no, onFetch: no, onCancel: no, onAskDelete: no, onDelete: no }} />);
 
-  it("shows on a Whisper model on Windows, and only on that one", () => {
-    const html = render("windows");
-    expect(html.match(/Slow on this computer: runs on the processor\./g)).toHaveLength(1);
+  it("shows the speed and accuracy as dots, filled up to the rating", () => {
+    const html = render(turbo());
+    expect(html).toContain('aria-label="Speed 2 of 3"');
+    expect(html).toContain('aria-label="Accuracy 3 of 3"');
+    expect(html.match(/data-filled="yes"/g)).toHaveLength(5);
+    expect(html.match(/data-filled="no"/g)).toHaveLength(1);
   });
 
-  it("does not show on the Mac", () => {
-    expect(render("mac")).not.toContain("Slow on this computer");
+  it("says the speed is on the graphics card when that is where the model runs, and drops the old slow note", () => {
+    const html = render(turbo());
+    expect(html).toContain("on the graphics card");
+    expect(html).not.toContain("Slow on this computer");
+  });
+
+  it("says on the processor when it runs there, and that a card would be faster when this computer has a way to use one", () => {
+    expect(render(turbo({ runs_on: "processor", card_path: false }))).toContain("on the processor");
+    expect(render(turbo({ runs_on: "processor", card_path: false }))).not.toContain("faster on a graphics card");
+    expect(render(turbo({ runs_on: "processor", card_path: true }))).toContain("on the processor here, faster on a graphics card");
+  });
+
+  it("describes what the model is good for in plain words", () => {
+    const html = render(turbo());
+    expect(html).toContain("99 languages, adds punctuation, a mid-size download, best on a graphics card.");
+    expect(render(turbo({ english_only: true, languages: "English", kind: "parakeet", size_mb: 2400, card_path: false, runs_on: "processor" }))).toContain("English only, adds punctuation, a large download, works well on the processor.");
+  });
+
+  it("shows nothing extra for a row with no ratings, like a local AI model", () => {
+    const html = render(entry("qwen", "missing"));
+    expect(html).not.toContain("Speed");
+    expect(html).not.toContain("download,");
   });
 });
 

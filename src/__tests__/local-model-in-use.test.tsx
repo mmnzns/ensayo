@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readSource } from "./helpers/readSource";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { NoModelLine } from "../screens/first-run/FeedbackEngine";
@@ -58,7 +58,7 @@ describe("step 6 with no model", () => {
 describe("step 7 when the story cannot be read", () => {
   const noop = () => {};
   it("recognises the missing-model error by the constant the backend uses", () => {
-    const rust = readFileSync("src-tauri/src/ai_commands.rs", "utf8");
+    const rust = readSource("src-tauri/src/ai_commands.rs");
     expect(rust).toContain(`pub const LOCAL_MODEL_MISSING: &str = "${LOCAL_MODEL_MISSING}";`);
     expect(isLocalModelMissing("The local AI model (Qwen3.5 4B) isn't downloaded yet. Download it in Settings › AI.")).toBe(true);
     expect(isLocalModelMissing(new Error("Offline."))).toBe(false);

@@ -6,6 +6,8 @@ import { isApp } from "../../data/real";
 import { useStore } from "../../data/store";
 import StepHeader from "./StepHeader";
 import { useSpeech } from "./useSpeech";
+import { Ratings } from "../settings/RatingDots";
+import type { ModelRow } from "../settings/speechModels";
 import Dialog from "../states/Dialog";
 import { go } from "../../ui/router";
 import { SPEECH_WARNING, speechWarningNeeded } from "./setup";
@@ -21,11 +23,23 @@ export default function Speech() {
   return isApp() ? <SpeechLive /> : <SpeechMock />;
 }
 
+/** The speed and accuracy dots and a plain line on what the model is good for; nothing until the backend has said. */
+function ModelFacts({ model }: { model: ModelRow | undefined }) {
+  if (!model) return null;
+  return (
+    <>
+      {model.ratings ? <Ratings speed={model.ratings.speed} accuracy={model.ratings.accuracy} where={model.speedWhere} /> : null}
+      {model.about ? <span className="e-small">{model.about}</span> : null}
+    </>
+  );
+}
+
 const percentOf = (fraction: number) => Math.round(Math.min(1, Math.max(0, fraction || 0)) * 100);
 
 function SpeechLive() {
-  const { plan, downloading, fraction, error, download } = useSpeech();
+  const { plan, rows, downloading, fraction, error, download } = useSpeech();
   const pct = percentOf(fraction);
+  const model = plan ? rows.find((r) => r.id === plan.modelId) : undefined;
   const ready = plan?.kind === "ready";
   // Leaving with no speech model asks first: practice can't hear anything until one is downloaded.
   const [asking, setAsking] = useState(false);
@@ -52,6 +66,7 @@ function SpeechLive() {
                   <span className="e-badge e-badge-ok">{plan.fromOtherApp ? "Found" : "Ready"}</span>
                 </span>
                 <span className="e-meta">{plan.name} · {plan.fromOtherApp ? "found from another app, nothing to download" : "nothing more to download"}</span>
+                <ModelFacts model={model} />
               </span>
             </div>
           ) : (
@@ -64,6 +79,7 @@ function SpeechLive() {
                 <span className="e-meta">
                   {plan.onlyVoiceDetection ? "The part that tells your voice from silence. It is tiny." : `${plan.name}. Accurate, and keeps the "um"s Ensayo needs to count.`}
                 </span>
+                {plan.onlyVoiceDetection ? null : <ModelFacts model={model} />}
                 {downloading ? (
                   <>
                     <span className="e-bar" style={{ maxWidth: "420px" }} role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>

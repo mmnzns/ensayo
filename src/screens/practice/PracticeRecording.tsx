@@ -2,16 +2,16 @@
 import { useEffect, useRef, useState } from "react";
 import { clock } from "../../data/screens/practice";
 import { useStore } from "../../data/store";
-import { useLive, beginRecording, getLive, micLost, MIC_LOST, recordAgainAfterLoss, recordingStatus, restartRecording, retryFinish, SCORE_LOST_MIN_MS, setRecordingPaused, stopAndFinish } from "../../practice/live";
+import { useLive, askRoute, beginRecording, getLive, micLost, MIC_LOST, recordAgainAfterLoss, recordingScreenShown, recordingStatus, restartRecording, retryFinish, SCORE_LOST_MIN_MS, setRecordingPaused, skipWhileRecording, stopAndFinish } from "../../practice/live";
 import { LIMIT_STOPPED, LIMIT_WARNING, limitState } from "../../practice/limit";
 import { SILENCE_START, silenceStep, silenceStop } from "../../practice/silence";
 import { readPrefs } from "../settings/prefs";
 import FocusShell from "../../ui/FocusShell";
 import { go } from "../../ui/router";
-import { ASK, THINK } from "./practiceFlow";
+import { ASK, THINK, resetFlow } from "./practiceFlow";
 import { Kbd, SessionHeader } from "./parts";
 import { usePractice } from "./usePractice";
-import { useKeys } from "./useKeys";
+import { keyBelongsToTarget, useKeys } from "./useKeys";
 import EndSessionDialog from "./EndSessionDialog";
 import { atStake, escDecision } from "./endSession";
 
@@ -68,6 +68,8 @@ export default function PracticeRecording() {
   // A live session starts the microphone when the screen opens, shows its real level, and stops itself at the hard cap.
   useEffect(() => {
     if (!live) return;
+    // Leaving this screen any way but Stop, Skip or End stops the capture, so nothing keeps recording unseen.
+    const left = recordingScreenShown();
     if (getLive().phase !== "recording") void beginRecording();
     const autoStop = readPrefs().practice.autoStop;
     silence.current = SILENCE_START;
@@ -92,7 +94,10 @@ export default function PracticeRecording() {
         }),
       130,
     );
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      left();
+    };
   }, [live]);
 
   // The microphone didn't start (on Windows, a blocked microphone fails here): back to the question, which says
@@ -135,6 +140,31 @@ export default function PracticeRecording() {
     silence.current = SILENCE_START;
     if (live) void restartRecording();
   };
+  // Skip question: the answer is thrown away unscored, and the next question (or the end) comes up, like the asking screen's Skip.
+  const canSkip = !(live && mode === "mock");
+  const skip = () => {
+    if (lost || !canSkip) return;
+    if (!live) {
+      resetFlow();
+      go(ASK);
+      return;
+    }
+    void skipWhileRecording().then((next) => {
+      if (next === "done") go(endTo);
+      else if (next === "asking") go(askRoute());
+    });
+  };
+  const skipRef = useRef(skip);
+  skipRef.current = skip;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "s" || e.repeat || e.metaKey || e.ctrlKey || e.altKey || keyBelongsToTarget(e.target as HTMLElement | null, undefined)) return;
+      e.preventDefault();
+      skipRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // At 4:00 of recorded time it stops, says why on the next screen, and scores the answer.
   useEffect(() => {
     if (limitState(seconds) === "stop") stop(LIMIT_STOPPED);
@@ -142,7 +172,7 @@ export default function PracticeRecording() {
   }, [seconds]);
   const [asking, setAsking] = useState(false);
   const onEsc = () => (escDecision(atStake("recording", live)) === "ask" ? setAsking(true) : end());
-  useKeys({ space: () => stop(), p: togglePause, esc: onEsc });
+  useKeys({ space: () => stop(), p: togglePause, r: startOver, esc: onEsc });
 
   const pct = (n: number) => `${Math.min(100, (n / max) * 100)}%`;
   const dot = (
@@ -192,20 +222,42 @@ export default function PracticeRecording() {
           </div>
         </div>
         <div style={{ display: lost ? "none" : "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-          <button type="button" aria-label="Stop answering" onClick={() => stop()} style={{ width: "96px", height: "96px", borderRadius: "50%", background: "var(--e-ink)", color: "var(--e-surface)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(43,39,34,0.22)", border: "none", padding: 0, cursor: "pointer" }}>
-            <span style={{ width: "30px", height: "30px", borderRadius: "6px", background: "var(--e-surface)" }} />
-          </button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 96px 1fr", alignItems: "start", width: "100%", maxWidth: "420px" }}>
+            <div style={{ justifySelf: "end", marginTop: "20px", marginRight: "20px", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", width: "76px" }}>
+              <button type="button" aria-label="Start over" onClick={startOver} style={{ width: "56px", height: "56px", borderRadius: "50%", background: "var(--e-ground)", color: "var(--e-ink)", border: "1px solid var(--e-line)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, cursor: "pointer" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7" />
+                  <path d="M3 4v5h5" />
+                </svg>
+              </button>
+              <span className="e-small" aria-hidden="true">Start over</span>
+              <span className="e-small">or press <Kbd>R</Kbd></span>
+            </div>
+            <button type="button" aria-label="Stop answering" onClick={() => stop()} style={{ width: "96px", height: "96px", borderRadius: "50%", background: "var(--e-ink)", color: "var(--e-surface)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(43,39,34,0.22)", border: "none", padding: 0, cursor: "pointer" }}>
+              <span style={{ width: "30px", height: "30px", borderRadius: "6px", background: "var(--e-surface)" }} />
+            </button>
+            <span />
+          </div>
           <span className="e-meta">
             Press <Kbd>Space</Kbd> when you're done
           </span>
-          <button type="button" className="e-btn e-btn-soft e-btn-sm" aria-pressed={paused} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
-          <span className="e-small">or press <Kbd>P</Kbd></span>
+          <div style={{ display: "flex", gap: "28px", alignItems: "flex-start", justifyContent: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+              <button type="button" className="e-btn e-btn-soft e-btn-sm" aria-pressed={paused} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
+              <span className="e-small">or press <Kbd>P</Kbd></span>
+            </div>
+            {canSkip && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={skip}>Skip question</button>
+                <span className="e-small">or press <Kbd>S</Kbd></span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div className="e-wrap" style={{ width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
           <span className="e-small">Pauses are fine. Take a second to find the word.</span>
-          <button type="button" className="e-btn e-btn-ghost e-btn-sm" onClick={startOver}>Start over</button>
         </div>
       </div>
       {asking && <EndSessionDialog stake="recording" onEnd={end} onKeep={() => setAsking(false)} />}

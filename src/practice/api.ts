@@ -87,7 +87,16 @@ export async function tauriApi(): Promise<RepApi> {
     return id;
   };
   return {
-    startRecording: () => invoke<string>("start_recording", { device: readPrefs().mic.device || null, takeOver: takeOverOnFirstStart() }),
+    startRecording: async () => {
+      const device = readPrefs().mic.device || null;
+      try {
+        return await invoke<string>("start_recording", { device, takeOver: takeOverOnFirstStart() });
+      } catch (e) {
+        // The recorder still holds a capture that nothing on screen owns (and it isn't one the caller can stop): take it over.
+        if (!/already recording/i.test(e instanceof Error ? e.message : String(e))) throw e;
+        return invoke<string>("start_recording", { device, takeOver: true });
+      }
+    },
     stopRecording: () => invoke("stop_recording"),
     level: () => invoke("recording_level"),
     pauseRecording: () => invoke("pause_recording"),

@@ -5,6 +5,7 @@ use crate::models_store::{self, DownloadSlot};
 use crate::paths;
 use crate::recorder::capture::{Capture, StartError};
 use crate::recorder::mic::{input_devices, MicSource};
+use crate::speech::engine::{CardState, Os};
 use crate::speech::{models, transcribe};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -74,20 +75,45 @@ pub struct SpeechModelEntry {
     size_mb: u64,
     /// One of Ensayo's own picks; Settings shows the rest behind "Show all models".
     recommended: bool,
+    /// The engine's ratings, 1 to 3 (the dots in Settings).
+    speed: u8,
+    accuracy: u8,
+    english_only: bool,
+    /// "whisper", "parakeet", "parakeet_unified" or "nemotron".
+    kind: &'static str,
+    /// Where it runs on THIS computer: "card" (the graphics card) or "processor". Decided by the same rule that loads it.
+    runs_on: &'static str,
+    /// This computer has a way for it to use a graphics card, with the switch on or off.
+    card_path: bool,
     /// The same states as `ModelStatus`.
     state: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     fraction: Option<f32>,
 }
 
+fn kind_name(kind: catalog::Kind) -> &'static str {
+    match kind {
+        catalog::Kind::Whisper => "whisper",
+        catalog::Kind::Parakeet => "parakeet",
+        catalog::Kind::ParakeetUnified => "parakeet_unified",
+        catalog::Kind::Nemotron => "nemotron",
+        _ => "other",
+    }
+}
+
 /// Every speech model the engine has, Ensayo's picks first, in the order Settings lists them, with its state.
 pub fn speech_model_list(store: &SharedStore) -> Vec<SpeechModelEntry> {
+    speech_model_list_on(store, &CardState::now())
+}
+
+fn speech_model_list_on(store: &SharedStore, card: &CardState) -> Vec<SpeechModelEntry> {
     models::speech_list()
         .into_iter()
         .filter_map(|o| {
             let m = models::speech_model(o.id)?;
             let status = store.status(o.id);
-            Some(SpeechModelEntry { id: o.id, name: o.name, maker: o.maker, note: o.note, languages: m.languages, size_mb: m.size() / 1_000_000, recommended: o.recommended, state: models_store::state_name(&status), fraction: models_store::fraction_of(&status) })
+            let placed = card.placement(Os::here(), m.kind);
+            Some(SpeechModelEntry { id: o.id, name: o.name, maker: o.maker, note: o.note, languages: m.languages, size_mb: m.size() / 1_000_000, recommended: o.recommended, speed: m.speed, accuracy: m.accuracy, english_only: m.english_only, kind: kind_name(m.kind), runs_on: if placed.on_card { "card" } else { "processor" }, card_path: placed.card_path, state: models_store::state_name(&status), fraction: models_store::fraction_of(&status) })
         })
         .collect()
 }
@@ -454,7 +480,7 @@ mod tests {
     #[test]
     fn the_speech_list_has_every_speech_model_with_ensayos_picks_first_and_nothing_else() {
         let (_d, store) = temp_store();
-        let list = speech_model_list(&store);
+        let list = speech_model_list_on(&store, &CardState { setting_on: true, card: false, whisper_helper: false });
         assert_eq!(list[0].id, models::DEFAULT_MODEL, "this computer's recommended model comes first");
         assert!(list.iter().all(|m| m.state == "missing"), "an empty folder has nothing");
         assert!(list.iter().all(|m| m.id != "vad"), "voice detection is not a model to pick");
@@ -465,6 +491,30 @@ mod tests {
         let json = serde_json::to_value(&list[0]).unwrap();
         assert_eq!(json["recommended"], true);
         assert!(list.iter().all(|m| m.size_mb > 10 && !m.languages.is_empty()));
+    }
+
+    #[test]
+    fn every_speech_model_carries_the_engines_ratings_and_where_it_runs_here() {
+        let (_d, store) = temp_store();
+        let list = speech_model_list_on(&store, &CardState { setting_on: true, card: true, whisper_helper: true });
+        for m in &list {
+            let e = catalog::find(m.id).unwrap();
+            assert_eq!((m.speed, m.accuracy, m.english_only), (e.speed, e.accuracy, e.english_only), "{}", m.id);
+            assert!((1..=3).contains(&m.speed) && (1..=3).contains(&m.accuracy), "{}", m.id);
+            assert!(m.runs_on == "card" || m.runs_on == "processor");
+            assert!(m.card_path || m.runs_on == "processor", "{}: on the card with no path to it", m.id);
+        }
+        let turbo = list.iter().find(|m| m.id == "whisper-turbo").unwrap();
+        assert_eq!((turbo.kind, turbo.speed, turbo.accuracy), ("whisper", 2, 3));
+        // Whisper is on the card on a Mac (Metal) and on Windows with the helper; Nemotron never is.
+        assert_eq!(turbo.runs_on == "card", cfg!(target_os = "macos") || cfg!(windows));
+        assert_eq!(list.iter().find(|m| m.id == "nemotron-3.5").unwrap().runs_on, "processor");
+        // The switch off: everything is on the processor, but the paths are still reported.
+        let off = speech_model_list_on(&store, &CardState { setting_on: false, card: true, whisper_helper: true });
+        assert!(off.iter().all(|m| m.runs_on == "processor"));
+        assert_eq!(off.iter().find(|m| m.id == "whisper-turbo").unwrap().card_path, cfg!(target_os = "macos") || cfg!(windows));
+        let json = serde_json::to_value(turbo).unwrap();
+        assert!(json["speed"].is_number() && json["runs_on"].is_string() && json["card_path"].is_boolean() && json["english_only"].is_boolean());
     }
 
     #[test]

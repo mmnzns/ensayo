@@ -1,6 +1,6 @@
 ---
 id: analyse-jd
-version: 3
+version: 4
 model_tier: strong
 schema: schemas/analyse-jd.schema.json
 inputs: [jd_text, company, role, process, profile, bank_index, startup_flag, targets]
@@ -11,6 +11,9 @@ inputs: [jd_text, company, role, process, profile, bank_index, startup_flag, tar
 JD import. Reads a pasted job description and produces what the candidate needs to prepare:
 company read, priorities, the beliefs the hiring team must form, a question set per stage, the
 best story for each question, gap questions, and the posting's own language to mirror.
+
+Version 4 (0.5.1): gap questions must not repeat a question already in `questions`. Reads were
+asking the same topic twice, once in each list.
 
 Version 2 (v0.1 Targets): also reads what kind of job the posting is (who the company sells to,
 the role family, the seniority) and says how well each of the candidate's targets fits it.
@@ -58,6 +61,11 @@ Produce:
 - `gap_questions`: questions about tools, credentials or experience the posting requires that do
   not appear in the profile or story index. Each with the `requirement` copied exactly as the
   posting words it, including tool names and years.
+  A gap question must not repeat or overlap a question already in `questions`: same topic, same
+  tool, same credential, or the same history asked another way. When a gap is already touched by
+  a question in `questions`, fold it into that question instead (for example, add "and are you
+  entitled to work here?" to the recruiter logistics question once) and leave it out of
+  `gap_questions`. Each topic is asked once across both lists.
   Empty if none.
 - `no_match`: priorities or beliefs with no fitting story, each with a short note on the story
   that would fill it: the situation it starts from, what the candidate must have done

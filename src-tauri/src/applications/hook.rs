@@ -75,20 +75,30 @@ fn consistency_notice(e: &CallError) -> String {
     }
 }
 
+/// Prompt 07 on one answer. It reads only the words, the question, the stories and the application's claims log, never the
+/// scorer's checks, so it can run while the coach writes. `budget` is its own copy (see `Budget::fork`).
+pub fn extract(storage: &Storage, llm: &dyn crate::ai::llm::Llm, budget: &mut crate::scoring::run::Budget, app: &AppCtx, question: &str, stories: &[Story], metrics: &Metrics) -> Result<Extracted, CallError> {
+    let mut ai = AiCtx { llm, coach: false, budget };
+    let ctx = AnswerCtx { stage_id: &app.stage_id, stage_ref: &app.stage_ref, question, metrics, stories };
+    claims::extract(storage, &mut ai, &app.rec.id, &ctx)
+}
+
 /// After the model scored an answer inside an application: pulls the claims out, adds `c1_consistent` to its checks,
 /// and when a conflict now outranks the fix the coach was told, words the note again about the conflict. A failure
 /// here never loses the rep: it comes back as a plain notice. A `coached` answer (the Smart coach already wrote its
 /// advice) still gets the check, but its fix, note and rewrite are left alone and no note is worded again.
 #[allow(clippy::too_many_arguments)]
-pub fn after_scored(storage: &Storage, ai: &mut AiCtx, app: &AppCtx, heard: &Heard, metrics: &mut Metrics, fix: &mut Option<String>, note: &mut Option<String>, rewrite: &mut Option<Rewrite>, coached: bool) -> (Option<Pending>, Option<String>) {
+pub fn after_scored(storage: &Storage, ai: &mut AiCtx, app: &AppCtx, heard: &Heard, metrics: &mut Metrics, fix: &mut Option<String>, note: &mut Option<String>, rewrite: &mut Option<Rewrite>, coached: bool, early: Option<Result<Extracted, CallError>>) -> (Option<Pending>, Option<String>) {
     let all = storage.load_stories().map(|l| l.items).unwrap_or_default();
     let stories: Vec<Story> = heard.story_ids.iter().filter_map(|id| all.iter().find(|s| &s.id == id).cloned()).collect();
-    let extracted = {
-        let ctx = AnswerCtx { stage_id: &app.stage_id, stage_ref: &app.stage_ref, question: heard.question, metrics, stories: &stories };
-        match claims::extract(storage, ai, &app.rec.id, &ctx) {
-            Ok(e) => e,
-            Err(e) => return (None, Some(consistency_notice(&e))),
-        }
+    // `early` is the claims call that already ran beside the coach; without one it runs now.
+    let called = match early {
+        Some(done) => done,
+        None => extract(storage, ai.llm, ai.budget, app, heard.question, &stories, metrics),
+    };
+    let extracted = match called {
+        Ok(e) => e,
+        Err(e) => return (None, Some(consistency_notice(&e))),
     };
     let check = extracted.check();
     with_c1(&mut metrics.checks, check.clone());

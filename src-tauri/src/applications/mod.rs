@@ -3,6 +3,7 @@
 
 pub mod claims;
 pub mod cue;
+pub mod dedupe;
 pub mod hook;
 pub mod interviews;
 pub mod inputs;

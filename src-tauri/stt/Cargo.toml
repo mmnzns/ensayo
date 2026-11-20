@@ -1,0 +1,21 @@
+[package]
+name = "ensayo-stt"
+version = "0.1.0"
+description = "Ensayo's speech helper for the Windows graphics card: the engine's Whisper helper, in its own process"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "ensayo-stt"
+path = "src/main.rs"
+
+[dependencies]
+voice-engine-stt = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.4.0" }
+voice-engine-protocol = { git = "https://github.com/mmnzns/voice-engine", tag = "v0.4.0" }
+
+[features]
+# Windows graphics-card build (shipped as ensayo-stt-vulkan.exe, never linked into Ensayo.exe): needs the Vulkan SDK
+# (VULKAN_SDK) to build and vulkan-1.dll to run. Release builds come from the engine's workflow instead; this crate is
+# for building the helper on a development PC (scripts/build-llm-helper.ps1).
+vulkan = ["voice-engine-stt/vulkan"]

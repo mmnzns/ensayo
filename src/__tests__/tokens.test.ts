@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
+import { readSource } from "./helpers/readSource";
 import { describe, expect, it } from "vitest";
 
 const DESIGN = "/Users/miguel.monzones/My Drive (mikeymonzones@gmail.com)/MAIN DRIVE - Miguel/FILES - Projects & Work/Ensayo/Design/styles/tokens.json";
 
 describe("theme tokens", () => {
-  const css = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8").toLowerCase();
+  const css = readSource(new URL("../styles/tokens.css", import.meta.url)).toLowerCase();
 
   it("uses the primary and ground colours from the design", () => {
     expect(css).toContain("#b8432c");

@@ -4,8 +4,9 @@
 # finds it. Used by dev, ci.yml and the Release workflow's test-build; real releases take their helpers from the
 # engine's build workflow instead (docs/RELEASE.md).
 #
-# Graphics-card helper: when the Vulkan SDK is installed (VULKAN_SDK is set and the folder exists) this also builds
-# `--features vulkan` as ensayo-llm-vulkan-<triple>.exe (and target\debug\ensayo-llm-vulkan.exe). Without the SDK it
+# Graphics-card helpers: when the Vulkan SDK is installed (VULKAN_SDK is set and the folder exists) this also builds
+# `--features vulkan` as ensayo-llm-vulkan-<triple>.exe (and target\debug\ensayo-llm-vulkan.exe), and the Whisper
+# helper as target\debug\ensayo-stt-vulkan.exe. Without the SDK it
 # says so and skips; the app then uses the processor helper. The Vulkan sidecar is not in the default externalBin
 # list, so skipping never breaks bundling (docs/RELEASE.md, "The graphics-card helper").
 $ErrorActionPreference = 'Stop'
@@ -27,6 +28,13 @@ if ($env:VULKAN_SDK -and (Test-Path $env:VULKAN_SDK)) {
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   Copy-Item "$vk\release\ensayo-llm.exe" "binaries\ensayo-llm-vulkan-$triple.exe" -Force
   try { Copy-Item "$vk\release\ensayo-llm.exe" target\debug\ensayo-llm-vulkan.exe -Force -ErrorAction Stop } catch { Write-Warning "Could not update target\debug\ensayo-llm-vulkan.exe (is tauri dev running?): $_" }
+
+  # The graphics-card speech helper (Whisper): the engine's helper, its own target folder too. It is not copied into
+  # binaries (the default externalBin does not list it); `tauri dev` finds it next to the debug exe.
+  $vkStt = 'target\vulkan-stt-helper'
+  cargo build --release -p ensayo-stt --features vulkan --target-dir $vkStt
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  try { Copy-Item "$vkStt\release\ensayo-stt.exe" target\debug\ensayo-stt-vulkan.exe -Force -ErrorAction Stop } catch { Write-Warning "Could not update target\debug\ensayo-stt-vulkan.exe (is tauri dev running?): $_" }
 } else {
-  Write-Host 'Vulkan SDK not found (VULKAN_SDK is not set): skipping the graphics-card AI helper. The app will use the processor helper.'
+  Write-Host 'Vulkan SDK not found (VULKAN_SDK is not set): skipping the graphics-card helpers. The AI will use the processor helper and Whisper will run on the processor.'
 }

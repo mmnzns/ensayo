@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readSource } from "./helpers/readSource";
 import { describe, expect, it } from "vitest";
 import { habitMark } from "../screens/settings/ProgressHabits";
 import { barTransition } from "../screens/practice/PracticeRecording";
 
-const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
+const read = (rel: string) => readSource(new URL(rel, import.meta.url));
 
 describe("the habit strip", () => {
   it("marks a pass with a tick and anything else with a dot, not only colour", () => {

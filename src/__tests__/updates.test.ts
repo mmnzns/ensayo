@@ -137,8 +137,8 @@ describe("the words", () => {
 
 describe("where the banner lives", () => {
   it("is in the app shell and never in the practice (focus) shell", async () => {
-    const { readFileSync } = await import("node:fs");
-    const read = (f: string) => readFileSync(new URL(`../ui/${f}`, import.meta.url), "utf8");
+    const { readSource } = await import("./helpers/readSource");
+    const read = (f: string) => readSource(new URL(`../ui/${f}`, import.meta.url));
     expect(read("AppShell.tsx")).toContain("<UpdateBanner />");
     expect(read("FocusShell.tsx")).not.toContain("UpdateBanner");
   });

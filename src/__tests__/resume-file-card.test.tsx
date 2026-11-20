@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import ResumeFileCard from "../components/ResumeFileCard";
 
 describe("the resume file card on New application", () => {
-  const name = "MiguelMonzones_Resume_Anatta_Marketing_Operations_Final_v7.docx";
+  const name = "Jordan_Rivera_Resume_Acme_Marketing_Operations_Final_v7.docx";
   const html = renderToString(<ResumeFileCard fileName={name} pages={2} onReplace={() => {}} />);
 
   it("lets the name column shrink and cuts a long name with an ellipsis", () => {

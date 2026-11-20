@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { SPEECH_MODELS } from "../../practice/api";
+import { modelRows, type ModelRow, type SpeechModelEntry } from "../settings/speechModels";
 import { downloadErrorLine, speechPlan, type SpeechModelStatus, type SpeechPlan } from "./setup";
 
 /** Where the speech model stands, and the download. Reads the same models, in the same order, as a practice session does. */
@@ -9,12 +10,16 @@ export function useSpeech() {
   const [plan, setPlan] = useState<SpeechPlan | null>(null);
   const [fraction, setFraction] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [rows, setRows] = useState<ModelRow[]>([]);
 
   const refresh = useCallback(async () => {
     try {
       const models = await Promise.all(SPEECH_MODELS.map((id) => invoke<SpeechModelStatus>("model_status", { id })));
       const vad = await invoke<SpeechModelStatus>("model_status", { id: "vad" }).catch(() => null);
       setPlan(speechPlan(models, vad));
+      // The ratings and where each model runs come with the list in Settings; the step shows them for its model. The step
+      // works without them if the list can't be read.
+      invoke<SpeechModelEntry[]>("speech_models").then((list) => setRows(modelRows(list, "")), () => {});
     } catch (e) {
       setError(downloadErrorLine(e));
     }
@@ -48,5 +53,5 @@ export function useSpeech() {
     await refresh();
   };
 
-  return { plan, refresh, downloading: fraction !== null, fraction: fraction ?? 0, error, download };
+  return { plan, rows, refresh, downloading: fraction !== null, fraction: fraction ?? 0, error, download };
 }
