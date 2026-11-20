@@ -86,10 +86,17 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      # A runner image CMake upgrade must not reuse a cached build dir that points at the old install.
+      - name: Read CMake version
+        id: cmake
+        shell: pwsh
+        run: |
+          $v = (cmake --version | Select-Object -First 1).Trim()
+          "version=$v" >> $env:GITHUB_OUTPUT
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: release-windows
+          key: release-windows-cmake-${{ steps.cmake.outputs.version }}
       - run: npm ci
       # The helpers come from the engine's workflow (the `helpers` job): ensayo-llm-<triple>.exe and, on x64,
       # ensayo-llm-vulkan-<triple>.exe and ensayo-stt-vulkan-<triple>.exe, where Tauri's externalBin expects them.
@@ -166,10 +173,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      # A runner image CMake upgrade must not reuse a cached build dir that points at the old install.
+      - name: Read CMake version
+        id: cmake
+        shell: bash
+        run: echo "version=$(cmake --version | head -n 1)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: release-${{ matrix.arch }}
+          key: release-${{ matrix.arch }}-cmake-${{ steps.cmake.outputs.version }}
       - run: npm ci
       # ensayo-llm-<triple> from the engine's workflow (the `helpers` job). Artifacts lose the executable bit.
       - uses: actions/download-artifact@v4
@@ -254,10 +266,15 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      # A runner image CMake upgrade must not reuse a cached build dir that points at the old install.
+      - name: Read CMake version
+        id: cmake
+        shell: bash
+        run: echo "version=$(cmake --version | head -n 1)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: test-build-${{ matrix.os }}
+          key: test-build-${{ matrix.os }}-cmake-${{ steps.cmake.outputs.version }}
       - run: npm ci
       # The AI helpers come from the engine's workflow (the `helpers` job), as in the release jobs. macos-latest is
       # Apple silicon.
